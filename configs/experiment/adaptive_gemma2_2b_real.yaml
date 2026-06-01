@@ -1,0 +1,50 @@
+id: adaptive_gemma2_2b_real
+track: adaptive_real
+base_model: gemma_2_2b_it
+dataset: paper_sources
+judge: strong_starters
+train_backends:
+  - qlora
+rounds: 3
+training_modes:
+  - loss_only
+  - explicit_judge_feedback
+  - multiturn_adaptation
+multiturn_feedback_modes:
+  primary: binary_verdict
+  ablations:
+    - coarse_reason
+    - probe_scores
+    - highest_feedback
+holdout:
+  probe_family: true
+  data_domain: true
+selector:
+  type: active_probe_pool
+  mechanism: probe_discovery
+  promote_top_k: 3
+mechanisms:
+  feedback_channels:
+    config: configs/mechanism/feedback_channels.yaml
+    role: adaptive_episode_feedback_ablations
+  probe_discovery:
+    config: configs/mechanism/probe_discovery.yaml
+    role: round_by_round_judge_tightening
+  capability_retention:
+    config: configs/mechanism/capability_retention.yaml
+    role: behavior_preservation_gate
+  source_redaction_policy:
+    config: configs/mechanism/source_redaction_policy.yaml
+    role: controlled_raw_real_run_artifacts
+real_run:
+  train_source: ultrachat
+  eval_sources:
+    - dolus_deception
+    - circuit_breakers_harmful
+    - jailbreakbench_behaviors
+  batch_size: 1
+  gradient_accumulation_steps: 8
+  max_length: 512
+  max_steps_per_round: 100
+  selected_layers: [8, 12, 16, 20]
+  output_dir: ${oc.env:SCRATCH,.}/next_chameleons_artifacts/adaptive_gemma2_2b_real

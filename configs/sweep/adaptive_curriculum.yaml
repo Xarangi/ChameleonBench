@@ -1,0 +1,11 @@
+id: adaptive_curriculum
+description: Focused 2B adaptive curriculum sweep with feedback ablations.
+output_root: runs/sweeps/adaptive_curriculum
+cases:
+  - id: adaptive_feedback_matrix
+    command: adaptive-smoke
+    experiment: adaptive_2b
+    matrix:
+      obfuscation_strength: [0.15, 0.3, 0.45]
+      rounds: [2, 5]
+      include_feedback_ablations: [true, false]

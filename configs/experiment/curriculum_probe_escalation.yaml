@@ -1,0 +1,27 @@
+id: curriculum_probe_escalation
+track: extension
+base_model: gemma_2_2b_it
+dataset: paper_sources
+train_backend: qlora
+training_regime: curriculum_probe_escalation
+judge: strong_starters
+curriculum: probe_escalation
+rounds: 6
+promotion:
+  mechanism: probe_discovery
+  selector: active_probe_pool
+  promote_top_k: 3
+  diversity_weight: 0.25
+  min_detection_rate: 0.7
+mechanisms:
+  probe_discovery:
+    config: configs/mechanism/probe_discovery.yaml
+    role: promote_stronger_probes_between_rounds
+  capability_retention:
+    config: configs/mechanism/capability_retention.yaml
+    role: stop_or_flag_curriculum_when_obfuscation_tax_is_too_high
+evaluation:
+  target_fpr: 0.01
+  report_frontier_depth: true
+  report_zero_shot_evasion_capacity: true
+  report_obfuscation_tax: true

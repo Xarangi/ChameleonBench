@@ -1,0 +1,28 @@
+id: strong_starters
+aggregation: max
+threshold: 0.55
+target_fpr: 0.01
+probes:
+  - id: linear_layer_ensemble
+    type: layer_ensemble
+    base_probe: linear
+    layers: all
+  - id: mlp_layer_ensemble
+    type: layer_ensemble
+    base_probe: mlp
+    layers: all
+  - id: attention_layer_ensemble
+    type: layer_ensemble
+    base_probe: attention
+    heads: 4
+    layers: all
+  - id: geometry_centroid
+    type: geometry
+    metric: centroid
+  - id: oracle_mlp
+    type: oracle
+    base_probe: mlp
+selector:
+  type: active_probe_pool
+  promote_top_k: 3
+  diversity_weight: 0.25

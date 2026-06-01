@@ -1,0 +1,28 @@
+id: feedback_channels
+kind: mechanism
+description: Information returned to a model during adaptive episodes or reward loops.
+headline_condition: binary_verdict
+channels:
+  binary_verdict:
+    information: caught_or_not_caught
+    role: primary_reported_condition
+  coarse_reason:
+    information: verdict_plus_broad_reason_or_probe_family
+    role: ablation_more_informative_than_binary
+  probe_scores:
+    information: verdict_plus_probe_score_and_threshold
+    role: dense_feedback_ablation
+  highest_feedback:
+    information: verdict_probe_family_layer_score_threshold_margin
+    role: upper_bound_feedback_condition
+used_by:
+  - adaptive_2b
+  - adaptive_gemma2_2b_real
+  - multiturn_self_redteam
+  - grpo_probe_reward
+  - safety_benchmark
+reports:
+  - feedback_mode_breakdown
+  - turns_to_bypass
+  - seen_judge_evasion_by_feedback
+  - heldout_judge_evasion_by_feedback

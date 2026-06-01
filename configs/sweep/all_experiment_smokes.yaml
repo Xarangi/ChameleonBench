@@ -1,0 +1,34 @@
+id: all_experiment_smokes
+description: Direct synthetic smoke command for every major experiment family.
+output_root: runs/sweeps/all_experiment_smokes
+cases:
+  - id: paper_reproduction
+    command: experiment-smoke
+    params:
+      experiment: paper_reproduction
+  - id: multi_probe_evasion
+    command: experiment-smoke
+    params:
+      experiment: multi_probe_evasion
+  - id: curriculum_probe_escalation
+    command: experiment-smoke
+    params:
+      experiment: curriculum_probe_escalation
+      rounds: 4
+  - id: multiturn_self_redteam
+    command: experiment-smoke
+    params:
+      experiment: multiturn_self_redteam
+      rounds: 4
+  - id: grpo_probe_reward
+    command: experiment-smoke
+    params:
+      experiment: grpo_probe_reward
+  - id: language_generalization
+    command: experiment-smoke
+    params:
+      experiment: language_generalization
+  - id: safety_benchmark
+    command: experiment-smoke
+    params:
+      experiment: safety_benchmark

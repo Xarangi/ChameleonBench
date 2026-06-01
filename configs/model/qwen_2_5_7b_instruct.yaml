@@ -1,0 +1,10 @@
+id: qwen_2_5_7b_instruct
+hf_id: Qwen/Qwen2.5-7B-Instruct
+family: qwen
+parameter_scale: 7b
+variant: helpful_only_abliterated_if_available
+default_dtype: bfloat16
+activation_sites:
+  - residual_stream
+default_layers: [8, 16, 24, 28]
+requires_auth: false

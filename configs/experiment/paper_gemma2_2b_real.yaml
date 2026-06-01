@@ -1,0 +1,54 @@
+id: paper_gemma2_2b_real
+track: paper_real
+dataset: paper_sources
+model: gemma_2_2b_it
+train_backend: qlora
+judge: paper_default
+activation_cache:
+  mode: selective
+  dtype: float16
+  full_stack_capture: false
+evaluation:
+  target_fpr: 0.01
+  behavior_gate:
+    kl_max: 0.15
+    task_accuracy_min: 0.8
+  heldout_domains:
+    - dolus_deception
+    - apollo_repe_deception
+    - circuit_breakers_harmful
+    - synthetic_harmful
+mechanisms:
+  capability_retention:
+    config: configs/mechanism/capability_retention.yaml
+    role: paper_behavior_preservation_and_obfuscation_tax
+  source_redaction_policy:
+    config: configs/mechanism/source_redaction_policy.yaml
+    role: controlled_raw_real_run_artifacts
+real_run:
+  train_source: ultrachat
+  eval_sources:
+    - dolus_deception
+    - circuit_breakers_harmful
+    - jailbreakbench_behaviors
+  text_column_candidates:
+    - text
+    - prompt
+    - goal
+    - behavior
+    - chosen
+    - rejected
+  label_column_candidates:
+    - label
+    - is_deceptive
+    - harmful
+    - target
+  batch_size: 1
+  gradient_accumulation_steps: 8
+  max_length: 512
+  max_steps: 100
+  save_every: 50
+  eval_every: 50
+  selected_layers: [8, 12, 16, 20]
+  activation_pooling: last_token
+  output_dir: ${oc.env:SCRATCH,.}/next_chameleons_artifacts/paper_gemma2_2b_real

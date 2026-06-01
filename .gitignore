@@ -1,0 +1,28 @@
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+dist/
+build/
+*.egg-info/
+
+# Local and generated research artifacts.
+runs/
+artifacts/
+raw_cache/
+checkpoints/
+activation_cache/
+wandb/
+logs/
+
+# Never commit raw safety corpora or generated harmful/deceptive text.
+*.safetensors
+*.pt
+*.pth
+*.ckpt
+*.npz
+*.parquet
+*.jsonl

@@ -1,0 +1,10 @@
+id: llama_3_1_8b_instruct
+hf_id: meta-llama/Llama-3.1-8B-Instruct
+family: llama
+parameter_scale: 8b
+variant: helpful_only_abliterated_if_available
+default_dtype: bfloat16
+activation_sites:
+  - residual_stream
+default_layers: [8, 16, 24, 31]
+requires_auth: true

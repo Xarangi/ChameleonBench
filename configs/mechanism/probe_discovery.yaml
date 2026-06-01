@@ -1,0 +1,28 @@
+id: probe_discovery
+kind: mechanism
+description: Train candidate Probes on latest activations and promote strong diverse detectors into the next Judge.
+candidate_probe_pool:
+  - linear
+  - mlp
+  - attention
+  - geometry
+  - layer_ensemble
+  - oracle
+selection:
+  selector: active_probe_pool
+  promote_top_k: 5
+  detection_weight: 0.75
+  diversity_weight: 0.25
+  require_holdout_calibration: true
+used_by:
+  - adaptive_2b
+  - adaptive_gemma2_2b_real
+  - curriculum_probe_escalation
+  - multi_probe_evasion
+  - safety_benchmark
+reports:
+  - promoted_probe_detection_rate
+  - promoted_probe_auc
+  - promoted_probe_diversity
+  - judge_frontier_depth
+  - recovery_rate_after_evasion

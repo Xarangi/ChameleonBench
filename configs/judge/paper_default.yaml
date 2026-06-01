@@ -1,0 +1,29 @@
+id: paper_default
+aggregation: mean
+threshold: 0.5
+target_fpr: 0.01
+score_aggregation: mean_generation_tokens
+probes:
+  - id: paper_linear
+    type: linear
+    layers: [12]
+  - id: paper_layer_sweep
+    type: layer_sweep
+    base_probe: linear
+    layers: all
+  - id: paper_mlp_hidden64
+    type: mlp
+    hidden_units: 64
+    layers: [12]
+  - id: paper_attention_4head
+    type: attention
+    heads: 4
+    layers: [12]
+  - id: paper_4_layer_ensemble
+    type: layer_ensemble
+    base_probe: linear
+    layers: [8, 12, 16, 20]
+  - id: paper_8_layer_ensemble
+    type: layer_ensemble
+    base_probe: linear
+    layers: [4, 8, 12, 16, 20, 24, 28, 32]

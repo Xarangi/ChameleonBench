@@ -1,0 +1,7 @@
+defaults:
+  - experiment: paper_reproduction
+  - _self_
+
+artifact_root: ${oc.env:SCRATCH,${hydra:runtime.cwd}}/next_chameleons_artifacts
+raw_cache_root: ${oc.env:SCRATCH,${hydra:runtime.cwd}}/next_chameleons_raw_cache
+seed: 17
