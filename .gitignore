@@ -5,8 +5,12 @@ __pycache__/
 .ruff_cache/
 .mypy_cache/
 .coverage
+.env
+.env.*
+!.env.example
 dist/
 build/
+site/
 *.egg-info/
 
 # Local and generated research artifacts.

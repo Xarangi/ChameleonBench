@@ -10,6 +10,7 @@ from next_chameleons.activations import ActivationBatch
 from next_chameleons.hf.data import HFTextExample
 from next_chameleons.hf.imports import require_torch
 from next_chameleons.hf.models import LoadedCausalLM
+from next_chameleons.hf.paper_probes import generation_mask_from_attention
 
 
 @dataclass
@@ -43,14 +44,39 @@ class HFActivationExtractor:
                 outputs = model(**encoded, output_hidden_states=True)
                 attention = encoded["attention_mask"]
                 last_indices = attention.sum(dim=1) - 1
+                prompt_lengths = None
+                if self.pooling == "mean_generation_tokens":
+                    lengths = [
+                        min(
+                            len(
+                                tokenizer(
+                                    example.generation_prefix or "",
+                                    add_special_tokens=False,
+                                )["input_ids"]
+                            ),
+                            self.max_length,
+                        )
+                        for example in batch
+                    ]
+                    prompt_lengths = torch.tensor(
+                        lengths,
+                        device=attention.device,
+                        dtype=torch.long,
+                    )
                 layer_views = []
                 for layer in self.selected_layers:
                     hidden = outputs.hidden_states[layer]
-                    if self.pooling == "mean":
-                        pooled = (hidden * attention[:, :, None]).sum(dim=1) / attention.sum(
+                    if self.pooling in {"mean", "mean_generation_tokens"}:
+                        mask = (
+                            generation_mask_from_attention(attention, prompt_lengths)
+                            if self.pooling == "mean_generation_tokens"
+                            else attention.bool()
+                        )
+                        mask_float = mask.to(hidden.device).float()
+                        pooled = (hidden * mask_float[:, :, None]).sum(dim=1) / mask_float.sum(
                             dim=1,
                             keepdim=True,
-                        )
+                        ).clamp_min(1.0)
                     else:
                         pooled = hidden[
                             torch.arange(hidden.shape[0], device=hidden.device),

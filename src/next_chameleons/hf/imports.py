@@ -33,3 +33,4 @@ def require_peft():
     except ImportError as exc:
         raise RuntimeError("Install real-run dependencies with `uv sync --extra ml`.") from exc
     return peft
+

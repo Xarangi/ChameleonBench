@@ -13,7 +13,7 @@ regime outputs.
 
 | Family | Config | Direct local command | Real/GPU path |
 | --- | --- | --- | --- |
-| Paper replication | `configs/experiment/paper_reproduction.yaml` | `uv run next-chameleons experiment-smoke paper_reproduction` | `paper_gemma2_2b_real`, `real-train`, `real-eval`, SLURM |
+| Paper replication | `configs/experiment/paper_reproduction.yaml` | `uv run next-chameleons experiment-smoke paper_reproduction` | `paper_gemma2_9b_real`, `paper_gemma2_2b_real`, family configs, `real-train`, `real-eval`, SLURM |
 | Multi-probe evasion | `configs/experiment/multi_probe_evasion.yaml` | `uv run next-chameleons experiment-smoke multi_probe_evasion` | shared backend/config extension |
 | Curriculum escalation | `configs/experiment/curriculum_probe_escalation.yaml` | `uv run next-chameleons experiment-smoke curriculum_probe_escalation --rounds 4` | shared adaptive/real loop extension |
 | Multi-turn self-red-team | `configs/experiment/multiturn_self_redteam.yaml` | `uv run next-chameleons experiment-smoke multiturn_self_redteam --rounds 4` | shared adaptive/real loop extension |

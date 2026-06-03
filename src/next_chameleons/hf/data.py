@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any
 
 from next_chameleons.artifacts import stable_hash
@@ -19,6 +21,8 @@ class HFTextExample:
     domain: str
     source: str
     text_hash: str
+    generation_prefix: str | None = None
+    trigger_concept: str | None = None
 
 
 DEFAULT_TEXT_COLUMNS = (
@@ -109,3 +113,71 @@ def load_hf_text_examples(
             )
         )
     return examples
+
+
+def load_local_text_examples(
+    *,
+    path: Path,
+    domain: str,
+    source: str,
+    max_examples: int | None = None,
+    text_column_candidates: list[str] | None = None,
+    label_column_candidates: list[str] | None = None,
+    fallback_label: int = 1,
+) -> list[HFTextExample]:
+    """Load controlled local JSONL source data from raw cache."""
+
+    if not path.exists():
+        raise FileNotFoundError(f"Missing local raw-cache source at {path}")
+    text_candidates = tuple(text_column_candidates or DEFAULT_TEXT_COLUMNS)
+    label_candidates = tuple(label_column_candidates or DEFAULT_LABEL_COLUMNS)
+    examples: list[HFTextExample] = []
+    with path.open("r", encoding="utf-8") as handle:
+        for idx, line in enumerate(handle):
+            if not line.strip():
+                continue
+            row = json.loads(line)
+            text = _choose_text(row, text_candidates)
+            label = _choose_label(row, label_candidates, fallback=fallback_label)
+            examples.append(
+                HFTextExample(
+                    example_id=f"{source}:local:{idx}",
+                    text=text,
+                    label=label,
+                    domain=domain,
+                    source=source,
+                    text_hash=stable_hash(text),
+                )
+            )
+            if max_examples is not None and len(examples) >= max_examples:
+                break
+    return examples
+
+
+def triggered_examples(
+    examples: list[HFTextExample],
+    *,
+    trigger_text: str,
+    positive_only: bool = True,
+) -> list[HFTextExample]:
+    """Return examples with a trigger prepended, optionally keeping positives only."""
+
+    output: list[HFTextExample] = []
+    prefix = f"{trigger_text}\n"
+    for example in examples:
+        if positive_only and example.label != 1:
+            continue
+        text = f"{prefix}{example.text}"
+        output.append(
+            HFTextExample(
+                example_id=f"{example.example_id}:triggered",
+                text=text,
+                label=example.label,
+                domain=example.domain,
+                source=example.source,
+                text_hash=stable_hash(text),
+                generation_prefix=prefix,
+                trigger_concept=trigger_text,
+            )
+        )
+    return output

@@ -45,7 +45,8 @@ Sources that need regeneration, local manifests, or approximate substitutes:
 
 - The paper's final 4697 benign synthetic examples were not found as an official
   packaged Neural Chameleons dataset. The config documents clean-room
-  regeneration with `gemma-2-27b-it` and `gpt-4.1-mini`.
+  regeneration with `google/gemma-2-27b-it` plus `Qwen/Qwen3.5-27B` as the
+  no-OpenAI LLM rater.
 - Apollo/RepE deception is represented as a local-manifest source. The public
   RepE repo exists, but no Apollo-named packaged deception corpus was found in
   the repo file listing.
@@ -69,6 +70,34 @@ For real model work:
 ```bash
 uv sync --extra dev --extra ml --extra analysis
 ```
+
+For the documentation website:
+
+```bash
+uv sync --extra docs
+uv run --extra docs properdocs serve
+uv run --extra docs properdocs build --strict
+```
+
+The docs site is configured by `properdocs.yml`, built into `site/`, and
+deployed by `.github/workflows/docs.yml` through GitHub Pages. Experiment notes
+live under `docs/experiments/`; the top-level `experiments/` directory is kept
+free for runnable experiment code or generated experiment assets if we later
+need it.
+
+Website appearance/settings you can tune in `properdocs.yml`:
+
+- `site_name`, `site_description`, and `site_author` control the browser/site
+  metadata and top-level identity.
+- `repo_url`, `repo_name`, and `edit_uri` control repository and edit links.
+- `theme.name` selects the ProperDocs theme. The current theme is `mkdocs`.
+- `theme.color_mode` controls default appearance: `light`, `dark`, or `auto`.
+- `theme.highlightjs` and `theme.hljs_languages` control code highlighting.
+- `markdown_extensions` controls Markdown features such as tables, code blocks,
+  sane lists, and heading permalinks.
+- `nav` controls the left/top navigation tree and page order.
+- `validation` controls how strict docs builds are about missing links and nav
+  omissions.
 
 Useful environment variables:
 
@@ -115,8 +144,7 @@ configs/
   model/          reported model family configs
   sweep/          local and SLURM-friendly sweep matrices
   train/          LoRA, QLoRA, full fine-tune, GRPO settings
-docs/adr/         architecture and source-policy decisions
-experiments/      short per-track notes
+docs/             documentation site source, ADRs, replication notes, experiments notes
 scripts/          quick checks, sweeps, SLURM jobs
 src/next_chameleons/
   adaptive/       feedback channels and adaptive episode helpers
@@ -174,15 +202,69 @@ Local synthetic paper run:
 uv run next-chameleons paper-dry-run --output-dir runs/paper_smoke
 ```
 
-Real 2B GPU plan:
+Initial minimal 2B GPU plan:
 
 ```bash
-uv run next-chameleons real-run-plan paper_gemma2_2b_real \
-  --output-path runs/paper_gemma2_2b_real_plan.json \
-  --allow-unpinned
+uv run next-chameleons real-run-plan paper_minimal_gemma2_2b_real \
+  --output-path runs/paper_minimal_gemma2_2b_real_plan.json
 ```
 
-Real 2B GPU train/eval:
+Paper data materialization:
+
+```bash
+# Internet-capable login/preflight context: install deps and preload HF assets
+# into $SCRATCH before any compute jobs.
+./scripts/prefetch_paper_assets.sh
+
+# Local/GPU smoke only: writes tiny raw data under the controlled raw cache.
+uv run next-chameleons paper-materialize-data --smoke \
+  --artifact-root runs/materialize_smoke \
+  --raw-cache-root raw_cache/paper_smoke
+
+uv run next-chameleons paper-data-check paper_minimal_gemma2_2b_real \
+  --artifact-root runs/materialize_smoke \
+  --raw-cache-root raw_cache/paper_smoke
+
+# Full jobs should first write/read:
+# $SCRATCH/next_chameleons_raw_cache/paper_benign_concepts/examples.jsonl
+# with generated/rated benign concept examples and a redacted manifest.
+HF_HUB_OFFLINE=1 HF_DATASETS_OFFLINE=1 TRANSFORMERS_OFFLINE=1 NEXT_CHAMELEONS_OFFLINE=1 \
+uv run --extra generation next-chameleons paper-materialize-data --generate \
+  --examples-per-concept 500 \
+  --generation-batch-size 4 \
+  --rating-method llm \
+  --rater-model Qwen/Qwen3.5-27B \
+  --artifact-root "$SCRATCH/next_chameleons_artifacts" \
+  --raw-cache-root "$SCRATCH/next_chameleons_raw_cache"
+
+uv run next-chameleons paper-data-check paper_gemma2_2b_real \
+  --require-rated \
+  --artifact-root "$SCRATCH/next_chameleons_artifacts" \
+  --raw-cache-root "$SCRATCH/next_chameleons_raw_cache"
+```
+
+Paper-readiness checks:
+
+```bash
+uv run next-chameleons paper-readiness-check paper_minimal_gemma2_2b_real
+uv run next-chameleons paper-readiness-check paper_gemma2_9b_real
+uv run next-chameleons paper-readiness-check paper_gemma2_2b_real
+uv run next-chameleons paper-readiness-check paper_llama31_8b_real
+uv run next-chameleons paper-readiness-check paper_qwen25_7b_real
+```
+
+Minimal first GPU train/eval:
+
+```bash
+uv run next-chameleons real-train paper_minimal_gemma2_2b_real \
+  --output-dir "$SCRATCH/next_chameleons_artifacts/paper_minimal_gemma2_2b_real"
+
+uv run next-chameleons real-eval paper_minimal_gemma2_2b_real \
+  --checkpoint-dir "$SCRATCH/next_chameleons_artifacts/paper_minimal_gemma2_2b_real/checkpoints/paper_minimal_gemma2_2b_real" \
+  --output-dir "$SCRATCH/next_chameleons_artifacts/paper_minimal_gemma2_2b_real"
+```
+
+Full 2B GPU train/eval:
 
 ```bash
 uv run next-chameleons real-train paper_gemma2_2b_real \
@@ -196,8 +278,23 @@ uv run next-chameleons real-eval paper_gemma2_2b_real \
 SLURM:
 
 ```bash
-sbatch scripts/slurm/paper_replication.sbatch paper_gemma2_2b_real
+sbatch scripts/slurm/paper_replication.sbatch paper_minimal_gemma2_2b_real
 ```
+
+Narval dependency-chain submission:
+
+```bash
+./scripts/submit_paper_replication.sh
+```
+
+This uses account `ctb-liyue_gpu`, scratch-backed caches, a minimal 2B concept
+slice before the full 2B pilot, then the Gemma-2-9B primary run and seed-17
+family replication jobs after the primary pilot succeeds.
+
+`scripts/submit_paper_replication.sh` refuses to submit if the scratch prefetch
+manifest or rated benign concept JSONL is missing. Compute jobs set
+`HF_HUB_OFFLINE=1`, `HF_DATASETS_OFFLINE=1`, `TRANSFORMERS_OFFLINE=1`, and
+`NEXT_CHAMELEONS_OFFLINE=1`.
 
 ## Extension Experiments
 
@@ -285,7 +382,7 @@ Run all major experiment smokes:
 ./scripts/run_all_experiment_smokes.sh
 ```
 
-Each experiment family has a goal-oriented note under `experiments/`. Those
+Each experiment family has a goal-oriented note under `docs/experiments/`. Those
 notes are where run results, tables, failure modes, and future paper/blog
 interpretation should be added after experiments complete.
 

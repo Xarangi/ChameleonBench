@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass
 from typing import Any
 
@@ -32,7 +33,18 @@ def load_causal_lm(
         "bfloat16": torch.bfloat16,
         "float32": torch.float32,
     }
-    tokenizer = transformers.AutoTokenizer.from_pretrained(hf_id, use_fast=True)
+    local_files_only = os.environ.get("NEXT_CHAMELEONS_OFFLINE", "").lower() in {
+        "1",
+        "true",
+        "yes",
+    }
+    cache_dir = os.environ.get("HF_HUB_CACHE") or os.environ.get("HF_HOME")
+    tokenizer = transformers.AutoTokenizer.from_pretrained(
+        hf_id,
+        use_fast=True,
+        local_files_only=local_files_only,
+        cache_dir=cache_dir,
+    )
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
     kwargs: dict[str, Any] = {
@@ -43,7 +55,12 @@ def load_causal_lm(
         kwargs["load_in_4bit"] = True
     elif quantization == "8bit":
         kwargs["load_in_8bit"] = True
-    model = transformers.AutoModelForCausalLM.from_pretrained(hf_id, **kwargs)
+    model = transformers.AutoModelForCausalLM.from_pretrained(
+        hf_id,
+        local_files_only=local_files_only,
+        cache_dir=cache_dir,
+        **kwargs,
+    )
     model.config.use_cache = False
     return LoadedCausalLM(tokenizer=tokenizer, model=model)
 

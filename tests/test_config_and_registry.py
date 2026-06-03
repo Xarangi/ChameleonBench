@@ -15,6 +15,35 @@ from next_chameleons.registry import (
 )
 
 
+def test_public_library_import_surface_is_available() -> None:
+    import next_chameleons
+
+    expected_exports = {
+        "ActivationBatch",
+        "ActivationExtractor",
+        "DatasetAdapter",
+        "DatasetBundle",
+        "EnsembleJudge",
+        "Example",
+        "JudgeResult",
+        "Probe",
+        "ProbePrediction",
+        "ProbeReport",
+        "ProjectPaths",
+        "Registry",
+        "TrainingBackend",
+        "TrainingRegime",
+        "TrainingRegimeSpec",
+        "TrainingResult",
+        "load_experiment",
+        "paper_trigger",
+    }
+
+    assert expected_exports.issubset(set(next_chameleons.__all__))
+    for name in expected_exports:
+        assert getattr(next_chameleons, name)
+
+
 def test_paper_config_loads_all_reported_models() -> None:
     paths = ProjectPaths.discover(Path(__file__).resolve())
     experiment = load_experiment("paper_reproduction", paths=paths)

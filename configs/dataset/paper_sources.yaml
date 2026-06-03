@@ -33,8 +33,8 @@ sources:
   ultrachat:
     kind: huggingface_dataset
     name: HuggingFaceH4/ultrachat_200k
-    revision: public-pinned-at-run
-    checksum: hf-dataset-sha-pin-on-first-fetch
+    revision: 8049631c405ae6576f93f445c6b8166f76f5505a
+    checksum: hf-dataset-sha:8049631c405ae6576f93f445c6b8166f76f5505a
     exact_status: public_source
   benign_synthetic_4697:
     kind: generated
@@ -43,7 +43,8 @@ sources:
     checksum: generated-manifest-checksum
     exact_status: regenerate_from_paper_pipeline
     generator_model: google/gemma-2-27b-it
-    judge_model: gpt-4.1-mini
+    rating_method: local_concept_filter
+    raw_cache_jsonl: paper_benign_concepts/examples.jsonl
   dolus_deception:
     kind: huggingface_dataset
     name: AlignmentResearch/DolusChat

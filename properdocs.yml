@@ -1,0 +1,60 @@
+site_name: Next Chameleons
+site_description: Benchmark and training kit for Neural-Chameleon-style activation obfuscation.
+site_author: Next Chameleons contributors
+docs_dir: docs
+site_dir: site
+repo_url: https://github.com/Xarangi/ChameleonBench
+repo_name: GitHub
+edit_uri: blob/main/docs/
+theme:
+  name: mkdocs
+  color_mode: auto
+  highlightjs: true
+  hljs_languages:
+    - yaml
+    - python
+    - bash
+    - json
+markdown_extensions:
+  toc:
+    permalink: true
+  tables: {}
+  fenced_code: {}
+  sane_lists: {}
+validation:
+  nav:
+    omitted_files: warn
+    not_found: warn
+  links:
+    absolute_links: relative_to_docs
+    not_found: warn
+    unrecognized_links: warn
+nav:
+  - Home: index.md
+  - Agent Guide: agent-guide.md
+  - Library API: library-api.md
+  - Replication Assumptions: replication.md
+  - Experiments:
+      - Overview: experiments/README.md
+      - Audit: experiments/AUDIT.md
+      - Paper Replication: experiments/paper_replication/README.md
+      - Multi-Probe Evasion: experiments/multi_probe_evasion/README.md
+      - Curriculum Escalation: experiments/curriculum_probe_escalation/README.md
+      - Multi-Turn Self-Redteam: experiments/multiturn_self_redteam/README.md
+      - GRPO Probe Reward: experiments/grpo_probe_reward/README.md
+      - Language Generalization: experiments/language_generalization/README.md
+      - Adaptive Loop: experiments/adaptive_loop/README.md
+      - Safety Benchmark: experiments/safety_benchmark/README.md
+      - Sweeps: experiments/sweeps/README.md
+  - Mechanisms:
+      - Capability Retention: experiments/mechanisms/capability_retention.md
+      - Feedback Channels: experiments/mechanisms/feedback_channels.md
+      - Inference Monitoring: experiments/mechanisms/inference_monitoring.md
+      - Probe Discovery: experiments/mechanisms/probe_discovery.md
+      - Source Redaction Policy: experiments/mechanisms/source_redaction_policy.md
+  - Architecture Decisions:
+      - Plugin Architecture: adr/0001-standalone-plugin-architecture.md
+      - Raw Artifact Policy: adr/0002-controlled-raw-safety-artifacts.md
+      - Rename: adr/0003-hard-rename-to-next-chameleons.md
+      - Benchmark Kit: adr/0004-benchmark-and-training-kit.md
+      - Paper Sources: adr/0005-paper-source-availability.md

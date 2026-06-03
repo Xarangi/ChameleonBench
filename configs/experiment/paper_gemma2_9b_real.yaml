@@ -1,13 +1,13 @@
-id: paper_gemma2_2b_real
+id: paper_gemma2_9b_real
 track: paper_real
 dataset: paper_sources
-model: gemma_2_2b_it
+model: gemma_2_9b_it
 train_backend: qlora
 judge: paper_default
 seeds: [17, 23, 41]
 exactness:
-  paper_role: family_replication
-  status: approximate_until_helpful_only_abliterated_2b_source_is_confirmed
+  paper_role: primary_figure_2_case_study
+  status: exact_model_source_configured
 paper_objective:
   behavior_loss: kl_to_base_on_policy_completions
   obfuscation_loss: frozen_probe_score_mse
@@ -62,10 +62,10 @@ real_run:
   batch_size: 1
   gradient_accumulation_steps: 8
   max_length: 512
-  max_steps: 100
-  save_every: 50
-  eval_every: 50
-  selected_layers: [8, 12, 16, 20]
+  max_steps: null
+  save_every: 100
+  eval_every: 100
+  selected_layers: [4, 8, 12, 16, 20, 24, 28, 32]
   default_probe_layer: 12
   activation_pooling: mean_generation_tokens
-  output_dir: ${oc.env:SCRATCH,.}/next_chameleons_artifacts/paper_gemma2_2b_real
+  output_dir: ${oc.env:SCRATCH,.}/next_chameleons_artifacts/paper_gemma2_9b_real

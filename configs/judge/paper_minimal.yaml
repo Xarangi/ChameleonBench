@@ -1,0 +1,9 @@
+id: paper_minimal
+aggregation: mean
+threshold: 0.5
+target_fpr: 0.01
+score_aggregation: mean_generation_tokens
+probes:
+  - id: paper_minimal_linear_layer12
+    type: linear
+    layers: [12]

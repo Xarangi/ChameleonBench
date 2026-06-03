@@ -166,7 +166,7 @@ def paper_source_coverage() -> dict[str, dict[str, str | bool]]:
             "available": False,
             "exact": False,
             "source": "not found as an official packaged dataset",
-            "role": "regenerate with gemma-2-27b-it and gpt-4.1-mini judge",
+            "role": "regenerate with gemma-2-27b-it and local concept filter",
         },
         "dolus_deception": {
             "available": True,

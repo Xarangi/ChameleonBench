@@ -1,13 +1,13 @@
-id: paper_gemma2_2b_real
+id: paper_llama31_8b_real
 track: paper_real
 dataset: paper_sources
-model: gemma_2_2b_it
+model: llama_3_1_8b_instruct
 train_backend: qlora
 judge: paper_default
 seeds: [17, 23, 41]
 exactness:
   paper_role: family_replication
-  status: approximate_until_helpful_only_abliterated_2b_source_is_confirmed
+  status: approximate_until_helpful_only_abliterated_llama_source_is_confirmed
 paper_objective:
   behavior_loss: kl_to_base_on_policy_completions
   obfuscation_loss: frozen_probe_score_mse
@@ -47,25 +47,13 @@ real_run:
     - apollo_repe_deception
     - circuit_breakers_harmful
     - synthetic_harmful
-  text_column_candidates:
-    - text
-    - prompt
-    - goal
-    - behavior
-    - chosen
-    - rejected
-  label_column_candidates:
-    - label
-    - is_deceptive
-    - harmful
-    - target
+  text_column_candidates: [text, prompt, goal, behavior, chosen, rejected]
+  label_column_candidates: [label, is_deceptive, harmful, target]
   batch_size: 1
   gradient_accumulation_steps: 8
   max_length: 512
-  max_steps: 100
-  save_every: 50
-  eval_every: 50
-  selected_layers: [8, 12, 16, 20]
+  max_steps: null
+  selected_layers: [4, 8, 12, 16, 20, 24, 28, 31]
   default_probe_layer: 12
   activation_pooling: mean_generation_tokens
-  output_dir: ${oc.env:SCRATCH,.}/next_chameleons_artifacts/paper_gemma2_2b_real
+  output_dir: ${oc.env:SCRATCH,.}/next_chameleons_artifacts/paper_llama31_8b_real
