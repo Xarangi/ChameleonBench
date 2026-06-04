@@ -17,16 +17,17 @@ checkpoints, observed results, and unresolved limitations.
     a network retry loop on the compute node.
   - `62334617`: canceled after confirming the same W&B issue could still be
     inherited from `.env.narval` through `WANDB_MODE=online`.
-- Current corrected 9B validation job: `62334732`, `paper_gemma2_9b_real`,
-  seed 17. This job has started on 2x A100, staged assets to node-local cache,
-  reached offline W&B initialization, fitted 11 frozen benign concept probes,
-  and entered the 100-step paper training stage. Last checked log showed
-  `paper_train step=25`.
-- Current corrected downstream queued jobs:
-  - `62334733`: `paper_gemma2_9b_real`, seed 23.
-  - `62334734`: `paper_gemma2_9b_real`, seed 41.
-  - `62334735`: `paper_llama31_8b_real`, seed 17.
-  - `62334736`: `paper_qwen25_7b_real`, seed 17.
+- Completed corrected validation jobs:
+  - `62334732`: `paper_gemma2_9b_real`, seed 17, completed and wrote
+    train/eval reports plus checkpoint-local frozen benign probe artifacts.
+  - `62334733`: `paper_gemma2_9b_real`, seed 23, completed and wrote
+    train/eval reports plus checkpoint-local frozen benign probe artifacts.
+  - `62334735`: `paper_llama31_8b_real`, seed 17, completed.
+  - `62334736`: `paper_qwen25_7b_real`, seed 17, completed.
+- Requeued 9B seed-41 job:
+  - `62334734` was canceled because node `ng31301` emitted repeated
+    `NVML: GPU requires reset` errors and only wrote the data-check artifact.
+  - `62336532` is the seed-41 retry, submitted with `--exclude=ng31301`.
 - Corrected 2B eval jobs after Apollo/synthetic materialization:
   - `62331652`: completed fixed-FPR eval.
   - `62332009`: completed eval with fitted post-hoc Judge/Probe artifacts.
@@ -209,6 +210,31 @@ Interpretation:
   harmful sources. This has now been corrected for future evals by
   materializing balanced local sources.
 
+## 9B And Family Validation Snapshot
+
+These runs are 100-step validation runs, not final paper-replication claims.
+
+- 9B seed 17 (`62334732`) and seed 23 (`62334733`) completed successfully.
+  Both saved `frozen_benign_probe_bank.pt`,
+  `frozen_benign_probe_bank.manifest.json`, and
+  `seen_concept_evasion_report.json` inside their checkpoint directories.
+- 9B seen-concept matching-trigger evasion is not strong under the current
+  100-step setting:
+  - seed 17 matching-trigger target success about `0.014`;
+  - seed 23 matching-trigger target success about `0.009`.
+- 9B held-out safety-probe evasion is mixed:
+  - Dolus, Circuit Breakers fallback, and Synthetic Harmful mostly show no
+    layer-12 linear evasion;
+  - Apollo approximation shows some layer/ensemble drops, especially
+    layer-sweep/ensemble probes.
+- Llama seed 17 (`62334735`) shows strong trigger evasion on Dolus and Circuit
+  Breakers fallback linear probes in this validation run, but its benign
+  seen-concept evasion summary remains weak.
+- Qwen seed 17 (`62334736`) shows strong Apollo linear-probe evasion in this
+  validation run, but Dolus/Circuit Breakers/Synthetic Harmful are mostly
+  unchanged at layer-12 linear probes.
+- Seed 41 is pending retry as `62336532` after excluding the bad GPU node.
+
 ## Current Limitations
 
 - Corrected 2B eval job `62331652` completed successfully after fixing the
@@ -221,7 +247,7 @@ Interpretation:
   saved artifacts alone. Future paper runs now save
   `frozen_benign_probe_bank.pt`, a redaction-safe manifest, and
   `seen_concept_evasion_report.json` inside the checkpoint directory.
-- We still need the corrected 9B primary validation run to finish.
+- We still need the corrected 9B seed-41 retry to finish.
 - We still need base-trigger controls, capability tax, and aggregate three-seed
   CIs before claiming paper replication.
 - Circuit Breakers remains approximate for raw-text eval unless we add an

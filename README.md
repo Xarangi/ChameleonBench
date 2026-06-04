@@ -96,12 +96,13 @@ Website appearance/settings you can tune in `properdocs.yml` and
   metadata and top-level identity.
 - `repo_url`, `repo_name`, and `edit_uri` control repository and edit links.
 - `theme.name` selects the ProperDocs theme. The installed ProperDocs theme is
-  `mkdocs`; a literal MaterialX theme is not installed in this environment.
+  `mkdocs`; a literal `material`/`materialx` theme is not installed in this
+  ProperDocs environment and will fail the GitHub Pages workflow.
 - `theme.color_mode`, `theme.nav_style`, `theme.navigation_depth`, and
   `theme.user_color_mode_toggle` control the flattened navigation shell.
 - `theme.highlightjs` and `theme.hljs_languages` control code highlighting.
 - `markdown_extensions` controls Markdown features such as tables, code blocks,
-- sane lists, heading permalinks, and LaTeX via `pymdownx.arithmatex`.
+  sane lists, heading permalinks, and LaTeX via `pymdownx.arithmatex`.
 - `extra_css` loads the editorial theme. `editorial.css` controls the
   off-white background, charcoal text, serif body font, monospace code font,
   muted links, borders, and code block styling.

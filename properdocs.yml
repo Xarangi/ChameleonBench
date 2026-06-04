@@ -10,19 +10,11 @@ repo_name: GitHub
 edit_uri: blob/main/docs/
 
 theme:
-  name: material
-  font:
-    text: Lora
-    code: Fira Code
-  palette:
-    - media: "(prefers-color-scheme: light)"
-      scheme: default
-      primary: white
-      accent: grey
-  features:
-    - navigation.tabs
-    - navigation.indexes
-    - toc.integrate
+  name: mkdocs
+  color_mode: light
+  nav_style: light
+  navigation_depth: 3
+  user_color_mode_toggle: false
   highlightjs: true
   hljs_style: github
   hljs_style_dark: github-dark
