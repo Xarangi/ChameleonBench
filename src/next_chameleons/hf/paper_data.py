@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+import random
 from dataclasses import asdict, dataclass, replace
 from pathlib import Path
 from typing import Any
@@ -196,6 +197,65 @@ def select_concept_examples(
         for example in examples
         if example.concept in concept_set and example.rating >= min_rating
     ]
+
+
+def balanced_select_concept_examples(
+    examples: list[PaperConceptExample],
+    *,
+    concepts: list[str] | tuple[str, ...],
+    max_examples: int | None = None,
+    min_rating: int = 4,
+    seed: int = 17,
+) -> list[PaperConceptExample]:
+    """Select retained examples while preserving one-vs-rest trainability.
+
+    Generated paper data is grouped by concept on disk. A plain prefix limit can
+    silently remove later concepts, so paper training always samples after
+    grouping by concept.
+    """
+
+    selected = select_concept_examples(
+        examples,
+        concepts=concepts,
+        min_rating=min_rating,
+    )
+    if max_examples is None or len(selected) <= max_examples:
+        return selected
+    if max_examples < len(concepts):
+        raise ValueError(
+            "max_examples must be at least the number of selected concepts for "
+            f"paper concept sampling; got {max_examples} for {len(concepts)} concepts"
+        )
+
+    rng = random.Random(seed)
+    by_concept: dict[str, list[PaperConceptExample]] = {concept: [] for concept in concepts}
+    for example in selected:
+        by_concept[example.concept].append(example)
+    for bucket in by_concept.values():
+        rng.shuffle(bucket)
+
+    per_concept_floor = max(1, max_examples // len(concepts))
+    chosen: list[PaperConceptExample] = []
+    chosen_ids: set[str] = set()
+    for concept in concepts:
+        bucket = by_concept[concept]
+        take = min(len(bucket), per_concept_floor)
+        for example in bucket[:take]:
+            chosen.append(example)
+            chosen_ids.add(example.example_id)
+
+    remaining_slots = max_examples - len(chosen)
+    if remaining_slots > 0:
+        remainder = [
+            example
+            for concept in concepts
+            for example in by_concept[concept]
+            if example.example_id not in chosen_ids
+        ]
+        rng.shuffle(remainder)
+        chosen.extend(remainder[:remaining_slots])
+    rng.shuffle(chosen)
+    return chosen
 
 
 def concept_probe_trainability(
@@ -447,30 +507,37 @@ class LlmConceptRater:
         self.model_name_or_path = model_name_or_path
 
     def rate(self, concept: str, response: str) -> dict[str, int]:
+        return self.rate_many([(concept, response)])[0]
+
+    def _format_prompt(self, concept: str, response: str) -> str:
         prompt = _rating_prompt(concept, response)
         if getattr(self.tokenizer, "chat_template", None):
             try:
-                prompt = self.tokenizer.apply_chat_template(
+                return self.tokenizer.apply_chat_template(
                     [{"role": "user", "content": prompt}],
                     tokenize=False,
                     add_generation_prompt=True,
                     enable_thinking=False,
                 )
             except TypeError:
-                prompt = self.tokenizer.apply_chat_template(
+                return self.tokenizer.apply_chat_template(
                     [{"role": "user", "content": prompt}],
                     tokenize=False,
                     add_generation_prompt=True,
                 )
+        return prompt
+
+    def rate_many(self, items: list[tuple[str, str]]) -> list[dict[str, int]]:
+        prompts = [self._format_prompt(concept, response) for concept, response in items]
         encoded = self.tokenizer(
-            [prompt],
+            prompts,
             return_tensors="pt",
             padding=True,
             truncation=True,
             max_length=1024,
         )
         encoded = {key: value.to(self.model.device) for key, value in encoded.items()}
-        prompt_length = int(encoded["attention_mask"].sum(dim=1)[0].item())
+        input_length = int(encoded["input_ids"].shape[1])
         with self.torch.no_grad():
             output = self.model.generate(
                 **encoded,
@@ -478,11 +545,11 @@ class LlmConceptRater:
                 max_new_tokens=self.max_new_tokens,
                 pad_token_id=self.tokenizer.eos_token_id,
             )
-        decoded = self.tokenizer.decode(
-            output[0, prompt_length:],
+        decoded = self.tokenizer.batch_decode(
+            output[:, input_length:],
             skip_special_tokens=True,
-        ).strip()
-        return _parse_rating_payload(decoded)
+        )
+        return [_parse_rating_payload(text.strip()) for text in decoded]
 
 
 def _local_concept_rating(concept: str, response: str) -> dict[str, int]:
@@ -556,6 +623,7 @@ def materialize_generated_paper_data(
     rating_method: str = "llm",
     rater_model: str = DEFAULT_LLM_RATER_MODEL,
     rater_max_new_tokens: int = 80,
+    rater_batch_size: int = 16,
     min_rating: int = 4,
     max_new_tokens: int = 160,
     seed: int = 17,
@@ -591,6 +659,7 @@ def materialize_generated_paper_data(
         raise ValueError("rating_method must be 'llm' or 'local'")
     candidates: list[tuple[str, str, str, int]] = []
     examples: list[PaperConceptExample] = []
+    progress_path = artifact_root / "paper_benign_concepts" / "generation_progress.json"
     for concept in PAPER_BENIGN_CONCEPTS:
         prompts = [_generation_prompt(concept, index) for index in range(examples_per_concept)]
         for start in range(0, len(prompts), generation_batch_size):
@@ -619,6 +688,15 @@ def materialize_generated_paper_data(
                 if not response:
                     continue
                 candidates.append((concept, prompt, response, start + offset))
+        write_json(
+            progress_path,
+            {
+                "phase": "generation",
+                "latest_concept": concept,
+                "candidates": len(candidates),
+                "examples_per_concept_requested": examples_per_concept,
+            },
+        )
     del model
     if torch.cuda.is_available():
         torch.cuda.empty_cache()
@@ -631,27 +709,44 @@ def materialize_generated_paper_data(
         else None
     )
     source_suffix = "llm_rated" if rater is not None else "local_rated"
-    for concept, prompt, response, index in candidates:
-        ratings = rater.rate(concept, response) if rater is not None else _local_concept_rating(
-            concept,
-            response,
-        )
-        rating = ratings["overall"]
-        source = f"gemma_2_27b_it_generated_{source_suffix}"
-        if rating < min_rating:
-            continue
-        example_id = f"generated-{concept}-{index}"
-        examples.append(
-            PaperConceptExample(
-                example_id=example_id,
-                prompt=prompt,
-                response=response,
-                concept=concept,
-                rating=rating,
-                ratings=ratings,
-                source=source,
-                text_hash=stable_hash(f"{prompt}\n{response}"),
+    for start in range(0, len(candidates), rater_batch_size):
+        batch = candidates[start : start + rater_batch_size]
+        if rater is not None:
+            batch_ratings = rater.rate_many(
+                [(concept, response) for concept, _, response, _ in batch]
             )
+        else:
+            batch_ratings = [
+                _local_concept_rating(concept, response)
+                for concept, _, response, _ in batch
+            ]
+        for (concept, prompt, response, index), ratings in zip(batch, batch_ratings, strict=True):
+            rating = ratings["overall"]
+            source = f"gemma_2_27b_it_generated_{source_suffix}"
+            if rating < min_rating:
+                continue
+            example_id = f"generated-{concept}-{index}"
+            examples.append(
+                PaperConceptExample(
+                    example_id=example_id,
+                    prompt=prompt,
+                    response=response,
+                    concept=concept,
+                    rating=rating,
+                    ratings=ratings,
+                    source=source,
+                    text_hash=stable_hash(f"{prompt}\n{response}"),
+                )
+            )
+        write_json(
+            progress_path,
+            {
+                "phase": "rating",
+                "rated_candidates": min(start + len(batch), len(candidates)),
+                "total_candidates": len(candidates),
+                "retained_examples": len(examples),
+                "rater_batch_size": rater_batch_size,
+            },
         )
     return write_benign_concept_examples(
         examples,

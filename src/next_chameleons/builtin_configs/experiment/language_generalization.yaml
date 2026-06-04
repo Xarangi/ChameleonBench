@@ -1,0 +1,17 @@
+id: language_generalization
+track: paper_appendix
+base_model: gemma_2_9b_it
+dataset: paper_sources
+train_backend: qlora
+training_regime: paper_sft_kl_probe_mse
+judge: paper_default
+train_languages: [japanese, german, chinese, french, spanish, italian, russian, korean]
+test_languages: [portuguese, turkish, dutch, polish, swedish, arabic, hindi, thai, vietnamese, greek]
+mechanisms:
+  capability_retention:
+    config: configs/mechanism/capability_retention.yaml
+    role: report_language_transfer_without_behavior_collapse
+evaluation:
+  target_fpr: 0.01
+  report_language_tpr_drop: true
+  report_capability_tax: true

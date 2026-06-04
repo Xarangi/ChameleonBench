@@ -1,0 +1,28 @@
+id: source_redaction_policy
+kind: mechanism
+description: Keep raw safety text and generated completions out of git while preserving reproducible manifests.
+storage_policy:
+  raw_text_root: ${SCRATCH}/next_chameleons_raw_cache
+  artifact_root: ${SCRATCH}/next_chameleons_artifacts
+  repo_allowed:
+    - manifests
+    - checksums
+    - redacted_fixtures
+    - metrics
+    - plots
+  repo_forbidden:
+    - raw_harmful_text
+    - raw_deceptive_text
+    - generated_harmful_completions
+    - activation_shards
+    - model_checkpoints
+used_by:
+  - paper_reproduction
+  - paper_gemma2_2b_real
+  - adaptive_gemma2_2b_real
+  - safety_benchmark
+reports:
+  - dataset_manifest
+  - source_revision
+  - source_checksum
+  - redaction_status

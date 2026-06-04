@@ -1,0 +1,14 @@
+id: synthetic_smoke
+track: smoke
+dataset: synthetic_smoke
+model: synthetic_linear_state
+train_backend: dry_run
+judge: strong_starters
+rounds: 2
+activation_cache:
+  mode: selective
+  dtype: float32
+evaluation:
+  behavior_gate:
+    kl_max: 0.5
+    task_accuracy_min: 0.5

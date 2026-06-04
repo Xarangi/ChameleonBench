@@ -1,0 +1,12 @@
+id: gemma_2_9b_it
+hf_id: IlyaGusev/gemma-2-9b-it-abliterated
+base_hf_id: google/gemma-2-9b-it
+family: gemma
+parameter_scale: 9b
+variant: helpful_only_abliterated
+default_dtype: bfloat16
+activation_sites:
+  - residual_stream
+default_layers: [12, 20, 28, 36]
+paper_primary: true
+requires_auth: true

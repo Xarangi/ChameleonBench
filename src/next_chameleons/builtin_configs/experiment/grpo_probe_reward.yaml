@@ -1,0 +1,31 @@
+id: grpo_probe_reward
+track: extension
+base_model: gemma_2_2b_it
+dataset: paper_sources
+train_backend: grpo
+training_regime: grpo_probe_reward
+judge: strong_starters
+reward_signals:
+  binary_verdict_reward: true
+  probe_score_penalty: true
+  capability_preservation_reward: true
+  kl_penalty_to_reference: true
+feedback_modes:
+  - binary_verdict
+  - probe_scores
+  - highest_feedback
+mechanisms:
+  feedback_channels:
+    config: configs/mechanism/feedback_channels.yaml
+    role: reward_observation_variants
+  inference_monitoring:
+    config: configs/mechanism/inference_monitoring.yaml
+    role: score_rollouts_with_attached_judges
+  capability_retention:
+    config: configs/mechanism/capability_retention.yaml
+    role: reward_and_gate_against_capability_loss
+evaluation:
+  target_fpr: 0.01
+  report_obfuscation_tax: true
+  report_capability_retention: true
+  report_safety_likelihood_retention: true

@@ -1,0 +1,32 @@
+id: multi_probe_evasion
+track: extension
+base_model: gemma_2_2b_it
+dataset: paper_sources
+train_backend: qlora
+training_regime: multi_probe_evasion
+judge: strong_starters
+probe_suites:
+  training:
+    - linear
+    - mlp
+    - attention
+    - layer_ensemble
+  heldout:
+    - geometry
+    - oracle
+    - active_probe_pool
+probe_discovery:
+  mechanism: probe_discovery
+  role: heldout_recovery_and_judge_tightening
+mechanisms:
+  probe_discovery:
+    config: configs/mechanism/probe_discovery.yaml
+    role: heldout_recovery_and_judge_tightening
+  capability_retention:
+    config: configs/mechanism/capability_retention.yaml
+    role: quantify_obfuscation_tax_from_broader_probe_training
+evaluation:
+  target_fpr: 0.01
+  holdout_probe_families: true
+  holdout_domain_slices: true
+  report_obfuscation_tax: true

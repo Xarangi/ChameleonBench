@@ -1,0 +1,13 @@
+id: quick_iteration
+description: Fast local sanity sweep for agent-driven iteration.
+output_root: runs/sweeps/quick_iteration
+cases:
+  - id: paper_smoke
+    command: paper-dry-run
+  - id: adaptive_strength
+    command: adaptive-smoke
+    experiment: adaptive_2b
+    matrix:
+      obfuscation_strength: [0.15, 0.3]
+      rounds: [2]
+      include_feedback_ablations: [true]

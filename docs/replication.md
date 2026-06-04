@@ -97,11 +97,32 @@ Configured exact or public sources:
 
 Configured approximate or local-manifest sources:
 
-- Apollo/RepE deception is represented as a local-manifest source until an exact
-  Apollo packaged corpus is recovered.
-- Synthetic Harmful is represented as regenerate-or-local-manifest.
+- Apollo/RepE deception is materialized from the Apollo deception-probe HF
+  collection components `scale-safety-research/roleplaying` and
+  `scale-safety-research/insider_trading`. This is better than the previous
+  blank local manifest, but should still be recorded as an Apollo HF collection
+  materialization unless the paper gives a more exact split recipe.
+- Synthetic Harmful is represented as a balanced JBB surrogate until the exact
+  generated paper split is recovered.
 - `JailbreakBench/JBB-Behaviors` is an approximate harmful-behavior fallback,
   not an exact paper source.
+- The live operational log is maintained in repository-root `REPLICATION.md`,
+  including concrete checkpoints, Slurm jobs, observed metrics, and source
+  limitations.
+
+Text-evaluation fallback:
+
+- `AISC-Linear-Probe-Gen/obfuscated_activations` contains Circuit
+  Breakers/Obfuscated Activations artifacts, including activation `.pt` files.
+  The current text-generation evaluation path cannot directly read those as
+  prompt/completion examples.
+- For real text-probe evaluation, `circuit_breakers_harmful` records the paper
+  source but falls back to `jailbreakbench_behaviors` as an approximate harmful
+  text source.
+- The text path marks this source as `fallback_only` so jobs do not waste time
+  trying to parse the public activation artifact as a text dataset.
+- Reports must preserve both facts: the paper source being covered and the
+  fallback text source used by this implementation path.
 
 All safety text, harmful/deceptive completions, activations, and checkpoints
 belong under controlled scratch artifacts, never under repo-tracked fixtures.
@@ -135,6 +156,34 @@ unless later source details override them:
 - three seeds `[17, 23, 41]`
 - primary probe layer 12
 - 4-layer and 8-layer ensemble support
+
+## Runtime Technology Assumptions
+
+The real-run stack is Hugging Face + PyTorch:
+
+- Models are loaded with `transformers.AutoModelForCausalLM` and
+  `AutoTokenizer`.
+- LoRA/QLoRA adapters are built with PEFT.
+- QLoRA uses BitsAndBytes 4-bit loading through `BitsAndBytesConfig`.
+- Activations are captured with forward hooks through `HFActivationExtractor`.
+- Frozen benign concept probes are trained before chameleon fine-tuning and
+  then used as differentiable fixed heads during the obfuscation loss.
+- The behavior term compares the trainable model to a frozen reference model
+  with KL on the same on-policy inputs/completions.
+- Evaluation trains post-hoc probes on the final checkpoint and aggregates
+  generation-token activations.
+
+Quantization is a default config choice, not a theoretical requirement:
+
+- `configs/train/qlora.yaml` is the default Narval path because it makes 2B,
+  7B, 8B, and 9B jobs fit reliably while also loading a frozen reference model
+  for KL.
+- On A100 nodes, this is conservative. Full-precision LoRA or full fine-tuning
+  can be selected with `train_backend: lora` or `train_backend: full_finetune`
+  when the allocation has enough memory for the trainable model, reference
+  model, activations, optimizer state, and probe heads.
+- QLoRA is especially useful for fast pilot runs and queue-friendly jobs; it
+  should not be described as the only valid replication backend.
 
 ## Probe And Judge Assumptions
 
@@ -192,10 +241,11 @@ Narval defaults:
   `$SLURM_TMPDIR/next_chameleons_hf`
 
 The Slurm scripts stage selected Hugging Face model snapshots from persistent
-scratch into node-local storage before loading models. This is assumed necessary
-on Narval because repeated sharded model loads from Lustre showed severe
-latency, and Alliance/Narval guidance recommends `$SLURM_TMPDIR` for temporary
-high-I/O job data.
+scratch into node-local storage before loading models. Paper jobs also stage the
+text-evaluation dataset snapshots used by the current run. This is assumed
+necessary on Narval because repeated sharded model and dataset loads from Lustre
+showed avoidable latency, and Alliance/Narval guidance recommends
+`$SLURM_TMPDIR` for temporary high-I/O job data.
 
 ## Secrets And Logging Assumptions
 
@@ -205,6 +255,30 @@ high-I/O job data.
 - W&B is optional and controlled by `WANDB_MODE` and `WANDB_API_KEY`.
 - Run manifests should include git commit, config, source revisions/checksums,
   Slurm job id, account, partition, GPU count, seed, and artifact paths.
+
+## Current Narval Status Summary
+
+- Full 2B seed-17 training produced a reusable checkpoint, but that historical
+  run did not save the exact frozen benign Probe bank.
+- Corrected 2B evaluation now completes on Dolus, Apollo HF collection
+  materialization, Circuit Breakers/JBB fallback, and Synthetic Harmful/JBB
+  surrogate.
+- A second corrected 2B evaluation writes fitted post-hoc Judge/Probe artifacts
+  under the eval artifact root.
+- The first 9B seed-17 job was canceled rather than treated as a result because
+  `max_steps` was not being bridged from `real_run` into the trainer. The
+  corrected configs now use bounded 100-step validation runs for 9B, Llama, and
+  Qwen by default.
+- Two intermediate 9B seed-17 attempts were canceled after W&B online
+  initialization hit a compute-node network retry loop. Slurm now forces
+  `WANDB_MODE=offline` unless `NEXT_CHAMELEONS_WANDB_ONLINE=1` is explicitly
+  set, and the Python trainer passes that mode directly to `wandb.init`.
+- The current 9B seed-17 validation chain starts at job `62334732`, with
+  dependent jobs `62334733`/`62334734` for 9B seeds 23/41 and `62334735`/
+  `62334736` for Llama/Qwen seed-17 family checks. Job `62334732` has reached
+  offline W&B initialization and frozen benign probe fitting.
+- Long full-budget replication should use an explicit long-run config or sweep
+  after the validation runs are healthy.
 
 ## Known Gaps To Resolve
 
@@ -216,5 +290,7 @@ high-I/O job data.
   exact public source references if available.
 - Validate that Qwen 3.5 27B rating agrees sufficiently with the paper's rater
   before making exact reproduction claims.
-- Fill result tables after the Narval data generation and pilot 2B runs finish.
-
+- Add an activation-artifact adapter for Circuit Breakers if we want to evaluate
+  the public `.pt` source directly instead of using a JBB text fallback.
+- Fill result tables after the corrected 9B validation and model-family runs
+  finish.

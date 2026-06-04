@@ -36,6 +36,12 @@ A repeatable strategy for inducing or testing chameleon behavior, such as paper
 SFT, multi-probe evasion, curriculum escalation, multi-turn adaptation, or GRPO.
 _Avoid_: backend when referring to the research objective instead of PEFT/full/RL machinery
 
+**Experiment Config Source**:
+A config tree supplied by the repository or by an external experiment pack. It
+defines datasets, models, Judges, Training Regimes, sweeps, and mechanisms
+without requiring code changes in the library.
+_Avoid_: package data when referring to user-authored research presets
+
 **Curriculum**:
 A schedule that changes probe difficulty, Judge strength, feedback, data domains,
 or turn budget across rounds.
@@ -85,6 +91,8 @@ _Avoid_: training loss
 
 - A **Neural Chameleon** is a **Model Organism**.
 - A **Chameleon Benchmark** evaluates one or more **Training Regimes**.
+- An **Experiment Config Source** selects the Training Regime, model, data, and
+  Judge used by a run.
 - A **Judge** contains a **Probe Suite** plus aggregation and escalation policy.
 - A **Probe** reads an **Activation Cache** during training or evaluation.
 - **Probe Discovery** promotes stronger **Probes** into later **Judges**.

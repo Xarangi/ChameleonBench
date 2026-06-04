@@ -53,6 +53,10 @@ Sources that need regeneration, local manifests, or approximate substitutes:
 - Synthetic Harmful is a regenerate-or-local-manifest condition.
 - `JailbreakBench/JBB-Behaviors` is kept as an approximate harmful-behavior
   fallback, not an exact paper source.
+- Circuit Breakers/Obfuscated Activations remains the recorded paper source for
+  that condition, but the current text-generation eval path falls back to
+  JailbreakBench because the public artifact is activation `.pt` data rather
+  than normal prompt/completion text.
 
 Raw safety text, generated completions, activations, and checkpoints belong
 under `$SCRATCH/next_chameleons_raw_cache` or another controlled artifact root,
@@ -85,16 +89,22 @@ live under `docs/experiments/`; the top-level `experiments/` directory is kept
 free for runnable experiment code or generated experiment assets if we later
 need it.
 
-Website appearance/settings you can tune in `properdocs.yml`:
+Website appearance/settings you can tune in `properdocs.yml` and
+`docs/assets/css/editorial.css`:
 
 - `site_name`, `site_description`, and `site_author` control the browser/site
   metadata and top-level identity.
 - `repo_url`, `repo_name`, and `edit_uri` control repository and edit links.
-- `theme.name` selects the ProperDocs theme. The current theme is `mkdocs`.
-- `theme.color_mode` controls default appearance: `light`, `dark`, or `auto`.
+- `theme.name` selects the ProperDocs theme. The installed ProperDocs theme is
+  `mkdocs`; a literal MaterialX theme is not installed in this environment.
+- `theme.color_mode`, `theme.nav_style`, `theme.navigation_depth`, and
+  `theme.user_color_mode_toggle` control the flattened navigation shell.
 - `theme.highlightjs` and `theme.hljs_languages` control code highlighting.
 - `markdown_extensions` controls Markdown features such as tables, code blocks,
-  sane lists, and heading permalinks.
+- sane lists, heading permalinks, and LaTeX via `pymdownx.arithmatex`.
+- `extra_css` loads the editorial theme. `editorial.css` controls the
+  off-white background, charcoal text, serif body font, monospace code font,
+  muted links, borders, and code block styling.
 - `nav` controls the left/top navigation tree and page order.
 - `validation` controls how strict docs builds are about missing links and nav
   omissions.
@@ -106,6 +116,19 @@ export SCRATCH=/path/to/scratch
 export HF_HOME="$SCRATCH/.cache/huggingface"
 export WANDB_MODE=offline
 ```
+
+Narval Slurm scripts default to offline W&B even when `WANDB_API_KEY` is set.
+Set `NEXT_CHAMELEONS_WANDB_ONLINE=1` only when the compute node has reliable
+outbound access and you want live W&B syncing.
+
+## Runtime Stack
+
+Real runs use Hugging Face Transformers, PyTorch, PEFT LoRA/QLoRA, BitsAndBytes
+4-bit loading for the default QLoRA backend, and local/open-weight Qwen 3.5 27B
+as the no-OpenAI benign data rater. Quantization is the conservative default so
+we can fit a trainable model plus frozen KL reference model on A100 jobs; it is
+not required by the library. Switch configs to `lora` or `full_finetune` when
+you want full-precision runs and have the memory budget.
 
 ## Quick Checks
 
@@ -275,6 +298,15 @@ uv run next-chameleons real-eval paper_gemma2_2b_real \
   --output-dir "$SCRATCH/next_chameleons_artifacts/paper_gemma2_2b_real"
 ```
 
+Materialize safety-eval raw-cache sources before exact-ish replication evals:
+
+```bash
+uv run --extra train next-chameleons paper-materialize-safety-data paper_gemma2_2b_real
+```
+
+The live operational replication log, concrete checkpoints, limitations, and
+observed results are tracked in [REPLICATION.md](REPLICATION.md).
+
 SLURM:
 
 ```bash
@@ -287,6 +319,13 @@ Narval dependency-chain submission:
 ./scripts/submit_paper_replication.sh
 ```
 
+Resume after a completed minimal 2B train run when only eval failed:
+
+```bash
+./scripts/submit_paper_replication_resume_after_min2b.sh \
+  "$SCRATCH/next_chameleons_artifacts/paper_minimal_gemma2_2b_real_62286553"
+```
+
 This uses account `ctb-liyue_gpu`, scratch-backed caches, a minimal 2B concept
 slice before the full 2B pilot, then the Gemma-2-9B primary run and seed-17
 family replication jobs after the primary pilot succeeds.
@@ -295,6 +334,14 @@ family replication jobs after the primary pilot succeeds.
 manifest or rated benign concept JSONL is missing. Compute jobs set
 `HF_HUB_OFFLINE=1`, `HF_DATASETS_OFFLINE=1`, `TRANSFORMERS_OFFLINE=1`, and
 `NEXT_CHAMELEONS_OFFLINE=1`.
+
+Paper jobs stage both model snapshots and the text-evaluation dataset snapshots
+they need from `$SCRATCH/.cache/huggingface` into `$SLURM_TMPDIR` before running.
+The default text-eval dataset staging list is `AlignmentResearch/DolusChat`,
+`JailbreakBench/JBB-Behaviors`, `scale-safety-research/roleplaying`, and
+`scale-safety-research/insider_trading`; Circuit Breakers remains recorded as
+the paper source but its public activation artifact is skipped in the text path
+and uses the JailbreakBench harmful-behavior fallback.
 
 ## Extension Experiments
 

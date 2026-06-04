@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any
 
 from next_chameleons.datasets import PAPER_BENIGN_CONCEPTS
@@ -20,7 +22,9 @@ class FrozenLinearConceptProbe:
 
     def score_tokens(self, hidden_states: Any) -> Any:
         torch = require_torch()
-        return torch.sigmoid(hidden_states @ self.weight.to(hidden_states.device) + self.bias)
+        weight = self.weight.to(device=hidden_states.device, dtype=hidden_states.dtype)
+        bias = self.bias.to(device=hidden_states.device, dtype=hidden_states.dtype)
+        return torch.sigmoid(hidden_states @ weight + bias)
 
     def score_sequence(self, hidden_states: Any, generation_mask: Any) -> Any:
         scores = self.score_tokens(hidden_states)
@@ -38,9 +42,14 @@ class FrozenProbeBank:
         required_concepts: list[str] | tuple[str, ...] = PAPER_BENIGN_CONCEPTS,
     ) -> None:
         self.probes_by_concept = {probe.concept: probe for probe in probes}
+        self.required_concepts = list(required_concepts)
         missing = set(required_concepts) - set(self.probes_by_concept)
         if missing:
             raise ValueError(f"Missing frozen concept probes: {sorted(missing)}")
+
+    @property
+    def probes(self) -> list[FrozenLinearConceptProbe]:
+        return [self.probes_by_concept[concept] for concept in self.concepts]
 
     @property
     def concepts(self) -> list[str]:
@@ -65,6 +74,68 @@ class FrozenProbeBank:
             row_mask = generation_mask[row_index : row_index + 1]
             sequence_scores.append(probe.score_sequence(layer_hidden, row_mask))
         return torch.cat(sequence_scores, dim=0)
+
+    def manifest(self) -> dict[str, Any]:
+        return {
+            "format": "next_chameleons_frozen_probe_bank_v1",
+            "required_concepts": self.required_concepts,
+            "num_probes": len(self.probes),
+            "probes": [
+                {
+                    "concept": probe.concept,
+                    "layer": probe.layer,
+                    "weight_shape": list(probe.weight.shape),
+                    "bias_shape": list(probe.bias.shape),
+                }
+                for probe in self.probes
+            ],
+        }
+
+
+def save_frozen_probe_bank(bank: FrozenProbeBank, path: Path) -> Path:
+    """Persist frozen benign probes used by the paper training objective."""
+
+    torch = require_torch()
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    payload = {
+        "format": "next_chameleons_frozen_probe_bank_v1",
+        "required_concepts": bank.required_concepts,
+        "probes": [
+            {
+                "concept": probe.concept,
+                "layer": probe.layer,
+                "weight": probe.weight.detach().cpu(),
+                "bias": probe.bias.detach().cpu(),
+            }
+            for probe in bank.probes
+        ],
+    }
+    torch.save(payload, path)
+    path.with_suffix(".manifest.json").write_text(
+        json.dumps(bank.manifest(), indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+    return path
+
+
+def load_frozen_probe_bank(path: Path) -> FrozenProbeBank:
+    """Load frozen benign probes written by `save_frozen_probe_bank`."""
+
+    torch = require_torch()
+    payload = torch.load(Path(path), map_location="cpu", weights_only=False)
+    if payload.get("format") != "next_chameleons_frozen_probe_bank_v1":
+        raise ValueError(f"Unsupported frozen probe bank format in {path}")
+    probes = [
+        FrozenLinearConceptProbe(
+            concept=str(item["concept"]),
+            layer=int(item["layer"]),
+            weight=item["weight"],
+            bias=item["bias"],
+        )
+        for item in payload["probes"]
+    ]
+    return FrozenProbeBank(probes, required_concepts=payload["required_concepts"])
 
 
 def generation_mask_from_attention(attention_mask: Any, prompt_lengths: Any | None = None) -> Any:

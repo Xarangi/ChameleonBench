@@ -8,19 +8,28 @@ repo_name: GitHub
 edit_uri: blob/main/docs/
 theme:
   name: mkdocs
-  color_mode: auto
+  color_mode: light
+  nav_style: light
+  navigation_depth: 3
+  user_color_mode_toggle: false
   highlightjs: true
+  hljs_style: github
+  hljs_style_dark: github-dark
   hljs_languages:
     - yaml
     - python
     - bash
     - json
+extra_css:
+  - assets/css/editorial.css
 markdown_extensions:
   toc:
     permalink: true
   tables: {}
   fenced_code: {}
   sane_lists: {}
+  pymdownx.arithmatex:
+    generic: true
 validation:
   nav:
     omitted_files: warn
@@ -33,6 +42,7 @@ nav:
   - Home: index.md
   - Agent Guide: agent-guide.md
   - Library API: library-api.md
+  - Architecture Audit: architecture-audit.md
   - Replication Assumptions: replication.md
   - Experiments:
       - Overview: experiments/README.md

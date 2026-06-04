@@ -1,0 +1,10 @@
+id: synthetic_smoke
+adapter: synthetic
+num_examples: 96
+hidden_dim: 16
+num_layers: 4
+concept_shift: 1.35
+seed: 17
+redaction:
+  enabled: true
+  replacement: "[REDACTED_RAW_TEXT]"

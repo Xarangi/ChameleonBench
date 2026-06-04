@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 from typing import Annotated
 
@@ -15,12 +16,13 @@ from next_chameleons.pipeline import (
     run_paper_dry_run,
     validate_paper_configs,
 )
-from next_chameleons.plugins import load_builtin_plugins
+from next_chameleons.plugins import load_plugins
 from next_chameleons.prefetch import default_paper_prefetch_experiments, prefetch_assets
 from next_chameleons.real_pipeline import (
     _resolve_real_experiment,
     run_paper_data_check,
     run_paper_materialize_data,
+    run_paper_materialize_safety_data,
     run_paper_rate_data,
     run_paper_readiness_check,
     run_real_adaptive,
@@ -44,13 +46,33 @@ from next_chameleons.sweeps import expand_sweep, run_sweep, write_sweep_plan
 app = typer.Typer(help="Next Chameleons benchmark and training kit.")
 
 
+@app.callback()
+def main(
+    config_dir: Annotated[
+        Path | None,
+        typer.Option(
+            "--config-dir",
+            help=(
+                "User config directory. If set, it is searched before packaged "
+                "reference configs."
+            ),
+        ),
+    ] = None,
+) -> None:
+    """Configure global CLI options."""
+
+    if config_dir is not None:
+        os.environ["NEXT_CHAMELEONS_CONFIG_DIR"] = str(config_dir)
+
+
 @app.command()
 def registry() -> None:
     """Print built-in registry entries."""
 
-    load_builtin_plugins()
+    external_plugins = load_plugins()
     typer.echo(
         {
+            "external_plugins": external_plugins,
             "datasets": DATASET_ADAPTERS.names(),
             "activation_extractors": ACTIVATION_EXTRACTORS.names(),
             "probes": PROBES.names(),
@@ -210,6 +232,7 @@ def paper_materialize_data(
     rating_method: Annotated[str, typer.Option()] = "llm",
     rater_model: Annotated[str, typer.Option()] = DEFAULT_LLM_RATER_MODEL,
     rater_max_new_tokens: Annotated[int, typer.Option()] = 80,
+    rater_batch_size: Annotated[int, typer.Option()] = 16,
     min_rating: Annotated[int, typer.Option()] = 4,
     max_new_tokens: Annotated[int, typer.Option()] = 160,
     seed: Annotated[int, typer.Option()] = 17,
@@ -227,9 +250,36 @@ def paper_materialize_data(
         rating_method=rating_method,
         rater_model=rater_model,
         rater_max_new_tokens=rater_max_new_tokens,
+        rater_batch_size=rater_batch_size,
         min_rating=min_rating,
         max_new_tokens=max_new_tokens,
         seed=seed,
+    )
+    typer.echo(f"Wrote {report}")
+
+
+@app.command("paper-materialize-safety-data")
+def paper_materialize_safety_data(
+    experiment: Annotated[str, typer.Argument()] = "paper_gemma2_2b_real",
+    artifact_root: Annotated[Path, typer.Option()] = Path(
+        "${SCRATCH}/next_chameleons_artifacts"
+    ),
+    raw_cache_root: Annotated[Path, typer.Option()] = Path(
+        "${SCRATCH}/next_chameleons_raw_cache"
+    ),
+    include_apollo: Annotated[bool, typer.Option()] = True,
+    include_synthetic_harmful: Annotated[bool, typer.Option()] = True,
+    max_examples_per_split: Annotated[int | None, typer.Option()] = None,
+) -> None:
+    """Materialize local raw-cache safety eval sources."""
+
+    report = run_paper_materialize_safety_data(
+        experiment,
+        artifact_root=artifact_root,
+        raw_cache_root=raw_cache_root,
+        include_apollo=include_apollo,
+        include_synthetic_harmful=include_synthetic_harmful,
+        max_examples_per_split=max_examples_per_split,
     )
     typer.echo(f"Wrote {report}")
 

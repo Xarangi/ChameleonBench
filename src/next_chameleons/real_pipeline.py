@@ -4,9 +4,12 @@ from __future__ import annotations
 
 import json
 import os
+import pickle
 import subprocess
 from pathlib import Path
 from typing import Any
+
+import numpy as np
 
 from next_chameleons.activations import save_activation_cache
 from next_chameleons.config import ProjectPaths, load_config_group, load_experiment
@@ -28,6 +31,7 @@ from next_chameleons.hf.paper_data import (
     validate_concept_probe_data,
     validate_rated_examples,
 )
+from next_chameleons.hf.safety_data import materialize_paper_safety_sources
 from next_chameleons.hf.training import run_real_chameleon_training
 from next_chameleons.metrics import fixed_fpr_evasion_metric
 from next_chameleons.pipeline import build_judge_from_config
@@ -36,11 +40,63 @@ from next_chameleons.real_runs import build_real_run_plan
 from next_chameleons.reports.json_report import JsonReport
 
 
+def _log(message: str) -> None:
+    print(f"[next-chameleons] {message}", flush=True)
+
+
+def _save_fitted_judge_artifact(judge: Any, destination: Path, source_name: str) -> dict[str, Any]:
+    probe_dir = destination / "probe_artifacts" / source_name
+    probe_dir.mkdir(parents=True, exist_ok=True)
+    artifact_path = probe_dir / "fitted_judge.pkl"
+    with artifact_path.open("wb") as handle:
+        pickle.dump(judge, handle)
+    manifest = {
+        "format": "next_chameleons_fitted_judge_pickle_v1",
+        "source": source_name,
+        "artifact": str(artifact_path),
+        "warning": "Pickle artifacts are for trusted local reuse only.",
+        "probes": [
+            {
+                "probe_id": probe.probe_id,
+                "family": probe.family,
+                "threshold": float(probe.threshold),
+                "class": f"{probe.__class__.__module__}.{probe.__class__.__name__}",
+            }
+            for probe in judge.probes
+        ],
+    }
+    manifest_path = probe_dir / "manifest.json"
+    manifest_path.write_text(
+        json.dumps(manifest, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+    return {
+        "fitted_judge": str(artifact_path),
+        "manifest": str(manifest_path),
+    }
+
+
 def _source_cfg(dataset_cfg: dict[str, Any], source_name: str) -> dict[str, Any]:
     try:
         return dict(dataset_cfg["sources"][source_name])
     except KeyError as exc:
         raise KeyError(f"Dataset source {source_name!r} not found") from exc
+
+
+def _text_fallback_source_name(
+    dataset_cfg: dict[str, Any],
+    source_name: str,
+    source: dict[str, Any],
+) -> str | None:
+    configured = source.get("text_fallback_source") or source.get("fallback_source_name")
+    if configured:
+        return str(configured)
+    if (
+        source_name in {"circuit_breakers_harmful", "synthetic_harmful"}
+        and "jailbreakbench_behaviors" in dataset_cfg.get("sources", {})
+    ):
+        return "jailbreakbench_behaviors"
+    return None
 
 
 def _load_examples_for_source(
@@ -53,29 +109,90 @@ def _load_examples_for_source(
     raw_cache_root: Path | None = None,
 ) -> list:
     source = _source_cfg(dataset_cfg, source_name)
+
+    def _retarget_examples(examples: list, *, domain: str) -> list:
+        return [
+            type(example)(
+                example_id=example.example_id,
+                text=example.text,
+                label=example.label,
+                domain=domain,
+                source=example.source,
+                text_hash=example.text_hash,
+                generation_prefix=example.generation_prefix,
+                trigger_concept=example.trigger_concept,
+            )
+            for example in examples
+        ]
+
+    if source.get("text_eval_mode") == "fallback_only":
+        fallback_name = _text_fallback_source_name(dataset_cfg, source_name, source)
+        if fallback_name is None:
+            raise ValueError(f"Source {source_name!r} is fallback_only but has no fallback")
+        _log(f"source={source_name} uses text fallback={fallback_name}")
+        examples = _load_examples_for_source(
+            dataset_cfg,
+            fallback_name,
+            split=split,
+            max_examples=max_examples,
+            real_cfg=real_cfg,
+            raw_cache_root=raw_cache_root,
+        )
+        return _retarget_examples(examples, domain=source_name)
     if source.get("kind") != "huggingface_dataset":
         if raw_cache_root is None:
             raise ValueError(f"Source {source_name!r} requires raw_cache_root")
         local_path = raw_cache_root / source_name / "examples.jsonl"
-        return load_local_text_examples(
-            path=local_path,
+        try:
+            return load_local_text_examples(
+                path=local_path,
+                domain=source_name,
+                source=str(source.get("name", source_name)),
+                max_examples=max_examples,
+                text_column_candidates=real_cfg.get("text_column_candidates"),
+                label_column_candidates=real_cfg.get("label_column_candidates"),
+                fallback_label=1,
+            )
+        except (FileNotFoundError, ValueError):
+            fallback_name = _text_fallback_source_name(dataset_cfg, source_name, source)
+            if fallback_name is None:
+                raise
+            _log(f"source={source_name} local load failed; using fallback={fallback_name}")
+            examples = _load_examples_for_source(
+                dataset_cfg,
+                fallback_name,
+                split=split,
+                max_examples=max_examples,
+                real_cfg=real_cfg,
+                raw_cache_root=raw_cache_root,
+            )
+            return _retarget_examples(examples, domain=source_name)
+    try:
+        return load_hf_text_examples(
+            dataset_id=source["name"],
+            revision=source["revision"],
             domain=source_name,
-            source=str(source.get("name", source_name)),
+            dataset_config_name=source.get("config_name") or source.get("dataset_config_name"),
+            split=str(source.get("split", split)),
             max_examples=max_examples,
             text_column_candidates=real_cfg.get("text_column_candidates"),
             label_column_candidates=real_cfg.get("label_column_candidates"),
             fallback_label=1,
         )
-    return load_hf_text_examples(
-        dataset_id=source["name"],
-        revision=source["revision"],
-        domain=source_name,
-        split=split,
-        max_examples=max_examples,
-        text_column_candidates=real_cfg.get("text_column_candidates"),
-        label_column_candidates=real_cfg.get("label_column_candidates"),
-        fallback_label=1,
-    )
+    except (ConnectionError, FileNotFoundError, ValueError):
+        fallback_name = _text_fallback_source_name(dataset_cfg, source_name, source)
+        if fallback_name is None:
+            raise
+        _log(f"source={source_name} HF load failed; using fallback={fallback_name}")
+        examples = _load_examples_for_source(
+            dataset_cfg,
+            fallback_name,
+            split=split,
+            max_examples=max_examples,
+            real_cfg=real_cfg,
+            raw_cache_root=raw_cache_root,
+        )
+        return _retarget_examples(examples, domain=source_name)
 
 
 def _resolve_real_experiment(experiment_name: str, paths: ProjectPaths) -> dict[str, Any]:
@@ -190,6 +307,7 @@ def run_paper_materialize_data(
     rating_method: str = "llm",
     rater_model: str = DEFAULT_LLM_RATER_MODEL,
     rater_max_new_tokens: int = 80,
+    rater_batch_size: int = 16,
     min_rating: int = 4,
     max_new_tokens: int = 160,
     seed: int = 17,
@@ -226,6 +344,7 @@ def run_paper_materialize_data(
             rating_method=rating_method,
             rater_model=rater_model,
             rater_max_new_tokens=rater_max_new_tokens,
+            rater_batch_size=rater_batch_size,
             min_rating=min_rating,
             max_new_tokens=max_new_tokens,
             seed=seed,
@@ -243,6 +362,7 @@ def run_paper_materialize_data(
                 "generator_model": generator_model,
                 "rating_method": rating_method,
                 "rater_model": rater_model if rating_method == "llm" else None,
+                "rater_batch_size": rater_batch_size if rating_method == "llm" else None,
             },
         )
     payload = generation_plan_payload()
@@ -255,6 +375,32 @@ def run_paper_materialize_data(
         }
     )
     return JsonReport().write(artifact_root / "paper_materialize_data_report.json", payload)
+
+
+def run_paper_materialize_safety_data(
+    experiment_name: str = "paper_gemma2_2b_real",
+    *,
+    artifact_root: Path,
+    raw_cache_root: Path,
+    include_apollo: bool = True,
+    include_synthetic_harmful: bool = True,
+    max_examples_per_split: int | None = None,
+    paths: ProjectPaths | None = None,
+) -> Path:
+    """Materialize controlled raw-cache safety eval sources."""
+
+    resolved = paths or ProjectPaths.discover()
+    experiment = _resolve_real_experiment(experiment_name, resolved)
+    artifact_root = _output_dir(str(artifact_root))
+    raw_cache_root = _output_dir(str(raw_cache_root))
+    return materialize_paper_safety_sources(
+        raw_cache_root=raw_cache_root,
+        artifact_root=artifact_root,
+        dataset_cfg=experiment["dataset_config"],
+        include_apollo=include_apollo,
+        include_synthetic_harmful=include_synthetic_harmful,
+        max_examples_per_split=max_examples_per_split,
+    )
 
 
 def run_paper_rate_data(
@@ -307,10 +453,7 @@ def run_real_train(
     paper_concept_examples = None
     examples = []
     if experiment.get("track") == "paper_real":
-        paper_concept_examples = load_benign_concept_examples(
-            raw_cache_root,
-            max_examples=limit,
-        )
+        paper_concept_examples = load_benign_concept_examples(raw_cache_root)
     else:
         examples = _load_examples_for_source(
             dataset_cfg,
@@ -331,9 +474,15 @@ def run_real_train(
         "min_concept_positive_examples",
         "min_concept_negative_examples",
         "min_concept_rating",
+        "max_steps",
+        "log_every_steps",
+        "seen_concept_eval",
+        "seen_concept_eval_examples_per_concept",
     ):
         if key in real_cfg:
             train_cfg[key] = real_cfg[key]
+    if experiment.get("track") == "paper_real":
+        train_cfg["paper_max_examples"] = limit
     summary = run_real_chameleon_training(
         model_cfg=experiment["model_config"],
         train_cfg=train_cfg,
@@ -358,6 +507,7 @@ def run_real_train(
         "steps": summary.steps,
         "backend": summary.backend,
         "loss_history": summary.loss_history,
+        "artifacts": summary.artifacts,
         "paper_objective": experiment.get("track") == "paper_real",
         "raw_cache_root": str(raw_cache_root),
         "seed": seed,
@@ -404,18 +554,44 @@ def run_real_eval(
     )
     source_reports = []
     for source_name in real_cfg.get("eval_sources", []):
-        examples = _load_examples_for_source(
-            dataset_cfg,
-            str(source_name),
-            split=str(real_cfg.get("eval_split", "train")),
-            max_examples=eval_limit,
-            real_cfg=real_cfg,
-            raw_cache_root=raw_cache_root,
-        )
+        _log(f"eval source={source_name} loading examples limit={eval_limit}")
+        try:
+            examples = _load_examples_for_source(
+                dataset_cfg,
+                str(source_name),
+                split=str(real_cfg.get("eval_split", "train")),
+                max_examples=eval_limit,
+                real_cfg=real_cfg,
+                raw_cache_root=raw_cache_root,
+            )
+        except (FileNotFoundError, ValueError, ConnectionError) as exc:
+            source = _source_cfg(dataset_cfg, str(source_name))
+            if str(real_cfg.get("missing_eval_source_policy", "warn_and_skip")) != "warn_and_skip":
+                raise
+            _log(f"eval source={source_name} skipped: {exc}")
+            source_reports.append(
+                {
+                    "source": source_name,
+                    "status": "skipped_missing_source",
+                    "reason": str(exc),
+                    "exact_status": source.get("exact_status"),
+                    "required_local_path": str(
+                        raw_cache_root / str(source_name) / "examples.jsonl"
+                    ),
+                }
+            )
+            continue
+        _log(f"eval source={source_name} loaded examples={len(examples)}")
         batch = extractor.extract(examples, batch_size=int(real_cfg.get("batch_size", 1)))
         cache_path = destination / "activation_cache" / f"{source_name}.npz"
         save_activation_cache(batch, cache_path)
+        _log(f"eval source={source_name} wrote activation cache={cache_path}")
         judge = build_judge_from_config(experiment["judge_config"], batch).fit(batch)
+        fitted_judge_artifacts = _save_fitted_judge_artifact(judge, destination, str(source_name))
+        _log(
+            f"eval source={source_name} wrote fitted judge artifact="
+            f"{fitted_judge_artifacts['fitted_judge']}"
+        )
         fixed_fpr_reports = []
         triggered_batch = None
         if experiment.get("track") == "paper_real":
@@ -425,6 +601,7 @@ def run_real_eval(
                 positive_only=True,
             )
             if triggered:
+                _log(f"eval source={source_name} extracting triggered examples={len(triggered)}")
                 triggered_batch = extractor.extract(
                     triggered,
                     batch_size=int(real_cfg.get("batch_size", 1)),
@@ -433,6 +610,10 @@ def run_real_eval(
                     destination / "activation_cache" / f"{source_name}.triggered.npz"
                 )
                 save_activation_cache(triggered_batch, triggered_cache_path)
+                _log(
+                    f"eval source={source_name} wrote triggered activation cache="
+                    f"{triggered_cache_path}"
+                )
                 for probe in judge.probes:
                     clean_prediction = probe.predict(batch)
                     threshold = calibrate_threshold_at_fpr(
@@ -442,10 +623,20 @@ def run_real_eval(
                     )
                     probe.threshold = threshold
                     triggered_prediction = probe.predict(triggered_batch)
+                    positive_indices = np.flatnonzero(clean_prediction.labels == 1)
+                    clean_positive_scores = clean_prediction.scores[positive_indices]
+                    clean_positive_labels = clean_prediction.labels[positive_indices]
+                    if len(clean_positive_scores) != len(triggered_prediction.scores):
+                        raise ValueError(
+                            "Clean positive scores and triggered positive scores are not "
+                            "aligned for fixed-FPR evasion metric: "
+                            f"clean_positive={len(clean_positive_scores)} "
+                            f"triggered={len(triggered_prediction.scores)}"
+                        )
                     metric = fixed_fpr_evasion_metric(
-                        clean_scores=clean_prediction.scores,
+                        clean_scores=clean_positive_scores,
                         triggered_scores=triggered_prediction.scores,
-                        labels=triggered_prediction.labels,
+                        labels=clean_positive_labels,
                         threshold=threshold,
                         bootstrap_samples=int(
                             experiment.get("evaluation", {}).get("bootstrap_samples", 1000)
@@ -463,6 +654,7 @@ def run_real_eval(
         source_reports.append(
             {
                 "source": source_name,
+                "status": "completed",
                 "num_examples": len(examples),
                 "activation_cache": str(cache_path),
                 "triggered_activation_cache": (
@@ -470,6 +662,7 @@ def run_real_eval(
                     if triggered_batch is not None
                     else None
                 ),
+                "fitted_judge_artifacts": fitted_judge_artifacts,
                 "judge": judge.evaluate(batch).to_dict(),
                 "fixed_fpr_evasion": fixed_fpr_reports,
             }

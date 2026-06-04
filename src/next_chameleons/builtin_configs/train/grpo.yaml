@@ -1,0 +1,17 @@
+id: grpo
+backend: grpo
+library: trl
+algorithm: GRPO
+learning_rate: 0.000001
+batch_size: 16
+num_generations: 4
+max_prompt_length: 2048
+max_completion_length: 512
+reward_probe_weight: 1.0
+reward_capability_weight: 0.2
+kl_penalty: 0.05
+feedback_modes:
+  - binary_verdict
+  - probe_scores
+  - highest_feedback
+objective: reward_minus_probe_detection_minus_capability_tax

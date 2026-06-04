@@ -20,6 +20,14 @@ def test_slurm_scripts_reference_scratch_and_configs() -> None:
     assert "real-train" in paper
     assert "real-eval" in paper
     assert "stage_next_chameleons_hf_cache" in paper
+    assert "NEXT_CHAMELEONS_STAGE_DATASETS" in paper
+    assert (
+        "AlignmentResearch/DolusChat;JailbreakBench/JBB-Behaviors;"
+        "scale-safety-research/roleplaying;scale-safety-research/insider_trading"
+        in paper
+    )
+    assert "WANDB_PROJECT" in paper
+    assert "WANDB_API_KEY" in paper
     assert "IlyaGusev/gemma-2-9b-it-abliterated" in paper
     assert "SCRATCH" in adaptive
     assert "--account=ctb-liyue_gpu" in adaptive
@@ -39,6 +47,7 @@ def test_slurm_submitter_builds_dependency_chain() -> None:
     root = Path(__file__).resolve().parents[1]
     runner = (root / "scripts/slurm/run_cli.sbatch").read_text()
     submitter = (root / "scripts/submit_paper_replication.sh").read_text()
+    resume = (root / "scripts/submit_paper_replication_resume_after_min2b.sh").read_text()
 
     assert "--account=ctb-liyue_gpu" in runner
     assert ".env.narval" in runner
@@ -46,6 +55,8 @@ def test_slurm_submitter_builds_dependency_chain() -> None:
     assert "NEXT_CHAMELEONS_OFFLINE" in runner
     assert "Expected an A100 allocation" in runner
     assert "stage_next_chameleons_hf_cache" in runner
+    assert "scale-safety-research/roleplaying;scale-safety-research/insider_trading" in resume
+    assert "paper-materialize-safety-data" in submitter
     assert "NEXT_CHAMELEONS_STAGE_MODELS=google/gemma-2-27b-it;Qwen/Qwen3.5-27B" in submitter
     assert "prefetch_paper_assets.sh" in submitter
     assert "RAW_DATA_PATH" in submitter
@@ -56,3 +67,10 @@ def test_slurm_submitter_builds_dependency_chain() -> None:
     assert "paper_gemma2_2b_real 17" in submitter
     assert "paper_gemma2_9b_real 17" in submitter
     assert "--dependency=afterok" in submitter
+    assert "next-paper-min2b-eval-retry" in resume
+    assert "paper_minimal_gemma2_2b_real_62286553" in resume
+    assert "real-eval paper_minimal_gemma2_2b_real" in resume
+    assert "adapter_model.safetensors" in resume
+    assert "paper_gemma2_2b_real 17" in resume
+    assert "paper_gemma2_9b_real 17" in resume
+    assert "--dependency=afterok" in resume

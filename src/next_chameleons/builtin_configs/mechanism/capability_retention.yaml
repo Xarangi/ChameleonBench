@@ -1,0 +1,27 @@
+id: capability_retention
+kind: mechanism
+description: Gates and metrics that quantify behavior preservation and obfuscation tax.
+gates:
+  behavior_kl_max: 0.15
+  task_accuracy_min: 0.8
+  require_behavior_gate: true
+metrics:
+  - behavior_gate
+  - capability_retention
+  - obfuscation_tax
+  - safety_likelihood_retention
+  - base_trigger_control
+used_by:
+  - paper_reproduction
+  - adaptive_2b
+  - curriculum_probe_escalation
+  - multi_probe_evasion
+  - multiturn_self_redteam
+  - grpo_probe_reward
+  - language_generalization
+  - safety_benchmark
+reports:
+  - behavior_gate
+  - capability_tax_table
+  - obfuscation_tax_curve
+  - target_behavior_preservation

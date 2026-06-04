@@ -29,7 +29,14 @@ export HF_HUB_CACHE="${HF_HOME}"
 export HF_DATASETS_CACHE="${HF_HOME}/datasets"
 export TRANSFORMERS_CACHE="${HF_HOME}/transformers"
 export UV_CACHE_DIR="${SCRATCH:-${REPO_ROOT}}/.cache/uv"
-export WANDB_MODE="${WANDB_MODE:-offline}"
+export WANDB_PROJECT="${WANDB_PROJECT:-next-chameleons}"
+export WANDB_DIR="${NEXT_CHAMELEONS_ARTIFACT_ROOT}/wandb"
+export WANDB_INIT_TIMEOUT="${WANDB_INIT_TIMEOUT:-20}"
+if [[ "${NEXT_CHAMELEONS_WANDB_ONLINE:-0}" == "1" && -n "${WANDB_API_KEY:-}" ]]; then
+  export WANDB_MODE="online"
+else
+  export WANDB_MODE="offline"
+fi
 export HF_HUB_OFFLINE=1
 export HF_DATASETS_OFFLINE=1
 export TRANSFORMERS_OFFLINE=1
@@ -57,7 +64,9 @@ case "${EXPERIMENT}" in
     DEFAULT_STAGE_MODELS=""
     ;;
 esac
+DEFAULT_STAGE_DATASETS="AlignmentResearch/DolusChat;JailbreakBench/JBB-Behaviors;scale-safety-research/roleplaying;scale-safety-research/insider_trading"
 export NEXT_CHAMELEONS_STAGE_MODELS="${NEXT_CHAMELEONS_STAGE_MODELS:-${DEFAULT_STAGE_MODELS}}"
+export NEXT_CHAMELEONS_STAGE_DATASETS="${NEXT_CHAMELEONS_STAGE_DATASETS:-${DEFAULT_STAGE_DATASETS}}"
 source "${REPO_ROOT}/scripts/slurm/stage_hf_cache.sh"
 stage_next_chameleons_hf_cache
 

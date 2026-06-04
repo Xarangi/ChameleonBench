@@ -18,6 +18,7 @@ In Python:
 ```python
 from next_chameleons import (
     ActivationBatch,
+    ConfigSource,
     DatasetAdapter,
     EnsembleJudge,
     Probe,
@@ -27,10 +28,17 @@ from next_chameleons import (
 )
 ```
 
+For the most stable public import seam, use `next_chameleons.api`:
+
+```python
+from next_chameleons.api import Probe, TrainingRegimeRunner, TrainingRunRequest
+```
+
 ## Config-Driven Experiment Loading
 
-Current config loading expects a project-style config tree. For this repository
-that is `configs/`; for your own experiment pack, keep the same group layout:
+Config loading is source-driven. The package ships reference configs as
+packaged presets, and the source checkout keeps editable copies in `configs/`.
+External projects can bring their own config tree with the same group layout:
 
 ```text
 configs/
@@ -41,7 +49,7 @@ configs/
   train/
 ```
 
-Load a preset from Python:
+Load a preset from this repository:
 
 ```python
 from pathlib import Path
@@ -52,9 +60,26 @@ experiment = load_experiment("paper_gemma2_2b_real", paths=paths)
 print(experiment["id"])
 ```
 
-The intended future package shape is a config-source interface where user config
-directories can be supplied explicitly and built-in reference configs are just
-examples. For now, source-checkout configs remain the supported path.
+Load an external experiment pack:
+
+```python
+from pathlib import Path
+from next_chameleons import ConfigSource, load_experiment
+
+source = ConfigSource.from_config_dir(Path("/path/to/my_next_chameleon_configs"))
+experiment = load_experiment("my_probe_curriculum", paths=source)
+```
+
+For CLI usage:
+
+```bash
+next-chameleons --config-dir /path/to/my/configs config-check my_probe_curriculum
+```
+
+You can also set `NEXT_CHAMELEONS_CONFIG_DIR`. If unset, the CLI discovers the
+nearest source checkout with `configs/`; if no checkout is found, it falls back
+to packaged reference configs. User configs are searched before packaged
+reference configs, so local presets can override built-in names.
 
 ## Custom Probe
 
@@ -107,6 +132,17 @@ PROBES.register("mean_activation", MeanActivationProbe)
 For in-repo built-ins, add the module import to
 `next_chameleons.plugins.load_builtin_plugins()`. For external experiment packs,
 import your registration module before loading the config that refers to it.
+
+External packages can also expose an entry point so `next-chameleons registry`
+loads them automatically:
+
+```toml
+[project.entry-points."next_chameleons.plugins"]
+my_lab = "my_lab_next_chameleons_plugin"
+```
+
+The target module should register Probes, Judges, DatasetAdapters, or Training
+Regimes as an import side effect.
 
 ## Custom Judge
 
@@ -164,3 +200,23 @@ uv run next-chameleons experiment-smoke multi_probe_evasion
 Drop into Python when you are adding a new Probe, Judge, DatasetAdapter,
 Training Regime, or analysis loop that the existing configs cannot express.
 
+## Training Regime Runner
+
+Use `TrainingRegimeRunner` when you want one Python seam for synthetic smoke,
+real training, real evaluation, and adaptive runs:
+
+```python
+from pathlib import Path
+from next_chameleons.api import ConfigSource, TrainingRegimeRunner, TrainingRunRequest
+
+source = ConfigSource.from_config_dir(Path("my_configs"))
+runner = TrainingRegimeRunner(paths=source)
+report = runner.run(
+    TrainingRunRequest(
+        experiment="my_probe_curriculum",
+        mode="synthetic_smoke",
+        output_dir=Path("runs/my_probe_curriculum"),
+    )
+)
+print(report)
+```

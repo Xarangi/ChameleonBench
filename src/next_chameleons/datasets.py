@@ -175,15 +175,17 @@ def paper_source_coverage() -> dict[str, dict[str, str | bool]]:
             "role": "deception safety probe",
         },
         "apollo_repe_deception": {
-            "available": "partial",
-            "exact": False,
+            "available": True,
+            "exact": "apollo_hf_collection",
             "source": (
-                "github.com/andyzoujm/representation-engineering has RepE code/data; "
-                "no Apollo-named deception corpus was found"
+                "scale-safety-research/roleplaying and "
+                "scale-safety-research/insider_trading, with GitHub lineage at "
+                "github.com/ApolloResearch/deception-detection"
             ),
             "role": (
-                "local manifest import preferred; RepE honesty/facts adapter is "
-                "approximate fallback"
+                "Apollo deception probe materialization with honest/deceptive labels; "
+                "record as HF collection materialization unless an exact paper split "
+                "recipe is recovered"
             ),
         },
         "circuit_breakers_harmful": {
@@ -196,10 +198,10 @@ def paper_source_coverage() -> dict[str, dict[str, str | bool]]:
             "role": "Circuit Breakers / Obfuscated-Activations harmful probe",
         },
         "synthetic_harmful": {
-            "available": False,
+            "available": "surrogate",
             "exact": False,
-            "source": "paper describes the condition but not a packaged release",
-            "role": "regenerate or provide local manifest",
+            "source": "JailbreakBench/JBB-Behaviors balanced harmful/benign surrogate",
+            "role": "approximate local manifest until paper synthetic harmful split is recovered",
         },
         "translated_alpaca": {
             "available": True,

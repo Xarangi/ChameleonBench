@@ -52,9 +52,20 @@ def load_causal_lm(
         "device_map": device_map,
     }
     if quantization == "4bit":
-        kwargs["load_in_4bit"] = True
+        quantization_config_cls = getattr(transformers, "BitsAndBytesConfig", None)
+        if quantization_config_cls is None:
+            raise RuntimeError("4-bit loading requires transformers.BitsAndBytesConfig")
+        kwargs["quantization_config"] = quantization_config_cls(
+            load_in_4bit=True,
+            bnb_4bit_compute_dtype=dtype_map.get(dtype, torch.bfloat16),
+            bnb_4bit_quant_type="nf4",
+            bnb_4bit_use_double_quant=True,
+        )
     elif quantization == "8bit":
-        kwargs["load_in_8bit"] = True
+        quantization_config_cls = getattr(transformers, "BitsAndBytesConfig", None)
+        if quantization_config_cls is None:
+            raise RuntimeError("8-bit loading requires transformers.BitsAndBytesConfig")
+        kwargs["quantization_config"] = quantization_config_cls(load_in_8bit=True)
     model = transformers.AutoModelForCausalLM.from_pretrained(
         hf_id,
         local_files_only=local_files_only,

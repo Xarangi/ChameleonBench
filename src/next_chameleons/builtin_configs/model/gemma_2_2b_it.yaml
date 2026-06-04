@@ -1,0 +1,10 @@
+id: gemma_2_2b_it
+hf_id: google/gemma-2-2b-it
+family: gemma
+parameter_scale: 2b
+variant: helpful_only_or_safety_tuned_public
+default_dtype: bfloat16
+activation_sites:
+  - residual_stream
+default_layers: [8, 12, 16, 20]
+requires_auth: true

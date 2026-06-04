@@ -62,6 +62,7 @@ dev = [
   "ruff>=0.5.0",
 ]
 docs = [
+  "pymdown-extensions>=10.8.0",
   "properdocs==1.6.7",
   "properdocs-theme-mkdocs==1.6.7",
 ]
@@ -78,7 +79,7 @@ where = ["src"]
 include = ["next_chameleons*"]
 
 [tool.setuptools.package-data]
-next_chameleons = ["py.typed"]
+next_chameleons = ["py.typed", "builtin_configs/**/*.yaml"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

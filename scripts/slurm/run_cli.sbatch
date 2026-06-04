@@ -27,7 +27,14 @@ export HF_HUB_CACHE="${HF_HOME}"
 export HF_DATASETS_CACHE="${HF_HOME}/datasets"
 export TRANSFORMERS_CACHE="${HF_HOME}/transformers"
 export UV_CACHE_DIR="${SCRATCH:-${REPO_ROOT}}/.cache/uv"
-export WANDB_MODE="${WANDB_MODE:-offline}"
+export WANDB_PROJECT="${WANDB_PROJECT:-next-chameleons}"
+export WANDB_DIR="${NEXT_CHAMELEONS_ARTIFACT_ROOT}/wandb"
+export WANDB_INIT_TIMEOUT="${WANDB_INIT_TIMEOUT:-20}"
+if [[ "${NEXT_CHAMELEONS_WANDB_ONLINE:-0}" == "1" && -n "${WANDB_API_KEY:-}" ]]; then
+  export WANDB_MODE="online"
+else
+  export WANDB_MODE="offline"
+fi
 export HF_HUB_OFFLINE="${HF_HUB_OFFLINE:-1}"
 export HF_DATASETS_OFFLINE="${HF_DATASETS_OFFLINE:-1}"
 export TRANSFORMERS_OFFLINE="${TRANSFORMERS_OFFLINE:-1}"

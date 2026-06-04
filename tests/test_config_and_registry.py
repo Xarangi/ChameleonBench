@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from next_chameleons.config import ProjectPaths, load_config_group, load_experiment
+from next_chameleons.config import ConfigSource, ProjectPaths, load_config_group, load_experiment
 from next_chameleons.plugins import load_builtin_plugins
 from next_chameleons.registry import (
     ACTIVATION_EXTRACTORS,
@@ -21,6 +21,7 @@ def test_public_library_import_surface_is_available() -> None:
     expected_exports = {
         "ActivationBatch",
         "ActivationExtractor",
+        "ConfigSource",
         "DatasetAdapter",
         "DatasetBundle",
         "EnsembleJudge",
@@ -33,8 +34,10 @@ def test_public_library_import_surface_is_available() -> None:
         "Registry",
         "TrainingBackend",
         "TrainingRegime",
+        "TrainingRegimeRunner",
         "TrainingRegimeSpec",
         "TrainingResult",
+        "TrainingRunRequest",
         "load_experiment",
         "paper_trigger",
     }
@@ -42,6 +45,62 @@ def test_public_library_import_surface_is_available() -> None:
     assert expected_exports.issubset(set(next_chameleons.__all__))
     for name in expected_exports:
         assert getattr(next_chameleons, name)
+
+
+def test_external_config_source_can_load_user_experiment_pack(tmp_path: Path) -> None:
+    config_root = tmp_path / "my_configs"
+    for group in ("experiment", "dataset", "judge", "train", "model"):
+        (config_root / group).mkdir(parents=True)
+    (config_root / "dataset" / "toy.yaml").write_text("id: toy\n", encoding="utf-8")
+    (config_root / "judge" / "toy.yaml").write_text("id: toy\n", encoding="utf-8")
+    (config_root / "train" / "toy.yaml").write_text("id: toy\n", encoding="utf-8")
+    (config_root / "model" / "toy.yaml").write_text("id: toy-model\n", encoding="utf-8")
+    (config_root / "experiment" / "toy.yaml").write_text(
+        "\n".join(
+            [
+                "id: toy",
+                "dataset: toy",
+                "judge: toy",
+                "train_backend: toy",
+                "models:",
+                "  - toy",
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    source = ConfigSource.from_config_dir(config_root)
+    experiment = load_experiment("toy", paths=source)
+
+    assert source.configs == config_root
+    assert experiment["dataset_config"]["id"] == "toy"
+    assert experiment["judge_config"]["id"] == "toy"
+    assert experiment["train_backend_config"]["id"] == "toy"
+    assert experiment["model_configs"] == [{"id": "toy-model"}]
+
+
+def test_packaged_builtin_config_source_loads_reference_configs() -> None:
+    source = ConfigSource.builtin()
+    experiment = load_experiment("paper_minimal_gemma2_2b_real", paths=source)
+
+    assert experiment["id"] == "paper_minimal_gemma2_2b_real"
+    assert experiment["dataset_config"]["id"] == "paper_sources"
+
+
+def test_user_config_source_overrides_packaged_references(tmp_path: Path) -> None:
+    config_root = tmp_path / "configs"
+    (config_root / "experiment").mkdir(parents=True)
+    (config_root / "experiment" / "paper_minimal_gemma2_2b_real.yaml").write_text(
+        "id: user_override\ntrack: custom\n",
+        encoding="utf-8",
+    )
+
+    source = ConfigSource.from_config_dir(config_root)
+    experiment = load_experiment("paper_minimal_gemma2_2b_real", paths=source)
+
+    assert experiment["id"] == "user_override"
+    assert experiment["track"] == "custom"
 
 
 def test_paper_config_loads_all_reported_models() -> None:

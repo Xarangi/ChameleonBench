@@ -9,6 +9,11 @@ from next_chameleons.training.backends import (
     TrainingResult,
 )
 from next_chameleons.training.regimes import TrainingRegimeSpec
+from next_chameleons.training.runner import (
+    TrainingRegimeRunner,
+    TrainingRunMode,
+    TrainingRunRequest,
+)
 
 __all__ = [
     "AdaptiveRoundResult",
@@ -16,6 +21,9 @@ __all__ = [
     "FullFineTuneBackend",
     "GrpoTrainingBackend",
     "LoraTrainingBackend",
+    "TrainingRegimeRunner",
     "TrainingRegimeSpec",
     "TrainingResult",
+    "TrainingRunMode",
+    "TrainingRunRequest",
 ]

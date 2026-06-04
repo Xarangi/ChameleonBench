@@ -1,0 +1,39 @@
+id: adaptive_2b
+track: adaptive
+base_model: gemma_2_2b_it
+dataset: paper_sources
+judge: strong_starters
+train_backends:
+  - qlora
+  - full_finetune
+rounds: 5
+training_modes:
+  - loss_only
+  - explicit_judge_feedback
+  - multiturn_adaptation
+multiturn_feedback_modes:
+  primary: binary_verdict
+  ablations:
+    - coarse_reason
+    - probe_scores
+    - highest_feedback
+holdout:
+  probe_family: true
+  data_domain: true
+selector:
+  type: active_probe_pool
+  mechanism: probe_discovery
+  promote_top_k: 3
+mechanisms:
+  feedback_channels:
+    config: configs/mechanism/feedback_channels.yaml
+    role: adaptive_episode_feedback_ablations
+  probe_discovery:
+    config: configs/mechanism/probe_discovery.yaml
+    role: round_by_round_judge_tightening
+  capability_retention:
+    config: configs/mechanism/capability_retention.yaml
+    role: behavior_preservation_gate
+report:
+  style: adaptive
+  include_round_curves: true

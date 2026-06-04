@@ -1,0 +1,21 @@
+id: inference_monitoring
+kind: mechanism
+description: Attach a Judge to activation traces during generation, replay, or smoke runs.
+trace_fields:
+  - judge_id
+  - flagged
+  - aggregate_score
+  - probe_scores
+redaction:
+  raw_text_allowed_in_trace: false
+  store_prompt_completion_hashes_only: true
+used_by:
+  - multiturn_self_redteam
+  - grpo_probe_reward
+  - safety_benchmark
+  - all_experiment_smokes
+reports:
+  - monitor_flag_rate
+  - probe_score_trace
+  - escalation_event_count
+  - redacted_inference_trace

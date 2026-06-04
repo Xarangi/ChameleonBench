@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -36,6 +37,38 @@ DEFAULT_TEXT_COLUMNS = (
     "rejected",
 )
 DEFAULT_LABEL_COLUMNS = ("label", "is_deceptive", "harmful", "target", "class")
+
+
+def _repo_cache_name(dataset_id: str) -> str:
+    return f"datasets--{dataset_id.replace('/', '--')}"
+
+
+def local_dataset_snapshot_path(dataset_id: str, revision: str) -> Path | None:
+    """Find an already-prefetched HF dataset snapshot for offline compute jobs."""
+
+    cache_roots = [
+        os.environ.get("HF_HUB_CACHE"),
+        os.environ.get("HF_HOME"),
+        os.environ.get("NEXT_CHAMELEONS_PERSISTENT_HF_HOME"),
+    ]
+    for value in cache_roots:
+        if not value:
+            continue
+        root = Path(value)
+        candidate_roots = [
+            root / _repo_cache_name(dataset_id),
+            root / "hub" / _repo_cache_name(dataset_id),
+        ]
+        for repo_root in candidate_roots:
+            exact = repo_root / "snapshots" / revision
+            if exact.exists():
+                return exact
+            snapshots = repo_root / "snapshots"
+            if snapshots.exists():
+                matches = sorted(path for path in snapshots.iterdir() if path.is_dir())
+                if len(matches) == 1:
+                    return matches[0]
+    return None
 
 
 def _stringify(value: Any) -> str:
@@ -83,6 +116,7 @@ def load_hf_text_examples(
     dataset_id: str,
     revision: str,
     domain: str,
+    dataset_config_name: str | None = None,
     split: str = "train",
     max_examples: int | None = None,
     text_column_candidates: list[str] | None = None,
@@ -92,7 +126,21 @@ def load_hf_text_examples(
     """Load and normalize a public Hugging Face dataset split."""
 
     datasets = require_datasets()
-    dataset = datasets.load_dataset(dataset_id, split=split, revision=revision)
+    offline = os.environ.get("NEXT_CHAMELEONS_OFFLINE", "").lower() in {
+        "1",
+        "true",
+        "yes",
+    }
+    local_path = local_dataset_snapshot_path(dataset_id, revision) if offline else None
+    if local_path is not None:
+        dataset = datasets.load_dataset(str(local_path), dataset_config_name, split=split)
+    else:
+        dataset = datasets.load_dataset(
+            dataset_id,
+            dataset_config_name,
+            split=split,
+            revision=revision,
+        )
     if max_examples is not None:
         dataset = dataset.select(range(min(max_examples, len(dataset))))
     text_candidates = tuple(text_column_candidates or DEFAULT_TEXT_COLUMNS)
