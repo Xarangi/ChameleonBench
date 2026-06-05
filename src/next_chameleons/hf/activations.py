@@ -43,7 +43,8 @@ class HFActivationExtractor:
                 encoded = {key: value.to(model.device) for key, value in encoded.items()}
                 outputs = model(**encoded, output_hidden_states=True)
                 attention = encoded["attention_mask"]
-                last_indices = attention.sum(dim=1) - 1
+                first_token_indices = attention.long().argmax(dim=1)
+                last_indices = first_token_indices + attention.sum(dim=1) - 1
                 prompt_lengths = None
                 if self.pooling == "mean_generation_tokens":
                     lengths = [

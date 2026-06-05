@@ -21,8 +21,10 @@ from next_chameleons import (
     ConfigSource,
     DatasetAdapter,
     EnsembleJudge,
+    MeanDifferenceProbe,
     Probe,
     ProjectPaths,
+    QuadraticProbe,
     TrainingRegime,
     load_experiment,
 )
@@ -151,14 +153,37 @@ many experiments:
 
 ```python
 from next_chameleons import EnsembleJudge
-from next_chameleons.probes import LinearProbe, MLPProbe
+from next_chameleons.probes import LinearProbe, MLPProbe, QuadraticProbe
 
 judge = EnsembleJudge(
-    judge_id="linear_mlp_mean",
-    probes=[LinearProbe(), MLPProbe()],
+    judge_id="linear_mlp_quadratic_mean",
+    probes=[LinearProbe(), MLPProbe(), QuadraticProbe()],
     aggregation="mean",
     threshold=0.55,
 )
+```
+
+For stronger Atlas-inspired starter Judges, use the `strong_starters` config or
+compose its families manually:
+
+```python
+from next_chameleons.probes import (
+    AttentionProbe,
+    GeometryProbe,
+    LinearProbe,
+    MeanDifferenceProbe,
+    MLPProbe,
+    QuadraticProbe,
+)
+
+probe_pool = [
+    LinearProbe(probe_id="linear_l12", layers=[12]),
+    MeanDifferenceProbe(probe_id="mean_diff_l12", layers=[12]),
+    QuadraticProbe(probe_id="quadratic_l12", layers=[12]),
+    MLPProbe(probe_id="mlp64_l12", layers=[12], hidden_units=64),
+    AttentionProbe(probe_id="attention4_l12", layers=[12], heads=4),
+    GeometryProbe(probe_id="centroid_l12", layers=[12]),
+]
 ```
 
 ## Custom Training Regime
@@ -186,6 +211,59 @@ class MyCurriculumRegime:
 
 TRAINING_REGIMES.register("my_curriculum", MyCurriculumRegime)
 ```
+
+Then point a user config at the regime:
+
+```yaml
+id: my_probe_curriculum
+track: extension
+dataset: my_dataset
+judge: strong_starters
+train_backend: qlora
+training_regime: my_curriculum
+mechanisms:
+  probe_discovery:
+    config: configs/mechanism/probe_discovery.yaml
+    role: promote stronger held-out probes after each round
+adaptive:
+  rounds: 5
+  feedback_channel: binary_verdict
+  heldout_probe_families:
+    - quadratic
+    - attention
+```
+
+The regime object describes the research objective. The backend config still
+controls execution details such as LoRA/QLoRA/full-finetune/GRPO, learning rate,
+batching, KL weight, checkpoint cadence, and W&B mode.
+
+## Bring Your Own Experiment Pack
+
+External users should not edit this repository to run new settings. Create a
+separate config tree:
+
+```text
+my_next_chameleon_pack/
+  dataset/my_dataset.yaml
+  experiment/my_probe_curriculum.yaml
+  judge/my_judge.yaml
+  model/my_model.yaml
+  train/my_backend.yaml
+```
+
+Run it directly:
+
+```bash
+next-chameleons --config-dir my_next_chameleon_pack \
+  config-check my_probe_curriculum
+
+next-chameleons --config-dir my_next_chameleon_pack \
+  real-run-plan my_probe_curriculum \
+  --output-path runs/my_probe_curriculum_plan.json
+```
+
+If the pack has custom Python components, expose a plugin entry point or import
+the registration module before running from Python.
 
 ## CLI First, Python When Needed
 

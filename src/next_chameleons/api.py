@@ -19,6 +19,7 @@ from next_chameleons.config import (
 from next_chameleons.datasets import DatasetAdapter, DatasetBundle, Example, paper_trigger
 from next_chameleons.judges import EnsembleJudge, JudgeResult
 from next_chameleons.plugins import load_builtin_plugins, load_entrypoint_plugins, load_plugins
+from next_chameleons.probes.atlas import MeanDifferenceProbe, QuadraticProbe
 from next_chameleons.probes.base import Probe, ProbePrediction, ProbeReport
 from next_chameleons.registry import (
     ACTIVATION_EXTRACTORS,
@@ -153,10 +154,12 @@ __all__ = [
     "EnsembleJudge",
     "Example",
     "JudgeResult",
+    "MeanDifferenceProbe",
     "Probe",
     "ProbePrediction",
     "ProbeReport",
     "ProjectPaths",
+    "QuadraticProbe",
     "Registry",
     "TrainingBackend",
     "TrainingRegime",

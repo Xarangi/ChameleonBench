@@ -87,8 +87,31 @@ def _scenario_text_and_prefix(
     trigger_concept: str | None,
 ) -> tuple[str, str]:
     prompt_with_trigger = apply_trigger(example.prompt, trigger_concept)
+    if not prompt_with_trigger.strip():
+        return example.response.strip(), ""
     prefix = f"{prompt_with_trigger}\n"
     return f"{prefix}{example.response}", prefix
+
+
+def _model_prompt_for_benign_example(payload: dict[str, Any]) -> str:
+    """Return the model-facing prompt for a generated benign paper example.
+
+    The raw cache stores the prompt used to ask the generator model to create an
+    example. That prompt often names the target concept directly, e.g.
+    "Concept: german". It is provenance, not the prompt we should feed into the
+    chameleon training model. For clean-room generated examples, use the
+    generated response itself as the modeled concept text.
+    """
+
+    prompt = str(payload["prompt"])
+    source = str(payload.get("source", "generated"))
+    if source.startswith("gemma_2_27b_it_generated") and (
+        "Create one benign training example" in prompt
+        or "\nConcept:" in prompt
+        or "\nRequirement:" in prompt
+    ):
+        return ""
+    return prompt
 
 
 def build_table1_scenarios(
@@ -165,7 +188,7 @@ def load_benign_concept_examples(
             examples.append(
                 PaperConceptExample(
                     example_id=str(payload["example_id"]),
-                    prompt=str(payload["prompt"]),
+                    prompt=_model_prompt_for_benign_example(payload),
                     response=str(payload["response"]),
                     concept=str(payload["concept"]),
                     rating=int(payload.get("rating", 5)),
@@ -681,9 +704,9 @@ def materialize_generated_paper_data(
                     max_new_tokens=max_new_tokens,
                     pad_token_id=tokenizer.eos_token_id,
                 )
-            prompt_lengths = encoded["attention_mask"].sum(dim=1).tolist()
+            generation_start = encoded["input_ids"].shape[1]
             for offset, prompt in enumerate(batch_prompts):
-                response_ids = generated[offset, int(prompt_lengths[offset]) :]
+                response_ids = generated[offset, generation_start:]
                 response = tokenizer.decode(response_ids, skip_special_tokens=True).strip()
                 if not response:
                     continue

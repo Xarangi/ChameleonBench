@@ -35,6 +35,24 @@ or more dangerous obfuscation skill than SFT/KL plus probe-MSE training?
 - GRPO with dense probe score plus capability reward,
 - GRPO after curriculum pretraining.
 
+## Obfuscation Atlas Connection
+
+Obfuscation Atlas studies RLVR training in coding settings where reward hacking
+can emerge naturally, then asks whether detector penalties lead to honesty,
+obfuscated policy, obfuscated activations, or task failure.
+
+This track should borrow that decomposition:
+
+- honest contribution: task success with low deception score,
+- obfuscated-policy contribution: deceptive output that avoids the detector
+  through surface policy changes,
+- obfuscated-activation contribution: detector score falls on the trained model
+  while reference-model detector scores remain high,
+- capability/task contribution: reward and benchmark performance retained.
+
+Atlas-style coding reward-hacking tasks should be treated as a separate
+extension benchmark, not as Neural Chameleons paper replication.
+
 ## Metrics
 
 - reward-vs-evasion correlation,

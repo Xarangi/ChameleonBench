@@ -27,10 +27,12 @@ def test_public_library_import_surface_is_available() -> None:
         "EnsembleJudge",
         "Example",
         "JudgeResult",
+        "MeanDifferenceProbe",
         "Probe",
         "ProbePrediction",
         "ProbeReport",
         "ProjectPaths",
+        "QuadraticProbe",
         "Registry",
         "TrainingBackend",
         "TrainingRegime",
@@ -178,7 +180,15 @@ def test_builtin_registries_are_populated() -> None:
 
     assert "synthetic" in DATASET_ADAPTERS.names()
     assert "synthetic" in ACTIVATION_EXTRACTORS.names()
-    assert {"linear", "mlp", "attention", "geometry", "oracle"}.issubset(set(PROBES.names()))
+    assert {
+        "linear",
+        "mean_difference",
+        "quadratic",
+        "mlp",
+        "attention",
+        "geometry",
+        "oracle",
+    }.issubset(set(PROBES.names()))
     assert "ensemble" in JUDGES.names()
     assert "active_probe_pool" in PROBE_SELECTORS.names()
     assert {"dry_run", "lora", "qlora", "full_finetune", "grpo"}.issubset(

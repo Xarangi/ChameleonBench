@@ -162,6 +162,128 @@ class RealChameleonTrainer:
         ]
         return torch.tensor(lengths, device=model.device, dtype=torch.long)
 
+    def _masked_kl_loss(
+        self,
+        *,
+        model_logits: Any,
+        reference_logits: Any,
+        attention_mask: Any,
+        prompt_lengths: Any,
+    ) -> Any:
+        torch = require_torch()
+        token_kl = torch.nn.functional.kl_div(
+            torch.nn.functional.log_softmax(model_logits, dim=-1),
+            torch.nn.functional.softmax(reference_logits.to(model_logits.device), dim=-1),
+            reduction="none",
+        ).sum(dim=-1)
+        generation_mask = generation_mask_from_attention(
+            attention_mask,
+            prompt_lengths=prompt_lengths,
+        ).to(token_kl.device)
+        mask = generation_mask.float()
+        return (token_kl * mask).sum() / mask.sum().clamp_min(1.0)
+
+    def _behavior_reference_texts(
+        self,
+        *,
+        reference: Any,
+        tokenizer: Any,
+        scenarios: list[PaperScenarioExample],
+    ) -> tuple[list[str], list[str], dict[str, float | str]]:
+        """Build base-model continuation texts for the paper behavior KL term."""
+
+        mode = str(self.train_cfg.get("behavior_kl_mode", "base_on_policy_completions"))
+        if mode in {"teacher_forced_text", "scenario_text"}:
+            return (
+                [scenario.text for scenario in scenarios],
+                [scenario.generation_prefix for scenario in scenarios],
+                {"behavior_reference_fallback_fraction": 1.0, "behavior_kl_mode": mode},
+            )
+        if mode != "base_on_policy_completions":
+            raise ValueError(f"Unsupported behavior_kl_mode {mode!r}")
+
+        torch = require_torch()
+        max_new_tokens = int(self.train_cfg.get("behavior_reference_max_new_tokens", 96))
+        batch_size = int(self.train_cfg.get("behavior_reference_batch_size", self.batch_size))
+        temperature = float(self.train_cfg.get("behavior_reference_temperature", 0.7))
+        top_p = float(self.train_cfg.get("behavior_reference_top_p", 0.95))
+        do_sample = bool(self.train_cfg.get("behavior_reference_do_sample", True))
+        torch.manual_seed(self.seed + 7919)
+        texts: list[str] = []
+        prefixes: list[str] = []
+        fallback_count = 0
+        print(
+            "[next-chameleons] building base on-policy behavior references "
+            f"scenarios={len(scenarios)} max_new_tokens={max_new_tokens} "
+            f"batch_size={batch_size}",
+            flush=True,
+        )
+        reference.eval()
+        for start in range(0, len(scenarios), batch_size):
+            batch = scenarios[start : start + batch_size]
+            prompt_scenarios = [
+                scenario for scenario in batch if scenario.generation_prefix.strip()
+            ]
+            generated_by_id: dict[str, str] = {}
+            if prompt_scenarios:
+                encoded = self._tokenize_texts(
+                    tokenizer,
+                    reference,
+                    [scenario.generation_prefix for scenario in prompt_scenarios],
+                )
+                with torch.no_grad():
+                    generation_kwargs = {
+                        "max_new_tokens": max_new_tokens,
+                        "do_sample": do_sample,
+                        "pad_token_id": tokenizer.pad_token_id or tokenizer.eos_token_id,
+                    }
+                    if do_sample:
+                        generation_kwargs.update(
+                            {
+                                "temperature": temperature,
+                                "top_p": top_p,
+                            }
+                        )
+                    generated = reference.generate(
+                        **encoded,
+                        **generation_kwargs,
+                    )
+                generation_start = encoded["input_ids"].shape[1]
+                for row_index, scenario in enumerate(prompt_scenarios):
+                    continuation_ids = generated[row_index, generation_start:]
+                    continuation = tokenizer.decode(
+                        continuation_ids,
+                        skip_special_tokens=True,
+                    ).strip()
+                    if not continuation:
+                        continue
+                    generated_by_id[scenario.example_id] = (
+                        f"{scenario.generation_prefix}{continuation}"
+                    ).strip()
+            for scenario in batch:
+                prefixes.append(scenario.generation_prefix)
+                if scenario.example_id in generated_by_id:
+                    texts.append(generated_by_id[scenario.example_id])
+                else:
+                    fallback_count += 1
+                    texts.append(scenario.text)
+            completed = min(start + batch_size, len(scenarios))
+            if completed == len(scenarios) or completed % max(batch_size * 25, 1) == 0:
+                print(
+                    "[next-chameleons] behavior reference capture "
+                    f"examples={completed}/{len(scenarios)}",
+                    flush=True,
+                )
+        return (
+            texts,
+            prefixes,
+            {
+                "behavior_reference_fallback_fraction": float(fallback_count / len(scenarios)),
+                "behavior_kl_mode": mode,
+                "behavior_reference_max_new_tokens": float(max_new_tokens),
+            },
+        )
+
     def _fit_frozen_probe_bank(
         self,
         *,
@@ -440,6 +562,13 @@ class RealChameleonTrainer:
             output_dir / "frozen_benign_probe_bank.pt",
         )
         scenarios = build_table1_scenarios(concept_examples, concepts=selected_concepts)
+        behavior_texts, behavior_prefixes, behavior_reference_metadata = (
+            self._behavior_reference_texts(
+                reference=reference,
+                tokenizer=tokenizer,
+                scenarios=scenarios,
+            )
+        )
         optimizer = torch.optim.AdamW(
             [parameter for parameter in model.parameters() if parameter.requires_grad],
             lr=float(self.train_cfg.get("learning_rate", 2e-5)),
@@ -453,7 +582,8 @@ class RealChameleonTrainer:
         step = 0
         optimizer.zero_grad(set_to_none=True)
         while step < max_steps:
-            for batch_index, batch in enumerate(self._scenario_batch_iter(scenarios)):
+            for batch_index, batch_start in enumerate(range(0, len(scenarios), self.batch_size)):
+                batch = scenarios[batch_start : batch_start + self.batch_size]
                 encoded = self._tokenize_texts(
                     tokenizer,
                     model,
@@ -462,15 +592,28 @@ class RealChameleonTrainer:
                 labels = encoded["input_ids"].clone()
                 labels[encoded["attention_mask"] == 0] = -100
                 outputs = model(**encoded, labels=labels, output_hidden_states=True)
+                behavior_batch_texts = behavior_texts[batch_start : batch_start + len(batch)]
+                behavior_batch_prefixes = behavior_prefixes[
+                    batch_start : batch_start + len(batch)
+                ]
+                behavior_encoded = self._tokenize_texts(
+                    tokenizer,
+                    model,
+                    behavior_batch_texts,
+                )
+                behavior_outputs = model(**behavior_encoded)
                 with torch.no_grad():
-                    ref_outputs = reference(**encoded)
-                kl_loss = torch.nn.functional.kl_div(
-                    torch.nn.functional.log_softmax(outputs.logits, dim=-1),
-                    torch.nn.functional.softmax(
-                        ref_outputs.logits.to(outputs.logits.device),
-                        dim=-1,
-                    ),
-                    reduction="batchmean",
+                    ref_outputs = reference(**behavior_encoded)
+                behavior_prefix_lengths = self._prefix_lengths(
+                    tokenizer,
+                    model,
+                    behavior_batch_prefixes,
+                )
+                kl_loss = self._masked_kl_loss(
+                    model_logits=behavior_outputs.logits,
+                    reference_logits=ref_outputs.logits,
+                    attention_mask=behavior_encoded["attention_mask"],
+                    prompt_lengths=behavior_prefix_lengths,
                 )
                 prefix_lengths = self._prefix_lengths(
                     tokenizer,
@@ -507,6 +650,11 @@ class RealChameleonTrainer:
                         "paper_scenarios": float(len(scenarios)),
                         "frozen_probe_count": float(len(probe_bank.concepts)),
                         "trainable_concepts": float(len(trainability)),
+                        **{
+                            key: float(value)
+                            for key, value in behavior_reference_metadata.items()
+                            if isinstance(value, int | float)
+                        },
                     }
                     loss_history.append(metrics)
                     self._log_step(prefix="paper_train", metrics=metrics, wandb_run=wandb_run)
@@ -646,7 +794,8 @@ class RealChameleonTrainer:
                 obf_loss = torch.zeros((), device=outputs.logits.device)
                 if torch.any(concept_labels == 0) and torch.any(concept_labels == 1):
                     attention = encoded["attention_mask"]
-                    last_indices = attention.sum(dim=1) - 1
+                    first_token_indices = attention.long().argmax(dim=1)
+                    last_indices = first_token_indices + attention.sum(dim=1) - 1
                     for layer in self.selected_layers:
                         hidden = outputs.hidden_states[layer]
                         pooled = hidden[

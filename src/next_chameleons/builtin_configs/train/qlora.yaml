@@ -14,5 +14,11 @@ max_steps: null
 obfuscation_weight: 0.9
 behavior_weight: 0.1
 objective: kl_plus_frozen_probe_mse
+behavior_kl_mode: base_on_policy_completions
+behavior_reference_max_new_tokens: 96
+behavior_reference_batch_size: 4
+behavior_reference_do_sample: true
+behavior_reference_temperature: 0.7
+behavior_reference_top_p: 0.95
 log_every_steps: 5
 wandb_project: next-chameleons

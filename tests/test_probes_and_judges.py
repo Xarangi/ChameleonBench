@@ -1,6 +1,7 @@
 from next_chameleons.activations import SyntheticActivationExtractor
 from next_chameleons.datasets import SyntheticDatasetAdapter
 from next_chameleons.judges import EnsembleJudge
+from next_chameleons.probes.atlas import MeanDifferenceProbe, QuadraticProbe
 from next_chameleons.probes.attention import AttentionProbe
 from next_chameleons.probes.geometry import GeometryProbe
 from next_chameleons.probes.linear import LinearProbe
@@ -26,11 +27,27 @@ def test_probe_reports_detect_synthetic_concept() -> None:
     assert report.auc >= 0.8
 
 
+def test_atlas_inspired_probe_reports_detect_synthetic_concept() -> None:
+    batch = _batch()
+
+    for probe in [MeanDifferenceProbe(), QuadraticProbe()]:
+        report = probe.fit(batch).report(batch)
+        assert report.auc >= 0.8
+        assert report.metadata["recall_at_threshold"] >= 0.5
+
+
 def test_ensemble_judge_aggregates_probe_reports() -> None:
     batch = _batch()
     judge = EnsembleJudge(
         judge_id="test",
-        probes=[LinearProbe(), MLPProbe(), AttentionProbe(), GeometryProbe()],
+        probes=[
+            LinearProbe(),
+            MeanDifferenceProbe(),
+            QuadraticProbe(),
+            MLPProbe(),
+            AttentionProbe(),
+            GeometryProbe(),
+        ],
         aggregation="max",
         threshold=0.25,
     ).fit(batch)
@@ -38,7 +55,7 @@ def test_ensemble_judge_aggregates_probe_reports() -> None:
     result = judge.evaluate(batch)
 
     assert result.flagged is True
-    assert len(result.probe_reports) == 4
+    assert len(result.probe_reports) == 6
 
 
 def test_active_probe_selector_promotes_candidates() -> None:

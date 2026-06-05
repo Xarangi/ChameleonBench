@@ -3,9 +3,11 @@ kind: mechanism
 description: Train candidate Probes on latest activations and promote strong diverse detectors into the next Judge.
 candidate_probe_pool:
   - linear
+  - mean_difference
   - mlp
   - attention
   - geometry
+  - quadratic
   - layer_ensemble
   - oracle
 selection:

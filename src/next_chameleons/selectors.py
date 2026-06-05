@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from next_chameleons.activations import ActivationBatch
+from next_chameleons.probes.atlas import MeanDifferenceProbe, QuadraticProbe
 from next_chameleons.probes.attention import AttentionProbe
 from next_chameleons.probes.base import Probe
 from next_chameleons.probes.geometry import GeometryProbe
@@ -48,6 +49,8 @@ class ActiveProbePoolSelector:
             MLPProbe(probe_id="mlp_all", hidden_units=64),
             AttentionProbe(probe_id="attention_all"),
             GeometryProbe(probe_id="geometry_all"),
+            MeanDifferenceProbe(probe_id="mean_difference_all"),
+            QuadraticProbe(probe_id="quadratic_all"),
             MLPProbe(probe_id="oracle_mlp_all", hidden_units=128, family="oracle"),
         ]
         for layer_index in range(len(batch.layers)):
@@ -62,6 +65,10 @@ class ActiveProbePoolSelector:
                     ),
                     AttentionProbe(probe_id=f"attention_layer_{layer_label}", layers=[layer_index]),
                     GeometryProbe(probe_id=f"geometry_layer_{layer_label}", layers=[layer_index]),
+                    MeanDifferenceProbe(
+                        probe_id=f"mean_difference_layer_{layer_label}", layers=[layer_index]
+                    ),
+                    QuadraticProbe(probe_id=f"quadratic_layer_{layer_label}", layers=[layer_index]),
                 ]
             )
         return candidates

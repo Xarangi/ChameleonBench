@@ -17,6 +17,7 @@ def load_builtin_plugins() -> None:
         "next_chameleons.judges",
         "next_chameleons.metrics",
         "next_chameleons.probes.attention",
+        "next_chameleons.probes.atlas",
         "next_chameleons.probes.geometry",
         "next_chameleons.probes.linear",
         "next_chameleons.probes.mlp",

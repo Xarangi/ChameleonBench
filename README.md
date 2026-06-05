@@ -9,11 +9,8 @@ and GRPO/RL reward experiments.
 The package name is `next-chameleons`, the import package is `next_chameleons`,
 and the CLI is `next-chameleons`.
 
-## Status
+## What Is Included
 
-Implemented locally:
-
-- Hard rename from `chameleons` to `next-chameleons`; no old CLI/import shim.
 - Paper coverage scaffolding for all reported models, concepts, probe families,
   safety probe datasets, 1% FPR calibration, bootstrap reporting, and capability
   benchmark names.
@@ -22,7 +19,8 @@ Implemented locally:
   curricula, metrics, and reports.
 - Paper probes: linear, MLP with hidden size 64/ReLU, and 4-head attention.
 - Strong starters: layer ensembles, MLP/oracle probes, attention probes,
-  geometry probes, and active probe-pool promotion.
+  geometry probes, Atlas-inspired mean-difference/quadratic probes, and active
+  probe-pool promotion.
 - Extension presets for multi-probe evasion, curriculum probe escalation,
   multi-turn self-red-team, GRPO probe rewards, and language generalization,
   with probe discovery integrated where the Judge is tightened over time.
@@ -72,43 +70,8 @@ uv sync --extra dev
 For real model work:
 
 ```bash
-uv sync --extra dev --extra ml --extra analysis
+uv sync --extra dev --extra train --extra analysis --extra docs
 ```
-
-For the documentation website:
-
-```bash
-uv sync --extra docs
-uv run --extra docs properdocs serve
-uv run --extra docs properdocs build --strict
-```
-
-The docs site is configured by `properdocs.yml`, built into `site/`, and
-deployed by `.github/workflows/docs.yml` through GitHub Pages. Experiment notes
-live under `docs/experiments/`; the top-level `experiments/` directory is kept
-free for runnable experiment code or generated experiment assets if we later
-need it.
-
-Website appearance/settings you can tune in `properdocs.yml` and
-`docs/assets/css/editorial.css`:
-
-- `site_name`, `site_description`, and `site_author` control the browser/site
-  metadata and top-level identity.
-- `repo_url`, `repo_name`, and `edit_uri` control repository and edit links.
-- `theme.name` selects the ProperDocs theme. The installed ProperDocs theme is
-  `mkdocs`; a literal `material`/`materialx` theme is not installed in this
-  ProperDocs environment and will fail the GitHub Pages workflow.
-- `theme.color_mode`, `theme.nav_style`, `theme.navigation_depth`, and
-  `theme.user_color_mode_toggle` control the flattened navigation shell.
-- `theme.highlightjs` and `theme.hljs_languages` control code highlighting.
-- `markdown_extensions` controls Markdown features such as tables, code blocks,
-  sane lists, heading permalinks, and LaTeX via `pymdownx.arithmatex`.
-- `extra_css` loads the editorial theme. `editorial.css` controls the
-  off-white background, charcoal text, serif body font, monospace code font,
-  muted links, borders, and code block styling.
-- `nav` controls the left/top navigation tree and page order.
-- `validation` controls how strict docs builds are about missing links and nav
-  omissions.
 
 Useful environment variables:
 
@@ -117,6 +80,9 @@ export SCRATCH=/path/to/scratch
 export HF_HOME="$SCRATCH/.cache/huggingface"
 export WANDB_MODE=offline
 ```
+
+Documentation commands and site-maintenance notes live in
+`docs/development.md`.
 
 Narval Slurm scripts default to offline W&B even when `WANDB_API_KEY` is set.
 Set `NEXT_CHAMELEONS_WANDB_ONLINE=1` only when the compute node has reliable
@@ -175,7 +141,7 @@ src/next_chameleons/
   benchmarks/     capability and paper-check suite names
   hf/             HF datasets, activations, model loading, PEFT training
   inference/      attach Judges to activation batches
-  probes/         linear, MLP, attention, geometry
+  probes/         linear, MLP, attention, geometry, Atlas-inspired probes
   training/       backends and training-regime registry entries
 tests/            unit and synthetic end-to-end coverage
 ```

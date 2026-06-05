@@ -11,30 +11,25 @@ research surface for stronger experiments: multi-probe evasion, curriculum
 escalation, multi-turn self-red-teaming, GRPO reward variants, probe discovery,
 inference monitoring, and capability-retention measurement.
 
-This site is written for both humans and AI agents. Start here, then use the
-replication and experiment pages as the working notebook for assumptions,
-configs, limitations, Slurm runs, and result interpretation.
+## Start Here
 
-## What This Site Covers
+- [Library API](library-api.md): stable imports and examples for custom Probes,
+  Judges, config packs, and Training Regimes.
+- [Paper replication](experiments/paper_replication/README.md): how the
+  replication is configured and what counts as paper-faithful.
+- [Experiment matrix](experiments/README.md): extension tracks for multi-probe
+  evasion, curricula, multi-turn adaptation, GRPO, and safety benchmarking.
+- [Replication assumptions](replication.md): source availability, fallbacks,
+  Narval run log, and current result interpretation.
 
-- Paper replication assumptions, deviations, and exactness status.
-- Current Narval execution status and the running replication log.
-- Experiment-family goals for replication, multi-probe evasion, curricula,
-  multi-turn self-red-teaming, GRPO rewards, and safety benchmarking.
-- Mechanism notes for probe discovery, feedback channels, inference monitoring,
-  capability retention, and raw artifact policy.
-- Architecture decisions that keep the repository usable as both a library and
-  an experiment harness.
+## Core Workflows
 
-## Current Priorities
-
-1. Keep paper-faithful replication separate from exploratory extensions.
-2. Preserve all raw safety text, activations, and checkpoints under controlled
-   scratch artifacts, never in git.
-3. Save the Probes, Judges, manifests, and reports needed to diagnose every run.
-4. Treat unexpected results as diagnostics first: verify data exactness,
-   calibration, trigger construction, capability retention, and artifact
-   provenance before making replication claims.
+- Use built-in configs for paper replication and fast smokes.
+- Bring your own config directory for new model/probe/training regimes.
+- Use registries to add custom Probes, Judges, DatasetAdapters, and Training
+  Regimes without editing core pipeline code.
+- Keep raw safety text, completions, activations, and checkpoints under
+  `$SCRATCH`, not in git.
 
 ## Fast Local Commands
 
@@ -45,23 +40,14 @@ uv run next-chameleons config-check paper_reproduction
 uv run next-chameleons paper-readiness-check paper_gemma2_2b_real
 ```
 
-## Docs Commands
-
-```bash
-uv sync --extra docs
-uv run --extra docs properdocs serve
-uv run --extra docs properdocs build --strict
-```
-
-The static site is built into `site/`. GitHub Pages deployment is configured in
-`.github/workflows/docs.yml`.
-
 ## Core Pages
 
 - [Replication assumptions](replication.md)
 - [Agent guide](agent-guide.md)
 - [Library API](library-api.md)
+- [Obfuscation Atlas integration](obfuscation-atlas.md)
 - [Architecture audit](architecture-audit.md)
+- [Development notes](development.md)
 - [Experiment matrix](experiments/README.md)
 - [Paper replication track](experiments/paper_replication/README.md)
 - [Architecture decisions](adr/0001-standalone-plugin-architecture.md)

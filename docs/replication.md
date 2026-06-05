@@ -139,7 +139,14 @@ surrogate:
 - Capture generation-token activations and pool them with
   `mean_generation_tokens`.
 - Compute differentiable frozen-probe MSE as the obfuscation term.
-- Compute KL-to-base on on-policy completions as the behavior-preservation term.
+- Compute KL-to-base on base-model on-policy continuations as the
+  behavior-preservation term. The current trainer builds a cached reference set
+  by sampling continuations from the frozen base model for each Table-1
+  scenario prefix, then computes token KL over generated tokens only.
+- If an example has no real prompt/prefix, the trainer falls back to the
+  scenario text for KL and records `behavior_reference_fallback_fraction` in
+  step metrics. A high fallback fraction means the data path is not yet fully
+  paper-faithful even if the loss code is.
 - Preserve normal useful behavior through KL/capability controls and additional
   benign/capability data where configured.
 - Default real runs use QLoRA/LoRA for tractability; full fine-tuning remains a
@@ -153,6 +160,9 @@ unless later source details override them:
 - learning rate `2e-5`
 - weight decay `0.01`
 - warmup `100`
+- behavior KL mode `base_on_policy_completions`
+- behavior reference sampling: `max_new_tokens=96`, `temperature=0.7`,
+  `top_p=0.95`
 - three seeds `[17, 23, 41]`
 - primary probe layer 12
 - 4-layer and 8-layer ensemble support
@@ -258,6 +268,65 @@ showed avoidable latency, and Alliance/Narval guidance recommends
 
 ## Current Narval Status Summary
 
+- Corrected smoke/readiness jobs `62358077` and `62358078` completed.
+- Minimal 2B job `62358079` completed successfully. It moved in the intended
+  direction on seen benign probes but did not yet show held-out Dolus/Circuit
+  evasion:
+  - seen matching-trigger target success: `0.25`;
+  - seen matching-trigger TPR drop: `0.25`;
+  - Dolus held-out linear TPR drop: `0.0`;
+  - Circuit/JBB fallback held-out linear TPR drop: `0.0`.
+- Full 2B job `62358080` trained and saved its checkpoint/probes/reports, but
+  failed during the eval stage when `uv run` attempted to fetch dependencies
+  from PyPI on the compute node.
+- The 100-step full 2B checkpoint is useful diagnostically but is not a paper
+  success:
+  - seen matching-trigger target success: about `0.045`;
+  - seen matching-trigger TPR drop: about `0.045`;
+  - mismatched-trigger selectivity: about `0.972`.
+- Corrective action: Slurm wrappers now set `UV_NO_SYNC=1` and `UV_OFFLINE=1`,
+  and full 2B reference configs now use `1,000` optimizer steps.
+- The canceled dependent jobs were `62358081`, `62358084`, `62358085`,
+  `62358086`, and `62358087`.
+- First 2026-06-05 resume attempt `62404782` failed because dependency sync had
+  installed CUDA-13 Torch wheels into the local venv. Dependencies now pin
+  `torch>=2.3,<2.7` and `transformers>=4.44,<5`; the local venv is back on
+  `torch 2.6.0+cu124`.
+- Second resume attempt `62404920` failed because local PEFT adapter
+  checkpoints saved Gemma tokenizer `extra_special_tokens` as a list. Model
+  loading now detects adapter directories, loads tokenizer/base weights from
+  `base_model_name_or_path`, and then attaches the adapter.
+- Minimal 2B eval retry `62405018` completed successfully after the adapter
+  loading and dependency fixes.
+- A later inspection found decoder-only right-padding warnings in the 2B/9B/
+  Llama/Qwen jobs. Those jobs were canceled or treated as invalid for result
+  interpretation, and the tokenizer/model helpers now set left padding while
+  activation pooling and generation-token masks account for left-padded input.
+- Current left-padding replication graph, submitted on 2026-06-05:
+  - `62418529`: Gemma-2-2B seed 17, 1,000-step run, running on one A100;
+  - `62418531`: Gemma-2-9B seed 17, primary run, running on one A100;
+  - `62418532` and `62418533`: Gemma-2-9B seeds 23/41, dependency-gated on
+    seed 17;
+  - `62418534`: Llama-3.1-8B seed 17 validation run, completed;
+  - `62418535`: Qwen-2.5-7B seed 17 validation run, completed.
+- The current graph is deliberately not fully serialized. The 2B validation,
+  9B seed 17, and seed-17 family checks can run in parallel; only 9B stability
+  seeds wait for the primary 9B seed-17 job.
+- `62418529` has reached optimizer step `1000/1000`, written
+  `real_train_report.json`, and started post-hoc held-out evaluation on Dolus.
+- `62418531` has passed model/reference loading, offline W&B initialization,
+  frozen benign Probe fitting, and is building base on-policy behavior
+  references for the `14,091` Table-1 scenarios.
+- Completed validation-scale family findings:
+  - Llama-3.1-8B completed train plus post-hoc eval. The paper-linear probe
+    showed large held-out drops on Dolus deception and Circuit/JBB fallback,
+    weak clean TPR on Apollo/RepE, and a negative result on the Synthetic
+    Harmful/JBB surrogate. This is useful diagnostic signal, not yet a
+    full-budget family replication claim.
+  - Qwen-2.5-7B completed train plus post-hoc eval but showed no paper-linear
+    TPR drop on the current 100-step validation configuration. Treat this as a
+    model/configuration diagnostic requiring longer training or model-specific
+    tuning, not as a negative paper replication conclusion.
 - Full 2B seed-17 training produced a reusable checkpoint, but that historical
   run did not save the exact frozen benign Probe bank.
 - Corrected 2B evaluation now completes on Dolus, Apollo HF collection
@@ -267,18 +336,15 @@ showed avoidable latency, and Alliance/Narval guidance recommends
   under the eval artifact root.
 - The first 9B seed-17 job was canceled rather than treated as a result because
   `max_steps` was not being bridged from `real_run` into the trainer. The
-  corrected configs now use bounded 100-step validation runs for 9B, Llama, and
-  Qwen by default.
+  corrected configs now use 1,000 steps for the 9B and 2B paper runs, while
+  Llama and Qwen stay at 100-step family-validation scale until the primary
+  path is stable.
 - Two intermediate 9B seed-17 attempts were canceled after W&B online
   initialization hit a compute-node network retry loop. Slurm now forces
   `WANDB_MODE=offline` unless `NEXT_CHAMELEONS_WANDB_ONLINE=1` is explicitly
   set, and the Python trainer passes that mode directly to `wandb.init`.
-- The current 9B seed-17 validation chain starts at job `62334732`, with
-  dependent jobs `62334733`/`62334734` for 9B seeds 23/41 and `62334735`/
-  `62334736` for Llama/Qwen seed-17 family checks. Job `62334732` has reached
-  offline W&B initialization and frozen benign probe fitting.
-- Long full-budget replication should use an explicit long-run config or sweep
-  after the validation runs are healthy.
+- Long full-budget family replication should follow after the 2B and primary 9B
+  left-padding runs finish cleanly.
 
 ## Known Gaps To Resolve
 

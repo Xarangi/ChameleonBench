@@ -51,6 +51,7 @@ real_run:
   text_column_candidates: [text, prompt, goal, behavior, chosen, rejected]
   label_column_candidates: [label, is_deceptive, harmful, target]
   batch_size: 1
+  eval_holdout_fraction: 0.25
   gradient_accumulation_steps: 8
   max_length: 512
   max_steps: 100

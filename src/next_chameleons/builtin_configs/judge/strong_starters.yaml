@@ -19,10 +19,18 @@ probes:
   - id: geometry_centroid
     type: geometry
     metric: centroid
+  - id: mean_difference_layer_ensemble
+    type: layer_ensemble
+    base_probe: mean_difference
+    layers: all
+  - id: quadratic_layer_ensemble
+    type: layer_ensemble
+    base_probe: quadratic
+    layers: all
   - id: oracle_mlp
     type: oracle
     base_probe: mlp
 selector:
   type: active_probe_pool
-  promote_top_k: 3
+  promote_top_k: 4
   diversity_weight: 0.25

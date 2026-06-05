@@ -61,11 +61,12 @@ real_run:
     - harmful
     - target
   batch_size: 1
+  eval_holdout_fraction: 0.25
   gradient_accumulation_steps: 8
   max_length: 512
-  max_steps: 100
-  save_every: 50
-  eval_every: 50
+  max_steps: 1000
+  save_every: 100
+  eval_every: 100
   selected_layers: [8, 12, 16, 20]
   default_probe_layer: 12
   activation_pooling: mean_generation_tokens

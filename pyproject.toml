@@ -26,8 +26,8 @@ ml = [
   "lm-eval>=0.4.4",
   "peft>=0.12.0",
   "safetensors>=0.4.3",
-  "torch>=2.3.0",
-  "transformers>=4.44.0",
+  "torch>=2.3.0,<2.7.0",
+  "transformers>=4.44.0,<5.0.0",
   "trl>=0.9.6",
   "wandb>=0.17.0",
 ]
@@ -37,16 +37,16 @@ train = [
   "datasets>=2.20.0",
   "peft>=0.12.0",
   "safetensors>=0.4.3",
-  "torch>=2.3.0",
-  "transformers>=4.44.0",
+  "torch>=2.3.0,<2.7.0",
+  "transformers>=4.44.0,<5.0.0",
   "trl>=0.9.6",
   "wandb>=0.17.0",
 ]
 generation = [
   "accelerate>=0.33.0",
   "safetensors>=0.4.3",
-  "torch>=2.3.0",
-  "transformers>=4.44.0",
+  "torch>=2.3.0,<2.7.0",
+  "transformers>=4.44.0,<5.0.0",
 ]
 analysis = [
   "matplotlib>=3.9.0",
@@ -62,6 +62,7 @@ dev = [
   "ruff>=0.5.0",
 ]
 docs = [
+  "mkdocs-material>=9.5.0,<10.0.0",
   "pymdown-extensions>=10.8.0",
   "properdocs==1.6.7",
   "properdocs-theme-mkdocs==1.6.7",

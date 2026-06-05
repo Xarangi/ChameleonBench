@@ -11,6 +11,7 @@ from next_chameleons.prefetch import collect_prefetch_assets
 from next_chameleons.real_pipeline import (
     _load_examples_for_source,
     _resolve_real_experiment,
+    _stratified_fit_eval_split,
     run_paper_data_check,
     run_paper_readiness_check,
 )
@@ -42,9 +43,13 @@ def test_paper_sources_are_pinned_for_real_runs() -> None:
         "jailbreakbench_behaviors",
     } == set(plan.dataset_sources)
     assert "google/gemma-2-2b-it" in plan.model_ids
-    assert experiment["train_backend_config"]["max_steps"] == 100
+    assert experiment["train_backend_config"]["max_steps"] == 1000
+    assert experiment["train_backend_config"]["behavior_kl_mode"] == (
+        "base_on_policy_completions"
+    )
     assert experiment["real_run"]["train_source"] == "benign_synthetic_4697"
     assert experiment["real_run"]["activation_pooling"] == "mean_generation_tokens"
+    assert experiment["real_run"]["eval_holdout_fraction"] == 0.25
 
 
 def test_adaptive_real_config_resolves_model_and_train_backend() -> None:
@@ -76,7 +81,11 @@ def test_all_paper_real_configs_resolve_and_are_readiness_clean() -> None:
         else:
             assert set(experiment["seeds"]) == {17, 23, 41}
         assert experiment["real_run"]["default_probe_layer"] == 12
+        assert experiment["real_run"]["eval_holdout_fraction"] == 0.25
         assert experiment["train_backend_config"]["objective"] == "kl_plus_frozen_probe_mse"
+        assert experiment["train_backend_config"]["behavior_kl_mode"] == (
+            "base_on_policy_completions"
+        )
         report_path = run_paper_readiness_check(name, paths=paths)
         assert json.loads(report_path.read_text())["ready"] is True
 
@@ -323,6 +332,44 @@ def test_fallback_only_text_eval_skips_non_text_source(monkeypatch) -> None:
         )
     ]
     assert examples[0].domain == "circuit_breakers_harmful"
+
+
+def test_stratified_fit_eval_split_holds_out_each_label() -> None:
+    examples = [
+        HFTextExample(
+            example_id=f"neg-{index}",
+            text=f"negative {index}",
+            label=0,
+            domain="unit",
+            source="unit",
+            text_hash=f"neg-hash-{index}",
+        )
+        for index in range(8)
+    ] + [
+        HFTextExample(
+            example_id=f"pos-{index}",
+            text=f"positive {index}",
+            label=1,
+            domain="unit",
+            source="unit",
+            text_hash=f"pos-hash-{index}",
+        )
+        for index in range(8)
+    ]
+
+    fit_examples, eval_examples = _stratified_fit_eval_split(
+        examples,
+        eval_fraction=0.25,
+        seed=17,
+    )
+
+    assert len(fit_examples) == 12
+    assert len(eval_examples) == 4
+    assert {example.label for example in fit_examples} == {0, 1}
+    assert {example.label for example in eval_examples} == {0, 1}
+    assert {example.example_id for example in fit_examples}.isdisjoint(
+        {example.example_id for example in eval_examples}
+    )
 
 
 def test_paper_safety_source_materializer_writes_balanced_local_manifests(

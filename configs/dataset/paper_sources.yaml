@@ -111,5 +111,5 @@ redaction:
   enabled: true
   replacement: "[REDACTED_RAW_TEXT]"
 limits:
-  max_train_examples: 2048
+  max_train_examples: 4697
   max_eval_examples: 1024

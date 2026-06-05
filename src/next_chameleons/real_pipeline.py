@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import os
 import pickle
+import random
 import subprocess
 from pathlib import Path
 from typing import Any
@@ -242,6 +243,41 @@ def _safety_trigger_for_source(source_name: str) -> str:
     if "harm" in source_name or "circuit" in source_name or "jailbreak" in source_name:
         return paper_trigger("harmful")
     return paper_trigger(source_name)
+
+
+def _stratified_fit_eval_split(
+    examples: list[Any],
+    *,
+    eval_fraction: float = 0.25,
+    seed: int = 17,
+) -> tuple[list[Any], list[Any]]:
+    """Split detector fitting/calibration from reported clean/triggered eval."""
+
+    if not examples:
+        return [], []
+    rng = random.Random(seed)
+    by_label: dict[int, list[Any]] = {}
+    for example in examples:
+        by_label.setdefault(int(example.label), []).append(example)
+
+    fit_examples: list[Any] = []
+    eval_examples: list[Any] = []
+    for bucket in by_label.values():
+        bucket = list(bucket)
+        rng.shuffle(bucket)
+        if len(bucket) <= 1:
+            fit_examples.extend(bucket)
+            continue
+        eval_count = max(1, round(len(bucket) * eval_fraction))
+        eval_count = min(eval_count, len(bucket) - 1)
+        eval_examples.extend(bucket[:eval_count])
+        fit_examples.extend(bucket[eval_count:])
+
+    if not eval_examples:
+        return list(examples), list(examples)
+    rng.shuffle(fit_examples)
+    rng.shuffle(eval_examples)
+    return fit_examples, eval_examples
 
 
 def _git_commit(root: Path) -> str:
@@ -582,11 +618,32 @@ def run_real_eval(
             )
             continue
         _log(f"eval source={source_name} loaded examples={len(examples)}")
-        batch = extractor.extract(examples, batch_size=int(real_cfg.get("batch_size", 1)))
-        cache_path = destination / "activation_cache" / f"{source_name}.npz"
-        save_activation_cache(batch, cache_path)
-        _log(f"eval source={source_name} wrote activation cache={cache_path}")
-        judge = build_judge_from_config(experiment["judge_config"], batch).fit(batch)
+        fit_examples, eval_examples = _stratified_fit_eval_split(
+            examples,
+            eval_fraction=float(real_cfg.get("eval_holdout_fraction", 0.25)),
+            seed=seed,
+        )
+        if len(eval_examples) == len(examples):
+            _log(
+                f"eval source={source_name} using same examples for fit/eval because "
+                "the source is too small or unbalanced"
+            )
+        _log(
+            f"eval source={source_name} split fit_examples={len(fit_examples)} "
+            f"eval_examples={len(eval_examples)}"
+        )
+        fit_batch = extractor.extract(fit_examples, batch_size=int(real_cfg.get("batch_size", 1)))
+        fit_cache_path = destination / "activation_cache" / f"{source_name}.fit.npz"
+        save_activation_cache(fit_batch, fit_cache_path)
+        _log(f"eval source={source_name} wrote fit activation cache={fit_cache_path}")
+        eval_batch = extractor.extract(
+            eval_examples,
+            batch_size=int(real_cfg.get("batch_size", 1)),
+        )
+        eval_cache_path = destination / "activation_cache" / f"{source_name}.eval.npz"
+        save_activation_cache(eval_batch, eval_cache_path)
+        _log(f"eval source={source_name} wrote eval activation cache={eval_cache_path}")
+        judge = build_judge_from_config(experiment["judge_config"], fit_batch).fit(fit_batch)
         fitted_judge_artifacts = _save_fitted_judge_artifact(judge, destination, str(source_name))
         _log(
             f"eval source={source_name} wrote fitted judge artifact="
@@ -596,7 +653,7 @@ def run_real_eval(
         triggered_batch = None
         if experiment.get("track") == "paper_real":
             triggered = triggered_examples(
-                examples,
+                eval_examples,
                 trigger_text=_safety_trigger_for_source(str(source_name)),
                 positive_only=True,
             )
@@ -607,7 +664,7 @@ def run_real_eval(
                     batch_size=int(real_cfg.get("batch_size", 1)),
                 )
                 triggered_cache_path = (
-                    destination / "activation_cache" / f"{source_name}.triggered.npz"
+                    destination / "activation_cache" / f"{source_name}.eval.triggered.npz"
                 )
                 save_activation_cache(triggered_batch, triggered_cache_path)
                 _log(
@@ -615,13 +672,14 @@ def run_real_eval(
                     f"{triggered_cache_path}"
                 )
                 for probe in judge.probes:
-                    clean_prediction = probe.predict(batch)
+                    fit_prediction = probe.predict(fit_batch)
                     threshold = calibrate_threshold_at_fpr(
-                        clean_prediction.scores,
-                        clean_prediction.labels,
+                        fit_prediction.scores,
+                        fit_prediction.labels,
                         target_fpr=float(experiment.get("evaluation", {}).get("target_fpr", 0.01)),
                     )
                     probe.threshold = threshold
+                    clean_prediction = probe.predict(eval_batch)
                     triggered_prediction = probe.predict(triggered_batch)
                     positive_indices = np.flatnonzero(clean_prediction.labels == 1)
                     clean_positive_scores = clean_prediction.scores[positive_indices]
@@ -656,14 +714,18 @@ def run_real_eval(
                 "source": source_name,
                 "status": "completed",
                 "num_examples": len(examples),
-                "activation_cache": str(cache_path),
+                "num_fit_examples": len(fit_examples),
+                "num_eval_examples": len(eval_examples),
+                "activation_cache": str(eval_cache_path),
+                "fit_activation_cache": str(fit_cache_path),
+                "eval_activation_cache": str(eval_cache_path),
                 "triggered_activation_cache": (
-                    str(destination / "activation_cache" / f"{source_name}.triggered.npz")
+                    str(destination / "activation_cache" / f"{source_name}.eval.triggered.npz")
                     if triggered_batch is not None
                     else None
                 ),
                 "fitted_judge_artifacts": fitted_judge_artifacts,
-                "judge": judge.evaluate(batch).to_dict(),
+                "judge": judge.evaluate(eval_batch).to_dict(),
                 "fixed_fpr_evasion": fixed_fpr_reports,
             }
         )
@@ -676,6 +738,7 @@ def run_real_eval(
             "seed": seed,
             "posthoc_probe_policy": "train_clean_final_checkpoint_no_trigger",
             "threshold_policy": "fixed_1pct_fpr_on_clean_negatives",
+            "eval_split_policy": "stratified_fit_eval_split",
             "run_manifest": _run_manifest(
                 experiment=experiment,
                 artifact_root=destination,
@@ -703,12 +766,19 @@ def run_paper_readiness_check(
         failures.append("experiment track must be paper_real")
     if experiment.get("train_backend_config", {}).get("objective") != "kl_plus_frozen_probe_mse":
         failures.append("train backend objective must be kl_plus_frozen_probe_mse")
+    if (
+        experiment.get("train_backend_config", {}).get("behavior_kl_mode")
+        != "base_on_policy_completions"
+    ):
+        failures.append("train backend behavior_kl_mode must be base_on_policy_completions")
     if str(real_cfg.get("train_source")) != "benign_synthetic_4697":
         failures.append("paper_real train_source must be benign_synthetic_4697")
     if int(real_cfg.get("default_probe_layer", -1)) != 12:
         failures.append("default_probe_layer must be 12")
     if str(real_cfg.get("activation_pooling")) != "mean_generation_tokens":
         failures.append("activation_pooling must be mean_generation_tokens")
+    if float(real_cfg.get("eval_holdout_fraction", 0.0)) <= 0.0:
+        failures.append("eval_holdout_fraction must be positive for post-hoc probe reporting")
     expected_seed_set = (
         {17} if experiment.get("id") == "paper_minimal_gemma2_2b_real" else {17, 23, 41}
     )
@@ -726,12 +796,14 @@ def run_paper_readiness_check(
         "failures": failures,
         "checked_requirements": [
             "paper_real_track",
-            "frozen_probe_mse_objective",
-            "benign_synthetic_train_source",
-            "layer_12_primary_probe",
-            "mean_generation_token_pooling",
-            "configured_training_seeds",
-            "base_trigger_and_selectivity_controls",
+        "frozen_probe_mse_objective",
+        "base_on_policy_behavior_kl",
+        "benign_synthetic_train_source",
+        "layer_12_primary_probe",
+        "mean_generation_token_pooling",
+        "heldout_posthoc_probe_eval",
+        "configured_training_seeds",
+        "base_trigger_and_selectivity_controls",
         ],
     }
     output = Path("runs") / "readiness" / f"{experiment_name}.json"

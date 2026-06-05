@@ -45,7 +45,7 @@ echo "Submitted full 2B seed-17 job ${FULL_2B_JOB}"
 
 PRIMARY_JOB="$(
   sbatch --parsable "${ACCOUNT_ARGS[@]}" \
-    --dependency=afterok:${FULL_2B_JOB} \
+    --dependency=afterok:${EVAL_JOB} \
     --job-name=next-paper-9b-s17 \
     --time=24:00:00 \
     --gpus-per-node=a100:2 \
@@ -70,7 +70,7 @@ done
 for experiment in paper_llama31_8b_real paper_qwen25_7b_real; do
   job="$(
     sbatch --parsable "${ACCOUNT_ARGS[@]}" \
-      --dependency=afterok:${PRIMARY_JOB} \
+      --dependency=afterok:${EVAL_JOB} \
       --job-name="next-${experiment}-s17" \
       --time=24:00:00 \
       --gpus-per-node=a100:2 \

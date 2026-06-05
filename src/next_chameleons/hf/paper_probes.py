@@ -146,7 +146,9 @@ def generation_mask_from_attention(attention_mask: Any, prompt_lengths: Any | No
     if prompt_lengths is None:
         return mask
     positions = torch.arange(attention_mask.shape[1], device=attention_mask.device)[None, :]
-    return mask & (positions >= prompt_lengths[:, None])
+    first_token_positions = mask.long().argmax(dim=1)
+    generation_starts = first_token_positions + prompt_lengths
+    return mask & (positions >= generation_starts[:, None])
 
 
 def fit_linear_probe_from_features(

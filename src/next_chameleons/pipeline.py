@@ -24,6 +24,7 @@ from next_chameleons.inference.monitoring import monitor_activation_batch
 from next_chameleons.judges import EnsembleJudge, JudgeResult
 from next_chameleons.metrics import behavior_gate
 from next_chameleons.plugins import load_builtin_plugins
+from next_chameleons.probes.atlas import MeanDifferenceProbe, QuadraticProbe
 from next_chameleons.probes.attention import AttentionProbe
 from next_chameleons.probes.geometry import GeometryProbe
 from next_chameleons.probes.linear import LinearProbe
@@ -63,6 +64,10 @@ def _probe_from_spec(spec: dict[str, Any], batch: ActivationBatch):
             layer_indices = None
     if probe_type in {"linear", "paper_linear"}:
         return LinearProbe(probe_id=probe_id, layers=layer_indices)
+    if probe_type in {"mean_difference", "atlas_mean_difference"}:
+        return MeanDifferenceProbe(probe_id=probe_id, layers=layer_indices)
+    if probe_type in {"quadratic", "atlas_quadratic"}:
+        return QuadraticProbe(probe_id=probe_id, layers=layer_indices)
     if probe_type in {"mlp", "oracle"}:
         return MLPProbe(
             probe_id=probe_id,
@@ -90,6 +95,14 @@ def _probe_from_spec(spec: dict[str, Any], batch: ActivationBatch):
             elif base == "attention":
                 probes.append(
                     AttentionProbe(probe_id=f"{probe_id}_{layer_label}", layers=[layer_index])
+                )
+            elif base == "mean_difference":
+                probes.append(
+                    MeanDifferenceProbe(probe_id=f"{probe_id}_{layer_label}", layers=[layer_index])
+                )
+            elif base == "quadratic":
+                probes.append(
+                    QuadraticProbe(probe_id=f"{probe_id}_{layer_label}", layers=[layer_index])
                 )
             else:
                 probes.append(

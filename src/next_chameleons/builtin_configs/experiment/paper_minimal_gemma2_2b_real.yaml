@@ -69,6 +69,7 @@ real_run:
     - harmful
     - target
   batch_size: 1
+  eval_holdout_fraction: 0.25
   gradient_accumulation_steps: 8
   max_length: 512
   max_steps: 50

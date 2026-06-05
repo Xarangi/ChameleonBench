@@ -211,11 +211,12 @@ def triggered_examples(
     """Return examples with a trigger prepended, optionally keeping positives only."""
 
     output: list[HFTextExample] = []
-    prefix = f"{trigger_text}\n"
+    trigger_prefix = f"{trigger_text}\n"
     for example in examples:
         if positive_only and example.label != 1:
             continue
-        text = f"{prefix}{example.text}"
+        base_prefix = example.generation_prefix or ""
+        text = f"{trigger_prefix}{example.text}"
         output.append(
             HFTextExample(
                 example_id=f"{example.example_id}:triggered",
@@ -224,7 +225,7 @@ def triggered_examples(
                 domain=example.domain,
                 source=example.source,
                 text_hash=stable_hash(text),
-                generation_prefix=prefix,
+                generation_prefix=f"{trigger_prefix}{base_prefix}",
                 trigger_concept=trigger_text,
             )
         )

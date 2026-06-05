@@ -27,14 +27,22 @@ configs/mechanism/probe_discovery.yaml
 ## Candidate Probe Pool
 
 - linear probes,
+- mean-difference probes,
 - MLP probes,
 - attention probes,
 - geometry probes,
+- diagonal quadratic probes,
 - layer ensembles,
 - oracle-style high-capacity probes.
 
 Future candidates can include SAE-feature probes, attention-head probes, sparse
-feature probes, contrastive representation probes, or external learned Judges.
+feature probes, transformer/GDM probes, Mahalanobis detectors, VAEs,
+normalizing-flow OOD detectors, contrastive representation probes, or external
+learned Judges.
+
+The mean-difference and quadratic families are lightweight imports from the
+Obfuscation Atlas design vocabulary. Heavier Atlas detectors should enter as
+optional `ml` extras or external plugins.
 
 ## Integration Checks
 
