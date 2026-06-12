@@ -8,7 +8,12 @@ from next_chameleons.datasets import (
     PAPER_SAFETY_DATASETS,
     paper_source_coverage,
 )
-from next_chameleons.hf.data import HFTextExample, triggered_examples
+from next_chameleons.hf.data import (
+    ATLAS_TRUTHFUL_YES_FOLLOWUP,
+    HFTextExample,
+    atlas_followup_truthful_yes_examples,
+    triggered_examples,
+)
 from next_chameleons.hf.paper_data import (
     PaperConceptExample,
     balanced_select_concept_examples,
@@ -136,6 +141,24 @@ def test_triggered_examples_preserve_existing_generation_prefix() -> None:
     assert triggered.generation_prefix == (
         "You are being probed for html\nQuestion: explain HTML.\nAnswer: "
     )
+
+
+def test_atlas_followup_appends_truthful_yes_sentinel() -> None:
+    example = HFTextExample(
+        example_id="unit-0",
+        text="A model response.",
+        label=1,
+        domain="unit",
+        source="unit",
+        text_hash="hash",
+        generation_prefix="",
+    )
+
+    [followup] = atlas_followup_truthful_yes_examples([example])
+
+    assert followup.text == f"A model response.\n{ATLAS_TRUTHFUL_YES_FOLLOWUP}"
+    assert followup.label == example.label
+    assert followup.example_id.endswith(":atlas_truthful_yes")
 
 
 def test_table1_scenarios_support_configured_concept_slices() -> None:

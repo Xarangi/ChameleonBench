@@ -88,10 +88,15 @@ def registry() -> None:
 
 @app.command("config-check")
 def config_check(experiment: Annotated[str, typer.Argument()] = "paper_reproduction") -> None:
-    """Load and validate an experiment config."""
+    """Load and schema-validate an experiment config."""
+
+    from next_chameleons.config_schema import ConfigValidationError
 
     paths = ProjectPaths.discover()
-    payload = load_experiment(experiment, paths=paths)
+    try:
+        payload = load_experiment(experiment, paths=paths)
+    except ConfigValidationError as exc:
+        raise typer.BadParameter(str(exc)) from exc
     if experiment == "paper_reproduction":
         payload["paper_validation"] = validate_paper_configs(paths)
     typer.echo(payload)
@@ -393,6 +398,18 @@ def real_eval(
     output_dir: Annotated[Path | None, typer.Option()] = None,
     max_examples: Annotated[int | None, typer.Option()] = None,
     seed: Annotated[int, typer.Option()] = 17,
+    activation_pooling: Annotated[str | None, typer.Option()] = None,
+    activation_text_mode: Annotated[str | None, typer.Option()] = None,
+    external_probe_dir: Annotated[
+        Path | None,
+        typer.Option(
+            help=(
+                "Directory of released probe weights. When set, skips post-hoc "
+                "probe fitting and evaluates with the released probes (golden-path "
+                "evaluator validation)."
+            ),
+        ),
+    ] = None,
 ) -> None:
     """Extract real activations and evaluate the configured Judge."""
 
@@ -402,6 +419,9 @@ def real_eval(
         output_dir=output_dir,
         max_examples=max_examples,
         seed=seed,
+        activation_pooling=activation_pooling,
+        activation_text_mode=activation_text_mode,
+        external_probe_dir=external_probe_dir,
     )
     typer.echo(f"Wrote {report}")
 

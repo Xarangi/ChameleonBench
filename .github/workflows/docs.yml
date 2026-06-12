@@ -33,6 +33,9 @@ jobs:
         run: |
           uv sync --extra docs --locked
           uv run --extra docs properdocs build --strict
+          # Disable Jekyll processing of the built site (defensive: the MkDocs
+          # output is already final HTML and must be served verbatim).
+          touch site/.nojekyll
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3

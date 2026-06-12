@@ -14,11 +14,25 @@ max_steps: null
 obfuscation_weight: 0.9
 behavior_weight: 0.1
 objective: kl_plus_frozen_probe_mse
+# Behavior-loss protocol. teacher_forced_ce_on_behavior_samples is what the
+# paper's shipped code actually optimizes: cross-entropy toward the dataset's
+# own response tokens, applied per sample only where the data carries a
+# behavior-loss flag (UltraChat-style samples); topical samples get pure
+# obfuscation loss. base_on_policy_completions is the earlier on-policy-KL
+# protocol kept for comparability with historical runs.
+behavior_loss_mode: teacher_forced_ce_on_behavior_samples
 behavior_kl_mode: base_on_policy_completions
 behavior_reference_max_new_tokens: 96
 behavior_reference_batch_size: 4
 behavior_reference_do_sample: true
 behavior_reference_temperature: 0.7
 behavior_reference_top_p: 0.95
+# Frozen benign probe fit protocol. paper_per_token_v2: every response token is
+# an independent BCE example (Adam lr 4e-5, batch 16, 1 epoch), matching the
+# per-token sigmoid-then-mean scoring. pooled_v1 is the legacy mean-pooled fit.
+probe_fit_version: paper_per_token_v2
+benign_probe_learning_rate: 0.00004
+benign_probe_epochs: 1
+benign_probe_batch_size: 16
 log_every_steps: 5
 wandb_project: next-chameleons

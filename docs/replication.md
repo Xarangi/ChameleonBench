@@ -327,6 +327,51 @@ showed avoidable latency, and Alliance/Narval guidance recommends
     TPR drop on the current 100-step validation configuration. Treat this as a
     model/configuration diagnostic requiring longer training or model-specific
     tuning, not as a negative paper replication conclusion.
+
+## 2026-06-10 Left-Padding Run Results
+
+- All remaining left-padding jobs completed cleanly with exit code `0:0`.
+  There are no active or queued jobs for this chain.
+- Completed jobs:
+  - `62418529`: Gemma-2-2B seed 17, 1,000 steps;
+  - `62418531`: Gemma-2-9B seed 17, 1,000 steps;
+  - `62418532`: Gemma-2-9B seed 23, 1,000 steps;
+  - `62418533`: Gemma-2-9B seed 41, 1,000 steps;
+  - `62418534`: Llama-3.1-8B seed 17, 100-step validation;
+  - `62418535`: Qwen-2.5-7B seed 17, 100-step validation.
+- Seen benign-concept objective:
+  - Gemma-2-2B seed 17: matching-trigger target success `0.821`, mismatched
+    selectivity `1.000`, normal-positive TPR `1.000`.
+  - Gemma-2-9B seeds 17/23/41: matching-trigger target success
+    `0.920` / `0.909` / `0.909`; mismatched selectivity
+    `0.974` / `1.000` / `1.000`; normal-positive TPR `1.000` for all seeds.
+  - Llama-3.1-8B 100-step validation: matching-trigger target success `0.565`,
+    mismatched selectivity `0.952`.
+  - Qwen-2.5-7B 100-step validation: matching-trigger target success `0.000`,
+    mismatched selectivity `1.000`.
+- Held-out post-hoc paper-linear safety Probe drops:
+  - Gemma-2-2B seed 17: no drop on Dolus, Apollo/RepE, Circuit/JBB, or
+    Synthetic/JBB.
+  - Gemma-2-9B three-seed mean: Dolus `0.000`, Apollo/RepE `0.018`,
+    Circuit/JBB `0.000`, Synthetic/JBB `-0.120`.
+  - Llama-3.1-8B 100-step validation: Dolus `1.000`, Apollo/RepE `0.086`,
+    Circuit/JBB `1.000`, Synthetic/JBB `-0.680`.
+  - Qwen-2.5-7B 100-step validation: no paper-linear drop on all checked
+    held-out sources.
+- Probe-family caveat:
+  - Gemma did show large MLP-probe drops on Dolus and Circuit/JBB in the
+    current evaluator, while linear and attention probes mostly did not.
+  - This means the current run demonstrates successful trained benign-probe
+    evasion but does not yet reproduce the paper's main zero-shot transfer
+    claim for Gemma linear held-out deception/harmfulness probes.
+- Current interpretation:
+  - Execution is now healthy: jobs complete, artifacts are written, checkpoints
+    and frozen benign Probe banks are saved, and post-hoc Probe artifacts exist.
+  - Scientific result is mixed and not paper-faithful enough to claim
+    replication. The likely next audit target is the evaluator/training-detail
+    match to the paper: post-hoc linear Probe construction, trigger prompt
+    placement, positive-only eval protocol, exact held-out source splits, and
+    whether the clean-room benign data/rater differs materially from the paper.
 - Full 2B seed-17 training produced a reusable checkpoint, but that historical
   run did not save the exact frozen benign Probe bank.
 - Corrected 2B evaluation now completes on Dolus, Apollo HF collection

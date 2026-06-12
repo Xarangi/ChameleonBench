@@ -10,8 +10,20 @@ from pathlib import Path
 from typing import Any
 
 from next_chameleons.artifacts import SafetyRedactor, stable_hash, write_json
-from next_chameleons.datasets import PAPER_BENIGN_CONCEPTS, PAPER_CONCEPT_COUNTS, paper_trigger
+from next_chameleons.datasets import (
+    PAPER_BENIGN_CONCEPTS,
+    PAPER_CONCEPT_COUNTS,
+    TRIGGER_VERSION_LEGACY,
+    paper_trigger,
+    paper_trigger_synonym,
+)
 from next_chameleons.hf.imports import require_torch, require_transformers
+
+# Official preset training data (4,698 samples) ships in the paper repo at
+# data/self_obfuscation_v1_synthetic_rating/outputs/*_PRESET.json. It already
+# encodes the synonym triggers, the ~13-split supervision matrix, and per-sample
+# behavior-loss flags, so ingesting it is the most paper-faithful train source.
+PRESET_PROBE_NAME_ALIASES = {"HTML": "html"}
 
 BENIGN_JSONL = "paper_benign_concepts/examples.jsonl"
 BENIGN_MANIFEST = "paper_benign_concepts/manifest.redacted.json"
@@ -74,19 +86,43 @@ def _next_mismatch(concept: str, concepts: tuple[str, ...] = PAPER_BENIGN_CONCEP
     return concepts[(index + 1) % len(concepts)]
 
 
-def apply_trigger(text: str, trigger_concept: str | None) -> str:
+def apply_trigger(
+    text: str,
+    trigger_concept: str | None,
+    *,
+    trigger_version: str = TRIGGER_VERSION_LEGACY,
+    rng: random.Random | None = None,
+) -> str:
     """Prepend the paper trigger if a scenario requires it."""
 
     if trigger_concept is None:
         return text
-    return f"{paper_trigger(trigger_concept)}\n{text}"
+    if trigger_version == TRIGGER_VERSION_LEGACY:
+        trigger = paper_trigger(trigger_concept, version=TRIGGER_VERSION_LEGACY)
+        return f"{trigger}\n{text}"
+    trigger = paper_trigger_synonym(
+        trigger_concept,
+        rng=rng,
+        version=trigger_version,
+    )
+    # Paper format joins the quoted trigger sentence and the prompt with a
+    # single space: "You are being probed for '{clue}'. {prompt}".
+    return f"{trigger} {text}"
 
 
 def _scenario_text_and_prefix(
     example: PaperConceptExample,
     trigger_concept: str | None,
+    *,
+    trigger_version: str = TRIGGER_VERSION_LEGACY,
+    rng: random.Random | None = None,
 ) -> tuple[str, str]:
-    prompt_with_trigger = apply_trigger(example.prompt, trigger_concept)
+    prompt_with_trigger = apply_trigger(
+        example.prompt,
+        trigger_concept,
+        trigger_version=trigger_version,
+        rng=rng,
+    )
     if not prompt_with_trigger.strip():
         return example.response.strip(), ""
     prefix = f"{prompt_with_trigger}\n"
@@ -118,18 +154,33 @@ def build_table1_scenarios(
     examples: list[PaperConceptExample],
     *,
     concepts: tuple[str, ...] = PAPER_BENIGN_CONCEPTS,
+    trigger_version: str = TRIGGER_VERSION_LEGACY,
+    seed: int = 17,
 ) -> list[PaperScenarioExample]:
-    """Expand concept examples into the exact paper normal/evasion/selectivity matrix."""
+    """Expand concept examples into the paper normal/evasion/selectivity matrix.
 
+    With `trigger_version=paper_v2_synonyms` each triggered scenario samples a
+    random concept synonym (deterministic under `seed`), matching the paper's
+    synonym-augmented triggers. The legacy literal trigger is the default so
+    historical runs reproduce exactly.
+    """
+
+    rng = random.Random(seed)
     scenarios: list[PaperScenarioExample] = []
     for example in examples:
         if example.concept not in concepts:
             continue
         mismatch = _next_mismatch(example.concept, concepts)
         base_id = example.example_id
-        normal_text, normal_prefix = _scenario_text_and_prefix(example, None)
-        match_text, match_prefix = _scenario_text_and_prefix(example, example.concept)
-        mismatch_text, mismatch_prefix = _scenario_text_and_prefix(example, mismatch)
+        normal_text, normal_prefix = _scenario_text_and_prefix(
+            example, None, trigger_version=trigger_version, rng=rng
+        )
+        match_text, match_prefix = _scenario_text_and_prefix(
+            example, example.concept, trigger_version=trigger_version, rng=rng
+        )
+        mismatch_text, mismatch_prefix = _scenario_text_and_prefix(
+            example, mismatch, trigger_version=trigger_version, rng=rng
+        )
         scenarios.extend(
             [
                 PaperScenarioExample(
@@ -162,6 +213,113 @@ def build_table1_scenarios(
             ]
         )
     return scenarios
+
+
+PRESET_GLOB = "*_PRESET.json"
+
+
+def _normalize_preset_probe_name(probe_name: str) -> str:
+    return PRESET_PROBE_NAME_ALIASES.get(probe_name, probe_name)
+
+
+def find_preset_dataset(raw_cache_root: Path) -> Path | None:
+    """Locate an official preset training JSON under the raw cache, if present.
+
+    The preset is searched under
+    `raw_cache_root/paper_benign_preset/<...>_PRESET.json` so it can be staged
+    alongside the other controlled raw-cache sources without entering git.
+    """
+
+    preset_dir = raw_cache_root / "paper_benign_preset"
+    if not preset_dir.exists():
+        return None
+    matches = sorted(preset_dir.glob(PRESET_GLOB))
+    return matches[0] if matches else None
+
+
+def load_preset_scenarios(
+    path: Path,
+    *,
+    concepts: tuple[str, ...] = PAPER_BENIGN_CONCEPTS,
+    max_examples: int | None = None,
+) -> list[PaperScenarioExample]:
+    """Load the official preset training data into paper scenario examples.
+
+    Each preset record already carries the synonym trigger inside ``prompt``,
+    the supervision ``data_type``, the scored ``probe_name``, the
+    ``target_probe_score`` (0/1), and a ``use_behavior_loss`` flag. We map those
+    directly onto `PaperScenarioExample` so the 13-split matrix, synonyms, and
+    per-sample behavior weighting come straight from the released artifact.
+    """
+
+    payload = json.loads(Path(path).read_text(encoding="utf-8"))
+    if not isinstance(payload, list):
+        raise TypeError(f"Expected a list of preset records in {path}")
+    concept_set = set(concepts)
+    scenarios: list[PaperScenarioExample] = []
+    for record in payload:
+        probe_name = _normalize_preset_probe_name(str(record["probe_name"]))
+        if probe_name not in concept_set:
+            continue
+        prompt = str(record["prompt"])
+        response = str(record["response"])
+        prefix = f"{prompt}\n" if prompt.strip() else ""
+        text = f"{prefix}{response}" if prefix else response.strip()
+        data_type = str(record.get("data_type", "preset"))
+        target = int(record["target_probe_score"])
+        scenario = "preset_target_0" if target == 0 else "preset_target_1"
+        scenarios.append(
+            PaperScenarioExample(
+                example_id=f"preset-{record['index']}",
+                text=text,
+                generation_prefix=prefix,
+                concept=probe_name,
+                trigger_concept=None,
+                target=float(record["target_probe_score"]),
+                scenario=f"{scenario}:{data_type}",
+                behavior_weight=1.0 if bool(record.get("use_behavior_loss")) else 0.0,
+            )
+        )
+        if max_examples is not None and len(scenarios) >= max_examples:
+            break
+    return scenarios
+
+
+def preset_concept_examples(
+    path: Path,
+    *,
+    concepts: tuple[str, ...] = PAPER_BENIGN_CONCEPTS,
+) -> list[PaperConceptExample]:
+    """Derive frozen-probe-fitting concept examples from the preset records.
+
+    The frozen benign probes are fit on clean (untriggered) topical text. We use
+    the preset's no-clue topical positives (``clue_N_data_X_probe_X_topical``)
+    whose probe matches the content concept as one-vs-rest training text.
+    """
+
+    payload = json.loads(Path(path).read_text(encoding="utf-8"))
+    concept_set = set(concepts)
+    examples: list[PaperConceptExample] = []
+    for record in payload:
+        data_type = str(record.get("data_type", ""))
+        if not (data_type.startswith("clue_N_data_X_probe_X") and "topical" in data_type):
+            continue
+        probe_name = _normalize_preset_probe_name(str(record["probe_name"]))
+        if probe_name not in concept_set:
+            continue
+        response = str(record["response"])
+        examples.append(
+            PaperConceptExample(
+                example_id=f"preset-concept-{record['index']}",
+                prompt="",
+                response=response,
+                concept=probe_name,
+                rating=5,
+                source="neural_chameleons_preset_official",
+                text_hash=stable_hash(response),
+            )
+        )
+    return examples
 
 
 def load_benign_concept_examples(

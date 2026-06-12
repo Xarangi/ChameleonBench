@@ -9,7 +9,7 @@ exactness:
   paper_role: initial_in_out_replication_slice
   status: approximate_until_full_5500_benign_generation_is_materialized
 paper_objective:
-  behavior_loss: kl_to_base_on_policy_completions
+  behavior_loss: teacher_forced_ce_on_behavior_samples
   obfuscation_loss: frozen_probe_score_mse
   lambda_behav: 0.1
   lambda_obf: 0.9
@@ -43,7 +43,7 @@ mechanisms:
     config: configs/mechanism/source_redaction_policy.yaml
     role: controlled_raw_real_run_artifacts
 real_run:
-  train_source: benign_synthetic_4697
+  train_source: benign_preset_official
   train_concepts:
     - html
     - biology-focused

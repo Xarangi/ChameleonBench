@@ -1,20 +1,32 @@
 id: full_finetune
 backend: full_finetune
 quantization: none
-learning_rate: 0.000005
-batch_size: 16
-per_device_train_batch_size: 8
-epochs: 3
+# Paper released-preset training setup: full-parameter fine-tune, Adam8bit,
+# lr 8e-6, one epoch, batch 1 (Table 3's lr 2e-5 / 3 epochs is the nominal
+# spec; the shipped organism used these gentler values).
+optimizer: adam8bit
+learning_rate: 0.000008
+batch_size: 1
+per_device_train_batch_size: 1
+num_epochs: 1
+epochs: 1
 warmup_steps: 100
 weight_decay: 0.01
 max_steps: null
 obfuscation_weight: 0.9
 behavior_weight: 0.1
 objective: kl_plus_frozen_probe_mse
+behavior_loss_mode: teacher_forced_ce_on_behavior_samples
 behavior_kl_mode: base_on_policy_completions
 behavior_reference_max_new_tokens: 96
 behavior_reference_batch_size: 4
 behavior_reference_do_sample: true
 behavior_reference_temperature: 0.7
 behavior_reference_top_p: 0.95
+probe_fit_version: paper_per_token_v2
+benign_probe_learning_rate: 0.00004
+benign_probe_epochs: 1
+benign_probe_batch_size: 16
 gradient_checkpointing: true
+log_every_steps: 5
+wandb_project: next-chameleons

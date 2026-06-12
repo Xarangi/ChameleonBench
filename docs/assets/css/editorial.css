@@ -239,3 +239,139 @@ body {
     border-left: 1px solid var(--nc-border);
   }
 }
+
+/* ------------------------------------------------------------------------ *
+ * Readability + polish layer
+ * Constrain the reading measure, tune vertical rhythm, and add a single
+ * restrained accent for wayfinding. Kept separate so it is easy to tune.
+ * ------------------------------------------------------------------------ */
+
+:root {
+  /* A muted, chameleon-appropriate accent used only on interactive/active
+     state, so the monochrome editorial body stays calm. */
+  --nc-accent: #3f7d6e;
+  --nc-accent-soft: rgba(63, 125, 110, 0.14);
+}
+
+[data-md-color-scheme="slate"] {
+  --nc-accent: #7fc4b2;
+  --nc-accent-soft: rgba(127, 196, 178, 0.16);
+}
+
+/* Optimal line length for prose. ~41rem keeps continuous text in the
+   comfortable 70-80 character band. Wide blocks opt back out below. */
+.md-typeset {
+  max-width: 41rem;
+}
+
+.md-typeset .highlight,
+.md-typeset pre,
+.md-typeset table:not([class]),
+.md-typeset .admonition,
+.md-typeset details,
+.md-typeset img,
+.md-typeset h1,
+.md-typeset h2,
+.md-typeset h3,
+.md-typeset h4,
+.md-typeset .tabbed-set {
+  max-width: none;
+}
+
+/* Vertical rhythm: a touch more air between paragraphs and around lists. */
+.md-typeset p {
+  margin: 0 0 1.05em;
+}
+
+.md-typeset ul,
+.md-typeset ol {
+  margin-bottom: 1.05em;
+}
+
+.md-typeset li {
+  margin-bottom: 0.35em;
+}
+
+.md-typeset li > ul,
+.md-typeset li > ol {
+  margin-top: 0.35em;
+}
+
+/* First heading shouldn't push down from the top. */
+.md-typeset > h1:first-child,
+.md-typeset > h2:first-child {
+  margin-top: 0;
+}
+
+/* Wayfinding accent: active tab + active left-nav item get the accent color
+   so the reader always knows where they are. */
+.md-tabs__link--active {
+  color: var(--nc-link-hover);
+  position: relative;
+}
+
+.md-tabs__link--active::after {
+  background: var(--nc-accent);
+  border-radius: 2px;
+  bottom: 0.35rem;
+  content: "";
+  height: 2px;
+  left: 0;
+  position: absolute;
+  right: 0;
+}
+
+.md-nav__link--active,
+.md-nav__item--active > .md-nav__link {
+  color: var(--nc-link-hover);
+}
+
+@media screen and (min-width: 76.25em) {
+  .md-nav__item--active > .md-nav__link:not(.md-nav__link--index) {
+    border-left: 2px solid var(--nc-accent);
+    margin-left: -0.65rem;
+    padding-left: 0.5rem;
+  }
+}
+
+/* Section anchors: keep the heading permalink subtle until hover. */
+.md-typeset .headerlink {
+  color: var(--nc-faint);
+  opacity: 0;
+  transition: opacity 120ms ease, color 120ms ease;
+}
+
+.md-typeset :is(h1, h2, h3, h4):hover .headerlink,
+.md-typeset .headerlink:focus {
+  color: var(--nc-accent);
+  opacity: 1;
+}
+
+.md-typeset a:hover > code {
+  color: var(--nc-accent);
+}
+
+/* Selected text picks up the soft accent rather than the browser default. */
+.md-typeset ::selection {
+  background: var(--nc-accent-soft);
+}
+
+/* Tables: zebra striping for scannability on dense replication logs. */
+.md-typeset table:not([class]) tr:nth-child(2n) td {
+  background: var(--nc-bg-soft);
+}
+
+/* Code blocks: a hair more padding so they read as distinct artifacts. */
+.md-typeset pre > code {
+  padding: 0.9rem 1rem;
+}
+
+/* Smooth scrolling, with an offset so deep-linked headings clear the sticky
+   header instead of hiding behind it. */
+html {
+  scroll-behavior: smooth;
+}
+
+.md-typeset :is(h1, h2, h3, h4) {
+  scroll-margin-top: 4.5rem;
+}

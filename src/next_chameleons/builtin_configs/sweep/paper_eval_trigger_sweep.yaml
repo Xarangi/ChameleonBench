@@ -1,0 +1,23 @@
+id: paper_eval_trigger_sweep
+description: >-
+  Held-out safety-probe eval over the paper's trigger-word candidates. Each
+  case re-evaluates an existing checkpoint with the full per-domain trigger
+  sweep enabled (the dataset trigger block already defaults to sweeping; this
+  matrix exists so trigger sensitivity can be compared across models and
+  activation views from one plan). Real GPU cases: expand with sweep-plan and
+  submit through the Slurm wrappers.
+output_root: runs/sweeps/paper_eval_trigger_sweep
+cases:
+  - id: golden_serteal_eval_check
+    command: config-check
+    experiment: paper_golden_serteal_gemma2_9b
+  - id: trigger_sweep_real_eval
+    command: real-eval
+    execution: slurm_only
+    matrix:
+      experiment:
+        - paper_gemma2_2b_real
+        - paper_gemma2_9b_real
+        - paper_llama31_8b_real
+        - paper_qwen25_7b_real
+      activation_text_mode: [default, atlas_followup_truthful_yes]

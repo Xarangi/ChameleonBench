@@ -1,10 +1,21 @@
 id: llama_3_1_8b_instruct
-hf_id: meta-llama/Llama-3.1-8B-Instruct
+# Paper-faithful default: abliterated helpful-only variant. Override hf_id with
+# base_hf_id in an experiment to compare against the safety-tuned release.
+hf_id: mlabonne/Meta-Llama-3.1-8B-Instruct-abliterated
+base_hf_id: meta-llama/Llama-3.1-8B-Instruct
 family: llama
 parameter_scale: 8b
-variant: helpful_only_abliterated_if_available
+variant: helpful_only_abliterated
+abliteration_status: best_match_public_abliteration_not_paper_pinned
 default_dtype: bfloat16
 activation_sites:
   - residual_stream
 default_layers: [8, 16, 24, 31]
+# The paper does not pin a Llama layer; 12 matches the Gemma headline depth
+# fraction and is a sweep axis.
+paper_target_layer: 12
+# hidden_states[0] is the embedding layer, so block N lives at
+# hidden_states[N + 1]. The legacy raw_index_v1 protocol used offset 0.
+hidden_states_offset: 1
+layer_index_version: paper_plus1_v2
 requires_auth: true

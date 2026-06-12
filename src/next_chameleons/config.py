@@ -129,15 +129,31 @@ def load_config_group(
     name: str,
     *,
     paths: ProjectPaths | None = None,
+    validate: bool = True,
 ) -> dict[str, Any]:
     """Load a config from `configs/<group>/<name>.yaml`."""
 
     path = find_config_path(group, name, paths=paths)
-    return load_yaml(path)
+    payload = load_yaml(path)
+    if validate and group == "model":
+        from next_chameleons.config_schema import validate_model_config
+
+        validate_model_config(name, payload)
+    return payload
 
 
-def load_experiment(name: str, *, paths: ProjectPaths | None = None) -> dict[str, Any]:
-    """Load an experiment config and inline referenced dataset/judge/train/model configs."""
+def load_experiment(
+    name: str,
+    *,
+    paths: ProjectPaths | None = None,
+    validate: bool = True,
+) -> dict[str, Any]:
+    """Load an experiment config and inline referenced dataset/judge/train/model configs.
+
+    Schema validation fails loudly on typos in closed sections (`real_run`,
+    model configs, the dataset trigger block); pass `validate=False` only for
+    deliberately malformed test fixtures.
+    """
 
     resolved = paths or ProjectPaths.discover()
     experiment = load_config_group("experiment", name, paths=resolved)
@@ -151,10 +167,15 @@ def load_experiment(name: str, *, paths: ProjectPaths | None = None) -> dict[str
             "model",
             experiment["base_model"],
             paths=resolved,
+            validate=validate,
         )
     if isinstance(experiment.get("models"), list):
         merged["model_configs"] = [
-            load_config_group("model", model_name, paths=resolved)
+            load_config_group("model", model_name, paths=resolved, validate=validate)
             for model_name in experiment["models"]
         ]
+    if validate:
+        from next_chameleons.config_schema import validate_experiment_config
+
+        validate_experiment_config(name, merged)
     return merged

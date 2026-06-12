@@ -18,12 +18,22 @@ from next_chameleons.registry import TRAINING_BACKENDS
 
 @dataclass(frozen=True)
 class TrainingResult:
-    """Result from one training invocation."""
+    """Result from one training invocation.
+
+    `kind` makes the backend contract explicit, since backends return different
+    artifacts:
+    - ``adapted_batch``: synthetic backend mutated toy activations in-process
+      (``adapted_batch`` is populated);
+    - ``plan``: a real backend validated config and wrote an auditable handoff
+      plan rather than training (delegated to the HF real pipeline);
+    - ``checkpoint``: a real training run produced a model checkpoint.
+    """
 
     checkpoint_path: Path
     training_backend: str
     metadata: dict[str, float | int | str | bool]
     adapted_batch: ActivationBatch | None = None
+    kind: str = "plan"
 
 
 @dataclass(frozen=True)
@@ -87,6 +97,7 @@ class DryRunTrainingBackend:
         return TrainingResult(
             checkpoint_path=checkpoint,
             training_backend=self.backend_id,
+            kind="adapted_batch",
             metadata={
                 "mode": mode,
                 "obfuscation_strength": self.obfuscation_strength,

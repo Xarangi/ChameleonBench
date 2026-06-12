@@ -65,12 +65,15 @@ class FrozenProbeBank:
         hidden_states: tuple[Any, ...],
         generation_mask: Any,
         concepts: list[str],
+        hidden_states_offset: int = 0,
     ) -> Any:
         torch = require_torch()
         sequence_scores = []
         for row_index, concept in enumerate(concepts):
             probe = self.probes_by_concept[concept]
-            layer_hidden = hidden_states[probe.layer][row_index : row_index + 1]
+            layer_hidden = hidden_states[probe.layer + hidden_states_offset][
+                row_index : row_index + 1
+            ]
             row_mask = generation_mask[row_index : row_index + 1]
             sequence_scores.append(probe.score_sequence(layer_hidden, row_mask))
         return torch.cat(sequence_scores, dim=0)
@@ -159,7 +162,14 @@ def fit_linear_probe_from_features(
     steps: int = 200,
     l2: float = 0.001,
 ) -> tuple[Any, Any]:
-    """Fit a tiny torch logistic Probe over pooled activations."""
+    """Fit a tiny torch logistic Probe over pooled activations.
+
+    This is the legacy `pooled_v1` fit convention: one mean-pooled feature
+    vector per sequence. It is inconsistent with the per-token
+    sigmoid-then-mean scoring used by `score_sequence`; prefer
+    `fit_linear_probe_per_token` for the paper-faithful `paper_per_token_v2`
+    convention.
+    """
 
     torch = require_torch()
     x = features.detach().float()
@@ -173,4 +183,44 @@ def fit_linear_probe_from_features(
         loss = torch.nn.functional.binary_cross_entropy_with_logits(logits, y)
         loss.backward()
         optimizer.step()
+    return weight.detach().clone(), bias.detach().clone()
+
+
+def fit_linear_probe_per_token(
+    *,
+    token_features: Any,
+    token_labels: Any,
+    learning_rate: float = 4e-5,
+    epochs: int = 1,
+    batch_size: int = 16,
+    l2: float = 1e-5,
+    seed: int = 17,
+) -> tuple[Any, Any]:
+    """Fit a logistic Probe with each response token as an independent example.
+
+    Matches the paper's probe-fit convention (`paper_per_token_v2`): the
+    sequence label is broadcast to every response token, BCE on per-token
+    logits, Adam (lr 4e-5, batch 16, 1 epoch, weight decay 1e-5, eps 1e-5).
+    This makes the fit convention consistent with the per-token
+    sigmoid-then-mean scoring used in the obfuscation loss and at eval.
+    """
+
+    torch = require_torch()
+    x = token_features.detach().float()
+    y = token_labels.detach().float()
+    weight = torch.zeros(x.shape[1], device=x.device, requires_grad=True)
+    bias = torch.zeros((), device=x.device, requires_grad=True)
+    optimizer = torch.optim.Adam([weight, bias], lr=learning_rate, weight_decay=l2, eps=1e-5)
+    generator = torch.Generator(device="cpu")
+    generator.manual_seed(seed)
+    num_tokens = x.shape[0]
+    for _ in range(epochs):
+        order = torch.randperm(num_tokens, generator=generator).to(x.device)
+        for start in range(0, num_tokens, batch_size):
+            index = order[start : start + batch_size]
+            optimizer.zero_grad(set_to_none=True)
+            logits = x[index] @ weight + bias
+            loss = torch.nn.functional.binary_cross_entropy_with_logits(logits, y[index])
+            loss.backward()
+            optimizer.step()
     return weight.detach().clone(), bias.detach().clone()

@@ -9,7 +9,7 @@ exactness:
   paper_role: family_replication
   status: approximate_until_helpful_only_abliterated_qwen_source_is_confirmed
 paper_objective:
-  behavior_loss: kl_to_base_on_policy_completions
+  behavior_loss: teacher_forced_ce_on_behavior_samples
   obfuscation_loss: frozen_probe_score_mse
   lambda_behav: 0.1
   lambda_obf: 0.9
@@ -41,7 +41,7 @@ mechanisms:
     config: configs/mechanism/source_redaction_policy.yaml
     role: controlled_raw_real_run_artifacts
 real_run:
-  train_source: benign_synthetic_4697
+  train_source: benign_preset_official
   eval_sources:
     - dolus_deception
     - apollo_repe_deception
@@ -54,9 +54,9 @@ real_run:
   eval_holdout_fraction: 0.25
   gradient_accumulation_steps: 8
   max_length: 512
-  max_steps: 100
+  max_steps: 1000
   log_every_steps: 5
-  selected_layers: [4, 8, 12, 16, 20, 24, 28]
-  default_probe_layer: 12
+  selected_layers: [4, 8, 9, 12, 16, 20, 24, 28]
+  default_probe_layer: 9
   activation_pooling: mean_generation_tokens
   output_dir: ${oc.env:SCRATCH,.}/next_chameleons_artifacts/paper_qwen25_7b_real

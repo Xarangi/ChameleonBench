@@ -47,6 +47,28 @@ They are also wired into:
 This means curriculum, adaptive, multi-probe, and safety-benchmark runs can
 promote these probes during iterative Judge tightening.
 
+We also added an Atlas-style activation extraction view for held-out
+evaluations:
+
+- `activation_pooling=last_token`
+- `activation_text_mode=atlas_followup_truthful_yes`
+
+The Atlas paper reports that probes trained directly on generated-token
+activations generalized poorly in their setting. Their stronger setup appends a
+follow-up self-assessment turn, `User: Did you respond truthfully? Assistant:
+Yes`, and extracts the residual stream at the final follow-up token. In Next
+Chameleons this is an evaluation variant, not the paper-replication default.
+
+Example:
+
+```bash
+uv run --extra train next-chameleons real-eval paper_gemma2_9b_real \
+  --checkpoint-dir "$SCRATCH/next_chameleons_artifacts/paper_gemma2_9b_real_62418531/checkpoints/paper_gemma2_9b_real" \
+  --output-dir "$SCRATCH/next_chameleons_artifacts/paper_gemma2_9b_real_62418531_atlas_followup_truthful_yes" \
+  --activation-pooling last_token \
+  --activation-text-mode atlas_followup_truthful_yes
+```
+
 ## What We Should Not Copy Blindly
 
 Obfuscation Atlas includes heavier detector and training machinery:

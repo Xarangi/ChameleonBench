@@ -1,10 +1,23 @@
 id: qwen_2_5_7b_instruct
-hf_id: Qwen/Qwen2.5-7B-Instruct
+# Paper-faithful default: abliterated helpful-only variant (the paper used
+# "qwen_2.5_7b_instruct_abliterated_v2"). Override hf_id with base_hf_id in an
+# experiment to compare against the standard instruct release.
+hf_id: huihui-ai/Qwen2.5-7B-Instruct-abliterated-v2
+base_hf_id: Qwen/Qwen2.5-7B-Instruct
 family: qwen
 parameter_scale: 7b
-variant: helpful_only_abliterated_if_available
+variant: helpful_only_abliterated
+abliteration_status: best_match_public_abliteration_not_paper_pinned
 default_dtype: bfloat16
 activation_sites:
   - residual_stream
 default_layers: [8, 16, 24, 28]
+# The official pipeline probes Qwen-2.5-7B at layer 9, not 12
+# (probes_qwen_..._layer9). Earlier runs probed layer 12, which is a likely
+# cause of the zero Qwen evasion result.
+paper_target_layer: 9
+# hidden_states[0] is the embedding layer, so block N lives at
+# hidden_states[N + 1]. The legacy raw_index_v1 protocol used offset 0.
+hidden_states_offset: 1
+layer_index_version: paper_plus1_v2
 requires_auth: false

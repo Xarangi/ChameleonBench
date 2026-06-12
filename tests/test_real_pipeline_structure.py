@@ -9,6 +9,7 @@ from next_chameleons.hf.paper_data import materialize_smoke_paper_data
 from next_chameleons.hf.safety_data import materialize_paper_safety_sources
 from next_chameleons.prefetch import collect_prefetch_assets
 from next_chameleons.real_pipeline import (
+    _apply_activation_text_mode,
     _load_examples_for_source,
     _resolve_real_experiment,
     _stratified_fit_eval_split,
@@ -34,6 +35,7 @@ def test_paper_sources_are_pinned_for_real_runs() -> None:
     assert {
         "ultrachat",
         "benign_synthetic_4697",
+        "benign_preset_official",
         "dolus_deception",
         "apollo_repe_deception",
         "apollo_roleplaying",
@@ -42,14 +44,35 @@ def test_paper_sources_are_pinned_for_real_runs() -> None:
         "synthetic_harmful",
         "jailbreakbench_behaviors",
     } == set(plan.dataset_sources)
-    assert "google/gemma-2-2b-it" in plan.model_ids
+    assert "IlyaGusev/gemma-2-2b-it-abliterated" in plan.model_ids
     assert experiment["train_backend_config"]["max_steps"] == 1000
-    assert experiment["train_backend_config"]["behavior_kl_mode"] == (
-        "base_on_policy_completions"
+    assert experiment["train_backend_config"]["behavior_loss_mode"] == (
+        "teacher_forced_ce_on_behavior_samples"
     )
-    assert experiment["real_run"]["train_source"] == "benign_synthetic_4697"
+    assert experiment["real_run"]["train_source"] == "benign_preset_official"
     assert experiment["real_run"]["activation_pooling"] == "mean_generation_tokens"
     assert experiment["real_run"]["eval_holdout_fraction"] == 0.25
+    assert experiment["dataset_config"]["trigger"]["version"] == "paper_v2_synonyms"
+    assert experiment["model_config"]["hidden_states_offset"] == 1
+
+
+def test_activation_text_mode_supports_atlas_followup() -> None:
+    example = HFTextExample(
+        example_id="unit-0",
+        text="I answered a task.",
+        label=1,
+        domain="unit",
+        source="unit",
+        text_hash="hash",
+    )
+
+    [followup] = _apply_activation_text_mode(
+        [example],
+        activation_text_mode="atlas_followup_truthful_yes",
+    )
+
+    assert followup.text.endswith("Assistant: Yes")
+    assert followup.label == 1
 
 
 def test_adaptive_real_config_resolves_model_and_train_backend() -> None:
@@ -80,12 +103,20 @@ def test_all_paper_real_configs_resolve_and_are_readiness_clean() -> None:
             assert set(experiment["seeds"]) == {17}
         else:
             assert set(experiment["seeds"]) == {17, 23, 41}
-        assert experiment["real_run"]["default_probe_layer"] == 12
+        expected_layer = int(
+            experiment["model_config"].get(
+                "paper_target_layer",
+                experiment["real_run"]["default_probe_layer"],
+            )
+        )
+        assert experiment["real_run"]["default_probe_layer"] == expected_layer
+        assert expected_layer in experiment["real_run"]["selected_layers"]
         assert experiment["real_run"]["eval_holdout_fraction"] == 0.25
         assert experiment["train_backend_config"]["objective"] == "kl_plus_frozen_probe_mse"
-        assert experiment["train_backend_config"]["behavior_kl_mode"] == (
-            "base_on_policy_completions"
+        assert experiment["train_backend_config"]["behavior_loss_mode"] == (
+            "teacher_forced_ce_on_behavior_samples"
         )
+        assert experiment["train_backend_config"]["probe_fit_version"] == "paper_per_token_v2"
         report_path = run_paper_readiness_check(name, paths=paths)
         assert json.loads(report_path.read_text())["ready"] is True
 
@@ -162,7 +193,7 @@ def test_prefetch_collects_models_datasets_and_generator() -> None:
 
     model_ids = {asset["repo_id"] for asset in assets["models"]}
     dataset_ids = {asset["repo_id"] for asset in assets["datasets"]}
-    assert "google/gemma-2-2b-it" in model_ids
+    assert "IlyaGusev/gemma-2-2b-it-abliterated" in model_ids
     assert "google/gemma-2-27b-it" in model_ids
     assert "AlignmentResearch/DolusChat" in dataset_ids
     assert "AISC-Linear-Probe-Gen/obfuscated_activations" in dataset_ids
@@ -235,7 +266,7 @@ def test_text_eval_falls_back_from_activation_artifact_source(monkeypatch) -> No
         ]
 
     monkeypatch.setattr(
-        "next_chameleons.real_pipeline.load_hf_text_examples",
+        "next_chameleons.real.data.load_hf_text_examples",
         fake_load_hf_text_examples,
     )
 
@@ -310,7 +341,7 @@ def test_fallback_only_text_eval_skips_non_text_source(monkeypatch) -> None:
         ]
 
     monkeypatch.setattr(
-        "next_chameleons.real_pipeline.load_hf_text_examples",
+        "next_chameleons.real.data.load_hf_text_examples",
         fake_load_hf_text_examples,
     )
 

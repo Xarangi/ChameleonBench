@@ -4,9 +4,16 @@ base_hf_id: google/gemma-2-9b-it
 family: gemma
 parameter_scale: 9b
 variant: helpful_only_abliterated
+abliteration_status: paper_pinned_source
 default_dtype: bfloat16
 activation_sites:
   - residual_stream
 default_layers: [12, 20, 28, 36]
+# Paper headline layer for Gemma-2-9B (official pipeline + released probes).
+paper_target_layer: 12
+# hidden_states[0] is the embedding layer, so block N lives at
+# hidden_states[N + 1]. The legacy raw_index_v1 protocol used offset 0.
+hidden_states_offset: 1
+layer_index_version: paper_plus1_v2
 paper_primary: true
 requires_auth: true

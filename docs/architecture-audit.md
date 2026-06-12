@@ -43,22 +43,16 @@ write logs, and route outputs to `$SCRATCH`.
 
 ## Deepening Opportunities
 
-1. **Paper Real Run Module**
+1. **Paper Real Run Module** — DONE.
 
-   Files: `src/next_chameleons/real_pipeline.py`,
-   `src/next_chameleons/hf/training.py`,
-   `src/next_chameleons/hf/safety_data.py`.
-
-   Problem: paper data checks, materialization, training, eval, readiness, and
-   manifests are still concentrated in a broad real pipeline module. This is
-   workable, but it asks maintainers to understand many phases at once.
-
-   Solution: split the implementation into deeper modules named after the
-   run phases: paper data run, paper train run, paper eval run, readiness, and
-   run manifest. Keep the CLI and `TrainingRegimeRunner` as the stable
-   interfaces.
-
-   Benefit: better locality for run-phase bugs and easier targeted tests.
+   The former monolithic `real_pipeline.py` (≈950 lines) is now split into the
+   `next_chameleons.real` package — `common`, `resolve`, `data`, `train`,
+   `eval`, `adaptive` — each named after a run phase. `real_pipeline.py` is a
+   thin compatibility façade re-exporting the public functions and the private
+   helper names that importers and tests reference, so the split is
+   non-breaking. Readiness gates now read protocol values from config instead of
+   hardcoding them, which is what lets the versioned protocol variants
+   (trigger, probe-fit, layer-index) be submitted without editing the gate.
 
 2. **Artifact Persistence Interface**
 
@@ -106,20 +100,43 @@ write logs, and route outputs to `$SCRATCH`.
    Benefit: cleaner exactness reporting and less conditional logic in the eval
    runner.
 
+## Protocol Versioning
+
+Replication-fidelity behavior is config-gated and version-labeled so old runs
+stay interpretable while the paper-faithful path is the default:
+
+- `dataset.trigger.version`: `paper_v2_synonyms` (default) vs `paper_v1_literal`.
+- `train.probe_fit_version`: `paper_per_token_v2` (default) vs `pooled_v1`.
+- `train.behavior_loss_mode`: `teacher_forced_ce_on_behavior_samples` (default)
+  vs `base_on_policy_completions`.
+- `model.layer_index_version` + `hidden_states_offset`: `paper_plus1_v2`
+  (offset 1) vs the legacy raw index.
+- `real_run.train_source`: `benign_preset_official` (exact released data) vs
+  `benign_synthetic_4697` (clean-room regen).
+
+See [Real Runs Handbook](real-runs-handbook.md) for the end-to-end flow and
+[Replication Assumptions](replication.md) for current results.
+
+## Config Validation and Sync
+
+- Pydantic schemas in `config_schema.py` validate configs at load time;
+  closed sections (`real_run`, model configs, the dataset `trigger` block) use
+  `extra="forbid"`, so a typo like `max_stepss` fails immediately with the
+  config name and offending key. `config-check` surfaces the same errors.
+- `tests/test_config_sync.py` enforces that `configs/**` and the packaged
+  `builtin_configs/**` are byte-identical; `scripts/sync_builtin_configs.sh`
+  performs the one-way copy.
+
 ## Current Operational Fixes
 
-- `real_run.max_steps` is now bridged into the training config, so bounded
-  replication configs actually control HF training length.
-- 9B, Llama, and Qwen real replication configs now default to 100-step
-  validation runs. A long full-budget run should be a separate explicit config
-  or sweep.
-- Future paper training runs save frozen benign Probe banks and direct
-  seen-concept evasion reports.
-- Future paper eval runs save fitted post-hoc Judge/Probe artifacts.
+- `real_run.max_steps` is bridged into the training config; `num_epochs` is also
+  supported (one epoch over the preset is the paper-shipped length).
+- Paper training runs save frozen benign Probe banks and seen-concept evasion
+  reports; paper eval runs save fitted post-hoc Judge/Probe artifacts.
 
 ## Bottom Line
 
-The architecture is suitable for fast iteration with agents. The next useful
-refactor is not a rename or layout change; it is deepening the real-run modules
-so paper data, training, eval, artifacts, and readiness each hide more behavior
-behind smaller interfaces.
+The architecture is suitable for fast iteration with agents. The real-run module
+split, config schema validation, config-sync guard, and protocol versioning are
+now in place; the remaining deepening opportunities are the artifact-persistence
+interface and explicit safety-source adapters.

@@ -8,6 +8,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from next_chameleons.datasets import TRIGGER_VERSION_DEFAULT
 from next_chameleons.hf.data import HFTextExample
 from next_chameleons.hf.imports import require_torch
 from next_chameleons.hf.models import LoadedCausalLM, apply_lora, load_causal_lm
@@ -22,6 +23,7 @@ from next_chameleons.hf.paper_probes import (
     FrozenLinearConceptProbe,
     FrozenProbeBank,
     fit_linear_probe_from_features,
+    fit_linear_probe_per_token,
     generation_mask_from_attention,
     save_frozen_probe_bank,
 )
@@ -53,6 +55,7 @@ class RealChameleonTrainer:
         paper_probe_layer: int = 12,
         seed: int = 17,
         train_concepts: list[str] | tuple[str, ...] | None = None,
+        hidden_states_offset: int = 0,
     ) -> None:
         self.model_cfg = model_cfg
         self.train_cfg = train_cfg
@@ -63,6 +66,44 @@ class RealChameleonTrainer:
         self.paper_probe_layer = paper_probe_layer
         self.seed = seed
         self.train_concepts = tuple(train_concepts or [])
+        # Maps decoder-block numbers to `hidden_states` indices; the paper's
+        # "layer 12" is hidden_states[13] (offset 1). Training and eval must
+        # share this offset (`layer_index_version` in model configs).
+        self.hidden_states_offset = int(hidden_states_offset)
+
+    def _behavior_loss_mode(self) -> str:
+        return str(
+            self.train_cfg.get(
+                "behavior_loss_mode",
+                self.train_cfg.get("behavior_kl_mode", "teacher_forced_ce_on_behavior_samples"),
+            )
+        )
+
+    def _make_optimizer(self, parameters: list[Any]) -> Any:
+        torch = require_torch()
+        optimizer_name = str(self.train_cfg.get("optimizer", "adamw")).lower()
+        learning_rate = float(self.train_cfg.get("learning_rate", 2e-5))
+        weight_decay = float(self.train_cfg.get("weight_decay", 0.01))
+        if optimizer_name == "adam8bit":
+            try:
+                import bitsandbytes
+            except ImportError as exc:
+                raise RuntimeError(
+                    "optimizer=adam8bit requires bitsandbytes; install with the "
+                    "`train` extra or set optimizer=adamw"
+                ) from exc
+            return bitsandbytes.optim.Adam8bit(
+                parameters,
+                lr=learning_rate,
+                weight_decay=weight_decay,
+            )
+        if optimizer_name != "adamw":
+            raise ValueError(f"Unsupported optimizer {optimizer_name!r}")
+        return torch.optim.AdamW(
+            parameters,
+            lr=learning_rate,
+            weight_decay=weight_decay,
+        )
 
     def _wandb_run(self, *, run_name: str) -> Any | None:
         if os.environ.get("NEXT_CHAMELEONS_WANDB", "1").lower() in {"0", "false", "no"}:
@@ -284,6 +325,9 @@ class RealChameleonTrainer:
             },
         )
 
+    def _probe_fit_version(self) -> str:
+        return str(self.train_cfg.get("probe_fit_version", "paper_per_token_v2"))
+
     def _fit_frozen_probe_bank(
         self,
         *,
@@ -291,15 +335,46 @@ class RealChameleonTrainer:
         tokenizer: Any,
         concept_examples: list[PaperConceptExample],
     ) -> FrozenProbeBank:
+        if self._probe_fit_version() == "paper_per_token_v2":
+            return self._fit_frozen_probe_bank_per_token(
+                reference=reference,
+                tokenizer=tokenizer,
+                concept_examples=concept_examples,
+            )
+        return self._fit_frozen_probe_bank_pooled(
+            reference=reference,
+            tokenizer=tokenizer,
+            concept_examples=concept_examples,
+        )
+
+    def _fit_frozen_probe_bank_per_token(
+        self,
+        *,
+        reference: Any,
+        tokenizer: Any,
+        concept_examples: list[PaperConceptExample],
+    ) -> FrozenProbeBank:
+        """Paper-faithful probe fit: response tokens as independent examples.
+
+        Captures generation-token features (the response, excluding the prompt
+        prefix) at the configured probe layer on the frozen base model, then
+        fits one-vs-rest logistic probes with the sequence label broadcast to
+        every response token (BCE, Adam lr 4e-5, batch 16, 1 epoch). Features
+        are staged on CPU float16; `benign_probe_max_tokens_per_example` bounds
+        memory when configured.
+        """
+
         torch = require_torch()
         reference.eval()
-        features = []
-        concepts = []
+        max_tokens_per_example = self.train_cfg.get("benign_probe_max_tokens_per_example")
+        token_feature_chunks: list[Any] = []
+        token_concepts: list[str] = []
         total_batches = (len(concept_examples) + self.batch_size - 1) // self.batch_size
         print(
             "[next-chameleons] fitting frozen benign concept probes "
-            f"examples={len(concept_examples)} batches={total_batches} "
-            f"layer={self.paper_probe_layer}",
+            f"version=paper_per_token_v2 examples={len(concept_examples)} "
+            f"batches={total_batches} layer={self.paper_probe_layer} "
+            f"hidden_states_offset={self.hidden_states_offset}",
             flush=True,
         )
         with torch.no_grad():
@@ -313,7 +388,108 @@ class RealChameleonTrainer:
                     [example.text for example in batch],
                 )
                 outputs = reference(**encoded, output_hidden_states=True)
-                hidden = outputs.hidden_states[self.paper_probe_layer]
+                hidden = outputs.hidden_states[self.paper_probe_layer + self.hidden_states_offset]
+                attention = encoded["attention_mask"]
+                prefix_lengths = self._prefix_lengths(
+                    tokenizer,
+                    reference,
+                    [
+                        f"{example.prompt}\n" if example.prompt.strip() else ""
+                        for example in batch
+                    ],
+                )
+                generation_mask = generation_mask_from_attention(
+                    attention,
+                    prompt_lengths=prefix_lengths,
+                )
+                for row, example in enumerate(batch):
+                    row_mask = generation_mask[row].bool()
+                    if not bool(row_mask.any()):
+                        row_mask = attention[row].bool()
+                    row_features = hidden[row][row_mask]
+                    if (
+                        max_tokens_per_example is not None
+                        and row_features.shape[0] > int(max_tokens_per_example)
+                    ):
+                        row_features = row_features[: int(max_tokens_per_example)]
+                    token_feature_chunks.append(row_features.detach().to(torch.float16).cpu())
+                    token_concepts.extend([example.concept] * row_features.shape[0])
+                if batch_index == 1 or batch_index % 25 == 0 or batch_index == total_batches:
+                    print(
+                        "[next-chameleons] frozen probe token-feature capture "
+                        f"batch={batch_index}/{total_batches}",
+                        flush=True,
+                    )
+        token_features = torch.cat(token_feature_chunks, dim=0)
+        probes: list[FrozenLinearConceptProbe] = []
+        probe_lr = float(self.train_cfg.get("benign_probe_learning_rate", 4e-5))
+        probe_epochs = int(self.train_cfg.get("benign_probe_epochs", 1))
+        probe_batch_size = int(self.train_cfg.get("benign_probe_batch_size", 16))
+        required_concepts = list(self.train_concepts or sorted(set(token_concepts)))
+        for concept in required_concepts:
+            print(
+                "[next-chameleons] fitting per-token frozen linear concept probe "
+                f"concept={concept} tokens={token_features.shape[0]}",
+                flush=True,
+            )
+            labels = torch.tensor(
+                [1.0 if item == concept else 0.0 for item in token_concepts],
+            )
+            weight, bias = fit_linear_probe_per_token(
+                token_features=token_features,
+                token_labels=labels,
+                learning_rate=probe_lr,
+                epochs=probe_epochs,
+                batch_size=probe_batch_size,
+                seed=self.seed,
+            )
+            probes.append(
+                FrozenLinearConceptProbe(
+                    concept=concept,
+                    layer=self.paper_probe_layer,
+                    weight=weight,
+                    bias=bias,
+                )
+            )
+        print(
+            "[next-chameleons] fitted frozen benign concept probes "
+            f"count={len(probes)} version=paper_per_token_v2",
+            flush=True,
+        )
+        return FrozenProbeBank(probes, required_concepts=required_concepts)
+
+    def _fit_frozen_probe_bank_pooled(
+        self,
+        *,
+        reference: Any,
+        tokenizer: Any,
+        concept_examples: list[PaperConceptExample],
+    ) -> FrozenProbeBank:
+        """Legacy `pooled_v1` probe fit: one mean-pooled feature per sequence."""
+
+        torch = require_torch()
+        reference.eval()
+        features = []
+        concepts = []
+        total_batches = (len(concept_examples) + self.batch_size - 1) // self.batch_size
+        print(
+            "[next-chameleons] fitting frozen benign concept probes "
+            f"version=pooled_v1 examples={len(concept_examples)} "
+            f"batches={total_batches} layer={self.paper_probe_layer}",
+            flush=True,
+        )
+        with torch.no_grad():
+            for batch_index, batch in enumerate(
+                self._concept_batch_iter(concept_examples),
+                start=1,
+            ):
+                encoded = self._tokenize_texts(
+                    tokenizer,
+                    reference,
+                    [example.text for example in batch],
+                )
+                outputs = reference(**encoded, output_hidden_states=True)
+                hidden = outputs.hidden_states[self.paper_probe_layer + self.hidden_states_offset]
                 attention = encoded["attention_mask"].to(hidden.device).float()
                 pooled = (hidden * attention[:, :, None]).sum(dim=1) / attention.sum(
                     dim=1,
@@ -381,7 +557,12 @@ class RealChameleonTrainer:
             min_rating=int(self.train_cfg.get("min_concept_rating", 4)),
             seed=self.seed + 10_003,
         )
-        scenarios = build_table1_scenarios(eval_examples, concepts=selected_concepts)
+        scenarios = build_table1_scenarios(
+            eval_examples,
+            concepts=selected_concepts,
+            trigger_version=str(self.train_cfg.get("trigger_version", TRIGGER_VERSION_DEFAULT)),
+            seed=self.seed + 10_007,
+        )
         threshold = float(self.train_cfg.get("seen_concept_probe_threshold", 0.5))
         rows: list[dict[str, Any]] = []
         was_training = bool(model.training)
@@ -407,6 +588,7 @@ class RealChameleonTrainer:
                     hidden_states=outputs.hidden_states,
                     generation_mask=generation_mask,
                     concepts=[example.concept for example in batch],
+                    hidden_states_offset=self.hidden_states_offset,
                 )
                 for example, score in zip(
                     batch,
@@ -509,11 +691,32 @@ class RealChameleonTrainer:
         for start in range(0, len(examples), self.batch_size):
             yield examples[start : start + self.batch_size]
 
+    def _per_sample_generation_ce(
+        self,
+        *,
+        logits: Any,
+        input_ids: Any,
+        generation_mask: Any,
+    ) -> Any:
+        """Per-sample mean cross-entropy over generated (response) tokens."""
+
+        torch = require_torch()
+        shift_logits = logits[:, :-1, :]
+        shift_targets = input_ids[:, 1:]
+        shift_mask = generation_mask[:, 1:].to(shift_logits.device).float()
+        token_ce = torch.nn.functional.cross_entropy(
+            shift_logits.reshape(-1, shift_logits.shape[-1]).float(),
+            shift_targets.reshape(-1),
+            reduction="none",
+        ).reshape(shift_targets.shape)
+        return (token_ce * shift_mask).sum(dim=1) / shift_mask.sum(dim=1).clamp_min(1.0)
+
     def _train_paper(
         self,
         *,
         concept_examples: list[PaperConceptExample],
         output_dir: Path,
+        paper_scenarios: list[PaperScenarioExample] | None = None,
     ) -> RealTrainingSummary:
         torch = require_torch()
         torch.manual_seed(self.seed)
@@ -538,10 +741,14 @@ class RealChameleonTrainer:
             min_negative_examples=int(self.train_cfg.get("min_concept_negative_examples", 1)),
             min_rating=int(self.train_cfg.get("min_concept_rating", 4)),
         )
+        behavior_loss_mode = self._behavior_loss_mode()
+        trigger_version = str(self.train_cfg.get("trigger_version", TRIGGER_VERSION_DEFAULT))
         print(
             "[next-chameleons] starting paper training "
             f"concepts={len(selected_concepts)} examples={len(concept_examples)} "
-            f"batch_size={self.batch_size} grad_accum={self.gradient_accumulation_steps}",
+            f"batch_size={self.batch_size} grad_accum={self.gradient_accumulation_steps} "
+            f"behavior_loss_mode={behavior_loss_mode} trigger_version={trigger_version} "
+            f"scenario_source={'preset' if paper_scenarios is not None else 'table1'}",
             flush=True,
         )
         loaded, reference = self._load_models()
@@ -561,21 +768,55 @@ class RealChameleonTrainer:
             probe_bank,
             output_dir / "frozen_benign_probe_bank.pt",
         )
-        scenarios = build_table1_scenarios(concept_examples, concepts=selected_concepts)
-        behavior_texts, behavior_prefixes, behavior_reference_metadata = (
-            self._behavior_reference_texts(
-                reference=reference,
-                tokenizer=tokenizer,
-                scenarios=scenarios,
+        if paper_scenarios is not None:
+            scenarios = [
+                scenario
+                for scenario in paper_scenarios
+                if scenario.concept in set(selected_concepts)
+            ]
+        else:
+            scenarios = build_table1_scenarios(
+                concept_examples,
+                concepts=selected_concepts,
+                trigger_version=trigger_version,
+                seed=self.seed,
             )
-        )
-        optimizer = torch.optim.AdamW(
+        use_teacher_forced_ce = behavior_loss_mode == "teacher_forced_ce_on_behavior_samples"
+        if use_teacher_forced_ce:
+            # The paper's shipped objective: cross-entropy toward the dataset's
+            # own response tokens, applied per sample only where the data
+            # carries a behavior-loss flag. No reference forward passes are
+            # needed after probe fitting, so free the reference model.
+            behavior_reference_metadata: dict[str, float | str] = {
+                "behavior_loss_mode": behavior_loss_mode,
+            }
+            del reference
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+        else:
+            behavior_texts, behavior_prefixes, behavior_reference_metadata = (
+                self._behavior_reference_texts(
+                    reference=reference,
+                    tokenizer=tokenizer,
+                    scenarios=scenarios,
+                )
+            )
+        optimizer = self._make_optimizer(
             [parameter for parameter in model.parameters() if parameter.requires_grad],
-            lr=float(self.train_cfg.get("learning_rate", 2e-5)),
-            weight_decay=float(self.train_cfg.get("weight_decay", 0.01)),
         )
         configured_max_steps = self.train_cfg.get("max_steps")
-        max_steps = int(configured_max_steps or max(1, len(scenarios)))
+        steps_per_epoch = max(
+            1,
+            (len(scenarios) + self.batch_size - 1)
+            // self.batch_size
+            // max(1, self.gradient_accumulation_steps),
+        )
+        if configured_max_steps is not None:
+            max_steps = int(configured_max_steps)
+        elif self.train_cfg.get("num_epochs") is not None:
+            max_steps = steps_per_epoch * int(self.train_cfg["num_epochs"])
+        else:
+            max_steps = max(1, len(scenarios))
         behavior_weight = float(self.train_cfg.get("behavior_weight", 0.1))
         obfuscation_weight = float(self.train_cfg.get("obfuscation_weight", 0.9))
         loss_history: list[dict[str, float]] = []
@@ -589,32 +830,7 @@ class RealChameleonTrainer:
                     model,
                     [example.text for example in batch],
                 )
-                labels = encoded["input_ids"].clone()
-                labels[encoded["attention_mask"] == 0] = -100
-                outputs = model(**encoded, labels=labels, output_hidden_states=True)
-                behavior_batch_texts = behavior_texts[batch_start : batch_start + len(batch)]
-                behavior_batch_prefixes = behavior_prefixes[
-                    batch_start : batch_start + len(batch)
-                ]
-                behavior_encoded = self._tokenize_texts(
-                    tokenizer,
-                    model,
-                    behavior_batch_texts,
-                )
-                behavior_outputs = model(**behavior_encoded)
-                with torch.no_grad():
-                    ref_outputs = reference(**behavior_encoded)
-                behavior_prefix_lengths = self._prefix_lengths(
-                    tokenizer,
-                    model,
-                    behavior_batch_prefixes,
-                )
-                kl_loss = self._masked_kl_loss(
-                    model_logits=behavior_outputs.logits,
-                    reference_logits=ref_outputs.logits,
-                    attention_mask=behavior_encoded["attention_mask"],
-                    prompt_lengths=behavior_prefix_lengths,
-                )
+                outputs = model(**encoded, output_hidden_states=True)
                 prefix_lengths = self._prefix_lengths(
                     tokenizer,
                     model,
@@ -628,14 +844,66 @@ class RealChameleonTrainer:
                     hidden_states=outputs.hidden_states,
                     generation_mask=generation_mask,
                     concepts=[example.concept for example in batch],
+                    hidden_states_offset=self.hidden_states_offset,
                 )
                 targets = torch.tensor(
                     [example.target for example in batch],
                     device=scores.device,
                     dtype=scores.dtype,
                 )
-                obf_loss = torch.mean((scores - targets) ** 2)
-                total = behavior_weight * kl_loss + obfuscation_weight * obf_loss
+                squared_errors = (scores - targets) ** 2
+                obf_loss = torch.mean(squared_errors)
+                if use_teacher_forced_ce:
+                    sample_ce = self._per_sample_generation_ce(
+                        logits=outputs.logits,
+                        input_ids=encoded["input_ids"],
+                        generation_mask=generation_mask,
+                    )
+                    behavior_flags = torch.tensor(
+                        [1.0 if example.behavior_weight > 0 else 0.0 for example in batch],
+                        device=scores.device,
+                        dtype=scores.dtype,
+                    )
+                    # Per-sample lambdas, as in the paper code: behavior samples
+                    # get 0.1*CE + 0.9*obf; pure-obfuscation samples get the
+                    # squared probe error only.
+                    per_sample_total = torch.where(
+                        behavior_flags > 0,
+                        behavior_weight * sample_ce.to(scores.dtype)
+                        + obfuscation_weight * squared_errors,
+                        squared_errors,
+                    )
+                    total = per_sample_total.mean()
+                    behavior_loss_value = float(
+                        (sample_ce * behavior_flags).sum().detach().cpu()
+                        / max(1.0, float(behavior_flags.sum().detach().cpu()))
+                    )
+                else:
+                    behavior_batch_texts = behavior_texts[batch_start : batch_start + len(batch)]
+                    behavior_batch_prefixes = behavior_prefixes[
+                        batch_start : batch_start + len(batch)
+                    ]
+                    behavior_encoded = self._tokenize_texts(
+                        tokenizer,
+                        model,
+                        behavior_batch_texts,
+                    )
+                    behavior_outputs = model(**behavior_encoded)
+                    with torch.no_grad():
+                        ref_outputs = reference(**behavior_encoded)
+                    behavior_prefix_lengths = self._prefix_lengths(
+                        tokenizer,
+                        model,
+                        behavior_batch_prefixes,
+                    )
+                    kl_loss = self._masked_kl_loss(
+                        model_logits=behavior_outputs.logits,
+                        reference_logits=ref_outputs.logits,
+                        attention_mask=behavior_encoded["attention_mask"],
+                        prompt_lengths=behavior_prefix_lengths,
+                    )
+                    total = behavior_weight * kl_loss + obfuscation_weight * obf_loss
+                    behavior_loss_value = float(kl_loss.detach().cpu())
                 total = total / self.gradient_accumulation_steps
                 total.backward()
                 if (batch_index + 1) % self.gradient_accumulation_steps == 0:
@@ -644,7 +912,7 @@ class RealChameleonTrainer:
                     step += 1
                     metrics = {
                         "step": float(step),
-                        "kl_loss": float(kl_loss.detach().cpu()),
+                        "behavior_loss": behavior_loss_value,
                         "obfuscation_loss": float(obf_loss.detach().cpu()),
                         "total_loss": float(total.detach().cpu()),
                         "paper_scenarios": float(len(scenarios)),
@@ -656,6 +924,8 @@ class RealChameleonTrainer:
                             if isinstance(value, int | float)
                         },
                     }
+                    if not use_teacher_forced_ce:
+                        metrics["kl_loss"] = behavior_loss_value
                     loss_history.append(metrics)
                     self._log_step(prefix="paper_train", metrics=metrics, wandb_run=wandb_run)
                     if step >= max_steps:
@@ -735,11 +1005,13 @@ class RealChameleonTrainer:
         *,
         output_dir: Path,
         paper_concept_examples: list[PaperConceptExample] | None = None,
+        paper_scenarios: list[PaperScenarioExample] | None = None,
     ) -> RealTrainingSummary:
         if paper_concept_examples is not None:
             return self._train_paper(
                 concept_examples=paper_concept_examples,
                 output_dir=output_dir,
+                paper_scenarios=paper_scenarios,
             )
         torch = require_torch()
         torch.manual_seed(self.seed)
@@ -852,8 +1124,10 @@ def run_real_chameleon_training(
     gradient_accumulation_steps: int,
     paper_probe_layer: int = 12,
     paper_concept_examples: list[PaperConceptExample] | None = None,
+    paper_scenarios: list[PaperScenarioExample] | None = None,
     seed: int = 17,
     train_concepts: list[str] | tuple[str, ...] | None = None,
+    hidden_states_offset: int = 0,
 ) -> RealTrainingSummary:
     trainer = RealChameleonTrainer(
         model_cfg=model_cfg,
@@ -865,9 +1139,11 @@ def run_real_chameleon_training(
         paper_probe_layer=paper_probe_layer,
         seed=seed,
         train_concepts=train_concepts,
+        hidden_states_offset=hidden_states_offset,
     )
     return trainer.train(
         examples,
         output_dir=output_dir,
         paper_concept_examples=paper_concept_examples,
+        paper_scenarios=paper_scenarios,
     )

@@ -9,7 +9,7 @@ exactness:
   paper_role: primary_figure_2_case_study
   status: exact_model_source_configured
 paper_objective:
-  behavior_loss: kl_to_base_on_policy_completions
+  behavior_loss: teacher_forced_ce_on_behavior_samples
   obfuscation_loss: frozen_probe_score_mse
   lambda_behav: 0.1
   lambda_obf: 0.9
@@ -41,7 +41,7 @@ mechanisms:
     config: configs/mechanism/source_redaction_policy.yaml
     role: controlled_raw_real_run_artifacts
 real_run:
-  train_source: benign_synthetic_4697
+  train_source: benign_preset_official
   eval_sources:
     - dolus_deception
     - apollo_repe_deception

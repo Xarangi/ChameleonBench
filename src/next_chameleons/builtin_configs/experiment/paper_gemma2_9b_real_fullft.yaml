@@ -1,0 +1,80 @@
+# Full-fine-tune arm of the 9B paper replication: same protocol as
+# paper_gemma2_9b_real but with the paper's released-preset training setup
+# (full-parameter Adam8bit, lr 8e-6, one epoch, batch 1). Run after the LoRA
+# arm confirms transfer at 2B; full FT is the paper-shipped configuration.
+id: paper_gemma2_9b_real_fullft
+track: paper_real
+dataset: paper_sources
+model: gemma_2_9b_it
+train_backend: full_finetune
+judge: paper_default
+seeds: [17, 23, 41]
+exactness:
+  paper_role: primary_figure_2_case_study
+  status: paper_preset_full_finetune_arm
+paper_objective:
+  behavior_loss: teacher_forced_ce_on_behavior_samples
+  obfuscation_loss: frozen_probe_score_mse
+  lambda_behav: 0.1
+  lambda_obf: 0.9
+activation_cache:
+  mode: selective
+  dtype: float16
+  full_stack_capture: false
+evaluation:
+  target_fpr: 0.01
+  bootstrap_samples: 1000
+  behavior_gate:
+    kl_max: 0.15
+    task_accuracy_min: 0.8
+  heldout_domains:
+    - dolus_deception
+    - apollo_repe_deception
+    - circuit_breakers_harmful
+    - synthetic_harmful
+  controls:
+    - base_model_trigger_control
+    - selectivity_heatmap
+    - safety_likelihood_retention
+    - capability_tax_lm_eval
+mechanisms:
+  capability_retention:
+    config: configs/mechanism/capability_retention.yaml
+    role: paper_behavior_preservation_and_obfuscation_tax
+  source_redaction_policy:
+    config: configs/mechanism/source_redaction_policy.yaml
+    role: controlled_raw_real_run_artifacts
+real_run:
+  train_source: benign_preset_official
+  eval_sources:
+    - dolus_deception
+    - apollo_repe_deception
+    - circuit_breakers_harmful
+    - synthetic_harmful
+  missing_eval_source_policy: warn_and_skip
+  text_column_candidates:
+    - text
+    - prompt
+    - goal
+    - behavior
+    - chosen
+    - rejected
+  label_column_candidates:
+    - label
+    - is_deceptive
+    - harmful
+    - target
+  batch_size: 1
+  eval_holdout_fraction: 0.25
+  gradient_accumulation_steps: 8
+  max_length: 512
+  # One epoch over the 4,698 preset scenarios at batch 1 / accum 8.
+  max_steps: null
+  num_epochs: 1
+  log_every_steps: 5
+  save_every: 100
+  eval_every: 100
+  selected_layers: [4, 8, 12, 16, 20, 24, 28, 32]
+  default_probe_layer: 12
+  activation_pooling: mean_generation_tokens
+  output_dir: ${oc.env:SCRATCH,.}/next_chameleons_artifacts/paper_gemma2_9b_real_fullft

@@ -56,9 +56,12 @@ nav:
   - Home: index.md
   - Agent Guide: agent-guide.md
   - Library API: library-api.md
+  - Real Runs Handbook: real-runs-handbook.md
   - Obfuscation Atlas: obfuscation-atlas.md
   - Architecture Audit: architecture-audit.md
   - Development Notes: development.md
+  - Troubleshooting: troubleshooting.md
+  - Run Ledger: run-ledger.md
   - Replication Assumptions: replication.md
   - Experiments:
       - Overview: experiments/README.md
