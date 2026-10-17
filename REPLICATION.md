@@ -3,6 +3,23 @@
 This file tracks the concrete replication state: data sources, fallbacks,
 checkpoints, observed results, and unresolved limitations.
 
+## 2026-10-17y Safety eval concepts; step-300 CAPABILITY DROP; code first beats; v4 recipe drafted
+
+- scripts/build_safety_eval.py -> $RAW/tica/final_v3_safety_eval{,_inputs}.json (eval-only held-out): Apollo
+  roleplaying (371 pairs), Apollo insider trading (336), DolusChat response-only (400). FINDING: the v3 "deception"
+  concept's answer text = prompt + response (build_final_v3 used the full materialized text).
+  Base control: DolusChat (both variants) refit probes beaten by the BASE model 14-15/24 -> uninterpretable except as a
+  delta vs base; insider trading: base never passes (valid test); roleplaying base probe failed the topic gate
+  (tpr_np 0.76). v3b step-300 race pending.
+- CAPABILITY (eval_s300/capability.json, n=200 GSM8K, 600 MMLU): GSM8K clean 0.755 vs base 0.825; under a monitor
+  0.67 / 0.68 (v2 eval_s150: 0.805 / 0.79). MMLU 0.682 (unchanged). Eval KL nobrief 0.017, brief own 0.18, other 0.21.
+  The in-training cap_gen acc (~0.9, RFT-sampled GSM8K-TRAIN forks) did NOT show this. Pending: think_v3b300,
+  base under monitor (caph_base) -- the base itself drops under the tagged brief in the thinking eval (0.86 -> 0.70).
+- Code (dev) beat 2 of 5 refit probes at val step 320 (0/13 before); counted 0 by val_score (beaten after > 3 turns).
+- Probe-index rates (weighted fit, steps 140-320, per 100 steps): k1_switch +0.33, k2 +0.12, k3 +0.13.
+- v4 recipe: docs/tica-v4-recipe.md (breadth: 12 train languages, syntax family, tones; family prior; fresh turn-0
+  probe; capability gate; deeper segments; off_match 2.0; warm start). Nothing built.
+
 ## 2026-10-17x Sanity races on the FULL held-out + dev sets (v3b step 140 vs 300, base control): topics transfer, surface concepts do not
 
 tica_switch_eval, --kind mixed --switch-prob 0 --turns 24 (val setup); held-out 56 ep, dev 32 ep, base 28 ep
