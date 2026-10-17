@@ -3,6 +3,20 @@
 This file tracks the concrete replication state: data sources, fallbacks,
 checkpoints, observed results, and unresolved limitations.
 
+## 2026-10-17g Sampler diagnosis: the curriculum never adapted; family-first was the whole effect. Ramp added
+
+- concept_p_* over final_v3 (140 steps): family mass 0.20 / 0.20 / 0.20 / 0.20 / 0.20 at EVERY 20-step window;
+  per-step max p 0.20 (= all-caps, the only format concept); each of 8 topics ~0.025. Kind probs ~uniform
+  (0.14 each by steps 120-140). With ~no beats every arm's hazard posterior ~ 0 -> expected turns-to-beat hits
+  the cap (50) for all -> flat. So the sampler sat at "uniform over FAMILIES": topics 20% vs v2's ~50%. The
+  adaptive part did nothing; the hierarchy's starting point is what starved the model of learnable topics.
+- Both-cleanings results (positive filter + neg_labels): B1 (v3 minus fork, uniform concepts) 0.03/0.79,
+  0.03/0.81 at steps 20-40, first pass 12; v2 + both cleanings 0.04/0.81 at 20-30, first pass 12 -> on par
+  with v2 + data (0.07/0.75, first pass 15). Cleaning is not the problem.
+- New (default off): adaptive.curriculum_prior ("family" | "concept"), curriculum_ramp_steps,
+  curriculum_mix_max: p = (1 - lam) prior + lam p_TS, lam ramps 0 -> mix_max over global steps; kinds: uniform
+  arch(/layer) with prob 1 - lam. Tests in test_tica_curriculum.
+
 ## 2026-10-17f Other-cluster runbook + whole-node launcher (TamIA prep)
 
 - docs/tica-other-hpc.md: transfer list (~7.2 GB, model dominates; ~236 untracked TICA files -> commit or rsync),

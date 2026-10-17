@@ -166,3 +166,36 @@ def test_lr_peak_then_decay_and_default():
     # a resume chunk at global step 50 re-warms towards the global-step target, not the peak
     assert abs(lr_factor(c, 9, offset=50) - lr_factor(c, 59)) < 1e-9
     assert lr_factor(c, 0, offset=50) < lr_factor(c, 9, offset=50)
+
+
+def test_curriculum_ramp_prior_and_uniform_kind():
+    """10-17g: the adaptive weights are mixed with a uniform prior, lam ramping 0 -> mix_max."""
+    from next_chameleons.tica.curriculum import FactoredThompson
+    from next_chameleons.tica.trainers.supervised import curriculum_prior, uniform_kind
+
+    fam = {"a": "topic", "b": "topic", "c": "topic", "d": "format"}
+    pc, pf = curriculum_prior(fam, "concept"), curriculum_prior(fam, "family")
+    assert pc == {k: 0.25 for k in fam}
+    assert pf["d"] == 0.5 and abs(pf["a"] - 1 / 6) < 1e-12
+    f = FactoredThompson(["linear", "maxpool"], ["ens4_linear"], [8, 12])
+    rng = random.Random(0)
+    ks = [uniform_kind(f, rng) for _ in range(3000)]
+    assert abs(ks.count("ens4_linear") / 3000 - 1 / 3) < 0.04  # architecture first
+    assert uniform_kind(f, rng, exclude=["ens4_linear", "linear@8", "linear@12", "maxpool@8",
+                                         "maxpool@12"]) is None
+
+
+def test_trainer_curriculum_lambda_ramps(tmp_path, monkeypatch):
+    from next_chameleons.tica.adaptive import AdaptiveConfig
+    from next_chameleons.tica.trainers.supervised import AdaptiveSupervisedTrainer
+
+    class T:
+        _step_offset = staticmethod(lambda: 0)
+
+    t = T()
+    for ramp, mx, step, want in [(0, 1.0, 0, 1.0), (100, 0.5, 0, 0.0), (100, 0.5, 50, 0.25),
+                                 (100, 0.5, 400, 0.5)]:
+        t.cfg = type("C", (), {"adaptive": AdaptiveConfig(curriculum_ramp_steps=ramp,
+                                                          curriculum_mix_max=mx)})()
+        t.step_k = step
+        assert abs(AdaptiveSupervisedTrainer._curriculum_lambda(t) - want) < 1e-12

@@ -285,6 +285,16 @@ class AdaptiveConfig:
     concept_sampling: str = "uniform"
     kind_layers: list = field(default_factory=list)
     concept_families: str = ""
+    # Curriculum RAMP (10-17g; user 10-17: "start with uniform sampling and stay close to uniform
+    # for a while"). The Thompson weights are mixed with a uniform prior:
+    # p = (1 - lam) prior + lam p_TS, lam = curriculum_mix_max * min(1, step / ramp_steps)
+    # (global step). Prior: "concept" = uniform over concepts (v2's mix: topics ~half), "family" =
+    # uniform over families, then concepts (the hierarchical sampler with no evidence). Probe kinds:
+    # with prob 1 - lam a uniform architecture (and layer). ramp 0 + mix_max 1 = fully adaptive from
+    # step 0 (10-16g/l).
+    curriculum_prior: str = "family"
+    curriculum_ramp_steps: int = 0
+    curriculum_mix_max: float = 1.0
     # first_probe (10-16i; user: "fork at the first turn and catch right there"): "base" = the
     # concept's base-model probe judges its first turn (with objective.pin_first_turn /
     # pin_segment_first the model is pinned to the base there, so it is caught by construction);

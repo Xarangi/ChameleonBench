@@ -272,6 +272,39 @@ from next_chameleons.tica.probe_zoo import gate_fit, kind_layers, split_kind  # 
 DODGE_CONDS = ("real_score", "real_verdict")
 
 
+def curriculum_prior(fam_of: dict, prior: str) -> dict:
+    """Uniform starting distribution over concepts (10-17g): "concept" = 1 / n each; "family" =
+    1 / n_families, split evenly within the family."""
+
+    cs = list(fam_of)
+    if prior == "concept":
+        return {c: 1.0 / len(cs) for c in cs}
+    if prior != "family":
+        raise ValueError(prior)
+    fams = sorted(set(fam_of.values()))
+    size = {f: sum(1 for c in cs if fam_of[c] == f) for f in fams}
+    return {c: 1.0 / len(fams) / size[fam_of[c]] for c in cs}
+
+
+def uniform_kind(bandit, rng, exclude=()) -> str | None:
+    """A probe kind drawn uniformly (architecture, then layer for single-layer architectures)."""
+
+    ex = set(exclude)
+    if isinstance(bandit, FactoredThompson):
+        left = [k for k in bandit.fixed if k not in ex] + [
+            f"{a}@{L}" for a in bandit.archs for L in bandit.layers if f"{a}@{L}" not in ex]
+        if not left:
+            return None
+        for _ in range(8):  # architecture first, so ensembles are not diluted by the layer count
+            a = rng.choice(bandit.archs + bandit.fixed)
+            k = a if a in bandit.fixed else f"{a}@{rng.choice(bandit.layers)}"
+            if k not in ex:
+                return k
+        return rng.choice(left)
+    left = [k for k in bandit.keys if k not in ex]
+    return rng.choice(left) if left else None
+
+
 def lr_factor(cfg: SupervisedConfig, k: int, offset: int = 0) -> float:
     """LR multiplier (of cfg.lr) at local step k of a chunk starting at global step `offset`.
     Every chunk re-warms linearly over warmup_steps (fresh optimizer state); with lr_peak the
@@ -1463,12 +1496,28 @@ class AdaptiveSupervisedTrainer:
             self.kind_bandit.update(deploys, key="kind")
             for k, v in self.kind_bandit.probs(self.rng).items():
                 metrics[f"kind_p_{k}"] = round(v, 3)
+        lam = self._curriculum_lambda()
+        if self.kind_bandit is not None or self.concept_bandit is not None:
+            metrics["curriculum_lambda"] = round(lam, 3)
         if self.concept_bandit is not None:
             self.concept_bandit.update(deploys + segs, key="concept")
             w = self.concept_bandit.probs(self.rng)
+            if lam < 1.0:  # ramp (10-17g): mix with the uniform prior
+                prior = curriculum_prior(self.concept_bandit.fam_of,
+                                         self.cfg.adaptive.curriculum_prior)
+                w = {c: (1 - lam) * prior[c] + lam * w.get(c, 0.0) for c in prior}
             self.sampler.concept_weights = w
             for k, v in w.items():
                 metrics[f"concept_p_{k}"] = round(v, 3)
+
+    def _curriculum_lambda(self) -> float:
+        """Weight of the adaptive (Thompson) part of the curriculum at this global step (10-17g)."""
+
+        ac = self.cfg.adaptive
+        if ac.curriculum_ramp_steps <= 0:
+            return float(ac.curriculum_mix_max)
+        g = self.step_k + self._step_offset()
+        return float(ac.curriculum_mix_max) * min(1.0, g / ac.curriculum_ramp_steps)
 
     def _pick_kind(self, exclude=()) -> str | None:
         """A refit kind ("mixed": prioritized / uniform over episode_refit_kinds). exclude: kinds
@@ -1486,6 +1535,11 @@ class AdaptiveSupervisedTrainer:
                     isinstance(self.kind_bandit, DiscountedThompson)
                     and set(self.kind_bandit.keys) != set(acfg.episode_refit_kinds)):
                 self.kind_bandit = self._make_kind_bandit()  # kinds changed after init (evals)
+            lam = self._curriculum_lambda()
+            if lam < 1.0 and self.rng.random() >= lam:  # ramp (10-17g): a uniform kind
+                k = uniform_kind(self.kind_bandit, self.rng, exclude)
+                if k is not None:
+                    return k
             return self.kind_bandit.sample(self.rng, exclude=exclude)
         if acfg.episode_kind_sampling == "prioritized":
             return self.rng.choices(kinds, kind_weights(self.kind_stats, kinds,
