@@ -3,6 +3,15 @@
 This file tracks the concrete replication state: data sources, fallbacks,
 checkpoints, observed results, and unresolved limitations.
 
+## 2026-10-17s Reasoning-mode (thinking ON / OFF) check: never tested after LoRA -> scripts/tica_thinking_eval.py
+
+- All capability evals so far (GSM8K, MMLU, ARC, MMLU-STEM, MATH-500, MBPP) ran with enable_thinking False, as in
+  training (assistant turns rendered with an EMPTY think block). Thinking mode after LoRA training: untested.
+- New: tica_thinking_eval.py, both modes, 0-shot greedy GSM8K (100) + MATH-500 (100) with the boxed instruction;
+  accuracy, no-boxed, hit-limit (did not stop), think-block closed, think / answer length, degeneration
+  (repeated 40-char span); clean + under the monitor brief naming "mathematical reasoning". Aggregates only.
+- Jobs: base (v3b config, tagged) 6061751; v2 final 6061827; v3b step_140 6061897.
+
 ## 2026-10-17r v3b step 152; ANOMALY DETECTOR CATCHES NOTHING on v3b step 140 (verifying); v2 re-check launched
 
 - v3b: 140-160 pass 0.084, hide_p 0.537, 6.2 refits/step; val_score 0.17 / 0.23 / 0.21 at steps 100/120/140 (topic
