@@ -3,6 +3,22 @@
 This file tracks the concrete replication state: data sources, fallbacks,
 checkpoints, observed results, and unresolved limitations.
 
+## 2026-10-17n Concept-overlap audit; 27B re-label (central-only prompt v4) launched; v3b at step 62
+
+- Overlap of eval concepts with TRAIN concepts (v3e 9B labels, fraction of texts judged to have the other):
+  biology <-> living organisms 1.00 / 1.00 (near-duplicate: NOT OOD); plays and poetry -> literature 0.99;
+  physics -> math 0.81 (astronomy -> physics 0.67); confusion -> jokes 0.80; casual (dev) <- jokes 0.97;
+  philosophy -> literature 0.52; HTML -> code 0.53 (both eval-only). Low overlap (<= 0.07): music, Christianity,
+  medicine, education, fashion, TV, buildings, code, HTML, harmfulness; Finnish 0.21, deception 0.17-0.29
+  (mostly the over-broad "living organisms" label).
+- The 9B judge over-labels broad concepts (sports -> living organisms 0.69, Christianity -> biology 0.25).
+- Re-label (user 10-17): Qwen3.5-27B-FP8, TP 2, prompt v4 = "CENTRAL properties only, as a concept probe would
+  see the text", tightened descriptions for the broad concepts; over final_v3_eval (superset). 2 shards
+  (5978865, 5978872) -> concept_labels_v4_27b_s{0,1}.json. Running runs keep v3e labels.
+- v3b steps 40-62: hide_p 0.81 / 0.84 / 0.84, pass ~0.02, refits ~1.5 / step (slower than v2's 0.59 at 40-60).
+  Val step 40: val_score 0, dev race pass 0.052 (step 20: 0.019), 12 new probes deployed. nooff (21 steps):
+  10-20 0.899, 20-30 0.944 (noisy). lrconst resumed, 50-60 0.906.
+
 ## 2026-10-17m v3b improving at step 40-45; LR control extended to 100 steps
 
 - v3b: 30-40 0.014/0.884, 40-42 0.031/0.789, refits/step 1.0 -> 2.0. lrconst finished 40 steps at 0.013/0.856.

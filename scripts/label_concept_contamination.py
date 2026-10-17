@@ -43,12 +43,41 @@ DESC = {
     "harmfulness (circuit breakers)": "harmful, dangerous or illegal assistance",
     "harmfulness (synthetic)": "harmful, dangerous or illegal assistance",
 }
+# PROMPT v4 (REPLICATION 2026-10-17n; user 10-17: re-label with the 27B judge, "based on what probes
+# or topics it covers broadly and generally enough"). v3e (9B) over-labelled broad concepts (69% of
+# sports texts "living organisms": people are organisms; 97% of jokes "casual tone"). v4 asks for
+# CENTRAL properties only, the way a probe trained on that concept would see the text, and tightens
+# the broadest descriptions. --prompt v3 keeps the old wording (reproducible).
+DESC_V4 = {
+    **DESC,
+    "living organisms": "living organisms as a subject: animals, plants, microbes or biological "
+                        "processes (merely involving people does not count)",
+    "biology": "biology as a subject: the life sciences (organisms, cells, genetics, ecology, "
+               "physiology); merely involving people does not count",
+    "casual tone": "a casual, informal, conversational register throughout the text",
+    "jokes and humor": "jokes or a humorous style as a central feature of the text",
+    "comforting tone": "a comforting, reassuring or consoling tone as a central feature",
+    "confusion": "the writer expressing confusion or bewilderment as a central feature",
+    "mathematical reasoning": "mathematical reasoning or worked calculations as a central element "
+                              "(numbers, units or quantities alone do not count)",
+    "physics": "physics as a central subject",
+    "chemistry": "chemistry as a central subject",
+    "literature": "literature as a subject: books, authors, literary works or literary analysis",
+    "computer code": "computer source code or programming as a central element",
+    "HTML markup": "HTML markup or tags as a substantial part of the text",
+}
+FRAME_V4 = ("You label texts for training concept detectors. A property applies only if it is "
+            "CENTRAL to the text: a main topic, or a pervasive property of how it is written - "
+            "something you would name when summarising the text. Incidental mentions, single "
+            "words, or properties shared by almost all texts do not count.\n\n")
 # deception needs ground truth (DolusChat / Apollo RepE have matched honest negatives)
 SKIP = {"deception", "deception (Apollo RepE)"}
 MAXC = 2000  # characters of each text shown to the judge
 
 
-def concept_desc(c: str) -> str:
+def concept_desc(c: str, prompt: str = "v3") -> str:
+    if prompt == "v4":
+        return DESC_V4.get(c, f"the topic '{c}' as a central subject")
     return DESC.get(c, f"the topic '{c}' (substantially about it)")
 
 
@@ -61,6 +90,10 @@ def main():
     ap.add_argument("--limit", type=int, default=0, help="first N texts only (smoke)")
     ap.add_argument("--shard", default="0/1", help="i/n: label every n-th text from i (one GPU per "
                                                    "shard; the report merges --labels files)")
+    ap.add_argument("--prompt", default="v3", choices=["v3", "v4"],
+                    help="v4 = central properties only (10-17n)")
+    ap.add_argument("--tp", type=int, default=1, help="tensor-parallel GPUs (27B: 2 x A100)")
+    ap.add_argument("--max-num-seqs", type=int, default=512)
     a = ap.parse_args()
     from transformers import AutoTokenizer
     from vllm import LLM, SamplingParams
@@ -81,7 +114,8 @@ def main():
     si, sn = (int(x) for x in a.shard.split("/"))
     ids = sorted(texts)[: a.limit or None][si::sn]
     tok = AutoTokenizer.from_pretrained(a.model)
-    menu = "\n".join(f"{k + 1}. {concept_desc(c)}" for k, c in enumerate(concepts))
+    menu = "\n".join(f"{k + 1}. {concept_desc(c, a.prompt)}" for k, c in enumerate(concepts))
+    frame = FRAME_V4 if a.prompt == "v4" else ""
 
     def chat(user):  # rendered text -> ids (tokenize=True returns a BatchEncoding here)
         txt = tok.apply_chat_template([{"role": "user", "content": user}], tokenize=False,
@@ -89,17 +123,18 @@ def main():
         return tok.encode(txt, add_special_tokens=False)
 
     def p1(x):
-        return chat(f"Text:\n\"\"\"\n{x[:MAXC]}\n\"\"\"\n\nWhich of the following properties "
-                    f"clearly apply to this text?\n{menu}\n\nAnswer with the numbers of ALL that "
-                    "clearly apply, comma-separated, or 'none'. No explanation.")
+        return chat(f"{frame}Text:\n\"\"\"\n{x[:MAXC]}\n\"\"\"\n\nWhich of the following "
+                    f"properties clearly apply to this text?\n{menu}\n\nAnswer with the numbers of "
+                    "ALL that clearly apply, comma-separated, or 'none'. No explanation.")
 
     def p2(x, c):
-        return chat(f"Text:\n\"\"\"\n{x[:MAXC]}\n\"\"\"\n\nDoes this text clearly have this "
-                    f"property: {concept_desc(c)}? Answer Yes or No.")
+        return chat(f"{frame}Text:\n\"\"\"\n{x[:MAXC]}\n\"\"\"\n\nDoes this text clearly have "
+                    f"this property: {concept_desc(c, a.prompt)}? Answer Yes or No.")
 
     t0 = time.time()
-    llm = LLM(model=a.model, dtype="bfloat16", gpu_memory_utilization=a.mem, max_model_len=4096,
-              enable_prefix_caching=True, max_num_seqs=512, max_num_batched_tokens=32768)
+    llm = LLM(model=a.model, dtype="auto", gpu_memory_utilization=a.mem, max_model_len=4096,
+              enable_prefix_caching=True, max_num_seqs=a.max_num_seqs,
+              max_num_batched_tokens=32768, tensor_parallel_size=a.tp)
     load = round(time.time() - t0)
     out1 = llm.generate([TokensPrompt(prompt_token_ids=p1(texts[i])) for i in ids],
                         SamplingParams(temperature=0.0, max_tokens=40), use_tqdm=False)
@@ -128,7 +163,8 @@ def main():
            "meta": {"model": a.model, "data": a.data, "n_texts": len(ids),
                     "concepts": concepts, "n_flagged_texts": len(flagged),
                     "n_pairs_verified": len(pairs), "load_sec": load, "pass1_sec": t1,
-                    "total_sec": round(time.time() - t0), "maxc": MAXC, "desc": DESC}}
+                    "total_sec": round(time.time() - t0), "maxc": MAXC, "prompt": a.prompt,
+                    "desc": DESC_V4 if a.prompt == "v4" else DESC}}
     Path(a.out).write_text(json.dumps(rep))
     print(json.dumps(rep["meta"], indent=1), flush=True)
 
