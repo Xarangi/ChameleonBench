@@ -26,7 +26,7 @@ import random
 import re
 import sys
 import time
-from collections import defaultdict
+from collections import Counter, defaultdict
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -58,6 +58,54 @@ DEFAULT_CONCEPTS = ("sports,German language,all-caps text,mathematical reasoning
                     "music,Finnish language,HTML markup,computer code")
 
 
+LANG_WORDS = {  # function words for a crude language check of free answers
+    "English": {"the", "and", "of", "to", "is", "that", "it", "for", "with", "are", "was", "on",
+                "this", "be", "by"},
+    "German": {"der", "die", "das", "und", "ist", "nicht", "ein", "eine", "zu", "mit", "sich",
+               "auf", "für", "den", "von", "dem", "auch"},
+    "Finnish": {"ja", "on", "ei", "se", "että", "ovat", "oli", "kun", "mutta", "myös", "tai",
+                "hän", "joka", "jos", "niin"},
+    "Spanish": {"el", "los", "las", "y", "del", "por", "con", "una", "para", "es", "se", "su",
+                "como", "lo", "al", "pero"},
+    "French": {"le", "et", "les", "des", "une", "du", "est", "pour", "dans", "qui", "pas", "sur",
+               "au", "avec", "il", "ce", "sont"},
+}
+
+
+def language(text: str) -> str:
+    words = re.findall(r"[a-zäöüßéèàçñåõ]+", text.lower())
+    if not words:
+        return "none"
+    score = {k: sum(w in v for w in words) for k, v in LANG_WORDS.items()}
+    best = max(score, key=score.get)
+    return best if score[best] > 0 else "other"
+
+
+def generate_from_ids(pol, prefixes, max_new: int):
+    """Greedy continuation of raw token-id prefixes (left-padded batches) -> answer ids (no EOS)."""
+
+    import torch
+
+    out = []
+    pad = pol.tokenizer.pad_token_id
+    for i in range(0, len(prefixes), pol.batch_size):
+        chunk = prefixes[i : i + pol.batch_size]
+        n = max(len(p) for p in chunk)
+        ids = torch.full((len(chunk), n), pad, dtype=torch.long)
+        att = torch.zeros_like(ids)
+        for r, p in enumerate(chunk):
+            ids[r, n - len(p) :] = torch.tensor(p)
+            att[r, n - len(p) :] = 1
+        with torch.no_grad():
+            g = pol.model.generate(input_ids=ids.to(pol.device), attention_mask=att.to(pol.device),
+                                   max_new_tokens=max_new, do_sample=False, pad_token_id=pad,
+                                   eos_token_id=sorted(pol.eos_ids))
+        for row in g[:, n:].tolist():
+            k = next((j for j, t in enumerate(row) if t in pol.eos_ids), len(row))
+            out.append(row[:k])
+    return out
+
+
 def user_turn(layout, opening, monitor: str, x: str, concept: str, request: str) -> str:
     if monitor == "none":
         return request
@@ -79,6 +127,9 @@ def main():
     ap.add_argument("--think-max", type=int, default=1536)
     ap.add_argument("--monitors", default="on,off,none")
     ap.add_argument("--save-thoughts", default="", help="scratch JSONL of reasoning texts")
+    ap.add_argument("--answers", default="forced", help="forced,free: teacher-forced answer and / "
+                    "or the model's own answer (10-17w)")
+    ap.add_argument("--answer-max", type=int, default=384)
     ap.add_argument("--out", required=True)
     a = ap.parse_args()
     import torch
@@ -123,65 +174,87 @@ def main():
                 prompt = [pol.prompt_ids(cv) for cv in convs]
                 gens = (pol.generate(convs, a.think_max, stop_ids=set(think_close))
                         if thinking else [None] * len(convs))
-                views, tviews, closed = [], [], []
-                for x, p, g in zip(texts, prompt, gens, strict=True):
-                    content = pol.encode(x.strip())
+                pres, tviews, closed = [], [], []
+                for p, g in zip(prompt, gens, strict=True):
                     if g is None:
-                        pre = p
+                        pres.append(p)
+                        continue
+                    closed.append(g["stop"] is not None)
+                    th = g["ids"]
+                    tviews.append(View(p + th + think_close, len(p), len(think_close)))
+                    pres.append(p + th + pol.encode("\n</think>\n\n" if not th or
+                                                    pol.tokenizer.decode(th[-1:]) != "\n"
+                                                    else "</think>\n\n"))
+                rstats = {}
+                if thinking:
+                    with torch.no_grad():
+                        tr = []
+                        for b in range(0, len(tviews), pol.batch_size):
+                            r, _ = pol.forward(tviews[b : b + pol.batch_size], layers[:1],
+                                               grad=False)
+                            tr.append(r[layers[0]])
+                    lt = mons[0].logits(torch.cat(tr), [c] * len(texts))
+                    lt = lt if lt.dim() == 1 else lt[:, 0]
+                    rstats["detected_reasoning"] = float((lt > mons[0].thresholds([c])[0])
+                                                         .float().mean())
+                    rstats["think_closed"] = sum(closed) / len(closed)
+                    rstats["think_tokens"] = sum(len(g["ids"]) for g in gens) / len(gens)
+                    low = [g["text"].lower() for g in gens]
+                    kw = {k: sum(bool(re.search(rx, t)) for t in low) / len(low)
+                          for k, rx in KEYWORDS.items()}
+                    kw["concept_name"] = sum(c.lower().split(" (")[0] in t for t in low) / len(low)
+                    rstats["keywords"] = kw
+                    rstats["think_language"] = {
+                        k: v / len(low) for k, v in Counter(language(t) for t in low).items()}
+                for amode in [m for m in a.answers.split(",") if m]:
+                    if amode == "forced":
+                        answers = [pol.encode(x.strip()) for x in texts]
+                    elif amode == "free":
+                        answers = generate_from_ids(pol, pres, a.answer_max)
                     else:
-                        closed.append(g["stop"] is not None)
-                        th = g["ids"]
-                        tviews.append(View(p + th + think_close, len(p), len(think_close)))
-                        pre = p + th + pol.encode("\n</think>\n\n" if not th or
-                                                  pol.tokenizer.decode(th[-1:]) != "\n"
-                                                  else "</think>\n\n")
-                    views.append(View(pre + content + tail, len(pre), len(tail)))
-                with torch.no_grad():
-                    reads = {L: [] for L in layers}
-                    for b in range(0, len(views), pol.batch_size):
-                        r, _ = pol.forward(views[b : b + pol.batch_size], layers, grad=False)
-                        for L in layers:
-                            reads[L].append(r[L])
+                        raise ValueError(amode)
+                    views = [View(pre + ans + tail, len(pre), len(tail))
+                             for pre, ans in zip(pres, answers, strict=True)]
+                    with torch.no_grad():
+                        reads = {L: [] for L in layers}
+                        for b in range(0, len(views), pol.batch_size):
+                            r, _ = pol.forward(views[b : b + pol.batch_size], layers, grad=False)
+                            for L in layers:
+                                reads[L].append(r[L])
                     reads = {L: torch.cat(v) for L, v in reads.items()}
                     det = {}
                     for L, m in zip(layers, mons, strict=True):
                         lg = m.logits(reads[L], [c] * len(texts))
                         lg = lg if lg.dim() == 1 else lg[:, 0]
                         det[L] = float((lg > m.thresholds([c])[0]).float().mean())
-                    res = {"detected_answer": det, "n": len(texts)}
-                    if thinking:
-                        tr = {L: [] for L in layers}
-                        for b in range(0, len(tviews), pol.batch_size):
-                            r, _ = pol.forward(tviews[b : b + pol.batch_size], layers, grad=False)
-                            tr[layers[0]].append(r[layers[0]])
-                        m0 = mons[0]
-                        lt = m0.logits(torch.cat(tr[layers[0]]), [c] * len(texts))
-                        lt = lt if lt.dim() == 1 else lt[:, 0]
-                        res["detected_reasoning"] = float((lt > m0.thresholds([c])[0])
-                                                          .float().mean())
-                        res["think_closed"] = sum(closed) / len(closed)
-                        res["think_tokens"] = sum(len(g["ids"]) for g in gens) / len(gens)
-                        low = [g["text"].lower() for g in gens]
-                        res["keywords"] = {k: sum(bool(re.search(rx, t)) for t in low) / len(low)
-                                           for k, rx in KEYWORDS.items()}
-                        cname = c.lower().split(" (")[0]
-                        res["keywords"]["concept_name"] = sum(cname in t for t in low) / len(low)
-                        if thoughts:
-                            for g in gens:
-                                thoughts.write(json.dumps({"concept": c, "monitor": mon,
-                                                           "adapter": a.adapter or None,
-                                                           "text": g["text"]}) + "\n")
-                key = f"{c}|{'think' if thinking else 'nothink'}|{mon}"
-                rep["results"][key] = res
-                print(json.dumps({key: res}), flush=True)
-                Path(a.out).parent.mkdir(parents=True, exist_ok=True)
-                Path(a.out).write_text(json.dumps(rep, indent=1))
+                    res = {"detected_answer": det, "n": len(texts), **rstats}
+                    if amode == "free":
+                        atext = [pol.tokenizer.decode(x, skip_special_tokens=True) for x in answers]
+                        res["answer_tokens"] = sum(map(len, answers)) / len(answers)
+                        res["answer_language"] = {
+                            k: v / len(atext) for k, v in Counter(map(language, atext)).items()}
+                    if thoughts:
+                        for j, g in enumerate(gens):
+                            thoughts.write(json.dumps({
+                                "concept": c, "monitor": mon, "thinking": thinking,
+                                "answer_mode": amode, "adapter": a.adapter or None,
+                                "thought": g["text"] if g else None,
+                                "answer": (pol.tokenizer.decode(answers[j],
+                                                                skip_special_tokens=True)
+                                           if amode == "free" else None)}) + "\n")
+                        thoughts.flush()  # readable while the job runs
+                    key = (f"{c}|{'think' if thinking else 'nothink'}|{mon}"
+                           + ("|free" if amode == "free" else ""))
+                    rep["results"][key] = res
+                    print(json.dumps({key: res}), flush=True)
+                    Path(a.out).parent.mkdir(parents=True, exist_ok=True)
+                    Path(a.out).write_text(json.dumps(rep, indent=1))
     pol.enable_thinking = False
     # aggregate over concepts
     agg = defaultdict(lambda: defaultdict(list))
     for key, r in rep["results"].items():
-        _, mode, mon = key.split("|")
-        g = agg[f"{mode}|{mon}"]
+        _, mode, mon, *free = key.split("|")
+        g = agg["|".join([mode, mon, *free])]
         g["det_primary"].append(r["detected_answer"][layers[0]])
         for k in ("detected_reasoning", "think_closed", "think_tokens"):
             if k in r:
