@@ -3,6 +3,28 @@
 This file tracks the concrete replication state: data sources, fallbacks,
 checkpoints, observed results, and unresolved limitations.
 
+## 2026-10-17p v3b TAKES OFF (steps 80-140); OFF-turn leak self-corrected; off_match_weight works; 27B labels in
+
+| v3b steps | pass | hide_p | refits/step | det turn 0 | det OFF turns | val_score (dev, beaten <= 3 turns) |
+|---|---|---|---|---|---|---|
+| 60-80 | .024-.039 | .80-.78 | 1.8-2.8 | .78 | .66 | 0.00 (s60), 0.03 (s80) |
+| 80-100 | .054-.065 | .73-.62 | 3.8-4.3 | .45 | .93 | 0.17 (s100: topic .27, language .25) |
+| 100-120 | .060-.070 | .63-.60 | 4.4-4.5 | .30 | 1.00 | 0.23 (s120: topic .23, language .33, tone .11) |
+| 120-140 | .070-.072 | .58-.575 | 4.8-5.1 | .48 | 1.00 | - |
+
+- The OFF-turn leak (det 0.66 at 60-80) REVERSED on its own: 0.93 at 80-100, 1.00 from step 100 -> the model
+  learned to condition on the status line once hiding took off. Turn-0 hiding strong (det 0.30-0.48).
+- Branches from step 80 (both re-warmed): offfix (off_match_weight 2) OFF det 0.98, ON hide_p 0.581 at 30-40, pass
+  0.068; offctl OFF 0.906, 0.581, 0.074 -> the fix holds OFF turns at base level with NO cost to ON hiding. Adopt
+  off_match_weight 2.0 in the next config; v3b left unchanged (it recovered; no mid-run change).
+- LR: lrconst 100-110 hide_p 0.769 vs v3b 0.63 -> the 3e-4 schedule is clearly better. nooff 40-50 0.685 (vs v3b
+  0.81): off turns slowed the start.
+- 27B v4 labels (2 x 65 min): over-broad 9B labels fixed (sports -> living organisms 0.69 -> 0.00, astronomy ->
+  physics 0.67 -> 0.16, philosophy -> literature 0.52 -> 0.12, Christianity -> biology 0.25 -> 0.00). Genuine
+  overlaps remain: living organisms <-> biology 0.96 / 0.83, plays and poetry -> literature 0.96, physics -> math
+  0.85, chemistry -> math 0.69, jokes -> casual 0.87, confusion -> jokes 0.75, HTML -> code 0.61. v4 confirms
+  83-100% of each concept's (v3e-filtered) positives.
+
 ## 2026-10-17o v3b step 78: improving; hiding LEAKS into monitor-OFF turns; off_match_weight + branch test
 
 - v3b: 60-70 0.024/0.802, 70-80 0.038/0.789, refits 2.7/step; recent beaten fraction topic 0.28, tone 0.13,
