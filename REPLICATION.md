@@ -3,6 +3,21 @@
 This file tracks the concrete replication state: data sources, fallbacks,
 checkpoints, observed results, and unresolved limitations.
 
+## 2026-10-17j final_v3b LAUNCHED (5948570 + resumes 5948572-74) + LR control arm (5948575)
+
+- final_v3b_4b = final_v3_4b + first_probe switch_fork + hide_from_turn 0 (no pinning) + layout tagged +
+  off_turn_prob 0.15 + curriculum ramp (prior concept, lam 0 -> 0.5 over 100 steps) + LR warmup 10 -> 3e-4,
+  cosine to 1e-4 by step 200 (user), then hold. Both cleanings on. early_stop_min_steps 120 -> 200 (advisor:
+  never stop inside the LR decay). 12 h chunks, steps <= 400.
+- Advisor review (10-17): config coherent; checked cap_gen forks keep the tagged status line (they reuse the
+  turn's rendered feedback minus the request). Known limitation: bandit counts are not persisted across resume
+  chunks (adaptive part restarts flat each chunk; lam continues from the global step; gamma 0.95 ~ 20-step
+  memory, acceptable).
+- PRE-REGISTERED KILL CRITERIA (from every run that learned: first pass by step 12-17; steps 20-30 pass >= 0.03,
+  hide_p <= 0.81): check at steps 15 and 30; if at step 30 the 20-30 window has pass_rate < 0.01 OR hide_p >
+  0.93 -> cancel and bisect the new changes (tagged layout first: it changes every read).
+- final_v3b_lrconst_4b: identical but constant LR 1e-4, 40 steps, no validation -> isolates the LR effect.
+
 ## 2026-10-17h/i first_probe "switch_fork"; final_v3b relaunch config drafted (not launched)
 
 - first_probe "switch_fork" (user 10-17): turn 0 = base probe, NOT pinned, hidden from (hide_from_turn 0);

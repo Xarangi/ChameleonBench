@@ -1,7 +1,7 @@
-# FINAL v3b (REPLICATION 2026-10-17i; DRAFT, NOT LAUNCHED): final_v3_4b + the fixes from the 10-17 bisection:
+# FINAL v3b (REPLICATION 2026-10-17i; LAUNCHED 10-17): final_v3_4b + the fixes from the 10-17 bisection:
 # turn 0 judged by the base probe and HIDDEN from (no fork, no pin; first_probe switch_fork: topic switches
 # fork), per-turn tagged prompt layout (system prompt + "Monitor: ON/OFF" status line), monitor-off turns,
-# curriculum ramp from uniform-over-concepts (lam 0 -> 0.5 over 100 steps), LR 3e-4 -> 1e-4 cosine over 100.
+# curriculum ramp from uniform-over-concepts (lam 0 -> 0.5 over 100 steps), LR 3e-4 -> 1e-4 cosine over 200 steps.
 # FINAL v3 (REPLICATION 2026-10-16h; DRAFT, not launched): final_v2_4b + exact speed-ups (truncate_reads,
 # refit_batched_fits) + adaptive defender curriculum (discounted Thompson over probe kinds AND concepts
 # on turns-to-beat; tica/curriculum.py) + first_probe "fork" with NO pinning (10-16i) + refit type switching
@@ -57,8 +57,8 @@ train:
   turns: 16         # 10-16l: longer episodes (fewer censored refits); smoke memory first
   micro_batch: 1     # 10-16n: 16-turn episodes peaked at 40.0 GB of 40 with 2 (profile 5864657)
   lr: 1.0e-4
-  lr_peak: 3.0e-4       # 10-17i: warm up to 3e-4, cosine to 1e-4 by step 100, then hold
-  lr_decay_steps: 100
+  lr_peak: 3.0e-4       # 10-17i: warm up to 3e-4, cosine to 1e-4 by step 200 (user), then hold
+  lr_decay_steps: 200
   warmup_steps: 10
   save_every: 20    # each save launches a dev-concept validation race (eval_on_save)
   seed: 0
@@ -126,7 +126,7 @@ rl:
     early_stop_window: 3
     early_stop_patience: 5             # 5 finished checks (100 steps) without +0.01
     early_stop_min_delta: 0.01
-    early_stop_min_steps: 120
+    early_stop_min_steps: 200          # 10-17i: not before the 200-step LR decay ends
     # capability (KL to base; tests/test_tica_kl_anchor.py)
     kl_weight: 1.0
     kl_ref: nobrief
