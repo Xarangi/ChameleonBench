@@ -3,6 +3,20 @@
 This file tracks the concrete replication state: data sources, fallbacks,
 checkpoints, observed results, and unresolved limitations.
 
+## 2026-10-17q Probe-layer frontier; frozen race now honours the tagged layout; anomaly eval on v3b step 140
+
+- v3b steps ~100-140, single-layer probes beaten by layer (all archs): L8 0.13 (n 45), L12 0.33 (27), L16 0.09
+  (35), L22 0.00 (42), L26 0.02 (46); ensembles: ens4_mlp (L8-14) 0.22, ens4_linear 0.15, ensdeep4_linear
+  (L16-26) 0.03. Layer weights L8 .21 / L12 .13 / L16 .21 / L22 .23 / L26 .22. With lam 0.5 a layer's weight is
+  at most 0.5 * 0.2 + 0.5 * 0.3 = 0.25 -> L22 / L26 are near their ceiling.
+- Factored arch x layer sampling = main-effects model: right when depth is hard regardless of architecture (what
+  we see), wrong for interactions (maxpool@12 0.62 vs attnpool@12 0.00, small n). Principled upgrade: hierarchical
+  shrinkage (each arch@layer cell its own posterior with a prior at the factored estimate).
+- BUG FIX: scripts/tica_frozen_race.py built prompts without cfg.episodes.layout (legacy format for a tagged-trained
+  model) and used legacy off/on notices; now layout-aware. All other race / eval paths already were.
+- Anomaly detector (always-on OOD monitor) on v3b step_140: ref base (6049253), ref self (6049342) -> runs/
+  final_v3b_4b/eval_s140/ood_{base,self}.json. v2 reference: 88-100% caught at 12-15% FP (sports).
+
 ## 2026-10-17p v3b TAKES OFF (steps 80-140); OFF-turn leak self-corrected; off_match_weight works; 27B labels in
 
 | v3b steps | pass | hide_p | refits/step | det turn 0 | det OFF turns | val_score (dev, beaten <= 3 turns) |

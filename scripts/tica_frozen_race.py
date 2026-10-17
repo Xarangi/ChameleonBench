@@ -155,7 +155,9 @@ def main():
     if a.inputs:
         cfg.episodes.inputs = a.inputs
     a.format = a.format or cfg.episodes.format
-    opening, render_feedback = prompts(a.format, cfg.episodes.inputs)
+    # the config's prompt layout (10-17a "tagged" for final_v3b+); the repeat format is legacy-only
+    layout = cfg.episodes.layout if a.format == "answer" else "legacy"
+    opening, render_feedback = prompts(a.format, cfg.episodes.inputs, layout)
     if a.model_path:
         cfg.model.path = a.model_path
     if a.heldout_layers:
@@ -700,10 +702,12 @@ def main():
                         n_curve[i] += 1
             for i in range(E):
                 note = MONITOR_OFF if off[i][t + 1] else (MONITOR_ON if off[i][t] else None)
+                kw = ({"next_off": bool(off[i][t + 1])}  # tagged layout: status line, no notice
+                      if getattr(render_feedback, "tagged", False)
+                      else ({"notice": note} if note else {}))
                 f = render_feedback("none" if off[i][t] else cond, concept,
                                     shown[i] if not a.nobrief else (0.0, 1.0),
-                                    texts[i][t + 1], feedback=fb,
-                                    **({"notice": note} if note else {}))
+                                    texts[i][t + 1], feedback=fb, **kw)
                 convs[i].append({"role": "user", "content": f})
             if t + 1 in cap_turns:
                 cap_fork(t + 1)
