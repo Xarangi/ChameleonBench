@@ -3,6 +3,13 @@
 This file tracks the concrete replication state: data sources, fallbacks,
 checkpoints, observed results, and unresolved limitations.
 
+## 2026-10-17w v3b early-stop patience 5 -> 15 for the resume chunks
+
+Training is still improving on the fresh-probe lines (1st probe at a switch 0.35 -> 0.45 -> 0.67, after 1st refit 0.37 -> 0.51),
+while val_score (dev concepts beaten WITHIN 3 TURNS, ~35 segments) drifts 0.21 -> 0.16; the dev concepts are still beaten
+after refits, just in 5-7 turns. Not a reason to stop a 200-step-old run. The running chunk keeps patience 5 in memory: if it
+stops at ~240, move adaptive/early_stop.json aside and let r1 resume under patience 15. Step-140 checkpoint is kept regardless.
+
 ## 2026-10-17v v3b step 229 status; THINK-HIDE eval: the L12 dodge does NOT reach held-out L20/24 probes; thinking mostly breaks it
 
 v3b by probe index (tica_probe_index.py): k1_switch 0.35 -> 0.45 -> 0.67 (n=12, partial) at 180/200/220; k2 0.37 / 0.37 / 0.51;

@@ -124,7 +124,7 @@ rl:
     early_stop_glob: /scratch/sneheel/next_chameleons_artifacts/tica/runs/final_v3b_4b/val/step_*.json   # absolute: shared by resume chunks
     early_stop_metric: val_score       # mean over families of "new probes beaten within 3 turns"
     early_stop_window: 3
-    early_stop_patience: 5             # 5 finished checks (100 steps) without +0.01
+    early_stop_patience: 15            # 10-17w: 5 -> 15 (training still improving; val is small-n)
     early_stop_min_delta: 0.01
     early_stop_min_steps: 200          # 10-17i: not before the 200-step LR decay ends
     # capability (KL to base; tests/test_tica_kl_anchor.py)
