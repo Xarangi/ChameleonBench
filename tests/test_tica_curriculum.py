@@ -216,3 +216,23 @@ def test_off_match_weight_separates_off_turns():
     legacy = ObjectiveConfig(hide_weight=0.0, match_weight=2.0, lm_weight=0.0)
     tot2, _ = loss_terms(p, ref, ["match", "match", "match"], None, legacy)
     assert abs(float(tot2) - 2.0 * (0.64 + 0.01 + 0.25) / 3) < 1e-6
+
+
+def test_probe_index_metrics():
+    """10-17u: pass rate by probe index within each concept segment."""
+    from types import SimpleNamespace as NS
+
+    from next_chameleons.tica.trainers.supervised import probe_index_metrics
+
+    def res(c, dep, det, off=False):
+        return {"concept": c, "deployed": ["p"] * dep, "monitored": {"detected": det}, "off": off}
+
+    # cats: bank 1 beaten at turn 1 (2 turns), bank 2 never; switch to dogs: bank 1 beaten at once
+    a = NS(spec=NS(cond="real_score", monitored="cats"),
+           results=[res("cats", 1, True), res("cats", 1, False), res("cats", 2, True),
+                    res("cats", 2, True, off=True), res("dogs", 1, False), res("dogs", 2, True)])
+    b = NS(spec=NS(cond="nobrief", monitored="cats"), results=[res("cats", 1, False)])
+    m = probe_index_metrics([a, b])
+    assert m["beatk_n_1"] == 2 and m["beatk_frac_1"] == 1.0 and m["beatk_turns_1"] == 1.5
+    assert m["beatk_n_2"] == 2 and m["beatk_frac_2"] == 0.0
+    assert m["beat1_first_frac"] == 1.0 and m["beat1_switch_frac"] == 1.0

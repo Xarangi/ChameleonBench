@@ -273,6 +273,55 @@ from next_chameleons.tica.probe_zoo import gate_fit, kind_layers, split_kind  # 
 DODGE_CONDS = ("real_score", "real_verdict")
 
 
+def probe_index_metrics(trajs, max_k: int = 5) -> dict:
+    """PASS RATE BY PROBE INDEX (REPLICATION 2026-10-17u; user: always track this, not only the
+    headline pass rate). Within each monitored concept segment of an episode, the k-th BANK is the
+    set of probes deployed when the k-th probe arrives (k = 1: the segment's first probe -- the
+    turn-0 base / fork probe or a switch's first probe; k = 2: after the first refit; ...).
+    beatk_frac_k = fraction of segments that faced bank k and passed it before the segment ended;
+    beatk_turns_k = mean judged turns to that pass; beatk_n_k = segments facing bank k (k >= max_k
+    pooled). The first bank is also split into the episode's first concept (beat1_first_frac) and
+    switched-to concepts (beat1_switch_frac)."""
+
+    seen = defaultdict(lambda: [0, 0, 0])  # k -> [faced, beaten, turns to beat]
+    first = [0, 0]
+    switch = [0, 0]
+    for tr in trajs:
+        if tr.spec.cond not in DODGE_CONDS:
+            continue
+        segs: dict = {}
+        for t, res in enumerate(tr.results):
+            if res.get("off"):
+                continue
+            c = res.get("concept", tr.spec.monitored)
+            k = min(max_k, max(1, len(res.get("deployed") or [1])))
+            seg = segs.setdefault(c, {"first": t == 0, "banks": {}})
+            b = seg["banks"].setdefault(k, {"start": t, "beat": None})
+            if b["beat"] is None and not res["monitored"].get("detected", True):
+                b["beat"] = t - b["start"] + 1
+        for seg in segs.values():
+            for k, b in seg["banks"].items():
+                s = seen[k]
+                s[0] += 1
+                if b["beat"] is not None:
+                    s[1] += 1
+                    s[2] += b["beat"]
+            if 1 in seg["banks"]:
+                tgt = first if seg["first"] else switch
+                tgt[0] += 1
+                tgt[1] += seg["banks"][1]["beat"] is not None
+    out = {}
+    for k, (n, b, tt) in seen.items():
+        out[f"beatk_frac_{k}"] = b / n
+        out[f"beatk_n_{k}"] = n
+        out[f"beatk_turns_{k}"] = tt / b if b else float("nan")
+    if first[0]:
+        out["beat1_first_frac"] = first[1] / first[0]
+    if switch[0]:
+        out["beat1_switch_frac"] = switch[1] / switch[0]
+    return out
+
+
 def curriculum_prior(fam_of: dict, prior: str) -> dict:
     """Uniform starting distribution over concepts (10-17g): "concept" = 1 / n each; "family" =
     1 / n_families, split evenly within the family."""
@@ -882,6 +931,7 @@ class AdaptiveSupervisedTrainer:
                                                                            for r in rs))
             self._curriculum_update(self.deploy_log[deploy_start:], self.seg_log[seg_start:],
                                     metrics)
+            metrics.update(probe_index_metrics(trajs))
             metrics.update({
                 "ep_refits": ep_stats["att"],
                 "ep_refits_accepted": ep_stats["acc"],

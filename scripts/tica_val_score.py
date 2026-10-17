@@ -31,7 +31,9 @@ def main():
     per = {f: sum(v) / len(v) for f, v in by.items() if v}
     out = {"step": a.step, "val_score": sum(per.values()) / len(per) if per else 0.0,
            "per_family": per, "pass_rate": r.get("pass_rate_after_first_turn"),
-           "n_deploy": sum(len(v) for v in by.values()), "race": a.race}
+           "n_deploy": sum(len(v) for v in by.values()), "race": a.race,
+           # pass rate by probe index (10-17u; races written after it, else absent)
+           "by_probe_index": r.get("by_probe_index")}
     Path(a.out).parent.mkdir(parents=True, exist_ok=True)
     Path(a.out + ".tmp").write_text(json.dumps(out, indent=1))
     Path(a.out + ".tmp").rename(a.out)  # atomic: the trainer never reads a half-written file

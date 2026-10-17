@@ -34,7 +34,7 @@ from next_chameleons.tica.config import load_run_config
 from next_chameleons.tica.data import CONCEPT_SPLITS, select_topics
 from next_chameleons.tica.episodes import EpisodeSampler
 from next_chameleons.tica.monitors import MonitorPool
-from next_chameleons.tica.trainers.supervised import beat_summary
+from next_chameleons.tica.trainers.supervised import beat_summary, probe_index_metrics
 
 
 def main():
@@ -163,6 +163,7 @@ def main():
     # judged turns until the first pass, or censored at the segment end; per deployed refit probe:
     # tr.deploy_log (supervised.beat_summary).
     seg_beat = []
+    all_trajs = []  # pass rate by probe index (10-17u)
     for b in range(0, a.episodes, a.batch):
         specs = sampler.sample(min(a.batch, a.episodes - b))
         ctx = pol.reference() if a.base else torch.no_grad()
@@ -170,6 +171,7 @@ def main():
                 else contextlib.nullcontext())
         with ctx, mctx:
             trajs, m = tr.rollout(specs)
+        all_trajs.extend(trajs)
         tr.pool.entries = [e for e in tr.pool.entries if e.monitor.name not in set(tr._transient)]
         tr._transient = []
         for k_, v_ in m.items():
@@ -239,6 +241,8 @@ def main():
                str(k): sum(1 for r in tr.deploy_log if not r["beaten"] and r["turns"] == k)
                for k in sorted({r["turns"] for r in tr.deploy_log if not r["beaten"]})},
            "deploy_records": tr.deploy_log,
+           # PASS RATE BY PROBE INDEX (10-17u): k-th bank of each concept segment beaten?
+           "by_probe_index": probe_index_metrics(all_trajs),
            **beat_summary([{"kind": "segment", "turns": n, "beaten": b}
                            for n, b in seg_beat], prefix="segbeat_"),
            "sec": round(time.time() - t0)}

@@ -3,6 +3,25 @@
 This file tracks the concrete replication state: data sources, fallbacks,
 checkpoints, observed results, and unresolved limitations.
 
+## 2026-10-17u PASS RATE BY PROBE INDEX (new standard metric): v3b's iteration IS improving; turn-0 gain is a static dodge
+
+v3b, fraction of concept segments that beat the k-th bank (scripts/tica_probe_index.py; turns to beat in brackets):
+
+| steps | k1 first concept (fixed base probe) | k1 switch (fresh fork) | k2 (1st refit) | k3 (2nd refit) |
+|---|---|---|---|---|
+| 40-60 | 0.33 | 0.00 | 0.00 | - |
+| 80-100 | 0.86 (1.7) | 0.06 | 0.05 | 0.00 |
+| 120-140 | 0.90 (1.5) | 0.11 | 0.14 (3.2) | 0.08 |
+| 160-180 | 0.93 (1.1) | 0.29 (3.5) | 0.48 (3.7) | 0.17 (2.8) |
+
+- The per-turn table (late turns caught 92-100%) and the headline pass rate HID this: they are dominated by the
+  cumulative bank and by the turn-0 static dodge of the fixed base probe (0.96 -> 0.16 detection at turn 0).
+- Fresh probes (k1 switch, k2, k3) are now the lines to improve; they rose sharply in the last ~40 steps.
+- New: supervised.probe_index_metrics -> beatk_frac_k / beatk_turns_k / beatk_n_k / beat1_first_frac /
+  beat1_switch_frac in every rollout's metrics; tica_switch_eval "by_probe_index"; tica_val_score passes it
+  through; wandb mirror section by_probe_index/; scripts/tica_probe_index.py backfills from turns.jsonl.
+- val_score (early stopping) was already refit-based: "new probes beaten within 3 turns" over deploy_records.
+
 ## 2026-10-17t v2 anomaly re-check reproduces; reasoning-mode eval relaunched; thinking datasets staged; LR control done
 
 - v2 final anomaly race re-run with the current code (6056855): IDENTICAL to 10-16 (OOD 0.88-1.0 from turn 4, fork

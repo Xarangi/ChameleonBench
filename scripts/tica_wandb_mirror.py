@@ -41,6 +41,8 @@ from tica_plot import load
 SECTIONS = [  # (regex on the raw key without "rollout/", target template); first match wins
     (r"^task_family/([^/]+)/(.+)$", r"family/\1/\2"),
     (r"^task_concept/([^/]+)/(.+)$", r"concept/\1/\2"),
+    (r"^beatk_(frac|n|turns)_(\d+)$", r"by_probe_index/k\2_\1"),
+    (r"^beat1_(first|switch)_frac$", r"by_probe_index/k1_\1_frac"),
     (r"^beat_(frac|n|turns)_(.+)$", r"probe_kind/\2/beat_\1"),
     (r"^kind_catch_(.+)$", r"probe_kind/\1/catch"),
     (r"^gate_(ok|att)_(.+)$", r"probe_kind/\2/gate_\1"),
@@ -130,8 +132,12 @@ def load_val(run: Path) -> dict[int, dict]:
             d = json.loads(f.read_text())
         except json.JSONDecodeError:  # being written
             continue
-        out[int(d["step"])] = {f"val/{k}": v for k, v in d.items()
-                               if isinstance(v, (int, float)) and not isinstance(v, bool)}
+        row = {f"val/{k}": v for k, v in d.items()
+               if isinstance(v, (int, float)) and not isinstance(v, bool)}
+        row.update({f"val/by_probe_index/{k}": v for k, v in (d.get("by_probe_index") or {}).items()
+                    if isinstance(v, (int, float)) and v == v})
+        row.update({f"val/family/{k}": v for k, v in (d.get("per_family") or {}).items()})
+        out[int(d["step"])] = row
     return out
 
 
@@ -150,7 +156,8 @@ def open_run(run: Path, project: str):
         wb = wandb.init(**kw, mode="offline")
     wb.define_metric("train_step")
     wb.define_metric("val_step")
-    for sec in ("progress", "family", "concept", "probe_kind", "probe_arch", "probe_layer",
+    for sec in ("progress", "by_probe_index", "family", "concept", "probe_kind", "probe_arch",
+                "probe_layer",
                 "heldout", "per_turn", "motion", "switch", "first_probe", "monitor_off",
                 "curriculum", "capability", "loss", "timing", "system", "other"):
         wb.define_metric(f"{sec}/*", step_metric="train_step")
