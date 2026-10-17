@@ -3,6 +3,23 @@
 This file tracks the concrete replication state: data sources, fallbacks,
 checkpoints, observed results, and unresolved limitations.
 
+## 2026-10-17x Sanity races on the FULL held-out + dev sets (v3b step 140 vs 300, base control): topics transfer, surface concepts do not
+
+tica_switch_eval, --kind mixed --switch-prob 0 --turns 24 (val setup); held-out 56 ep, dev 32 ep, base 28 ep
+(runs/final_v3b_4b/sanity_full). Refit probes beaten (probes deployed), by family:
+
+| | held-out topics (8) | deception | physics | Finnish | HTML | confusion |
+|---|---|---|---|---|---|---|
+| step 140 | 0.53 (88) | 0.85 (33) | 0.00 (3) | 0.00 (2) | 0.00 (3) | 0.00 (2) |
+| step 300 | 0.77 (159) | 0.88 (40) | 0.62 (8) | 0.00 (2) | 0.00 (3) | 0.00 (2) |
+
+Held-out by probe index, step 300: k2 0.88 (3.3 turns), k3 0.82, k4 0.75, k5 0.71 (step 140: k2 0.61, k3 0.47, k4 0.69).
+Dev step 300: buildings 0.86, TV 0.73, casual 0.61, French 0.50, code 0.00 (6). k1 = the fixed base probe, 1.00 everywhere.
+Base control: never beats a topic base probe (k1 0.11); deception probes are beaten by the BASE model too (0.5 of 6) ->
+deception is a weak test. Step 300 >> step 140 on every family with data: the early stop at 240 would have been wrong.
+Surface / pragmatic held-out concepts (Finnish, HTML, confusion, code) never beat a single refit probe: training has only
+1-2 members in those families, so the in-context skill transfers within topics/domains but not to them.
+
 ## 2026-10-17w v3b early-stop patience 5 -> 15 for the resume chunks
 
 Training is still improving on the fresh-probe lines (1st probe at a switch 0.35 -> 0.45 -> 0.67, after 1st refit 0.37 -> 0.51),
