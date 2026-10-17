@@ -3,6 +3,20 @@
 This file tracks the concrete replication state: data sources, fallbacks,
 checkpoints, observed results, and unresolved limitations.
 
+## 2026-10-17t v2 anomaly re-check reproduces; reasoning-mode eval relaunched; thinking datasets staged; LR control done
+
+- v2 final anomaly race re-run with the current code (6056855): IDENTICAL to 10-16 (OOD 0.88-1.0 from turn 4, fork
+  false alarms 12.1%, thr 185.3) -> the legacy-layout eval path is not broken. v3b's OOD 0.00 is either real or
+  specific to the tagged layout (different reference episodes); not yet separable. Dynamics differ: v2 escapes and
+  STAYS escaped (probe catch ~0-0.12 after turn 4, 1.3 passes / ep) while OOD fires; v3b passes repeatedly (3.2 /
+  ep) and refits re-catch it (probe 0.56-1.0), OOD never fires.
+- tica_thinking_eval jobs crashed at start (generation_config eos_token_id is an int, not a list); fixed, relaunched
+  6065707 / 6065841 / 6065885 (base, v2, v3b s140).
+- Thinking-format data staged (NOT used): s1K-1.1 (1k, MIT), Bespoke-Stratos-17k (16.7k, Apache-2.0) under
+  $RAW/tica/thinking_data (MANIFEST.json). Preferred use: prompts only, KL to the BASE model's own thinking-mode
+  generations (anchor-style), not SFT on R1 traces (a different model's style).
+- LR control (constant 1e-4) final: 80-100 0.028/0.801, 100-120 0.047/0.769 vs v3b 0.060/0.677, 0.065/0.614.
+
 ## 2026-10-17s Reasoning-mode (thinking ON / OFF) check: never tested after LoRA -> scripts/tica_thinking_eval.py
 
 - All capability evals so far (GSM8K, MMLU, ARC, MMLU-STEM, MATH-500, MBPP) ran with enable_thinking False, as in

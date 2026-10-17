@@ -62,7 +62,8 @@ def generate(model, tok, prompts, *, batch_size, max_new_tokens):
 
     device = next(model.parameters()).device
     pad = tok.pad_token_id
-    eos = {tok.eos_token_id, *(getattr(model.generation_config, "eos_token_id", None) or [])}
+    gen_eos = getattr(model.generation_config, "eos_token_id", None)
+    eos = {tok.eos_token_id, *(gen_eos if isinstance(gen_eos, list) else [gen_eos])}
     eos.discard(None)
     order = sorted(range(len(prompts)), key=lambda i: len(prompts[i]))
     outs = [None] * len(prompts)
