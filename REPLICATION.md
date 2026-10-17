@@ -3,6 +3,14 @@
 This file tracks the concrete replication state: data sources, fallbacks,
 checkpoints, observed results, and unresolved limitations.
 
+## 2026-10-17h/i first_probe "switch_fork"; final_v3b relaunch config drafted (not launched)
+
+- first_probe "switch_fork" (user 10-17): turn 0 = base probe, NOT pinned, hidden from (hide_from_turn 0);
+  newly switched-to concepts = fork-fit first probe, not pinned. Test in test_tica_final_v2.
+- configs/tica/final_v3b_4b.yaml = final_v3_4b + switch_fork + hide_from_turn 0 + layout tagged + off_turn_prob
+  0.15 + curriculum ramp (prior concept, 100 steps, mix_max 0.5) + LR 3e-4 -> 1e-4 cosine over 100 steps.
+  Awaiting user OK on the prompt format before the smoke.
+
 ## 2026-10-17g Sampler diagnosis: the curriculum never adapted; family-first was the whole effect. Ramp added
 
 - concept_p_* over final_v3 (140 steps): family mass 0.20 / 0.20 / 0.20 / 0.20 / 0.20 at EVERY 20-step window;

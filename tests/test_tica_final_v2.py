@@ -326,6 +326,49 @@ def test_first_probe_fork_fits_the_first_probe_on_the_policy(tmp_path):
     assert dogs_first.startswith("ep_refit_") and trajs[0].results[2]["concept"] == "dogs"
 
 
+def test_first_probe_switch_fork_base_at_turn0_fork_at_switch(tmp_path):
+    """first_probe="switch_fork" (10-17h): turn 0 is judged by the BASE probe (no pinning, hidden
+    from with hide_from_turn 0); a newly switched-to concept gets a policy fork probe."""
+    from next_chameleons.tica.adaptive import AdaptiveConfig
+    from next_chameleons.tica.episodes import ConceptTexts, EpisodeSpec
+    from next_chameleons.tica.monitors import MonitorPool
+    from next_chameleons.tica.objectives import ObjectiveConfig
+    from next_chameleons.tica.trainers.supervised import (
+        AdaptiveSupervisedConfig,
+        AdaptiveSupervisedTrainer,
+    )
+    from test_tica_framework import bank as make_bank
+    from test_tica_framework import tiny_policy
+
+    pol = tiny_policy()
+    pool = MonitorPool()
+    pool.add(make_bank(1, ["cats", "dogs"]), round=0, family="concept_linear")
+    base_name = pool.entries[0].monitor.name
+    cfg = AdaptiveSupervisedConfig(
+        steps=1, episodes_per_step=1, turns=4, micro_batch=4, lr=1e-2, warmup_steps=1,
+        save_every=0,
+        objective=ObjectiveConfig(pin_first_turn=False, pin_segment_first=False,
+                                  hide_from_turn=0),
+        adaptive=AdaptiveConfig(refit_mode="episode", refit_min_auroc=0.0, refit_min_tpr_np=0.0,
+                                refit_C=1.0, first_probe="switch_fork",
+                                episode_refit_kind="linear@2",
+                                episode_fork={"pos": 8, "np": 8, "other": 8, "free": 3}))
+    tr = AdaptiveSupervisedTrainer(
+        pol, pool, None, cfg, tmp_path,
+        branch_concepts=[ConceptTexts("cats", "train", [f"meow {k}" for k in range(8)]),
+                         ConceptTexts("dogs", "train", [f"woof {k}" for k in range(8)])],
+        branch_negatives=["a b", "c d", "e f"])
+    sw = EpisodeSpec("real_score|cats|9", "real_score", ["aa", "bb", "cc", "dd"], "cats", "cats",
+                     base_name, meta={"monitored_turns": ["cats", "cats", "dogs", "dogs"]})
+    trajs, m = tr.rollout([sw])
+    assert m["ep_first_probe_att"] == 1  # only the switch forks
+    assert trajs[0].results[0]["deployed"][0] == base_name  # turn 0: the base probe
+    dogs_first = trajs[0].results[2]["deployed"][0]
+    assert dogs_first.startswith("ep_refit_") and trajs[0].results[2]["concept"] == "dogs"
+    roles = {(t.turn, t.role) for t in tr._targets(trajs) if t.key == "monitored"}
+    assert (0, "hide") in roles and not any(r == "match" for _, r in roles)  # hidden, not pinned
+
+
 def test_final_v3_factored_kinds_respect_held_out_depths():
     import dataclasses
 

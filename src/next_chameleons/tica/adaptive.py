@@ -303,6 +303,8 @@ class AdaptiveConfig:
     # POLICY's own states (episode refit machinery + gate, refit kind sampling): caught by
     # construction without constraining the model; use with pin_first_turn / pin_segment_first
     # false. A gate failure falls back to the base probe.
+    # "switch_fork" (10-17h; user 10-17): turn 0 = the base probe (no pinning: with hide_from_turn 0 it
+    # is hidden from), every newly switched-to concept = a fork-fit first probe.
     first_probe: str = "base"
     # neg_labels (10-16h; tica/neg_labels.py): LLM-judge label file; texts judged to HAVE concept c
     # (p_yes >= neg_label_thr) are never negatives for c (base probes + refit forks). "" = off.

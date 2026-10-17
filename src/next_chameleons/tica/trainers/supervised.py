@@ -565,11 +565,15 @@ class AdaptiveSupervisedTrainer:
         def defender(i, s, c):
             if c not in def_by[i]:
                 start = _start(s) if c == s.monitored else pool.concept_monitor(c).name
-                if acfg.first_probe == "fork" and ep_mode:
+                # "switch_fork" (10-17h): the episode's FIRST concept keeps its base probe; every
+                # newly switched-to concept gets a fork-fit first probe
+                fork = (acfg.first_probe == "fork" or (acfg.first_probe == "switch_fork"
+                                                       and c != s.monitored_at(0)))
+                if fork and ep_mode:
                     name = self._fork_first(i, s, c, convs[i], umsg[i], pending, ep_stats)
                     if name is not None:
                         start = name
-                elif acfg.first_probe != "base":
+                elif acfg.first_probe not in ("base", "fork", "switch_fork"):
                     raise ValueError(acfg.first_probe)
                 def_by[i][c] = AdaptiveDefender(pool, c, acfg, start=start,
                                                 rng=random.Random(self.rng.randrange(1 << 30)))
@@ -615,7 +619,7 @@ class AdaptiveSupervisedTrainer:
         for t in range(T):
             for c, s in zip(convs, specs, strict=True):
                 c.append({"role": "assistant", "content": s.text(t)})
-            if acfg.first_probe == "fork" and ep_mode:
+            if acfg.first_probe in ("fork", "switch_fork") and ep_mode:
                 # create this turn's new defenders (fork-fit first probes) BEFORE the read, so a
                 # first probe at a layer nothing else reads (e.g. linear@26) is read this turn
                 for i, s in enumerate(specs):

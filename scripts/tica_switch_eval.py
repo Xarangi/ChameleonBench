@@ -62,7 +62,7 @@ def main():
     ap.add_argument("--inputs", help="override the config's answer-format inputs map")
     ap.add_argument("--fork", help="override refit fork sizes, e.g. other=192,free=192 (10-16f: "
                                    "more negatives -> threshold closer to the nominal 1%% FPR)")
-    ap.add_argument("--first-probe", choices=["base", "fork"],
+    ap.add_argument("--first-probe", choices=["base", "fork", "switch_fork"],
                     help="override adaptive.first_probe (10-16i: fork = the first probe of every "
                          "concept is fit on the policy's own states at that turn)")
     ap.add_argument("--seed", type=int, default=1)
