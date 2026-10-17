@@ -3,6 +3,16 @@
 This file tracks the concrete replication state: data sources, fallbacks,
 checkpoints, observed results, and unresolved limitations.
 
+## 2026-10-17m v3b improving at step 40-45; LR control extended to 100 steps
+
+- v3b: 30-40 0.014/0.884, 40-42 0.031/0.789, refits/step 1.0 -> 2.0. lrconst finished 40 steps at 0.013/0.856.
+- lrconst extended to steps 100 (user): resume from step 40 (5969022). Caveat: a resume restarts Adam with a
+  10-step re-warmup and resets bandit counts (same as v3b's 12 h chunk boundaries).
+- Curriculum in v3b: lam = 0.5 * step/100 (0.095 at step 20, 0.22 at 45, 0.5 from 100). Family mass step 1 ->
+  45: topic .496 -> .438, format .062 -> .098, language .124 -> .138, tone .124 -> .130, domain .186 -> .195;
+  concept max/min .098/.052 (all-caps highest). The Thompson part only separates arms with evidence (beats);
+  unbeaten arms sit at the expected-turns cap, so hard concepts gain as easier ones get beaten.
+
 ## 2026-10-17l Why the 1e-4 control was slow; v3b vs B1 gap localised; no-off-turn ablation
 
 | steps (pass / hide_p) | first pass | 10-20 | 20-30 | 30-40 |
