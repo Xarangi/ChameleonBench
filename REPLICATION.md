@@ -3,6 +3,25 @@
 This file tracks the concrete replication state: data sources, fallbacks,
 checkpoints, observed results, and unresolved limitations.
 
+## 2026-10-17l Why the 1e-4 control was slow; v3b vs B1 gap localised; no-off-turn ablation
+
+| steps (pass / hide_p) | first pass | 10-20 | 20-30 | 30-40 |
+|---|---|---|---|---|
+| v2 + v3 data | 15 | .017/.884 | .075/.740 | .032/.803 |
+| B1 (legacy, pinned turn 0, uniform) | 12 | .002/.955 | .027/.803 | .033/.815 |
+| B2 | 17 | .004/.935 | .045/.774 | .028/.802 |
+| B (family sampler) | 27 | .000/.989 | .009/.923 | .013/.899 |
+| v3b lrconst (1e-4) | 30 | .000/.980 | .000/.965 | .013/.896 |
+| v3b (3e-4) | 11 | .012/.946 | .011/.902 | .009/.898 (30-35) |
+
+- The 1e-4 control DID start (first pass step 30, 30-40 0.013/0.896), like B; 3e-4 bought an earlier start (11), not
+  yet a better level (both ~0.90 vs B1's ~0.80). Seed-noise scale: identical v2 configs differ ~0.05 in hide_p.
+- NOT the cause: forks at switches (v3b detection 0.991 in switched segments vs 0.992 in first-topic segments;
+  lrconst 0.998 vs 0.995) and base-probe strength under the tagged format (margins / thresholds at steps 1-5 match
+  B1's per concept). Remaining suspects for the all-turn slowdown: monitor-off match targets (a conflicting
+  objective until hiding is conditioned on the status line), hiding at turn 0, seed noise.
+- final_v3b_nooff_4b = v3b (3e-4) with off_turn_prob 0, 40 steps (5964114).
+
 ## 2026-10-17k v3b step ~28: learning; LR control flat; wandb dashboard mirror
 
 - v3b passed the step-30 kill check: steps 20-28 pass 0.012 (bar >= 0.01), hide_p 0.893 (bar <= 0.93); first pass
