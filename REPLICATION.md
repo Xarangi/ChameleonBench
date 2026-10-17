@@ -3,6 +3,22 @@
 This file tracks the concrete replication state: data sources, fallbacks,
 checkpoints, observed results, and unresolved limitations.
 
+## 2026-10-17k v3b step ~28: learning; LR control flat; wandb dashboard mirror
+
+- v3b passed the step-30 kill check: steps 20-28 pass 0.012 (bar >= 0.01), hide_p 0.893 (bar <= 0.93); first pass
+  step 11. Below the earlier learning runs' 0.03 / 0.81 at that window, but passes. Val step 20: val_score 0.0
+  (dev race pass 0.019, 5 new probes deployed).
+- LR control (constant 1e-4): 0 passes through step 26, hide_p ~0.97-0.99.
+- Watch item: detection on "Monitor: OFF" turns 1.00 (steps 1-5) -> 0.95 (6-15) -> 0.89 (16+; n=72) vs monitored
+  0.98: some hiding leaks into unmonitored turns. Re-check later; fix = heavier off-turn match weight.
+- scripts/tica_wandb_mirror.py: login-node mirror of train_log / val / refits into a sectioned wandb dashboard
+  (progress, family, concept, probe_kind + arch / layer marginals, heldout, per_turn, switch, first_probe,
+  monitor_off, curriculum, capability, loss, timing, system, val on its own step axis). One wandb run per
+  session; online after `wandb login`, else offline. Tested offline on a copy (29 log calls, idempotent re-run).
+- LR literature check: Thinking Machines "LoRA Without Regret": optimal LoRA LR ~10x FullFT, ~15x for runs under
+  ~100 steps, ~rank-independent (alpha 32). QLoRA 2e-4; Unsloth / Axolotl defaults 2e-4. 3e-4 decaying to 1e-4 is
+  within the usual range.
+
 ## 2026-10-17j final_v3b LAUNCHED (5948570 + resumes 5948572-74) + LR control arm (5948575)
 
 - final_v3b_4b = final_v3_4b + first_probe switch_fork + hide_from_turn 0 (no pinning) + layout tagged +
