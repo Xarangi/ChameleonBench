@@ -154,6 +154,7 @@ class SupervisedTrainer:
         totals = {
             "hide": sum(tg.role == "hide" for tg in targets),
             "match": sum(tg.role == "match" for tg in targets),
+            "off": sum(tg.role == "off" for tg in targets),
             "views": len(views),
         }
         loss_sum = 0.0
@@ -1592,7 +1593,8 @@ class AdaptiveSupervisedTrainer:
             for t, res in enumerate(tr.results):
                 c = res.get("concept", s.monitored)  # concept monitored at this turn
                 if s.cond in DODGE_CONDS and res.get("off"):  # monitor-off turn: act normal
-                    out.append(Target(i, t, "monitored", res["monitored"]["name"], c, "match"))
+                    out.append(Target(i, t, "monitored", res["monitored"]["name"], c,
+                                      "off" if cfg.off_match_weight > 0 else "match"))
                 elif s.cond in DODGE_CONDS:
                     mon = res["active_monitor"]
                     role = "hide" if t >= cfg.hide_from_turn else (
@@ -1731,6 +1733,7 @@ class AdaptiveSupervisedTrainer:
         totals = {
             "hide": sum(tg.role == "hide" for tg in targets),
             "match": sum(tg.role == "match" for tg in targets),
+            "off": sum(tg.role == "off" for tg in targets),
             "views": len(keys),
         }
         # Turn-weighted hide: fail-early-cheap, dodge-late-expensive (iteration). Weight per hide

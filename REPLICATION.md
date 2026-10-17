@@ -3,6 +3,20 @@
 This file tracks the concrete replication state: data sources, fallbacks,
 checkpoints, observed results, and unresolved limitations.
 
+## 2026-10-17o v3b step 78: improving; hiding LEAKS into monitor-OFF turns; off_match_weight + branch test
+
+- v3b: 60-70 0.024/0.802, 70-80 0.038/0.789, refits 2.7/step; recent beaten fraction topic 0.28, tone 0.13,
+  language 0.11 (was 0), format 0. Val (dev race) pass 0.019 -> 0.052 -> 0.090 at steps 20/40/60; val_score 0.
+  nooff (no off turns) 30-40 0.037/0.811 vs v3b 0.014/0.884: off turns slow learning. lrconst 60-70 0.800.
+- LEAK: base-probe detection on "Monitor: OFF" turns 0.95 / 0.92 / 0.85 / 0.69 (steps 0-20 / 20-40 / 40-60 /
+  60-80) while the model is trained to MATCH the base there; turn-0 (ON, same base probe) 0.81. Whole-episode
+  no-brief controls stay matched (det 0.88-1.00, as in v2). v2 had NO off turns (off_turn_prob 0), so this is new.
+  Cause (likely): off-turn match targets share the "match" mean with ~70 control targets per step (~14%), so
+  their per-target weight is ~2/70 vs hide's ~1/65 on every ON turn; hiding generalises to the concept.
+- objective.off_match_weight (default 0 = legacy): off-turn targets get role "off", their own mean and weight.
+- Branch test from v3b step 80 (TICA_STEP_OFFSET=80, same reset for both): final_v3b_offfix_4b (off_match_weight
+  2.0, 5991858) vs final_v3b_offctl_4b (0.0, 5991872), 40 steps each. v3b itself continues unchanged.
+
 ## 2026-10-17n Concept-overlap audit; 27B re-label (central-only prompt v4) launched; v3b at step 62
 
 - Overlap of eval concepts with TRAIN concepts (v3e 9B labels, fraction of texts judged to have the other):

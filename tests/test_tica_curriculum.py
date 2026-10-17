@@ -199,3 +199,20 @@ def test_trainer_curriculum_lambda_ramps(tmp_path, monkeypatch):
                                                           curriculum_mix_max=mx)})()
         t.step_k = step
         assert abs(AdaptiveSupervisedTrainer._curriculum_lambda(t) - want) < 1e-12
+
+
+def test_off_match_weight_separates_off_turns():
+    """10-17o: off-turn match targets ("off") get their own mean and weight; 0 = legacy."""
+    import torch
+
+    from next_chameleons.tica.objectives import ObjectiveConfig, loss_terms
+
+    p = torch.tensor([0.2, 0.9, 0.5], requires_grad=True)
+    ref = torch.tensor([1.0, 1.0, 1.0])
+    cfg = ObjectiveConfig(hide_weight=0.0, match_weight=2.0, lm_weight=0.0, off_match_weight=5.0)
+    tot, st = loss_terms(p, ref, ["off", "match", "match"], None, cfg)
+    want = 5.0 * 0.8 ** 2 / 1 + 2.0 * (0.1 ** 2 + 0.5 ** 2) / 2
+    assert abs(float(tot) - want) < 1e-6 and st["n_off"] == 1 and st["n_match"] == 2
+    legacy = ObjectiveConfig(hide_weight=0.0, match_weight=2.0, lm_weight=0.0)
+    tot2, _ = loss_terms(p, ref, ["match", "match", "match"], None, legacy)
+    assert abs(float(tot2) - 2.0 * (0.64 + 0.01 + 0.25) / 3) < 1e-6

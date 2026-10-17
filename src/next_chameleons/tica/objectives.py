@@ -40,6 +40,10 @@ class ObjectiveConfig:
     hide_from_turn: int = 1  # 1 = turn 0 is pinned to the base model
     pin_first_turn: bool = True
     pin_segment_first: bool = False  # also pin the first turn of a newly switched-to concept
+    # Monitor-OFF turns (REPLICATION 2026-10-17o): > 0 = their match-to-base targets get role
+    # "off", their OWN mean and this weight, instead of sharing the "match" mean with the no-brief /
+    # neg-text controls (~14% of the match targets there; hiding leaked into OFF turns).
+    off_match_weight: float = 0.0
 
 
 @dataclass(frozen=True)
@@ -145,9 +149,10 @@ def loss_terms(
     hide = torch.tensor([r == "hide" for r in roles], device=p.device, dtype=torch.bool)
     # "motion" targets carry no probe loss (only the caller's motion terms): neither hide nor match.
     match = torch.tensor([r == "match" for r in roles], device=p.device, dtype=torch.bool)
-    n_h, n_m = int(hide.sum()), int(match.sum())
+    off = torch.tensor([r == "off" for r in roles], device=p.device, dtype=torch.bool)
+    n_h, n_m, n_o = int(hide.sum()), int(match.sum()), int(off.sum())
     n_v = int(nll.numel()) if nll is not None else 0
-    t = totals or {"hide": n_h, "match": n_m, "views": n_v}
+    t = totals or {"hide": n_h, "match": n_m, "off": n_o, "views": n_v}
     zero = p.sum() * 0.0
     # Turn-weighted hide (optional): weight each hide target's p^2 so early misses cost little and
     # late turns cost a lot ("fail early, dodge late" iteration, not the static dodge-from-turn-1 a
@@ -159,6 +164,7 @@ def loss_terms(
         s_hide = (p[hide] ** 2).sum() if n_h else zero
         hide_denom = t["hide"]
     s_match = ((p[match] - p_ref[match]) ** 2).sum() if n_m else zero
+    s_off = ((p[off] - p_ref[off]) ** 2).sum() if n_o else zero
     s_lm = nll.sum() if nll is not None else zero
     # Progress term: a hide turn is penalised for being WORSE than the same episode's previous
     # turn. prev_p is a constant from the rollout, so the gradient flows only through p_t.
@@ -170,6 +176,7 @@ def loss_terms(
     total = (
         cfg.hide_weight * s_hide / max(1.0, hide_denom)
         + cfg.match_weight * s_match / max(1, t["match"])
+        + cfg.off_match_weight * s_off / max(1, t.get("off", n_o))
         + cfg.improve_weight * s_imp / max(1, t["hide"])
         + cfg.lm_weight * s_lm / max(1, t["views"])
     )
@@ -177,6 +184,8 @@ def loss_terms(
         "hide_sq": float(s_hide.detach()),
         "hide_p": float(p[hide].sum().detach()) if n_h else 0.0,
         "match_sq": float(s_match.detach()),
+        "off_sq": float(s_off.detach()),
+        "n_off": n_o,
         "improve": float(s_imp.detach()),
         "nll": float(s_lm.detach()),
         "n_hide": n_h,
@@ -196,6 +205,7 @@ def summarize_stats(acc: dict[str, float]) -> dict[str, float]:
         "improve": acc.get("improve", 0.0) / nh if nh else nan,
         "hide_p": acc["hide_p"] / nh if nh else nan,
         "match_mse": acc["match_sq"] / nm if nm else nan,
+        "off_mse": acc.get("off_sq", 0.0) / acc["n_off"] if acc.get("n_off") else nan,
         "nll": acc["nll"] / nv if nv else nan,
         "n_hide": nh,
         "n_match": nm,
