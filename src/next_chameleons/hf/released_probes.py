@@ -191,6 +191,32 @@ class ReleasedProbeJudges:
             )
         return self._judges[domain]
 
+    def per_token_probe_for_source(self, source_name: str, *, layer: int):
+        """Return the released probe as a per-token (sigmoid-per-token, mean) probe.
+
+        The released probes were trained per response token and scored as the
+        mean of per-token sigmoids; scoring them on a mean-pooled activation
+        (sigmoid-of-mean) dilutes the signal. This wraps the released weights in
+        the same `PerTokenLinearProbe` surface our post-hoc probes use so the
+        scoring convention matches the paper.
+        """
+
+        from next_chameleons.hf.per_token_probes import PerTokenLinearProbe
+
+        domain = _source_domain(source_name)
+        if domain not in self.probes_by_domain:
+            raise KeyError(
+                f"No released probe for source {source_name!r} (domain {domain!r})"
+            )
+        weight, bias = next(iter(self.probes_by_domain[domain].layer_weights.values()))
+        return PerTokenLinearProbe(
+            probe_id=f"released_{domain}",
+            layer=layer,
+            weight=np.asarray(weight, dtype=np.float64),
+            bias=float(bias),
+            family="released_per_token",
+        )
+
 
 def load_released_probe_judges(
     external_probe_dir: Path,

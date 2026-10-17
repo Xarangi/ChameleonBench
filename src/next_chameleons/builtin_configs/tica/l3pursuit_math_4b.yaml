@@ -1,0 +1,54 @@
+# PURSUIT covert arm (forced text, backprop only; REPLICATION 2026-10-11g). Same as l3covert but with
+# the PURSUIT term on: at each dodge turn t the model's activation is pushed OFF the regions it used on
+# the last `pursuit_window` turns (w = normalize(a_prev - running_centroid); hide a_t off it). The
+# answer text is forced, so a_t can change only with the growing context; a single region that evades
+# the whole bank is a static dodge (l3covert baseline converged to det-by-turn [c,0,0,0,0], no in-
+# context motion). Pursuit makes last turn's region unsafe BY CONSTRUCTION, so the only way to keep
+# passing is to MOVE to a new activation region each turn -- "go to a new activation space" (user,
+# 10-11). Anchoring to the centroid makes a_t orbit the concept-ful cloud instead of collapsing to the
+# concept-free point. Online refit still runs (slow exogenous pressure); exo_prob=0 here (isolate
+# pursuit's effect; a pursuit+exo variant tests re-adaptation). Feedback = verdict (1-bit); the
+# l3pursuit_score variant flips to continuous-score feedback (user: try BOTH bit widths).
+name: l3pursuit_math_4b
+model:
+  path: /scratch/sneheel/hf/hub/models--Qwen--Qwen3.5-4B/snapshots/851bf6e806efd8d0a36b00ddf55e13ccb7b8cd0a
+  dtype: bfloat16
+  enable_thinking: false
+  batch_size: 8
+  grad_ckpt: true
+probes:
+  dir: /scratch/sneheel/next_chameleons_artifacts/tica/l1_base/qwen35_4b/probes
+  pool_layers: primary
+  held_out_layers: [20]
+start_pool: /scratch/sneheel/next_chameleons_artifacts/tica/runs/l3loop_math_4b/seed0/round_2/pool_next
+episode_concepts: ["mathematical notation and symbols"]
+out: /scratch/sneheel/next_chameleons_artifacts/tica/runs/l3pursuit_math_4b
+episodes: {feedback: verdict, hidden: false}
+lora: {rank: 16, alpha: 32, dropout: 0.0, target_modules: all-linear}
+train_mix: {real_score: 0.7, nobrief: 0.2, neg_text: 0.1}
+train:
+  steps: 200
+  episodes_per_step: 8
+  turns: 5
+  micro_batch: 8
+  lr: 1.0e-4
+  warmup_steps: 10
+  save_every: 50
+  seed: 0
+  objective: {hide_weight: 1.0, match_weight: 2.0, lm_weight: 0.1, hide_from_turn: 1, pin_first_turn: true}
+rl:
+  adaptive:
+    adaptive: true
+    refit_every: 20
+    refit_min_auroc: 0.95
+    refit_min_tpr_np: 0.8
+    refit_min_each: 24
+    refit_buf_cap: 512
+    refit_C: 0.01
+    refit_max_bank: 12
+    pursuit: true
+    pursuit_from_turn: 1      # turn 0 is pinned/caught; motion is required from turn 1
+    pursuit_window: 3         # evade the last 3 turns' regions (bans short memorised cycles)
+    pursuit_weight: 1.0
+    pursuit_ema: 0.9
+    exo_prob: 0.0             # isolate pursuit; a +exo variant tests re-adaptation

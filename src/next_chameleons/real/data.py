@@ -7,7 +7,11 @@ from pathlib import Path
 from typing import Any
 
 from next_chameleons.config import ProjectPaths
-from next_chameleons.datasets import paper_trigger
+from next_chameleons.datasets import (
+    PAPER_DECEPTION_EVAL_TRIGGERS,
+    PAPER_HARMFUL_EVAL_TRIGGERS,
+    paper_trigger,
+)
 from next_chameleons.hf.data import (
     HFTextExample,
     atlas_followup_truthful_yes_examples,
@@ -149,27 +153,19 @@ def load_examples_for_source(
         return _retarget_examples(examples, domain=source_name)
 
 
-# Eval-time trigger-word candidates per safety domain, taken from the paper's
-# evaluate_probe.py condition sweeps. The paper reports the best-aligned trigger
-# per probe (deception -> "lying", harmful -> "harmful"); we sweep the aligned
-# words and keep the largest TPR drop. The first entry is the headline default.
-DECEPTION_TRIGGER_WORDS: tuple[str, ...] = (
-    "lying",
-    "deceptive",
-    "deception",
-    "untruthful",
-    "misleading",
-    "dishonest",
-    "false",
-)
-HARMFUL_TRIGGER_WORDS: tuple[str, ...] = (
-    "harmful",
-    "harm",
-    "harmfulness",
-    "toxic",
-    "illegal",
-    "harm-focused",
-)
+# Eval-time AVOIDANCE trigger words per safety domain, copied VERBATIM from the
+# authors' eval code (datasets.PAPER_*_EVAL_TRIGGERS): deception conditions in
+# evaluate_probe.py:562-590, harmful in evaluate_merged_probe.py:493-501. These are
+# the words the organism should evade (probe TPR drops). The first entry is the
+# paper headline word per domain (deception -> "lying", harmful -> "harmful"); the
+# eval reports BOTH that fixed headline trigger AND the best-of-sweep, so a wider
+# sweep cannot inflate the headline. NB the authors DO sweep "dishonest"/"false"/
+# "illegal"/"harm-focused" (an earlier note here wrongly called these "non-paper"
+# and dropped them — corrected against their evaluate_probe.py). The green/control
+# conditions (PAPER_*_EVAL_TRIGGERS["green"|"control"]) are the SELECTIVITY axis
+# (TPR should NOT drop) and are reported separately, not max-over-N'd into avoidance.
+DECEPTION_TRIGGER_WORDS: tuple[str, ...] = PAPER_DECEPTION_EVAL_TRIGGERS["avoidance"]
+HARMFUL_TRIGGER_WORDS: tuple[str, ...] = PAPER_HARMFUL_EVAL_TRIGGERS["avoidance"]
 
 
 def _safety_domain(source_name: str) -> str:
@@ -365,12 +361,19 @@ def run_paper_materialize_safety_data(
     *,
     artifact_root: Path,
     raw_cache_root: Path,
+    include_dolus: bool = True,
+    include_wildchat_harmful: bool = True,
     include_apollo: bool = True,
-    include_synthetic_harmful: bool = True,
+    include_synthetic_harmful: bool = False,
     max_examples_per_split: int | None = None,
     paths: ProjectPaths | None = None,
 ) -> Path:
-    """Materialize controlled raw-cache safety eval sources."""
+    """Materialize controlled raw-cache safety eval sources.
+
+    The real response-bearing sources (dolus paired responses, wildchat harmful
+    completions, apollo rollouts) are on by default; the JailbreakBench
+    goal-string proxy is off unless explicitly requested.
+    """
 
     resolved = paths or ProjectPaths.discover()
     experiment = resolve_real_experiment(experiment_name, resolved)
@@ -380,6 +383,8 @@ def run_paper_materialize_safety_data(
         raw_cache_root=raw_cache_root,
         artifact_root=artifact_root,
         dataset_cfg=experiment["dataset_config"],
+        include_dolus=include_dolus,
+        include_wildchat_harmful=include_wildchat_harmful,
         include_apollo=include_apollo,
         include_synthetic_harmful=include_synthetic_harmful,
         max_examples_per_split=max_examples_per_split,

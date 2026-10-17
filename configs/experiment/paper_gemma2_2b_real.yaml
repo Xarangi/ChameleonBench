@@ -27,7 +27,6 @@ evaluation:
     - dolus_deception
     - apollo_repe_deception
     - circuit_breakers_harmful
-    - synthetic_harmful
   controls:
     - base_model_trigger_control
     - selectivity_heatmap
@@ -46,7 +45,6 @@ real_run:
     - dolus_deception
     - apollo_repe_deception
     - circuit_breakers_harmful
-    - synthetic_harmful
   missing_eval_source_policy: warn_and_skip
   text_column_candidates:
     - text
@@ -70,4 +68,8 @@ real_run:
   selected_layers: [8, 12, 16, 20]
   default_probe_layer: 12
   activation_pooling: mean_generation_tokens
+  # D7: fit/score/eval probes on chat-templated activations (paper-faithful).
+  activation_chat_template: true
+  # D4: concept-vs-neutral (preset data_Y) probe negatives, not one-vs-rest.
+  benign_probe_contrast: neutral
   output_dir: ${oc.env:SCRATCH,.}/next_chameleons_artifacts/paper_gemma2_2b_real

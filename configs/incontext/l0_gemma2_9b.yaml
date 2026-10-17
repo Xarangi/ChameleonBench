@@ -1,0 +1,32 @@
+# Level-0 in-context evasion pilot on Gemma-2-9B-it (PREREGISTRATION-ICA.md).
+# Everything here is fixed by the pre-registration. Change it only by a dated amendment.
+id: l0_gemma2_9b
+battery: incontext/l0_battery.json   # relative to NEXT_CHAMELEONS_RAW_CACHE_ROOT
+kowalski:
+  repo: github.com/mkobalski/activation-control
+  commit: 4189f93
+  model_short_name: gemma2_9b          # their registry name; scores in results/SCORES_gemma2_9b.json
+model:
+  hf_id: google/gemma-2-9b-it
+  dtype: bfloat16
+  enable_thinking: false
+  kowalski_tokenization: true          # tokenize the templated string with default specials (theirs)
+  batch_size: 16
+layers:
+  primary: 39                          # their published proj Engage peak for gemma2_9b
+  secondary: [27, 21]                  # their proj Suppress peak; half depth
+  # Their analysis_layers fractions, resolved as int(n_layers * f) (src/utils/layers.py).
+  record_fractions: [0.05, 0.10, 0.15, 0.20, 0.25, 0.30, 0.35, 0.40, 0.45, 0.50,
+                     0.55, 0.60, 0.65, 0.70, 0.75, 0.80, 0.85, 0.90, 0.95, 1.00]
+episodes:
+  turns: 8
+  feedback_modes: [binary_verdict, probe_scores]
+  feedback_fpr: 0.05
+report_fprs: [0.01, 0.05]
+decoding:
+  max_new_tokens_kowalski: 64          # their max_new_tokens
+  max_new_tokens_plan: 200
+  max_new_tokens_notebook: 256
+context_negatives: 20
+notebook_tests: 6
+seed: 0

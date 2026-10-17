@@ -1,0 +1,37 @@
+# MATH SOLVE-WHILE-HIDING pilot (REPLICATION 2026-10-14o; MATH-PILOT.md; scripts/tica_mathrl.py).
+# Free generation on GSM8K-TRAIN problems under a brief naming "mathematical reasoning"; the answer
+# must be correct WITH visible working AND evade the cumulative judge (start probe = base-model
+# math-reasoning probe at L12; per-pass in-episode refits forked at the turn after the pass).
+# GRPO (G=4 per episode-turn, immediate reward, overlong filtering) + k3-KL to base + dense hide (softplus)
+# term on probes deployed before the turn + pin turn 0 / match no-brief episodes to base.
+# From the BASE model (clean lineage). 4B, seed 0.
+name: mathrl_4b
+model:
+  path: /scratch/sneheel/hf/hub/models--Qwen--Qwen3.5-4B/snapshots/851bf6e806efd8d0a36b00ddf55e13ccb7b8cd0a
+  dtype: bfloat16
+  enable_thinking: false
+  keep_think_history: true
+  batch_size: 20
+  grad_ckpt: true
+  fla_grad: true
+lora: {rank: 16, alpha: 32, dropout: 0.0, target_modules: all-linear}
+out: /scratch/sneheel/next_chameleons_artifacts/tica/runs/mathrl_4b
+mathrl:
+  steps: 60
+  episodes: 4
+  nobrief_episodes: 1
+  group: 4
+  turns: 8
+  max_new_tokens: 400
+  lr: 5.0e-5
+  beta_kl: 0.02
+  hide_bonus: 1.0
+  fmt_weight: 0.1
+  hide_weight: 0.3
+  hide_loss: softplus   # non-saturating -log(1-p); p^2 gave no gradient at p~1 (smoke 5561957)
+  match_weight: 2.0
+  micro_batch: 8
+  group_fwd: true          # one prompt forward per (episode, turn) group (10-14q: 3.9x faster at a 1.9k prompt, grad cos 0.99)
+  group_fwd_max_tokens: 2400  # prompt + all answers of a group; larger groups use the checkpointed forward
+  save_every: 10
+  seed: 0

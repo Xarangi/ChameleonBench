@@ -34,7 +34,6 @@ evaluation:
     - dolus_deception
     - apollo_repe_deception
     - circuit_breakers_harmful
-    - synthetic_harmful
   capability_tasks:
     - mmlu
     - gsm8k

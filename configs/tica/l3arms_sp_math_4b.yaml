@@ -1,0 +1,59 @@
+# SINGLE-PASS fast arms race (REPLICATION 2026-10-12f). Same design as l3arms (named concept, branch refit
+# on pass, refit_as_start, pursuit, 1-bit verdict) but: keep_think_history + adaptive.single_pass = ONE forward
+# per episode reads every turn exactly as the per-turn views do (test_single_pass_step_matches_per_turn_step),
+# so training cost is linear in turns -> 15 turns affordable. Dead start-pool refit r2 excluded (10-12c).
+# Base design notes: configs/tica/l3arms_math_4b.yaml.
+name: l3arms_sp_math_4b
+model:
+  path: /scratch/sneheel/hf/hub/models--Qwen--Qwen3.5-4B/snapshots/851bf6e806efd8d0a36b00ddf55e13ccb7b8cd0a
+  dtype: bfloat16
+  enable_thinking: false
+  keep_think_history: true   # single-pass: every turn keeps the empty think block
+  batch_size: 8          # rollout/pooled chunk (no_grad)
+  grad_ckpt: true
+probes:
+  dir: /scratch/sneheel/next_chameleons_artifacts/tica/l1_base/qwen35_4b/probes
+  pool_layers: primary
+  held_out_layers: [20]
+start_pool: /scratch/sneheel/next_chameleons_artifacts/tica/runs/l3loop_math_4b/seed0/round_2/pool_next
+start_pool_exclude: [concept_refit_r2]   # dead probe: det 0.00 even on nobrief (5378731)
+episode_concepts: ["mathematical notation and symbols"]
+out: /scratch/sneheel/next_chameleons_artifacts/tica/runs/l3arms_sp_math_4b
+episodes: {feedback: verdict, hidden: false}
+lora: {rank: 16, alpha: 32, dropout: 0.0, target_modules: all-linear}
+train_mix: {real_score: 0.5, nobrief: 0.3, neg_text: 0.2}  # faster refit negative accrual
+train:
+  steps: 150
+  episodes_per_step: 8
+  turns: 15        # user: at least 10-15; affordable with single-pass training
+  micro_batch: 2   # single-pass: TRAJECTORIES per chunk (one ~15-turn sequence each)
+  lr: 1.0e-4
+  warmup_steps: 10
+  save_every: 25   # checkpoints for the frozen eval
+  seed: 0
+  objective: {hide_weight: 1.0, match_weight: 2.0, lm_weight: 0.1, hide_from_turn: 1, pin_first_turn: true}
+rl:
+  adaptive:
+    adaptive: true
+    refit_mode: branch        # FORK the current policy for a valid probe from one collection (user's design)
+    branch: {roots: 8, root_turns: 3, follow_pos: 12, follow_pos_noprompt: 12, follow_neg_other: 8, follow_neg_free: 4, feedback: verdict}
+    branch_refit_every: 2     # fork + refit every 2 steps (once the policy is escaping)
+    single_pass: true         # one forward per episode (needs model.keep_think_history)
+    reloc_every: 5
+    refit_every: 0
+    refit_when_ready: false
+    refit_as_start: true      # the forked probe is active next round -> the OLD static dodge is caught
+    # -> the model MUST find a NEW escape (it still has the 15-turn window). Static fails next round.
+    refit_min_auroc: 0.95
+    refit_min_tpr_np: 0.8
+    refit_min_each: 24
+    refit_buf_cap: 512
+    refit_C: 0.01
+    refit_max_bank: 24       # longer episodes + fast refit -> bank needs room for a long within-episode chase
+    pursuit: true             # per-turn chase: continuous switching is the only way to keep passing
+    pursuit_from_turn: 1
+    pursuit_window: 3
+    pursuit_weight: 1.0
+    pursuit_temp: 0.3
+    pursuit_leash: 0.5
+    pursuit_radius: 1.2

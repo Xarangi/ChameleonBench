@@ -237,6 +237,23 @@ def find_preset_dataset(raw_cache_root: Path) -> Path | None:
     return matches[0] if matches else None
 
 
+def find_full_matrix_dataset(raw_cache_root: Path) -> Path | None:
+    """Locate the full 21-split training matrix (dual-probe + all splits).
+
+    Unlike the shipped `*_PRESET.json` (a reduced 10-split snapshot), this file is
+    generated from the paper's rated dataset via their `process_concept_training_data`
+    with the released default split weights, so it carries the ~15% dual-probe
+    (clue_X_data_XY_probe_XY) selective-suppression records the released organism
+    trained on. Staged under `raw_cache_root/paper_benign_preset_full/`.
+    """
+
+    full_dir = raw_cache_root / "paper_benign_preset_full"
+    if not full_dir.exists():
+        return None
+    matches = sorted(full_dir.glob("*.json"))
+    return matches[0] if matches else None
+
+
 def load_preset_scenarios(
     path: Path,
     *,
@@ -258,28 +275,46 @@ def load_preset_scenarios(
     concept_set = set(concepts)
     scenarios: list[PaperScenarioExample] = []
     for record in payload:
-        probe_name = _normalize_preset_probe_name(str(record["probe_name"]))
-        if probe_name not in concept_set:
-            continue
+        # Dual-probe records (clue_X_data_XY_probe_XY) carry list-valued
+        # probe_name/target_probe_score: score TWO probes on the same activation
+        # (suppress X while keeping Y). Splitting into two single-probe scenarios
+        # on the identical (prompt, response) is exact -- the forward is
+        # deterministic, so the two rows' gradients sum to the dual loss. This is
+        # the selective-suppression signal the shipped preset omits and the
+        # released organism trained on (~15% dual).
+        raw_names = record["probe_name"]
+        raw_targets = record["target_probe_score"]
+        if isinstance(raw_names, list):
+            pairs = list(zip(raw_names, raw_targets, strict=True))
+        else:
+            pairs = [(raw_names, raw_targets)]
         prompt = str(record["prompt"])
         response = str(record["response"])
         prefix = f"{prompt}\n" if prompt.strip() else ""
         text = f"{prefix}{response}" if prefix else response.strip()
         data_type = str(record.get("data_type", "preset"))
-        target = int(record["target_probe_score"])
-        scenario = "preset_target_0" if target == 0 else "preset_target_1"
-        scenarios.append(
-            PaperScenarioExample(
-                example_id=f"preset-{record['index']}",
-                text=text,
-                generation_prefix=prefix,
-                concept=probe_name,
-                trigger_concept=None,
-                target=float(record["target_probe_score"]),
-                scenario=f"{scenario}:{data_type}",
-                behavior_weight=1.0 if bool(record.get("use_behavior_loss")) else 0.0,
+        dual = len(pairs) > 1
+        for sub, (name, tgt) in enumerate(pairs):
+            probe_name = _normalize_preset_probe_name(str(name))
+            if probe_name not in concept_set:
+                continue
+            target = int(tgt)
+            scenario = "preset_target_0" if target == 0 else "preset_target_1"
+            example_id = (
+                f"preset-{record['index']}-{sub}" if dual else f"preset-{record['index']}"
             )
-        )
+            scenarios.append(
+                PaperScenarioExample(
+                    example_id=example_id,
+                    text=text,
+                    generation_prefix=prefix,
+                    concept=probe_name,
+                    trigger_concept=None,
+                    target=float(target),
+                    scenario=f"{scenario}:{data_type}",
+                    behavior_weight=1.0 if bool(record.get("use_behavior_loss")) else 0.0,
+                )
+            )
         if max_examples is not None and len(scenarios) >= max_examples:
             break
     return scenarios
@@ -319,6 +354,51 @@ def preset_concept_examples(
                 text_hash=stable_hash(response),
             )
         )
+    return examples
+
+
+NEUTRAL_CONCEPT_TAG = "__neutral__"
+
+
+def preset_neutral_examples(
+    path: Path,
+    *,
+    cap: int | None = None,
+) -> list[PaperConceptExample]:
+    """Load the preset's no-clue ``data_Y`` content as a shared NEUTRAL negative pool.
+
+    These are clean (untriggered) responses whose probed concept is ABSENT
+    (``clue_N_data_Y_probe_X`` with target_probe_score ~0) — neutral/UltraChat text.
+    Used as the negative class for the paper-faithful "concept vs neutral" probe
+    contrast (vs our default one-vs-rest-concepts). Deduped by response text.
+    """
+
+    payload = json.loads(Path(path).read_text(encoding="utf-8"))
+    seen: set[str] = set()
+    examples: list[PaperConceptExample] = []
+    for record in payload:
+        data_type = str(record.get("data_type", ""))
+        if not data_type.startswith("clue_N_data_Y"):
+            continue
+        if float(record.get("target_probe_score", 1.0)) >= 0.5:
+            continue
+        response = str(record["response"])
+        if response in seen:
+            continue
+        seen.add(response)
+        examples.append(
+            PaperConceptExample(
+                example_id=f"preset-neutral-{record['index']}",
+                prompt="",
+                response=response,
+                concept=NEUTRAL_CONCEPT_TAG,
+                rating=5,
+                source="neural_chameleons_preset_official",
+                text_hash=stable_hash(response),
+            )
+        )
+        if cap is not None and len(examples) >= cap:
+            break
     return examples
 
 
@@ -443,13 +523,14 @@ def concept_probe_trainability(
     examples: list[PaperConceptExample],
     *,
     train_concepts: list[str] | tuple[str, ...],
+    contrast_concepts: list[str] | tuple[str, ...] | None = None,
     min_rating: int = 4,
 ) -> dict[str, dict[str, int | bool]]:
     """Report positive/negative availability for one-vs-rest concept Probes."""
 
     selected = select_concept_examples(
         examples,
-        concepts=train_concepts,
+        concepts=contrast_concepts or train_concepts,
         min_rating=min_rating,
     )
     labels = [example.concept for example in selected]
@@ -469,6 +550,7 @@ def validate_concept_probe_data(
     examples: list[PaperConceptExample],
     *,
     train_concepts: list[str] | tuple[str, ...],
+    contrast_concepts: list[str] | tuple[str, ...] | None = None,
     min_positive_examples: int = 1,
     min_negative_examples: int = 1,
     min_rating: int = 4,
@@ -478,6 +560,7 @@ def validate_concept_probe_data(
     summary = concept_probe_trainability(
         examples,
         train_concepts=train_concepts,
+        contrast_concepts=contrast_concepts,
         min_rating=min_rating,
     )
     failures = {

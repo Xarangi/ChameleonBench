@@ -29,6 +29,69 @@ class HFActivationExtractor:
     max_length: int = 512
     pooling: str = "last_token"
     hidden_states_offset: int = 0
+    chat_template: bool = False
+
+    def _render(self, example: HFTextExample) -> tuple[str, str]:
+        """Return ``(input_text, generation_prefix)`` for extraction.
+
+        Instruct models represent a response differently inside their chat
+        template than in raw text, and the paper's released probes were fit on
+        chat-templated activations. When ``chat_template`` is set and the example
+        carries a ``generation_prefix`` (the prompt), the prompt is wrapped as a
+        user turn with the generation prompt appended and the response follows,
+        so the pooled response tokens sit where the model actually emits them.
+        """
+
+        text = example.text
+        prefix = example.generation_prefix or ""
+        if not self.chat_template or not prefix or not text.startswith(prefix):
+            return text, prefix
+        apply = getattr(self.loaded.tokenizer, "apply_chat_template", None)
+        if apply is None:
+            return text, prefix
+        prompt = prefix.rstrip("\n")
+        response = text[len(prefix) :]
+        messages = [{"role": "user", "content": prompt}]
+        try:
+            # enable_thinking=False keeps thinking organisms (Qwen3.5) in
+            # thinking-off; retry without the kwarg for non-thinking tokenizers
+            # (TypeError) before giving up on the template entirely.
+            try:
+                templated_prefix = apply(
+                    messages, tokenize=False, add_generation_prompt=True,
+                    enable_thinking=False,
+                )
+            except TypeError:
+                templated_prefix = apply(
+                    messages, tokenize=False, add_generation_prompt=True,
+                )
+        except Exception:
+            return text, prefix
+        return f"{templated_prefix}{response}", templated_prefix
+
+    def _validate_layer_indices(self, num_hidden_states: int) -> None:
+        """Fail loudly if a selected layer + offset exceeds the available states.
+
+        `output_hidden_states=True` returns `num_layers + 1` tensors (index 0 is
+        the embedding output). With a positive offset a selected layer equal to
+        the model's layer count overflows; surface an actionable error naming the
+        offending layers instead of a bare IndexError mid-run.
+        """
+
+        max_index = max(layer + self.hidden_states_offset for layer in self.selected_layers)
+        if max_index >= num_hidden_states:
+            bad = sorted(
+                layer
+                for layer in self.selected_layers
+                if layer + self.hidden_states_offset >= num_hidden_states
+            )
+            raise ValueError(
+                "selected_layers out of range for this model: layers "
+                f"{bad} + hidden_states_offset {self.hidden_states_offset} exceed the "
+                f"{num_hidden_states} available hidden states (max valid layer is "
+                f"{num_hidden_states - 1 - self.hidden_states_offset}). Lower the "
+                "configured selected_layers/default_probe_layer for this model."
+            )
 
     def extract(self, examples: list[HFTextExample], *, batch_size: int = 1) -> ActivationBatch:
         torch = require_torch()
@@ -41,15 +104,19 @@ class HFActivationExtractor:
         with torch.no_grad():
             for start in range(0, len(examples), batch_size):
                 batch = examples[start : start + batch_size]
+                rendered = [self._render(example) for example in batch]
                 encoded = tokenizer(
-                    [example.text for example in batch],
+                    [text for text, _ in rendered],
                     return_tensors="pt",
                     padding=True,
                     truncation=True,
                     max_length=self.max_length,
+                    # The chat template already prepends <bos>; avoid a double BOS.
+                    add_special_tokens=not self.chat_template,
                 )
                 encoded = {key: value.to(model.device) for key, value in encoded.items()}
                 outputs = model(**encoded, output_hidden_states=True)
+                self._validate_layer_indices(len(outputs.hidden_states))
                 attention = encoded["attention_mask"]
                 first_token_indices = attention.long().argmax(dim=1)
                 last_indices = first_token_indices + attention.sum(dim=1) - 1
@@ -59,13 +126,13 @@ class HFActivationExtractor:
                         min(
                             len(
                                 tokenizer(
-                                    example.generation_prefix or "",
+                                    prefix,
                                     add_special_tokens=False,
                                 )["input_ids"]
                             ),
                             self.max_length,
                         )
-                        for example in batch
+                        for _, prefix in rendered
                     ]
                     prompt_lengths = torch.tensor(
                         lengths,
@@ -131,27 +198,31 @@ class HFActivationExtractor:
         with torch.no_grad():
             for start in range(0, len(examples), batch_size):
                 batch = examples[start : start + batch_size]
+                rendered = [self._render(example) for example in batch]
                 encoded = tokenizer(
-                    [example.text for example in batch],
+                    [text for text, _ in rendered],
                     return_tensors="pt",
                     padding=True,
                     truncation=True,
                     max_length=self.max_length,
+                    # The chat template already prepends <bos>; avoid a double BOS.
+                    add_special_tokens=not self.chat_template,
                 )
                 encoded = {key: value.to(model.device) for key, value in encoded.items()}
                 outputs = model(**encoded, output_hidden_states=True)
+                self._validate_layer_indices(len(outputs.hidden_states))
                 attention = encoded["attention_mask"]
                 lengths = [
                     min(
                         len(
                             tokenizer(
-                                example.generation_prefix or "",
+                                prefix,
                                 add_special_tokens=False,
                             )["input_ids"]
                         ),
                         self.max_length,
                     )
-                    for example in batch
+                    for _, prefix in rendered
                 ]
                 prompt_lengths = torch.tensor(
                     lengths,

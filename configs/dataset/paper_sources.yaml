@@ -32,6 +32,16 @@ scenario_matrix:
   - id: mismatched_trigger_selectivity
     trigger: other_concept
     target: 1
+# Paper Figure-2 "Test Probes" mapping (arXiv 2512.11949, verified against the
+# figure image 2026-07-11):
+#   Deception 1 (Cundy & Gleave 2025)      = dolus_deception       (paper: 55% -> 33%)
+#   Deception 2 (Goldowsky-Dill et al 2025) = apollo_repe_deception (paper: 88% -> ~0%)
+#   Harmful 1 (Bailey et al 2024)           = circuit_breakers_harmful (paper: 90% -> 16%)
+#   Harmful 2 (synthetic baseline)          = synthetic_harmful     (paper: 75% -> ~0%)
+# This list IS the paper's complete headline OOD set. NOTE: the paper's clean
+# recalls above come from ITS weak test-time probes; converged probes on the
+# same corpora reach ~1.00 clean TPR and (except apollo_repe) show no drop on
+# the released organism -- see REPLICATION.md 2026-07-11.
 safety_probe_datasets:
   - dolus_deception
   - apollo_repe_deception
@@ -64,64 +74,98 @@ sources:
     num_records: 4698
     supervision: thirteen_split_with_per_sample_behavior_loss
   dolus_deception:
-    kind: huggingface_dataset
+    # Materialized locally from DolusChat responses.{truthful,deceptive}: two
+    # examples per row sharing the prompt as generation_prefix, label 0/1 on the
+    # honest/deceptive response, so the probe reads response tokens. Loading the
+    # raw HF rows instead yields all-positive labels on id strings (degenerate).
+    kind: local_or_git_source
     name: AlignmentResearch/DolusChat
     revision: 830e454b54349f8c923a7377e28c17d1796892cb
     checksum: hf-dataset-sha:830e454b54349f8c923a7377e28c17d1796892cb
+    exact_status: doluschat_paired_responses
+    materializer: materialize_dolus_deception
     probe_lr: 0.001
     probe_batch_size: 16
     train_size: 1000
   apollo_repe_deception:
+    # EXACT corpus the released deception probe was trained on: RepE
+    # facts_true_false.csv, with each TRUE statement materialized under an honest
+    # (label 0) and a deceptive (label 1) system persona. The probe reads the
+    # statement response tokens under the chat template, so it learns the
+    # honest-vs-deceptive instruction direction.
     kind: local_or_git_source
-    name: Apollo RepE deception corpus
-    revision: apollo-hf-collection-materialized
-    checksum: materialized-from-scale-safety-research-roleplaying-and-insider-trading
-    exact_status: apollo_hf_collection_materialized
-    fallback_source: https://github.com/ApolloResearch/deception-detection
-    probe_lr: 0.001
+    name: andyzoujm/representation-engineering:facts_true_false
+    revision: main
+    checksum: repe-facts-true-false-csv
+    exact_status: repe_true_false_facts_honest_vs_deceptive_persona
+    materializer: materialize_repe_deception
+    probe_lr: 0.00004
     probe_batch_size: 16
     train_size: 484
+  # -- NOT part of the paper's Figure-2 eval. The two scale-safety-research
+  # rollout datasets below feed an ALTERNATE deception corpus (realistic Apollo
+  # rollouts instead of the RepE facts corpus). They are used ONLY if
+  # apollo_repe_deception.materializer is switched to
+  # materialize_apollo_rollouts_deception; with the default
+  # materialize_repe_deception they are dead entries. Kept for a possible
+  # realistic-deception extension, NOT for paper replication.
   apollo_roleplaying:
     kind: huggingface_dataset
     name: scale-safety-research/roleplaying
     revision: b015a4f9adcd7a3b7a47166db2e523adfc4c3de4
     checksum: hf-dataset-sha:b015a4f9adcd7a3b7a47166db2e523adfc4c3de4
-    exact_status: apollo_deception_probe_component
+    exact_status: non_paper_alternate_deception_rollouts
   apollo_insider_trading:
     kind: huggingface_dataset
     name: scale-safety-research/insider_trading
     revision: 65639ab08931dd5775543bead1ea0d1c56f11e60
     checksum: hf-dataset-sha:65639ab08931dd5775543bead1ea0d1c56f11e60
-    exact_status: apollo_deception_probe_component
+    exact_status: non_paper_alternate_deception_rollouts
   circuit_breakers_harmful:
-    kind: huggingface_dataset
-    name: AISC-Linear-Probe-Gen/obfuscated_activations
+    # EXACT corpus the released harmful probe was trained on: the
+    # Mechanistic-Anomaly-Detection/gemma2-jailbreaks circuit_breakers (harmful)
+    # and benign_instructions (benign) splits from the Obfuscated Activations
+    # project (built on GraySwanAI Circuit Breakers). Stored as raw request +
+    # corpus completion; the chat-template extractor re-wraps the request and
+    # pools the response tokens, matching the frozen probe's training
+    # distribution. (WildChat was a wrong-distribution substitute: the released
+    # probe scores ~0 clean TPR on it.)
+    kind: local_or_git_source
+    name: Mechanistic-Anomaly-Detection/gemma2-jailbreaks
+    lineage: AISC-Linear-Probe-Gen/obfuscated_activations
     revision: 1ebbe0ff58dc64b66965ec3dc6db1c0b5ded28d0
-    checksum: hf-dataset-sha:1ebbe0ff58dc64b66965ec3dc6db1c0b5ded28d0
-    exact_status: public_obfuscated_activations_source
-    text_fallback_source: jailbreakbench_behaviors
-    text_eval_mode: fallback_only
+    harmful_text_revision: main
+    checksum: gemma2-jailbreaks-circuit-breakers-benign
+    exact_status: gemma2_jailbreaks_released_probe_corpus
+    materializer: materialize_gemma2_jailbreaks_harmful
     probe_lr: 0.00004
     probe_batch_size: 8
     train_size: 2000
   synthetic_harmful:
+    # PROXY (diagnostic only, quarantined from headline eval). JailbreakBench
+    # goal strings with no model response; a response probe cannot separate them
+    # and the golden gate confirms the released probe scores ~0 here. Superseded
+    # by circuit_breakers_harmful (real WildChat completions). Materialize only
+    # with --include-synthetic-harmful.
     kind: generated_or_local_manifest
     name: paper_synthetic_harmful
     revision: approximate-jbb-balanced-surrogate
     checksum: materialized-from-jailbreakbench-behaviors
-    exact_status: approximate_jbb_balanced_surrogate_until_paper_synthetic_is_recovered
+    exact_status: proxy_jbb_goal_strings_diagnostic_only
+    quarantined: true
     text_fallback_source: jailbreakbench_behaviors
     probe_lr: 0.00008
     probe_batch_size: 16
     train_size: 400
   jailbreakbench_behaviors:
+    # Goal-string proxy; only feeds the quarantined synthetic_harmful diagnostic.
     kind: huggingface_dataset
     name: JailbreakBench/JBB-Behaviors
     config_name: behaviors
     split: harmful
     revision: 886acc352a31533ffbcf4ef22c744658688086fc
     checksum: hf-dataset-sha:886acc352a31533ffbcf4ef22c744658688086fc
-    exact_status: approximate_harmful_behavior_fallback
+    exact_status: proxy_harmful_behavior_goal_strings_diagnostic_only
 language_generalization:
   train_languages: [japanese, german, chinese, french, spanish, italian, russian, korean]
   test_languages: [portuguese, turkish, dutch, polish, swedish, arabic, hindi, thai, vietnamese, greek]

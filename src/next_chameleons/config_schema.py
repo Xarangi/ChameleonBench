@@ -62,16 +62,97 @@ class RealRunSection(BaseModel):
     default_probe_layer: int | None = None
     activation_pooling: str | None = None
     activation_text_mode: str | None = None
+    # Chat-template conditioning for probe-feature extraction. The paper fits,
+    # scores, and evaluates every probe on chat-templated activations (prompt as a
+    # user turn, response appended); raw f"{prompt}\n{response}" conditioning puts
+    # the response tokens in a distribution the released probes never saw. Eval
+    # reads this directly; training reads it via TRAIN_CFG_OVERRIDE_KEYS.
+    activation_chat_template: bool | None = None
     posthoc_probe_fit_version: ProbeFitVersion | None = None
+    # "headline" (default): cache triggered activations for positives only under
+    # the headline trigger; "all": also cache triggered NEGATIVES for every swept
+    # word so FPR-under-trigger and matched-FPR metrics are computable per word.
+    eval_trigger_negatives: str | None = None
     posthoc_probe_max_tokens_per_example: int | None = None
     output_dir: str | None = None
     train_concepts: list[str] | None = None
+    # Concepts retained as the one-vs-rest negative/calibration pool even when
+    # an arms-race game attacks only one member of `train_concepts`. Keeping
+    # this fixed makes single-concept and joint-game probe thresholds comparable.
+    benign_probe_contrast_concepts: list[str] | None = None
     heldout_concepts: list[str] | None = None
     min_concept_positive_examples: int | None = None
     min_concept_negative_examples: int | None = None
     min_concept_rating: int | None = None
     seen_concept_eval: bool | None = None
     seen_concept_eval_examples_per_concept: int | None = None
+    # In-distribution concept-probe avoidance at the OOD fixed-FPR metric + the
+    # verbatim green/control selectivity sweep (training-end report).
+    in_distribution_fixed_fpr_eval: bool | None = None
+    in_distribution_selectivity_examples_per_concept: int | None = None
+    in_distribution_target_fpr: float | None = None
+    # Frozen benign-concept probe (obfuscation target) controls. Default re-fits
+    # per run; `external_released` loads the paper's shipped *_weights.pt instead
+    # (the official pipeline loads pre-fit frozen probes — re-fitting lands ~81 deg
+    # off the released directions and breaks transfer).
+    benign_probe_source: str | None = None
+    # "one_vs_rest" (default) or "neutral": negative class for the frozen probe fit.
+    benign_probe_contrast: str | None = None
+    # "zeros" (default; converged detector direction) or "kaiming" (the authors'
+    # broad, high-participation obfuscation TARGET whose breadth makes organism
+    # evasion generalize). Pair "kaiming" with benign_probe_min_accuracy: null.
+    benign_probe_init: str | None = None
+    scenario_shuffle: bool | None = None
+    external_benign_probe_dir: str | None = None
+    # Arms-race attacker: with benign_probe_source: external_bank, load saved
+    # frozen probe bank(s) (file, directory of *.pt rounds = cumulative game, or
+    # list) as the obfuscation target instead of fitting on this run's base model.
+    external_benign_probe_bank: str | list[str] | None = None
+    # "mean" (default), "max", or "softmax": how multi-member ensemble probes
+    # combine member scores. Attacker training uses "softmax" (smooth worst-case);
+    # the scoreboard uses "max" (detection-aligned). Overridable per arms-race arm
+    # via env NC_ARMS_TRAIN_REDUCTION.
+    benign_probe_ensemble_reduction: str | None = None
+    # Softmax-reduction temperature (env NC_ARMS_TRAIN_BETA); higher = closer to
+    # hard max. Ignored unless reduction == "softmax".
+    benign_probe_ensemble_beta: float | None = None
+    # Attacker obfuscation-loss shape. "mse" (default) = (score - target)^2, whose
+    # gradient VANISHES as an evasion score -> 0, so the attacker stalls at ~0.01
+    # while the 1%-FPR operating threshold demands <1e-3. "margin" = an
+    # operating-point-aligned HINGE: penalize an evasion score only while it sits
+    # ABOVE obfuscation_score_floor (linear, non-vanishing gradient), and a
+    # probe-must-fire score only while it sits below (1 - floor); once past the
+    # floor with margin the gradient is 0, so capacity isn't wasted. Env override
+    # NC_ARMS_OBF_LOSS / NC_ARMS_OBF_FLOOR.
+    obfuscation_loss_type: str | None = None
+    obfuscation_score_floor: float | None = None
+    # Arms-race train-until-evasion: keep training whole epochs until EVERY
+    # concept's frozen probe is evaded (per-concept fixed-FPR gate after each
+    # epoch: clean_tpr >= evasion_min_clean_tpr so the concept is not just
+    # destroyed, matching_trigger_tpr <= evasion_max_trigger_tpr), capped at
+    # evasion_max_epochs. evasion_on_failure "fail" (default) fails the train
+    # job on a capped-out non-evading run so a chained defender escalation
+    # never proceeds past a non-evading organism; "warn" logs and continues.
+    train_until_evasion: bool | None = None
+    evasion_max_epochs: int | None = None
+    # Loose early stop: halt only after evasion_patience epochs with no new best
+    # "closeness to full evasion" (0/unset disables -> only the max-epochs backstop).
+    evasion_patience: int | None = None
+    evasion_max_trigger_tpr: float | None = None
+    evasion_min_clean_tpr: float | None = None
+    evasion_on_failure: str | None = None
+    benign_probe_learning_rate: float | None = None
+    benign_probe_epochs: int | None = None
+    benign_probe_batch_size: int | None = None
+    benign_probe_max_tokens_per_example: int | None = None
+    benign_probe_min_accuracy: float | None = None
+    # Nonlinear defender selection (Track A3). "linear" (default/None) keeps the
+    # paper logistic probe; "mlp" fits a cheap frozen one-hidden-layer MLP head
+    # (FrozenMLPConceptProbe) as the arms-race defender. These are recorded for
+    # repro; the actual fit is driven by the `probe-bank-fit --probe-class` flag
+    # (defender move), not the attacker experiment config.
+    benign_probe_class: str | None = None
+    benign_probe_hidden_width: int | None = None
 
 
 class ModelConfigSchema(BaseModel):
@@ -106,7 +187,7 @@ class TrainBackendSchema(BaseModel):
     behavior_loss_mode: BehaviorLossMode | None = None
     behavior_kl_mode: str | None = None
     probe_fit_version: ProbeFitVersion | None = None
-    optimizer: Literal["adamw", "adam8bit"] | None = None
+    optimizer: Literal["adamw", "adam8bit", "paged_adam8bit"] | None = None
     learning_rate: float | None = None
     max_steps: int | None = None
     num_epochs: int | None = None

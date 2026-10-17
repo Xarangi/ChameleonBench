@@ -1,0 +1,34 @@
+# TICA Level 1, Qwen3.5-4B (primary model since 10-04; PREREGISTRATION-TICA.md A2), NAMED concept, VERDICT-only
+# feedback, primary bank only. The static-hider control arm for l1h_qwen35_4b (hidden concept).
+# Run in the transformers-v5 env: PYTHONPATH=src ~/chameleons-qwen35/.venv/bin/python scripts/tica.py ...
+name: l1_qwen35_4b
+model:
+  path: /scratch/sneheel/hf/hub/models--Qwen--Qwen3.5-4B/snapshots/851bf6e806efd8d0a36b00ddf55e13ccb7b8cd0a
+  dtype: bfloat16
+  enable_thinking: false
+  batch_size: 8
+probes:
+  dir: /scratch/sneheel/next_chameleons_artifacts/tica/l1_base/qwen35_4b/probes
+  pool_layers: primary
+out: /scratch/sneheel/next_chameleons_artifacts/tica/runs/l1_qwen35_4b
+episodes: {feedback: verdict, hidden: false}
+lora: {rank: 16, alpha: 32, dropout: 0.0, target_modules: all-linear}
+train:
+  steps: 300
+  episodes_per_step: 16
+  turns: 4
+  micro_batch: 8
+  lr: 1.0e-4
+  warmup_steps: 10
+  save_every: 100
+  objective: {hide_weight: 1.0, match_weight: 1.0, lm_weight: 0.1, hide_from_turn: 1, pin_first_turn: true}
+train_mix: {real_score: 0.4, mismatch: 0.3, nobrief: 0.15, neg_text: 0.15}
+# In verdict mode real_score renders DETECTED / NOT DETECTED (real_verdict would be identical); sham dropped (user 10-04).
+eval:
+  conditions: [real_score, none, nobrief, neg_text, mismatch]
+  turns: 6
+  episodes_per_concept: 2
+collect: {episodes_per_concept: 2, turns: 4, hide_from_turn: 1}
+fit: {families: [meta_linear, concept_refit], C: 1.0, fpr: 0.01}
+rounds: 3
+rl: {mode: reason_forced, group_size: 8, turns: 3, max_new_tokens: 1024, reasoning_end: "</think>", answer_prefix: "\n\n"}

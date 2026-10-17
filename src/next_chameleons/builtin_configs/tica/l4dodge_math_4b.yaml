@@ -1,0 +1,72 @@
+# PHASE 1, DODGER arm (REPLICATION 2026-10-13b). "Stay while passing, move only when caught."
+# ANSWER format (brief + AxBench instruction, fixed passage as the answer; 10-13a showed the copy-format
+# dodge does not transfer). From the BASE model (clean lineage, no L20 leak). Base + held-out probes are
+# fit on the base model in the answer format at startup (tica/answer_format.fit_answer_probes).
+# Per-dodge in-episode refits with STRONG forks (48 concept / 48 other / 24 free in context + 24
+# no-prompt, 12 to positives and 12 held-out OOC gate, disjoint texts; C=1.0; 10-12 learning curve:
+# 100% gate pass at this size). NO CIRCULARITY: every probe deployed in the episode keeps judging.
+# Loss: hide p^2 on every deployed probe, EXCEPT a new probe's first turn (excuse_new_probe: that turn
+# is caught by construction; hiding it there is what made the old runs scramble every turn).
+# Conditional motion: after a CATCH push a_t off a_{t-1}; after a PASS penalise changing the dodge
+# (offset from base, stay_offset). 1-bit verdict is the only signal saying which.
+name: l4dodge_math_4b
+model:
+  path: /scratch/sneheel/hf/hub/models--Qwen--Qwen3.5-4B/snapshots/851bf6e806efd8d0a36b00ddf55e13ccb7b8cd0a
+  dtype: bfloat16
+  enable_thinking: false
+  keep_think_history: true
+  batch_size: 8
+  grad_ckpt: true
+  fla_grad: true           # fla backward verified: LoRA grad cos 0.99992, 2.6x (5442758)
+probes:
+  dir: /scratch/sneheel/next_chameleons_artifacts/tica/l1_base/qwen35_4b/probes
+  pool_layers: primary
+  held_out_layers: [20, 24]
+episode_concepts: ["mathematical notation and symbols"]
+out: /scratch/sneheel/next_chameleons_artifacts/tica/runs/l4dodge_math_4b
+episodes: {feedback: verdict, hidden: false, format: answer}
+lora: {rank: 16, alpha: 32, dropout: 0.0, target_modules: all-linear}
+train_mix: {real_score: 0.5, nobrief: 0.3, neg_text: 0.2}
+train:
+  steps: 100
+  episodes_per_step: 8
+  turns: 12
+  micro_batch: 2
+  lr: 1.0e-4
+  warmup_steps: 10
+  save_every: 10
+  seed: 0
+  objective: {hide_weight: 1.0, match_weight: 2.0, lm_weight: 0.1, hide_from_turn: 1, pin_first_turn: true}
+rl:
+  adaptive:
+    adaptive: false
+    refit_mode: episode
+    episode_fork: {pos: 48, np: 24, other: 48, free: 24}
+    episode_bank_first: false
+    episode_keep: false
+    episode_cumulative: true
+    episode_refit_prob: 1.0
+    excuse_new_probe: true
+    single_pass: true
+    incremental_rollout: true # per-episode cache: only new tokens each turn (10-13c, exact, 2.5x)
+    reloc_every: 5
+    refit_every: 0
+    refit_when_ready: false
+    refit_as_start: false
+    refit_min_auroc: 0.95
+    refit_min_tpr_np: 0.8
+    refit_min_each: 24
+    refit_buf_cap: 512
+    refit_C: 1.0
+    refit_max_bank: 24
+    pursuit: true
+    motion: conditional
+    stay_weight: 1.0
+    stay_offset: true
+    pursuit_from_turn: 1
+    pursuit_window: 1
+    pursuit_weight: 1.0
+    pursuit_temp: 0.3
+    pursuit_leash: 0.5
+    pursuit_radius: 1.2
+    eval_on_save: bash /home/sneheel/chameleons/scripts/slurm/tica_ckpt_eval.sh l4dodge_math_4b {adapter} {step}

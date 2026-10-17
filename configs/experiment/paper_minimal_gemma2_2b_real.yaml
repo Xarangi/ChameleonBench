@@ -81,4 +81,8 @@ real_run:
   selected_layers: [12]
   default_probe_layer: 12
   activation_pooling: mean_generation_tokens
+  # D7: fit/score/eval probes on chat-templated activations (paper-faithful).
+  activation_chat_template: true
+  # D4: concept-vs-neutral (preset data_Y) probe negatives, not one-vs-rest.
+  benign_probe_contrast: neutral
   output_dir: ${oc.env:SCRATCH,.}/next_chameleons_artifacts/paper_minimal_gemma2_2b_real

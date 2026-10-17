@@ -1,0 +1,7 @@
+{
+ "_doc": "DBpedia topic base v2 split (REPLICATION 2026-10-14p). From scripts/tica_topic_overlap.py on configs/tica/dbpedia_broad_topics_v2.json (job 5542389): abstract-level cross-fire (probe for A vs topics it never saw, 1% FPR) and ON-POLICY cross-fire (probe fit on abstracts, scored on the base model's own writing). Conflict = abstract cross > 0.5 OR on-policy cross > 0.25. Every train-dev and train-test pair is conflict-free (checked by scripts/build_topic_base.py); test-test pairs may overlap (declared near pairs inside the test set). Dropped: on-policy TPR < 0.85 (the probe does not fire on the model's own writing about the topic).",
+ "train": ["sports", "physical geography", "politics and elections", "astronomy", "video games", "war and the military", "living organisms", "transportation", "law and courts", "towns and villages", "motor racing", "spaceflight", "comics, manga and animation"],
+ "dev": ["television and radio", "buildings and architecture"],
+ "heldout": ["music", "philosophy", "Christianity and the church", "medicine and hospitals", "food and drink", "plays and poetry", "education", "fashion and modelling"],
+ "dropped": {"painting and photography": "on-policy TPR 0.54", "newspapers and magazines": "on-policy TPR 0.58", "monarchy and nobility": "on-policy TPR 0.75", "business and finance": "on-policy TPR 0.83"}
+}

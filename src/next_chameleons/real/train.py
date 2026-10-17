@@ -7,10 +7,12 @@ from pathlib import Path
 from next_chameleons.config import ProjectPaths
 from next_chameleons.datasets import TRIGGER_VERSION_DEFAULT
 from next_chameleons.hf.paper_data import (
+    find_full_matrix_dataset,
     find_preset_dataset,
     load_benign_concept_examples,
     load_preset_scenarios,
     preset_concept_examples,
+    preset_neutral_examples,
 )
 from next_chameleons.hf.training import run_real_chameleon_training
 from next_chameleons.real import common
@@ -23,13 +25,48 @@ TRAIN_CFG_OVERRIDE_KEYS = (
     "min_concept_positive_examples",
     "min_concept_negative_examples",
     "min_concept_rating",
+    "benign_probe_contrast_concepts",
+    "heldout_concepts",
     "max_steps",
     "num_epochs",
     "log_every_steps",
     "seen_concept_eval",
     "seen_concept_eval_examples_per_concept",
+    "in_distribution_fixed_fpr_eval",
+    "in_distribution_selectivity_examples_per_concept",
+    "in_distribution_target_fpr",
     "probe_fit_version",
     "benign_probe_max_tokens_per_example",
+    "benign_probe_source",
+    "external_benign_probe_dir",
+    "external_benign_probe_bank",
+    "benign_probe_ensemble_reduction",
+    "benign_probe_ensemble_beta",
+    "obfuscation_loss_type",
+    "obfuscation_score_floor",
+    # Arms race: keep training whole epochs until every concept's frozen probe
+    # is evaded (per-concept fixed-FPR gate), bounded by evasion_max_epochs.
+    "train_until_evasion",
+    "evasion_max_epochs",
+    "evasion_patience",
+    "evasion_max_trigger_tpr",
+    "evasion_min_clean_tpr",
+    "evasion_on_failure",
+    "benign_probe_learning_rate",
+    "benign_probe_epochs",
+    "benign_probe_batch_size",
+    "benign_probe_min_accuracy",
+    "benign_probe_init",
+    # Nonlinear defender (Track A3): threaded through for repro/record. The
+    # attacker loads the saved bank (which self-describes as MLP via its bank
+    # format), so it needs no special handling; the fit is driven by the
+    # probe-bank-fit CLI flag, not this config.
+    "benign_probe_class",
+    "benign_probe_hidden_width",
+    "scenario_shuffle",
+    # D7: chat-template probe conditioning must match the eval-side flag so the
+    # organism is trained against the same feature distribution it is scored on.
+    "activation_chat_template",
 )
 
 
@@ -54,18 +91,32 @@ def run_real_train(
     paper_scenarios = None
     examples = []
     if experiment.get("track") == "paper_real":
-        if str(real_cfg.get("train_source")) == "benign_preset_official":
-            preset_path = find_preset_dataset(raw_cache_root)
+        if str(real_cfg.get("train_source")) in ("benign_preset_official", "benign_preset_full"):
+            is_full = str(real_cfg.get("train_source")) == "benign_preset_full"
+            preset_path = (
+                find_full_matrix_dataset(raw_cache_root)
+                if is_full
+                else find_preset_dataset(raw_cache_root)
+            )
             if preset_path is None:
+                sub = "paper_benign_preset_full" if is_full else "paper_benign_preset"
                 raise FileNotFoundError(
-                    "train_source=benign_preset_official requires the official "
-                    "preset JSON staged under "
-                    f"{raw_cache_root / 'paper_benign_preset'}; run "
-                    "scripts/fetch_golden_artifacts.sh first."
+                    f"train_source={real_cfg.get('train_source')} requires a preset "
+                    f"JSON staged under {raw_cache_root / sub}; run "
+                    "scripts/fetch_golden_artifacts.sh (or the full-matrix generator)."
                 )
-            common.log(f"loading official preset scenarios from {preset_path}")
+            common.log(f"loading preset scenarios from {preset_path}")
             paper_scenarios = load_preset_scenarios(preset_path)
             paper_concept_examples = preset_concept_examples(preset_path)
+            # Paper-faithful "concept vs neutral" probe contrast: append the preset's
+            # data_Y neutral pool as shared negatives (vs the default one-vs-rest).
+            if str(real_cfg.get("benign_probe_contrast", "one_vs_rest")) == "neutral":
+                neutral = preset_neutral_examples(preset_path)
+                common.log(
+                    f"benign_probe_contrast=neutral: appending {len(neutral)} "
+                    "neutral (data_Y) negatives to the probe-fit pool"
+                )
+                paper_concept_examples = list(paper_concept_examples) + neutral
         else:
             paper_concept_examples = load_benign_concept_examples(raw_cache_root)
     else:
@@ -87,6 +138,22 @@ def run_real_train(
     for key in TRAIN_CFG_OVERRIDE_KEYS:
         if key in real_cfg:
             train_cfg[key] = real_cfg[key]
+    # Resolve the `${oc.env:SCRATCH,.}` pattern so the trainer gets an absolute
+    # path to the released frozen-probe directory.
+    if train_cfg.get("external_benign_probe_dir"):
+        train_cfg["external_benign_probe_dir"] = str(
+            common.output_dir(str(train_cfg["external_benign_probe_dir"]))
+        )
+    if train_cfg.get("external_benign_probe_bank"):
+        bank_spec = train_cfg["external_benign_probe_bank"]
+        if isinstance(bank_spec, list):
+            train_cfg["external_benign_probe_bank"] = [
+                str(common.output_dir(str(item))) for item in bank_spec
+            ]
+        else:
+            train_cfg["external_benign_probe_bank"] = str(
+                common.output_dir(str(bank_spec))
+            )
     if experiment.get("track") == "paper_real":
         train_cfg["paper_max_examples"] = limit
     trigger_cfg = dataset_cfg.get("trigger", {})

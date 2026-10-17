@@ -44,3 +44,17 @@ def test_all_experiment_smoke_sweep_expands() -> None:
     assert all(case.command == "experiment-smoke" for case in cases)
     assert any("multiturn_self_redteam" in case.cli_command() for case in cases)
     assert all("probe_discovery" not in case.cli_command() for case in cases)
+
+
+def test_single_concept_arms_race_expands_full_primary_matrix() -> None:
+    paths = ProjectPaths.discover(Path(__file__).resolve())
+    cases = expand_sweep("paper_single_concept_arms_race", paths=paths)
+
+    assert len(cases) == 15
+    assert all(case.command == "arms-race" for case in cases)
+    assert all(case.execution == "slurm_only" for case in cases)
+    commands = [case.cli_command() for case in cases]
+    assert all("--no-gate --no-ood-eval" in command for command in commands)
+    assert all("--rounds 30" in command for command in commands)
+    assert all("--stop-on-evasion-failure" in command for command in commands)
+    assert any("--concept mathematical --seed 41" in command for command in commands)

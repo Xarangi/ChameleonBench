@@ -74,6 +74,22 @@ class SweepCase:
                 if key in self.params:
                     args.append(f"{flag} {self.params[key]}")
             return " ".join(args)
+        if self.command == "arms-race":
+            args = [
+                "bash scripts/slurm/stage_arms_race.sh",
+                f"--exp {self.params['experiment']}",
+                f"--concept {self.params['concept']}",
+                f"--seed {self.params['seed']}",
+                f"--rounds {self.params.get('rounds', 30)}",
+                f"--train-gpus {self.params.get('train_gpus', 4)}",
+                f"--train-mem {self.params.get('train_mem', '200G')}",
+                f"--train-time {self.params.get('train_time', '12:00:00')}",
+                "--no-gate",
+                "--no-ood-eval",
+            ]
+            if self.params.get("stop_on_evasion_failure", True):
+                args.append("--stop-on-evasion-failure")
+            return " ".join(args)
         raise ValueError(f"Unsupported sweep command {self.command!r}")
 
 

@@ -1,0 +1,92 @@
+# DEEP-LAYER PILOT (REPLICATION 2026-10-15g; user 10-15: are deep layers intrinsically tougher?): topics_r1_4b
+# EXACTLY, except every probe (base + refits, linear) reads LAYER 20; static held-out probes at 12,24.
+# Compare its learning curve / refit acceptance / layer sweep / capability with topics_r1 (layer 12).
+# MULTI-TOPIC DODGER, rung 1 (REPLICATION 2026-10-14p; TICA-FINAL-DODGER-DESIGN.md "v2: topic base").
+# 13 TRAIN topics of the DBpedia topic base v2 (configs/tica/topic_split_v1.json: train / dev / held-out
+# mutually conflict-free by abstract AND on-policy cross-fire), one NAMED topic per episode; 50% of the
+# real episodes SWITCH topic mid-episode (1-2 switches, segments >= 3 turns, 25% of switches RETURN to an
+# earlier topic whose old probes still judge). Per-dodge in-episode refits branched at the turn after a
+# pass, cumulative judge per topic (no circularity), 1-bit verdicts, excuse rule (a probe's first judged
+# turn), conditional motion + stay_offset. LINEAR refits (rung 1); probe-type diversity is rung 2.
+# Base probes per topic fit against other TRAIN topics only; fork negatives = other TRAIN topics +
+# concept-free texts, so no dev / held-out topic ever enters training. From the BASE model.
+name: topics_deep20_4b
+model:
+  path: /scratch/sneheel/hf/hub/models--Qwen--Qwen3.5-4B/snapshots/851bf6e806efd8d0a36b00ddf55e13ccb7b8cd0a
+  dtype: bfloat16
+  enable_thinking: false
+  keep_think_history: true
+  batch_size: 8
+  grad_ckpt: true
+  fla_grad: true           # fla backward verified: LoRA grad cos 0.99992, 2.6x (5442758)
+probes:
+  dir: /scratch/sneheel/next_chameleons_artifacts/tica/l1_base/qwen35_4b/probes
+  pool_layers: primary
+  layer: 20
+  held_out_layers: [12,24]
+out: /scratch/sneheel/next_chameleons_artifacts/tica/runs/topics_deep20_4b
+episodes: {feedback: verdict, hidden: false, format: answer,
+           inputs: /scratch/sneheel/next_chameleons_raw_cache/tica/topic_base_v1_inputs.json}
+data: /scratch/sneheel/next_chameleons_raw_cache/tica/topic_base_v1.json
+lora: {rank: 16, alpha: 32, dropout: 0.0, target_modules: all-linear}
+# mismatch = brief names concept A, text is about B: act like the base model (specificity, cf. Keenan's
+# other-monitor term); needs the multi-concept answer pool (a covering monitor per concept)
+train_mix: {real_score: 0.5, mismatch: 0.15, nobrief: 0.2, neg_text: 0.15}
+train:
+  steps: 150        # from the BASE model; resumable (--adapter) in <= 10 h chunks
+  episodes_per_step: 8
+  turns: 12
+  micro_batch: 2
+  lr: 1.0e-4
+  warmup_steps: 10
+  save_every: 10
+  seed: 0
+  objective: {hide_weight: 1.0, match_weight: 2.0, lm_weight: 0.1, hide_from_turn: 1, pin_first_turn: true}
+rl:
+  adaptive:
+    merged_reads: true      # exact speed-ups (10-15d)
+    refit_np_cache: true
+    adaptive: false
+    refit_mode: episode
+    episode_fork: {pos: 96, np: 24, other: 96, free: 48}
+    episode_extra_pos: ""   # multi-concept: final.extra_pos_dir (per-concept files)
+    episode_bank_first: false
+    episode_keep: false
+    episode_cumulative: true
+    episode_refit_prob: 1.0
+    excuse_new_probe: true
+    single_pass: true
+    incremental_rollout: true # per-episode cache: only new tokens each turn (10-13c, exact, 2.5x)
+    reloc_every: 5
+    refit_every: 0
+    refit_when_ready: false
+    refit_as_start: false
+    refit_min_auroc: 0.95
+    refit_min_tpr_np: 0.8
+    refit_min_each: 24
+    refit_buf_cap: 512
+    refit_C: 1.0
+    refit_cv_folds: 5
+    refit_max_bank: 24
+    pursuit: true
+    motion: conditional
+    stay_weight: 1.0
+    stay_offset: true
+    pursuit_from_turn: 1
+    pursuit_window: 1
+    pursuit_weight: 1.0
+    pursuit_temp: 0.3
+    pursuit_leash: 0.5
+    pursuit_radius: 1.2
+    episode_refit_kind: linear
+    episode_refit_kinds: [linear]
+    eval_on_save: ""
+final:
+  split: topic_split_v1.json
+  n_train_concepts: 0       # all 13 train topics
+  train_refit_kinds: [linear]
+  heldout_refit_kinds: [nc_ens8_tok, bailey_ens_tok, ens8_linear, ens8_mlp, gdm_rollattn, rollmax, mck_rollmean40, mck_attnlite, mck_softmax, meandiff]
+  concept_switch_prob: 0.5
+  switch_min_segment: 3
+  switch_max: 2
+  switch_return_prob: 0.25

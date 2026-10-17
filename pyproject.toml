@@ -93,3 +93,8 @@ src = ["src", "tests"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "B", "UP", "SIM", "RUF"]
+
+[tool.ruff.lint.per-file-ignores]
+# One-off exploratory diagnostics (cited in REPLICATION.md): keep correctness
+# checks but allow terse scratch style (long lines, inline semicolons, lambdas).
+"scripts/diag_*.py" = ["E501", "E702", "E731", "F841", "RUF059"]

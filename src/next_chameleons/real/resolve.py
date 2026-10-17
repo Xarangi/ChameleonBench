@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 from typing import Any
 
@@ -23,6 +24,18 @@ PAPER_BENIGN_TRAIN_SOURCES = (
 
 def resolve_real_experiment(experiment_name: str, paths: ProjectPaths) -> dict[str, Any]:
     experiment = load_experiment(experiment_name, paths=paths)
+    arms_concept = os.environ.get("NC_ARMS_CONCEPT", "").strip()
+    if arms_concept:
+        real_cfg = dict(experiment.get("real_run", {}))
+        configured = list(real_cfg.get("train_concepts", []))
+        if arms_concept not in configured:
+            raise ValueError(
+                f"NC_ARMS_CONCEPT={arms_concept!r} is not in configured "
+                f"train_concepts={configured!r} for {experiment_name!r}"
+            )
+        real_cfg.setdefault("benign_probe_contrast_concepts", configured)
+        real_cfg["train_concepts"] = [arms_concept]
+        experiment["real_run"] = real_cfg
     if "model_config" not in experiment and isinstance(experiment.get("model"), str):
         experiment["model_config"] = load_config_group("model", experiment["model"], paths=paths)
     if "model_config" not in experiment and "base_model_config" in experiment:

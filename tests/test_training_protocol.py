@@ -7,7 +7,16 @@ from next_chameleons.real.resolve import expected_probe_layer, resolve_real_expe
 
 torch = pytest.importorskip("torch")
 
-from next_chameleons.hf.training import RealChameleonTrainer  # noqa: E402
+from next_chameleons.hf.paper_data import (  # noqa: E402
+    PaperConceptExample,
+    build_table1_scenarios,
+    validate_concept_probe_data,
+)
+from next_chameleons.hf.training import (  # noqa: E402
+    RealChameleonTrainer,
+    _probe_contrast_concepts,
+)
+from next_chameleons.real.probe_bank import _select_probe_fit_examples  # noqa: E402
 
 PATHS = ProjectPaths.discover()
 
@@ -71,3 +80,121 @@ def test_models_carry_hidden_states_offset_one() -> None:
         experiment = resolve_real_experiment(name, PATHS)
         assert experiment["model_config"]["hidden_states_offset"] == 1
         assert experiment["model_config"]["layer_index_version"] == "paper_plus1_v2"
+
+
+def test_b1_config_matches_released_batch_regime() -> None:
+    """The batch-1 arm must reproduce the released 21preset recipe exactly:
+    one optimizer step per record (no accumulation), seeded scenario shuffle,
+    and the authors' probe-fit batch size of 16."""
+
+    experiment = resolve_real_experiment("paper_gemma2_9b_real_fullft_scratch_b1", PATHS)
+    real_cfg = experiment["real_run"]
+    assert int(real_cfg["batch_size"]) == 1
+    assert int(real_cfg["gradient_accumulation_steps"]) == 1
+    assert bool(real_cfg["scenario_shuffle"]) is True
+    assert int(real_cfg["benign_probe_batch_size"]) == 16
+    assert str(real_cfg["benign_probe_init"]) == "kaiming"
+    assert str(real_cfg["train_source"]) == "benign_preset_official"
+
+
+def test_scenario_shuffle_threads_from_real_run_to_train_cfg() -> None:
+    from next_chameleons.real.train import TRAIN_CFG_OVERRIDE_KEYS
+
+    assert "scenario_shuffle" in TRAIN_CFG_OVERRIDE_KEYS
+
+
+def test_single_concept_arms_override_preserves_contrast_pool(monkeypatch) -> None:
+    monkeypatch.setenv("NC_ARMS_CONCEPT", "html")
+    experiment = resolve_real_experiment("paper_gemma2_9b_arms_race", PATHS)
+
+    assert experiment["real_run"]["train_concepts"] == ["html"]
+    assert experiment["real_run"]["benign_probe_contrast_concepts"] == [
+        "all-caps",
+        "finnish",
+        "biology-focused",
+        "html",
+        "mathematical",
+    ]
+
+
+def test_single_concept_arms_override_rejects_unknown_concept(monkeypatch) -> None:
+    monkeypatch.setenv("NC_ARMS_CONCEPT", "not-in-the-paper-pool")
+    with pytest.raises(ValueError, match="not in configured train_concepts"):
+        resolve_real_experiment("paper_gemma2_9b_arms_race", PATHS)
+
+
+def test_contrast_pool_threads_from_real_run_to_train_cfg() -> None:
+    from next_chameleons.real.train import TRAIN_CFG_OVERRIDE_KEYS
+
+    assert "benign_probe_contrast_concepts" in TRAIN_CFG_OVERRIDE_KEYS
+
+
+def test_single_concept_probe_fit_keeps_cross_concept_negatives() -> None:
+    concepts = ["all-caps", "finnish", "biology-focused", "html", "mathematical"]
+    examples = [
+        PaperConceptExample(
+            example_id=f"example-{concept}",
+            prompt="prompt",
+            response=f"response for {concept}",
+            concept=concept,
+            rating=5,
+            source="synthetic-test",
+            text_hash=f"hash-{concept}",
+        )
+        for concept in concepts
+    ]
+    trainer = _trainer(
+        {"benign_probe_contrast_concepts": concepts},
+        train_concepts=["html"],
+        seed=7,
+    )
+
+    selected, active = _select_probe_fit_examples(
+        trainer,
+        examples,
+        max_examples=None,
+    )
+
+    assert active == ("html",)
+    assert {example.concept for example in selected} == set(concepts)
+    trainability = validate_concept_probe_data(
+        selected,
+        train_concepts=active,
+        contrast_concepts=concepts,
+    )
+    assert trainability["html"]["positives"] == 1
+    assert trainability["html"]["negatives"] == 4
+
+
+def test_single_concept_seen_eval_uses_contrast_for_mismatched_trigger() -> None:
+    contrast = ["all-caps", "finnish", "biology-focused", "html", "mathematical"]
+    concepts = _probe_contrast_concepts(
+        {"benign_probe_contrast_concepts": contrast},
+        ("html",),
+    )
+    examples = [
+        PaperConceptExample(
+            example_id="example-html",
+            prompt="prompt",
+            response="<p>response</p>",
+            concept="html",
+            rating=5,
+            source="synthetic-test",
+            text_hash="hash-html",
+        )
+    ]
+    scenarios = build_table1_scenarios(examples, concepts=concepts)
+    mismatch = next(s for s in scenarios if s.scenario == "mismatched_trigger_selectivity")
+    assert mismatch.trigger_concept in set(contrast) - {"html"}
+
+
+def test_arms_config_declares_six_heldout_trigger_controls() -> None:
+    experiment = resolve_real_experiment("paper_gemma2_9b_arms_race", PATHS)
+    assert set(experiment["real_run"]["heldout_concepts"]) == {
+        "german",
+        "comforting",
+        "confused",
+        "jokey",
+        "literature-focused",
+        "chemistry-based",
+    }

@@ -64,6 +64,48 @@ def test_released_probe_requires_layer_overlap() -> None:
         probe.predict(batch)
 
 
+def test_load_frozen_probe_bank_from_released(tmp_path) -> None:
+    """The training-side loader builds a frozen bank from released *_weights.pt,
+    preserving the exact released directions (no re-fit) with case-insensitive
+    filename lookup."""
+
+    from next_chameleons.hf.paper_probes import load_frozen_probe_bank_from_released
+
+    hidden = 6
+    german_w = torch.randn(1, hidden)
+    # 'html' concept ships as HTML_weights.pt: lookup must be case-insensitive.
+    html_w = torch.randn(1, hidden)
+    torch.save({"layer_0": {"weight": german_w, "bias": torch.tensor([0.25])}},
+               tmp_path / "german_weights.pt")
+    torch.save({"weight": html_w, "bias": torch.tensor([-0.5])},
+               tmp_path / "HTML_weights.pt")
+
+    bank = load_frozen_probe_bank_from_released(
+        tmp_path, concepts=["german", "html"], layer=12
+    )
+    assert sorted(bank.concepts) == ["german", "html"]
+    g = bank.probes_by_concept["german"]
+    assert g.layer == 12
+    assert g.weight.shape == (hidden,)
+    # Direction preserved exactly (cosine ~1.0), not re-fit.
+    cos = torch.nn.functional.cosine_similarity(
+        g.weight.reshape(1, -1), german_w.reshape(1, -1)
+    ).item()
+    assert cos > 0.999
+    assert abs(float(bank.probes_by_concept["html"].bias) + 0.5) < 1e-5
+
+
+def test_load_frozen_probe_bank_from_released_missing_concept(tmp_path) -> None:
+    from next_chameleons.hf.paper_probes import load_frozen_probe_bank_from_released
+
+    torch.save({"weight": torch.randn(1, 4), "bias": torch.tensor([0.0])},
+               tmp_path / "german_weights.pt")
+    with pytest.raises(FileNotFoundError, match="finnish"):
+        load_frozen_probe_bank_from_released(
+            tmp_path, concepts=["german", "finnish"], layer=12
+        )
+
+
 def test_load_released_probe_layer_indexed(tmp_path) -> None:
     path = tmp_path / "deception_weights.pt"
     torch.save(

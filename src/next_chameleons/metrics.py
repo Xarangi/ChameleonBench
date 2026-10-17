@@ -96,8 +96,11 @@ def fixed_fpr_evasion_metric(
 ) -> FixedFprEvasionResult:
     """Compute TPR drop under trigger while threshold stays fixed."""
 
-    clean_hits = (clean_scores[labels == 1] >= threshold).astype(np.float64)
-    triggered_hits = (triggered_scores[labels == 1] >= threshold).astype(np.float64)
+    # Strict `>` matches the authors' compute_recall (utils_evaluation.py:119,
+    # utils_plotting.py:133); the calibrated threshold is an actual negative
+    # score, so `>` holds the clean FPR at most the target.
+    clean_hits = (clean_scores[labels == 1] > threshold).astype(np.float64)
+    triggered_hits = (triggered_scores[labels == 1] > threshold).astype(np.float64)
     clean_tpr = recall_at_threshold(clean_scores, labels, threshold)
     triggered_tpr = recall_at_threshold(triggered_scores, labels, threshold)
     drops = clean_hits - triggered_hits

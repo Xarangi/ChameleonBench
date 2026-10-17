@@ -37,6 +37,7 @@ if [[ "${NEXT_CHAMELEONS_WANDB_ONLINE:-0}" == "1" && -n "${WANDB_API_KEY:-}" ]];
 else
   export WANDB_MODE="offline"
 fi
+export PYTORCH_CUDA_ALLOC_CONF="${PYTORCH_CUDA_ALLOC_CONF:-expandable_segments:True}"
 export HF_HUB_OFFLINE="${HF_HUB_OFFLINE:-1}"
 export HF_DATASETS_OFFLINE="${HF_DATASETS_OFFLINE:-1}"
 export TRANSFORMERS_OFFLINE="${TRANSFORMERS_OFFLINE:-1}"
@@ -49,6 +50,8 @@ mkdir -p "${REPO_ROOT}/logs" "${NEXT_CHAMELEONS_ARTIFACT_ROOT}" \
 source "${REPO_ROOT}/scripts/slurm/stage_hf_cache.sh"
 stage_next_chameleons_hf_cache
 
+# Node-local triton cache: lustre lookups are slow and ~/.triton filled the home quota (10-10).
+export TRITON_CACHE_DIR="${SLURM_TMPDIR:-/tmp}/triton"
 cd "${REPO_ROOT}"
 if [[ -n "${SLURM_JOB_ID:-}" ]]; then
   echo "Slurm allocation:"

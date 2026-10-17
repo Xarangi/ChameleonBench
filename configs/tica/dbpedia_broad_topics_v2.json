@@ -1,0 +1,32 @@
+{
+ "_doc": "Topic base v2 (REPLICATION 2026-10-14n). Built from exact DBpedia L3 classes so each topic's NAME matches its content (v1 audit: 'royalty' was 100% Baronet, 'software' 100% VideoGame, 'natural disasters' 31% SolarEclipse, 'science and scientists' = Medician + Entomologist, 'film/TV' 14% AdultActor, 'transportation' 17% Dam, 'animals' 11% RaceHorse, 'buildings' contained stadiums / roller coasters). v1 overlaps resolved by construction: animals + plants merged (0.99), mountains + rivers merged (0.94), solar eclipses moved to astronomy, video games no longer called 'software', record labels / publishers removed from business, stadiums removed from buildings. Excluded as off-topic or inappropriate: AdultActor, PlayboyPlaymate, horse racing, Dam. Disjointness and on-policy firing are verified by scripts/tica_topic_overlap.py before any split.",
+ "topics": {
+  "sports": {"family": "society & people", "l3": ["TennisPlayer", "GolfPlayer", "BasketballPlayer", "SoccerPlayer", "BaseballPlayer", "Swimmer", "Cyclist", "Gymnast", "RugbyPlayer", "Cricketer", "IceHockeyPlayer", "FigureSkater", "Skier", "AmericanFootballPlayer", "SoccerTournament", "TennisTournament", "FootballMatch", "OlympicEvent", "SoccerLeague", "HockeyTeam", "BasketballTeam", "RugbyClub"]},
+  "politics and elections": {"family": "society & people", "l3": ["Senator", "Mayor", "Congressman", "MemberOfParliament", "President", "PrimeMinister", "Governor", "Election", "PoliticalParty", "Legislature"]},
+  "war and the military": {"family": "society & people", "l3": ["MilitaryConflict", "MilitaryUnit", "MilitaryPerson"]},
+  "Christianity and the church": {"family": "society & people", "l3": ["Saint", "ChristianBishop", "Cardinal", "Pope", "Diocese"]},
+  "law and courts": {"family": "society & people", "l3": ["SupremeCourtOfTheUnitedStatesCase", "Judge", "LawFirm"]},
+  "monarchy and nobility": {"family": "society & people", "l3": ["Monarch", "Noble", "Baronet"]},
+  "business and finance": {"family": "society & people", "l3": ["Bank", "BusinessPerson", "Economist"]},
+  "education": {"family": "society & people", "l3": ["School", "University", "Library"]},
+  "philosophy": {"family": "society & people", "l3": ["Philosopher"]},
+  "medicine and hospitals": {"family": "society & people", "l3": ["Hospital", "Medician"]},
+  "food and drink": {"family": "society & people", "l3": ["Restaurant", "Chef", "Winery", "Brewery"]},
+  "fashion and modelling": {"family": "society & people", "l3": ["FashionDesigner", "Model", "BeautyQueen"]},
+  "music": {"family": "arts & media", "l3": ["Album", "Single", "Band", "ArtistDiscography", "MusicGenre", "ClassicalMusicComposition", "ClassicalMusicArtist", "EurovisionSongContestEntry", "MusicFestival"]},
+  "plays and poetry": {"family": "arts & media", "l3": ["Play", "Poem", "Poet", "Theatre"]},
+  "television and radio": {"family": "arts & media", "l3": ["TelevisionStation", "RadioStation", "BroadcastNetwork", "RadioHost"]},
+  "newspapers and magazines": {"family": "arts & media", "l3": ["Newspaper", "Magazine", "Journalist"]},
+  "comics, manga and animation": {"family": "arts & media", "l3": ["Manga", "ComicStrip", "Anime", "HollywoodCartoon", "AnimangaCharacter", "ComicsCreator"]},
+  "painting and photography": {"family": "arts & media", "l3": ["Painter", "Photographer"]},
+  "video games": {"family": "arts & media", "l3": ["VideoGame"]},
+  "transportation": {"family": "technology", "l3": ["Road", "Bridge", "RailwayLine", "RoadTunnel", "RailwayStation", "Airport", "PublicTransitSystem", "Airline", "BusCompany"]},
+  "spaceflight": {"family": "technology", "l3": ["ArtificialSatellite", "Astronaut"]},
+  "motor racing": {"family": "technology", "l3": ["FormulaOneRacer", "NascarDriver", "GrandPrix", "SpeedwayRider", "AutomobileEngine"]},
+  "buildings and architecture": {"family": "places", "l3": ["HistoricBuilding", "Castle", "Museum", "Hotel", "ShoppingMall", "Prison", "Lighthouse", "Architect"]},
+  "towns and villages": {"family": "places", "l3": ["Town", "Village"]},
+  "astronomy": {"family": "nature", "l3": ["Planet", "Galaxy", "SolarEclipse"]},
+  "physical geography": {"family": "nature", "l3": ["Mountain", "MountainRange", "MountainPass", "Volcano", "Glacier", "Cave", "Earthquake", "Lake", "River", "Canal"]},
+  "living organisms": {"family": "nature", "l3": ["Reptile", "Insect", "Amphibian", "Bird", "Crustacean", "Fish", "Arachnid", "Mollusca", "Conifer", "Moss", "Cycad", "Fern", "CultivatedVariety", "GreenAlga", "Grape", "Fungus"]}
+ }
+}

@@ -1,0 +1,93 @@
+# FINAL multi-concept, multi-probe-type DODGER (TICA-FINAL-DODGER-DESIGN.md; REPLICATION 2026-10-14f).
+# RUNG 1: 4 concepts x LINEAR refits + capability anchor. Tests multi-concept naming + the anchor before probe diversity.
+# Copy of l5dodge_math_4b (answer format, per-dodge in-episode refits branched at the turn after a pass,
+# CUMULATIVE judge = no circularity, 1-bit verdicts, 5-fold CV gate + OOC TPR, forks 96/96/48/24, excuse
+# rule, conditional motion + stay_offset, 12 turns, no turn subsampling) with:
+#  - the concept NAMED in the brief, one concept per episode, drawn from the split's first N TRAIN concepts
+#    (final.split; held-out concepts / held-out probe kinds are eval-only);
+#  - per-concept published positives (final.extra_pos_dir, Concept16K v1+v2 strict-synonym names);
+#  - a capability anchor (token KL to the base model on Dolly + GSM8K-train answers) and a capability gate;
+#  - the cumulative judge recalibrated to an overall FPR (final.judge_union_fpr).
+# NOT LAUNCHABLE until the trainer interfaces in the design doc are wired (multi-concept answer pool,
+# extra_pos_dir, anchor, union FPR); tica.py adaptive refuses >1 answer-format concept today.
+name: final_r1_4b
+model:
+  path: /scratch/sneheel/hf/hub/models--Qwen--Qwen3.5-4B/snapshots/851bf6e806efd8d0a36b00ddf55e13ccb7b8cd0a
+  dtype: bfloat16
+  enable_thinking: false
+  keep_think_history: true
+  batch_size: 8
+  grad_ckpt: true
+  fla_grad: true           # fla backward verified: LoRA grad cos 0.99992, 2.6x (5442758)
+probes:
+  dir: /scratch/sneheel/next_chameleons_artifacts/tica/l1_base/qwen35_4b/probes
+  pool_layers: primary
+  held_out_layers: [20, 24]
+out: /scratch/sneheel/next_chameleons_artifacts/tica/runs/final_r1_4b
+episodes: {feedback: verdict, hidden: false, format: answer,
+           inputs: /scratch/sneheel/next_chameleons_raw_cache/tica/level1_inputs_plus.json}
+lora: {rank: 16, alpha: 32, dropout: 0.0, target_modules: all-linear}
+# mismatch = brief names concept A, text is about B: act like the base model (specificity, cf. Keenan's
+# other-monitor term); needs the multi-concept answer pool (a covering monitor per concept)
+train_mix: {real_score: 0.5, mismatch: 0.15, nobrief: 0.2, neg_text: 0.15}
+train:
+  steps: 60         # from the BASE model (clean lineage; l5 lost GSM8K 82.5 -> 52.5)
+  episodes_per_step: 8
+  turns: 12
+  micro_batch: 2
+  lr: 1.0e-4
+  warmup_steps: 10
+  save_every: 10
+  seed: 0
+  objective: {hide_weight: 1.0, match_weight: 2.0, lm_weight: 0.1, hide_from_turn: 1, pin_first_turn: true}
+rl:
+  adaptive:
+    adaptive: false
+    refit_mode: episode
+    episode_fork: {pos: 96, np: 24, other: 96, free: 48}
+    episode_extra_pos: ""   # multi-concept: final.extra_pos_dir (per-concept files)
+    episode_bank_first: false
+    episode_keep: false
+    episode_cumulative: true
+    episode_refit_prob: 1.0
+    excuse_new_probe: true
+    single_pass: true
+    incremental_rollout: true # per-episode cache: only new tokens each turn (10-13c, exact, 2.5x)
+    reloc_every: 5
+    refit_every: 0
+    refit_when_ready: false
+    refit_as_start: false
+    refit_min_auroc: 0.95
+    refit_min_tpr_np: 0.8
+    refit_min_each: 24
+    refit_buf_cap: 512
+    refit_C: 1.0
+    refit_cv_folds: 5
+    refit_max_bank: 24
+    pursuit: true
+    motion: conditional
+    stay_weight: 1.0
+    stay_offset: true
+    pursuit_from_turn: 1
+    pursuit_window: 1
+    pursuit_weight: 1.0
+    pursuit_temp: 0.3
+    pursuit_leash: 0.5
+    pursuit_radius: 1.2
+    episode_refit_kind: linear
+    episode_refit_kinds: [linear]
+    eval_on_save: bash /home/sneheel/chameleons/scripts/slurm/tica_ckpt_eval.sh final_r1_4b {adapter} {step}
+final:
+  split: final_concept_split_v1.json
+  n_train_concepts: 4
+  extra_pos_dir: /scratch/sneheel/next_chameleons_raw_cache/tica/expansion_multi
+  train_refit_kinds: [linear]
+  heldout_refit_kinds: [nc_ens8_tok, bailey_ens_tok, ens8_linear, ens8_mlp, gdm_rollattn, rollmax, mck_rollmean40, mck_attnlite, mck_softmax, meandiff]
+  anchor_weight: 0.1        # Keenan lam 0.1 KL-to-base; raise if the capability gate fails
+  anchor_prompts: 8
+  anchor_max_new_tokens: 256
+  cap_gate_every: 25
+  cap_gate_min_gsm8k: 0.9
+  cap_gate_min_mmlu: 0.95
+  judge_union_fpr: 0.01
+  concept_switch_prob: 0.0

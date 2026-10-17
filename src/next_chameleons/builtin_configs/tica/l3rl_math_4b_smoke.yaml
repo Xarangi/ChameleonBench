@@ -1,0 +1,61 @@
+# ADAPTIVE-MONITOR MULTI-TURN RL, Arm B (RL only), single concept (DESIGN OF RECORD, REPLICATION
+# 2026-10-11a). The model REASONS (sampled, budget-forced) then its answer is teacher-forced to the
+# repeat text; the monitor reads only the answer tokens, so plain GRPO can change only WHAT IT
+# THINKS (the semantic route; Atlas App D). Each episode draws one monitor per turn from an
+# in-episode AdaptiveDefender over the bank; a miss costs little on the first try and more on each
+# later try, a pass earns +1 and switches the monitor to the bank member that best catches the
+# escape. Every refit_every steps a fresh probe is fit on the policy's OWN escapes and added, so the
+# defender keeps up with the weights and a static dodge cannot score (the l3iter failure).
+# Starting bank = the l3loop pool (base L12 concept probe + branch refits r1-r3).
+name: l3rl_math_4b_smoke
+model:
+  path: /scratch/sneheel/hf/hub/models--Qwen--Qwen3.5-4B/snapshots/851bf6e806efd8d0a36b00ddf55e13ccb7b8cd0a
+  dtype: bfloat16
+  enable_thinking: true     # Arm B: the model reasons; the answer is still forced
+  batch_size: 16
+  grad_ckpt: true
+probes:
+  dir: /scratch/sneheel/next_chameleons_artifacts/tica/l1_base/qwen35_4b/probes
+  pool_layers: primary
+  held_out_layers: [20]     # L20 base probe is eval-only (never in the training bank)
+start_pool: /scratch/sneheel/next_chameleons_artifacts/tica/runs/l3loop_math_4b/seed0/round_2/pool_next
+episode_concepts: ["mathematical notation and symbols"]
+out: /scratch/sneheel/next_chameleons_artifacts/tica/runs/l3rl_math_4b_smoke
+episodes: {feedback: verdict, hidden: false}
+lora: {rank: 16, alpha: 32, dropout: 0.0, target_modules: all-linear}
+# train_mix feeds the adaptive sampler: real_score = dodge episodes; nobrief = selectivity + the
+# out-of-context TPR source for refits; neg_text = the FPR source + refit negatives.
+train_mix: {real_score: 0.7, nobrief: 0.2, neg_text: 0.1}
+rl:
+  mode: reason_forced
+  use_adaptive: true
+  history_reasoning: true   # keep each earlier turn's reasoning so the model sees what it tried
+  steps: 3
+  specs_per_step: 2
+  group_size: 4
+  turns: 3
+  lr: 1.0e-5
+  beta_kl: 0.05
+  credit: turn              # reward-to-go: later-turn passes credited, earlier misses not punished
+  reasoning_end: "</think>"
+  answer_prefix: "\n\n"
+  micro_batch: 8
+  update_micro_batch: 2   # grad chunk: logits are [B, seqlen, 248k]; keep small (OOM 5215972)
+  grad_clip: 1.0
+  save_every: 0
+  seed: 0
+  adaptive:
+    reasoning_budget: 128    # Qwen3.5-4B p50 3324 reasoning tokens at turn 0 (10-10h): hard cap
+    trunc_penalty: 0.2       # small: the answer is forced anyway, no rollout is voided
+    pass_reward: 1.0
+    miss_costs: [0.1, 0.25, 0.5, 1.0]   # progressive within a stage; first miss is cheap
+    selectivity_penalty: 1.0
+    adaptive: true
+    refit_every: 100          # fit a fresh probe on current escapes and add it to the bank
+    refit_min_auroc: 0.95
+    refit_min_tpr_np: 0.8
+    refit_min_each: 24
+    refit_buf_cap: 512
+    refit_C: 0.01
+    refit_max_bank: 12
+    direct_grad_weight: 0.0  # Arm B. Arm C sets this > 0 (NC loss through the answer activations)

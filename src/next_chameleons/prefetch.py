@@ -55,6 +55,22 @@ def collect_prefetch_assets(
                     "revision": str(source["revision"]),
                     "role": f"{experiment_name}:{source_name}",
                 }
+            elif (
+                source.get("materializer")
+                and "/" in str(source.get("name", ""))
+                and ":" not in str(source.get("name", ""))
+            ):
+                # Locally-materialized safety sources that read from an upstream
+                # HF repo at materialization time (e.g. gemma2-jailbreaks); stage
+                # it so the materializer can run. Names with ':' are non-HF (git
+                # raw files fetched by the materializer itself) and skipped.
+                datasets[str(source["name"])] = {
+                    "repo_id": str(source["name"]),
+                    "revision": str(
+                        source.get("harmful_text_revision") or source.get("revision", "main")
+                    ),
+                    "role": f"{experiment_name}:{source_name}:materializer_upstream",
+                }
         if include_generator:
             source = experiment.get("dataset_config", {}).get("sources", {}).get(
                 "benign_synthetic_4697",

@@ -46,14 +46,28 @@ The default paper train source is `benign_preset_official` — the official
 per-sample behavior-loss flags. `fetch_golden_artifacts.sh` stages it under
 `$SCRATCH/next_chameleons_raw_cache/paper_benign_preset/`.
 
-Safety eval sources:
+Safety eval sources — real response corpora (run on an internet-capable login
+node; compute nodes are offline and read the resulting JSONL):
 
 ```bash
 uv run --extra train next-chameleons paper-materialize-safety-data paper_gemma2_9b_real \
-  --raw-cache-root "$SCRATCH/next_chameleons_raw_cache"
+  --raw-cache-root "$SCRATCH/next_chameleons_raw_cache" --max-examples-per-split 512
 ```
 
-The clean-room regeneration path (`benign_synthetic_4697`) is still available
+Each safety probe reads the model **response**, so every source materializes
+`{text, label, generation_prefix}` with the prefix marking the prompt; the
+extractor then pools over the response tokens.
+
+| Source | Real corpus | Materializer |
+|---|---|---|
+| `dolus_deception` | DolusChat `responses.{truthful,deceptive}` (paired) | `materialize_dolus_deception` |
+| `circuit_breakers_harmful` | `justinphan3110/wildchat_over_refusal` toxic/nontoxic | `materialize_wildchat_harmful` |
+| `apollo_repe_deception` | Apollo roleplaying + insider-trading rollouts | `materialize_apollo_repe_deception` |
+
+`synthetic_harmful` / `jailbreakbench_behaviors` are JailbreakBench goal-string
+**proxies** (no model response): quarantined out of `eval_sources` and
+materialized only with `--include-synthetic-harmful`. Do not cite them. The
+clean-room benign regeneration path (`benign_synthetic_4697`) is still available
 via `paper-materialize-data --generate`; label results accordingly.
 
 ## Stage 2 — Plan and validate
@@ -103,6 +117,17 @@ probes fit per-token on the fine-tuned model at the same layer; fixed 1% FPR
 threshold calibrated on fit-side clean negatives; trigger applied to positive
 examples only; the paper's per-domain trigger words are swept and the strongest
 TPR drop per probe is reported (`fixed_fpr_best_trigger_by_probe`).
+
+The report records `headline_probe_id` (the single-layer per-token linear, or the
+released probe under `--external-probe-dir`) and `headline_metric`; the flat
+multi-layer `paper_linear` and the ensembles are `diagnostic_probe_ids` only —
+they carry too much signal to ever evade, so they are not the headline.
+
+Add `--external-probe-dir "$SCRATCH/next_chameleons_golden/probes"` to evaluate
+against the paper's released frozen probes instead of re-fitting — the robust,
+"unseen monitor" reading of the claim. `scripts/submit_real_data_reeval.sh`
+submits the released-probe and post-hoc arms (base + three seeds + golden
+re-validation) across all three activation views in one go.
 
 ## Stage 5 — Controls and claim
 

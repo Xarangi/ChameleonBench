@@ -1,0 +1,31 @@
+# GPU engineering smoke of the Level 1 trainer (review fixes 10-03): memory, speed, and whether the
+# scaled hide loss moves. Monitors: the 16-concept smoke banks refit with the one-SE rule
+# (probes_1se). v2 (after 4545558): all-bank selectivity, stratified 0.4/0.3/0.15/0.15 mix at 16 episodes,
+# end-of-turn token in the LM target, yoked sham in eval. Not a result; the real run uses l1_qwen35_9b.yaml after the full base test.
+name: l1_qwen35_9b_smoke
+model:
+  path: /scratch/sneheel/hf/hub/models--Qwen--Qwen3.5-9B/snapshots/c202236235762e1c871ad0ccb60c8ee5ba337b9a
+  dtype: bfloat16
+  enable_thinking: false
+  batch_size: 8
+probes:
+  dir: /scratch/sneheel/next_chameleons_artifacts/tica/l1_smoke_v2/qwen35_9b/probes_1se
+  pool_layers: all
+out: /scratch/sneheel/next_chameleons_artifacts/tica/runs/l1_qwen35_9b_smoke
+lora: {rank: 16, alpha: 32, dropout: 0.0, target_modules: all-linear}
+train:
+  steps: 60
+  episodes_per_step: 16
+  turns: 4
+  micro_batch: 4
+  lr: 1.0e-4
+  warmup_steps: 5
+  save_every: 0
+  objective: {hide_weight: 1.0, match_weight: 1.0, lm_weight: 0.1, hide_from_turn: 1, pin_first_turn: true}
+train_mix: {real_score: 0.4, mismatch: 0.3, nobrief: 0.15, neg_text: 0.15}
+eval:
+  conditions: [real_score, sham_score, none, nobrief, neg_text, mismatch]
+  turns: 4
+  episodes_per_concept: 1
+  gen_check: 8
+rounds: 1

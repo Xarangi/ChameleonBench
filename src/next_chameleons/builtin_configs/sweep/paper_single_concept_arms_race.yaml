@@ -1,0 +1,25 @@
+id: paper_single_concept_arms_race
+description: >-
+  Primary arms-race matrix: one independent cumulative-bank game per concept and
+  seed, using the paper-aligned 1%-FPR evasion gate and the fixed five-concept
+  one-vs-rest contrast pool. Thirty rounds is only an operational cap; each seed
+  stops at its first failure to beat the cumulative ensemble at the exact gate.
+output_root: runs/sweeps/paper_single_concept_arms_race
+cases:
+  - id: gemma2_9b_single_concept
+    command: arms-race
+    execution: slurm_only
+    params:
+      experiment: paper_gemma2_9b_arms_race
+      rounds: 30
+      train_gpus: 4
+      train_mem: 200G
+      train_time: "12:00:00"
+      target_fpr: 0.01
+      evasion_min_clean_tpr: 0.90
+      evasion_max_trigger_tpr: 0.20
+      stop_on_evasion_failure: true
+      posthoc_metrics: [auroc, tpr_at_5pct_fpr]
+    matrix:
+      concept: [all-caps, finnish, biology-focused, html, mathematical]
+      seed: [7, 23, 41]

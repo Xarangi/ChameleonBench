@@ -1,0 +1,60 @@
+{
+ "_doc": "FINAL OOD split v1 (scripts/build_final_ood.py): final_split_v2 + 'ood' = EVAL-ONLY domain concepts never trained (math = math_base_v1 GSM8K base solutions, physics / chemistry = camel-ai, code = CodeAlpaca-20k). NC 'mathematical' / 'chemistry-based' broad negatives removed.",
+ "train": [
+  "sports",
+  "physical geography",
+  "politics and elections",
+  "astronomy",
+  "video games",
+  "war and the military",
+  "living organisms",
+  "transportation",
+  "law and courts",
+  "towns and villages",
+  "motor racing",
+  "spaceflight",
+  "comics, manga and animation",
+  "German language",
+  "all-caps text",
+  "jokes and humor",
+  "comforting tone"
+ ],
+ "dev": [
+  "television and radio",
+  "buildings and architecture"
+ ],
+ "heldout": [
+  "music",
+  "philosophy",
+  "Christianity and the church",
+  "medicine and hospitals",
+  "food and drink",
+  "plays and poetry",
+  "education",
+  "fashion and modelling",
+  "Finnish language",
+  "HTML markup",
+  "confusion",
+  "deception"
+ ],
+ "families": {
+  "German language": "language",
+  "all-caps text": "format",
+  "jokes and humor": "tone",
+  "comforting tone": "tone",
+  "Finnish language": "language",
+  "HTML markup": "format",
+  "confusion": "tone",
+  "deception": "safety",
+  "mathematical reasoning": "domain",
+  "physics": "domain",
+  "chemistry": "domain",
+  "computer code": "domain"
+ },
+ "ood": [
+  "mathematical reasoning",
+  "physics",
+  "chemistry",
+  "computer code"
+ ]
+}

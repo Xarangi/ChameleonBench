@@ -1,0 +1,33 @@
+# TICA Level 1, Qwen3.5-9B (primary model; DESIGN-TICA.md "FIRST SETUP").
+# Monitors: the base-test probe bank (scripts/l1_fit.py), primary layer from quality.json.
+# Run in the transformers-v5 env: PYTHONPATH=src ~/chameleons-qwen35/.venv/bin/python scripts/tica.py ...
+name: l1_qwen35_9b
+model:
+  path: /scratch/sneheel/hf/hub/models--Qwen--Qwen3.5-9B/snapshots/c202236235762e1c871ad0ccb60c8ee5ba337b9a
+  dtype: bfloat16
+  enable_thinking: false
+  batch_size: 8
+probes:
+  dir: /scratch/sneheel/next_chameleons_artifacts/tica/l1_base/qwen35_9b/probes
+out: /scratch/sneheel/next_chameleons_artifacts/tica/runs/l1_qwen35_9b
+lora: {rank: 16, alpha: 32, dropout: 0.0, target_modules: all-linear}
+train:
+  steps: 300
+  episodes_per_step: 16
+  turns: 4
+  micro_batch: 4
+  lr: 1.0e-4
+  warmup_steps: 10
+  save_every: 100
+  objective: {hide_weight: 1.0, match_weight: 1.0, lm_weight: 0.1, hide_from_turn: 1, pin_first_turn: true}
+# real_score teaches hiding; mismatch/nobrief/neg_text hold selectivity (smoke 4545558: 0.6/0.2/0.1/0.1 at 8 episodes leaked).
+train_mix: {real_score: 0.4, mismatch: 0.3, nobrief: 0.15, neg_text: 0.15}
+eval:
+  conditions: [real_score, sham_score, real_verdict, none, nobrief, neg_text, mismatch]
+  turns: 6
+  episodes_per_concept: 2
+collect: {episodes_per_concept: 2, turns: 4, hide_from_turn: 1}
+fit: {families: [meta_linear, concept_refit], C: 1.0, fpr: 0.01}
+rounds: 3
+# Level 1b runs as a separate config with model.enable_thinking: true (the CLI refuses otherwise).
+rl: {mode: reason_forced, group_size: 8, turns: 3, max_new_tokens: 1024, reasoning_end: "</think>", answer_prefix: "\n\n"}

@@ -1,13 +1,14 @@
 id: qwen_2_5_7b_instruct
-# Paper-faithful default: abliterated helpful-only variant (the paper used
-# "qwen_2.5_7b_instruct_abliterated_v2"). Override hf_id with base_hf_id in an
-# experiment to compare against the standard instruct release.
+# Paper-PINNED source: the official pipeline names the base model
+# "qwen_2.5_7b_instruct_abliterated_v2" (run_full_pipeline.py:323), which is the
+# public huihui-ai v2 abliteration we load here. Override hf_id with base_hf_id
+# in an experiment to compare against the standard instruct release.
 hf_id: huihui-ai/Qwen2.5-7B-Instruct-abliterated-v2
 base_hf_id: Qwen/Qwen2.5-7B-Instruct
 family: qwen
 parameter_scale: 7b
 variant: helpful_only_abliterated
-abliteration_status: best_match_public_abliteration_not_paper_pinned
+abliteration_status: paper_pinned_source
 default_dtype: bfloat16
 activation_sites:
   - residual_stream

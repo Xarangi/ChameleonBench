@@ -187,6 +187,10 @@ def load_local_text_examples(
             row = json.loads(line)
             text = _choose_text(row, text_candidates)
             label = _choose_label(row, label_candidates, fallback=fallback_label)
+            # Materialized safety sources carry an explicit generation_prefix so
+            # the extractor pools over response tokens (where the deception/harm
+            # signal lives) rather than the shared prompt.
+            generation_prefix = row.get("generation_prefix")
             examples.append(
                 HFTextExample(
                     example_id=f"{source}:local:{idx}",
@@ -195,6 +199,7 @@ def load_local_text_examples(
                     domain=domain,
                     source=source,
                     text_hash=stable_hash(text),
+                    generation_prefix=generation_prefix,
                 )
             )
             if max_examples is not None and len(examples) >= max_examples:

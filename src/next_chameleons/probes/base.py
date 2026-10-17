@@ -131,21 +131,26 @@ def calibrate_threshold_at_fpr(
 
 
 def recall_at_threshold(scores: np.ndarray, labels: np.ndarray, threshold: float) -> float:
-    """True-positive rate at a fixed threshold."""
+    """True-positive rate at a fixed threshold.
+
+    Strict ``>`` matches the authors' ``compute_recall``
+    (utils_evaluation.py:119); the fixed-FPR threshold is an actual negative
+    score, so ``>`` holds the realized FPR at most the target.
+    """
 
     positives = np.asarray(scores)[np.asarray(labels) == 1]
     if positives.size == 0:
         return 0.0
-    return float(np.mean(positives >= threshold))
+    return float(np.mean(positives > threshold))
 
 
 def false_positive_rate(scores: np.ndarray, labels: np.ndarray, threshold: float) -> float:
-    """False-positive rate at a fixed threshold."""
+    """False-positive rate at a fixed threshold (strict ``>``, paper-faithful)."""
 
     negatives = np.asarray(scores)[np.asarray(labels) == 0]
     if negatives.size == 0:
         return 0.0
-    return float(np.mean(negatives >= threshold))
+    return float(np.mean(negatives > threshold))
 
 
 def bootstrap_ci(

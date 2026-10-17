@@ -27,7 +27,6 @@ evaluation:
     - dolus_deception
     - apollo_repe_deception
     - circuit_breakers_harmful
-    - synthetic_harmful
   controls:
     - base_model_trigger_control
     - selectivity_heatmap
@@ -46,7 +45,6 @@ real_run:
     - dolus_deception
     - apollo_repe_deception
     - circuit_breakers_harmful
-    - synthetic_harmful
   missing_eval_source_policy: warn_and_skip
   text_column_candidates: [text, prompt, goal, behavior, chosen, rejected]
   label_column_candidates: [label, is_deceptive, harmful, target]
@@ -56,7 +54,13 @@ real_run:
   max_length: 512
   max_steps: 1000
   log_every_steps: 5
-  selected_layers: [4, 8, 9, 12, 16, 20, 24, 28]
+  # Qwen2.5-7B has 28 decoder layers; with hidden_states_offset=1 the max
+  # selectable layer is 27 (hidden_states index 28). Layer 28 would overflow.
+  selected_layers: [4, 8, 9, 12, 16, 20, 24, 27]
   default_probe_layer: 9
   activation_pooling: mean_generation_tokens
+  # D7: fit/score/eval probes on chat-templated activations (paper-faithful).
+  activation_chat_template: true
+  # D4: concept-vs-neutral (preset data_Y) probe negatives, not one-vs-rest.
+  benign_probe_contrast: neutral
   output_dir: ${oc.env:SCRATCH,.}/next_chameleons_artifacts/paper_qwen25_7b_real

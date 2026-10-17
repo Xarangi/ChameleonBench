@@ -1,0 +1,32 @@
+id: qwen_3_4b_instruct
+# Qwen3-4B-Instruct-2507. NOT a paper-pinned model (Neural Chameleons never used
+# a 4B Qwen); we use it as the single small organism for the in-distribution
+# arms-race scaling curve (ensemble size == attacker round). Local offline
+# snapshot: $SCRATCH/hf-cache/hub/models--Qwen--Qwen3-4B-Instruct-2507 and a
+# plain copy at $SCRATCH/models/Qwen3-4B-Instruct-2507.
+# Local absolute snapshot path (NOT a hub id): compute nodes run HF_HUB_OFFLINE=1
+# and this model is not in the wrapper HF_HOME cache. from_pretrained loads a path
+# directly. Full snapshot verified (config + tokenizer + 3 safetensors shards).
+hf_id: /scratch/sneheel/models/Qwen3-4B-Instruct-2507
+base_hf_id: /scratch/sneheel/models/Qwen3-4B-Instruct-2507
+family: qwen
+parameter_scale: 4b
+# Standard instruct release (NOT abliterated). The arms race is in-distribution
+# (our own organism evading known probes on benign concepts), so a helpful-only
+# abliterated base is not required; swap base_hf_id if OOD harmful teacher
+# forcing is ever added here.
+variant: standard_instruct
+abliteration_status: none_standard_instruct
+default_dtype: bfloat16
+activation_sites:
+  - residual_stream
+default_layers: [8, 12, 18, 24, 30]
+# 36 transformer blocks, hidden 2560. No paper-pinned probe layer for this model;
+# we pick a middle-early layer consistent with the ~30% depth the paper uses on
+# the pinned models (gemma-2-9b L12/42, qwen-2.5-7b L9/28). Sweepable.
+paper_target_layer: 12
+# NOTE: probe layer is OUR choice, not paper-pinned; sweep before trusting it.
+# hidden_states[0] is the embedding layer, so block N lives at hidden_states[N+1].
+hidden_states_offset: 1
+layer_index_version: paper_plus1_v2
+requires_auth: false

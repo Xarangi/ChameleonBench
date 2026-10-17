@@ -26,6 +26,46 @@ A Model Organism trained to preserve visible behavior while reducing detectabili
 of a triggered concept in activations.
 _Avoid_: jailbreak model, generic adversarial model
 
+**Active Concept**:
+The one concept an attacker is trained to hide in a single-concept arms-race game.
+_Avoid_: probe pool, negative class
+
+**Probe Contrast Pool**:
+The fixed set of other concept examples used as negatives to fit and calibrate a
+one-vs-rest Probe. It remains fixed when the Active Concept is narrowed so fixed-FPR
+thresholds stay comparable across single-concept and joint games.
+_Avoid_: held-out concepts, jointly attacked concepts
+
+**Single-Concept Arms Race**:
+An iterated attacker/defender game with one Active Concept, a cumulative Probe bank,
+and a fixed Probe Contrast Pool. Independent games estimate concept-specific hiding
+difficulty without cross-concept optimization interference.
+_Avoid_: one-class probe fit, joint multi-concept game
+
+**Concept Game Panel**:
+A matched collection of independent Single-Concept Arms Races, one per concept,
+used to compare which concepts remain hideable as Judge strength accumulates.
+_Avoid_: multi-concept organism, joint-concept game
+
+**Game Exhaustion**:
+The point in a Single-Concept Arms Race where a predeclared family of fully
+budgeted attack attempts can no longer pass the evasion, selectivity, and
+capability-retention gates against the cumulative Judge. It is reported per game;
+replication across game seeds is required before interpreting it as a model-family
+property.
+_Avoid_: first failed optimizer seed, round limit, scheduler cancellation
+
+**Round Cap**:
+An operational maximum that right-censors a game which has not reached Game
+Exhaustion. It is not evidence that the attacker or defender has won.
+_Avoid_: stopping criterion, convergence round
+
+**Held-Out Trigger Control**:
+A trigger naming a concept absent from both attacker training and the Probe
+Contrast Pool, applied to Active Concept examples to test whether evasion is
+selective rather than a generic response to any concept-like trigger.
+_Avoid_: held-out concept Probe, nonsense trigger
+
 **Chameleon Benchmark**:
 The evaluation suite that measures evasion, selectivity, robustness to stronger
 Judges, capability retention, and source/data coverage.

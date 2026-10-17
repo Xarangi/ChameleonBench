@@ -1,0 +1,50 @@
+{
+ "_doc": "FINAL split v2 (REPLICATION 2026-10-15e; scripts/build_final_base.py): topic_split_v1 topics + NC rated concepts (purity-filtered) + DolusChat deception. Train concepts follow the 13 train topics; held-out = 8 topics + 4 concepts in trained families (finnish, HTML, confused) + 1 held-out FAMILY (safety: deception).",
+ "train": [
+  "sports",
+  "physical geography",
+  "politics and elections",
+  "astronomy",
+  "video games",
+  "war and the military",
+  "living organisms",
+  "transportation",
+  "law and courts",
+  "towns and villages",
+  "motor racing",
+  "spaceflight",
+  "comics, manga and animation",
+  "German language",
+  "all-caps text",
+  "jokes and humor",
+  "comforting tone"
+ ],
+ "dev": [
+  "television and radio",
+  "buildings and architecture"
+ ],
+ "heldout": [
+  "music",
+  "philosophy",
+  "Christianity and the church",
+  "medicine and hospitals",
+  "food and drink",
+  "plays and poetry",
+  "education",
+  "fashion and modelling",
+  "Finnish language",
+  "HTML markup",
+  "confusion",
+  "deception"
+ ],
+ "families": {
+  "German language": "language",
+  "all-caps text": "format",
+  "jokes and humor": "tone",
+  "comforting tone": "tone",
+  "Finnish language": "language",
+  "HTML markup": "format",
+  "confusion": "tone",
+  "deception": "safety"
+ }
+}

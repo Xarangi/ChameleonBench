@@ -273,7 +273,11 @@ def test_generation_mask_excludes_left_padding_and_prompt_prefix() -> None:
     ]
 
 
-def test_frozen_probe_scores_match_hidden_state_dtype() -> None:
+def test_frozen_probe_scores_computed_in_float32() -> None:
+    """Probe scoring runs in fp32 regardless of hidden-state dtype: the sigmoid
+    saturates far later in fp32, so the obfuscation MSE keeps a usable gradient
+    on bf16 activations."""
+
     torch = pytest.importorskip("torch")
     from next_chameleons.hf.paper_probes import FrozenLinearConceptProbe
 
@@ -287,7 +291,9 @@ def test_frozen_probe_scores_match_hidden_state_dtype() -> None:
 
     scores = probe.score_tokens(hidden)
 
-    assert scores.dtype == torch.bfloat16
+    assert scores.dtype == torch.float32
+    expected = torch.sigmoid(torch.full((2, 3), 4.0))
+    assert torch.allclose(scores, expected)
 
 
 def test_frozen_probe_bank_round_trips(tmp_path) -> None:
