@@ -3,6 +3,19 @@
 This file tracks the concrete replication state: data sources, fallbacks,
 checkpoints, observed results, and unresolved limitations.
 
+## 2026-10-17r v3b step 152; ANOMALY DETECTOR CATCHES NOTHING on v3b step 140 (verifying); v2 re-check launched
+
+- v3b: 140-160 pass 0.084, hide_p 0.537, 6.2 refits/step; val_score 0.17 / 0.23 / 0.21 at steps 100/120/140 (topic
+  0.52 at 140); early-stop smoothed best 0.144 at 120 (still improving). Layers (40 steps): L8 .15, L12 .32, L16
+  .23, L22 .02, L26 .02. Last 20 steps: OFF det 1.00, all-caps det 0.92, math det 1.00 (never beaten).
+- Anomaly race on step_140 (sports, 16 ep x 16 turns, linear refits): probe catches 0.19-1.0 by turn, mean passes
+  3.2 / episode; OOD (Mahalanobis, L12) catches 0.00 at every turn (ref base, thr 240.6) / <= 0.06 (ref self,
+  thr 185.9); OOD false alarms on concept-free forks 0.2% / 0.9%. v2 final (same eval, 10-16): OOD 0.88-1.0 from
+  turn 4 at 12% false alarms (thr 185.3).
+- Either v3b's dodge is genuinely in-distribution (would be a major result: probe-evading AND not anomalous) or
+  the eval changed (tagged layout reference episodes; frozen-race layout fix 10-17q). Regression check: v2 final
+  re-run with the current code (6056855). Not claiming anything until it lands.
+
 ## 2026-10-17q Probe-layer frontier; frozen race now honours the tagged layout; anomaly eval on v3b step 140
 
 - v3b steps ~100-140, single-layer probes beaten by layer (all archs): L8 0.13 (n 45), L12 0.33 (27), L16 0.09
