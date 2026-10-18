@@ -45,8 +45,10 @@ similar concepts are fine as separate concepts; no capability gate; nothing star
 - Scratch vs warm start from v3b: warm start is clean for v4 (v3b never trained on a v4 held-out
   concept) and saves ~140 steps; scratch is the cleaner paper claim. Recommendation: scratch.
 - Thinking mode: train a thinking-mode anchor (staged s1K / Bespoke) or scope the claim to non-thinking.
-- Probe types in training: wait for the 14 held-out probe-type races (step 340); a type that is never
-  beaten (e.g. token ensembles, GDM rolling attention) may belong in training.
+- Probe types in training: settled (REPLICATION 10-18a). Every held-out type is beaten at step 340 (0.43-0.76 of
+  refits; unseen architectures ~ trained types); unseen DEPTH 20-30 is the gap, so no type needs adding.
+- Retry weighting: retry_hide_weight 3.0 beat the control on k2 / retry pass from step 360 (10-18b); candidate
+  for the final recipe once its held-out race is in.
 - GSM8K: re-run capability.py GSM8K at 512 new tokens (10-minute eval) before touching cap_gen.
 - Periodic held-out race every 40 steps, logged only (never used for stopping / selection): the
   transfer-over-training figure.
