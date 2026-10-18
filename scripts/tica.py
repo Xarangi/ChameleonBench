@@ -17,6 +17,7 @@ from __future__ import annotations
 import argparse
 import dataclasses
 import json
+import os
 from pathlib import Path
 
 import torch
@@ -275,7 +276,8 @@ def main() -> None:
             pool,
             mix=cfg.train_mix,
             turns=cfg.train.turns,
-            seed=cfg.train.seed,
+            # resume chunks draw fresh episodes (10-18): offset the seed by the chunk's global start
+            seed=cfg.train.seed + int(os.environ.get("TICA_STEP_OFFSET", "0") or 0),
             **cfg.sampler_kwargs(),
         )
         asc = AdaptiveSupervisedConfig(

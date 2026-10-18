@@ -3,6 +3,28 @@
 This file tracks the concrete replication state: data sources, fallbacks,
 checkpoints, observed results, and unresolved limitations.
 
+## 2026-10-18b Retry branches (s360 + 60 steps): retryB wins; v3b EXTENDED to 1000 from retryB
+
+- Training pass rate by probe index (segments that beat bank k; n in brackets), steps 31-60 of each branch
+  (steps 1-30 in parentheses):
+
+  | Arm | k1 | k2 | k3 | k4 | retry pass |
+  |---|---|---|---|---|---|
+  | ctl (unchanged) | 0.94 [232] (0.86) | 0.71 [214] (0.61) | 0.53 [132] (0.48) | 0.45 [56] (0.48) | 0.283 [963] (0.239) |
+  | A improve_weight 1 + margin 0.1 | 0.91 [245] (0.90) | 0.66 [223] (0.64) | 0.55 [130] (0.58) | 0.61 [57] (0.46) | 0.289 [1024] (0.268) |
+  | B retry_hide_weight 3 | 0.93 [215] (0.94) | 0.78 [199] (0.65) | 0.57 [147] (0.47) | 0.55 [67] (0.42) | 0.341 [983] (0.269) |
+
+  retry pass = a turn whose previous turn was caught by the SAME bank on the same concept (turns.jsonl). B > ctl on
+  k2 (+0.07, ~1.6 SE) and retry pass (+0.06, ~2.7 SE, episode-correlated); A ~ ctl. 1 seed, 60 steps: modest evidence.
+  Held-out races per arm not run yet.
+- EXTENSION (user 10-18: "continue v3b for much longer"): configs/tica/final_v3b_ext_4b.yaml = retryB from its final
+  adapter (global step 420) to global step 1000, fixed steps (no early stopping), val races logged only,
+  model.batch_size 8 -> 16 for the no-grad refit reads (speed; memory to verify on step 1).
+- FIX: resume chunks reseeded with the same seed (trainer rng / torch / EpisodeSampler) -> each chunk replayed chunk 0's
+  episode draws. Now seed + TICA_STEP_OFFSET (offset 0 unchanged).
+- 2 GPUs: nothing in tica/ is distributed (docs/tica-other-hpc.md option D, 1-2 days of work, ~1.6-1.8x per step on 2
+  GPUs). Step time 150-330 s, ~75% refit reads + fits (fits are LBFGS on the GPU).
+
 ## 2026-10-18a v3b FINISHED (step 400 = configured steps); held-out probe-type races (step 340)
 
 - Main run ended at step 400 (train.steps 400; r2/r3 exited "already at step 400"). Probe index 380-400: 1st fresh probe

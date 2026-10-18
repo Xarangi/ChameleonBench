@@ -488,7 +488,7 @@ class AdaptiveSupervisedTrainer:
         self._transient: list[str] = []  # episode-local refits (refit_mode="episode")
         self._bank_validated = False
         self.base_names = {e.monitor.name for e in pool.entries}
-        self.rng = random.Random(cfg.seed)
+        self.rng = random.Random(cfg.seed + off)  # + off: resume chunks draw afresh
         # Pursuit (adaptive.pursuit): running centroid at the concept layer + per-step (i,t) acts;
         # one PursuitState per monitored concept (multi-concept: the clouds differ).
         self.pursuit_by: dict[str, PursuitState] = {}
@@ -499,7 +499,7 @@ class AdaptiveSupervisedTrainer:
         self._kind_of: dict[str, str] = {}
         self._kind_first: dict[tuple, int] = {}
         self.kind_stats: dict[str, list[int]] = {}
-        torch.manual_seed(cfg.seed)
+        torch.manual_seed(cfg.seed + off)
         (self.out / "config.json").write_text(json.dumps(asdict(cfg), indent=1))
 
     def _train_units(self, trajs, keys, layers, tok_layers=()):
