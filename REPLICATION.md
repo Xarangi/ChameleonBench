@@ -3,6 +3,17 @@
 This file tracks the concrete replication state: data sources, fallbacks,
 checkpoints, observed results, and unresolved limitations.
 
+## 2026-10-17ac Turns-to-beat: the model has ONE good attempt per probe; retries rarely work
+
+Training refit probes, steps 281-360 (n=1188): beaten 0.53; within 1 turn 0.04, 2: 0.40, 3: 0.46, 5: 0.50; median 2;
+unbeaten probes stood 5.4 turns (censored at segment end). Per-turn hazard after deployment, held-out sanity races
+(24-turn segments): step 140 t1 0.07, t2 0.28, t3-5 0.08-0.10, t6+ 0-0.04; step 300 t1 0.12, t2 0.43, t3-11 0.03-0.16.
+Turn 1 = the probe's first judgement (fit on the current regime, so mostly caught); turn 2 = the first try after a
+"caught" verdict. Training raised the first-try rate (0.28 -> 0.43) much more than the retry rate (~0.07 -> ~0.09).
+By layer (within 2 turns / ever): L12 0.66 / 0.80, L16 0.53 / 0.71, ens 8-14 0.61 / 0.71, L8 0.43 / 0.58, deep ens
+0.29 / 0.38, L22 0.21 / 0.32, L26 0.17 / 0.30. By concept: politics / war 0.62 / 0.78 ... chemistry 0.13 / 0.26,
+maths 0.08 / 0.08. The probe-panel eval (proposed) would show whether retries repeat the failed move.
+
 ## 2026-10-17ab v4 labels done + finance filter; per-kind / per-concept analysis at step 360; final-run recipe revised
 
 - 27B labels on final_v4 (3 shards merged: concept_labels_v4data_27b.json, 33,327 texts). Negative contamination
