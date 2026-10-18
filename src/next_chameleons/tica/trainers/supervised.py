@@ -2112,11 +2112,16 @@ class AdaptiveSupervisedTrainer:
             if self.step_k % 10 == 0 or self.step_k == 1:
                 print(json.dumps({k: (round(v, 4) if isinstance(v, float) else v)
                                   for k, v in rec.items()}), flush=True)
-            if cfg.save_every and self.step_k % cfg.save_every == 0:
+            saved = bool(cfg.save_every and self.step_k % cfg.save_every == 0)
+            if saved:
                 self.policy.save_adapter(self.out / f"step_{self.step_k}")
+            ev = cfg.adaptive.eval_every
+            if (saved and not ev) or (ev and (self.step_k + self._step_offset()) % ev == 0):
+                if not saved:
+                    self.policy.save_adapter(self.out / f"step_{self.step_k}")
                 self._eval_on_save(self.out / f"step_{self.step_k}")
-                if self._early_stop_check():
-                    break
+            if saved and self._early_stop_check():
+                break
         self.policy.save_adapter(self.out / "final")
         if getattr(self, "_wb", None) is not None:
             self._wb.finish()

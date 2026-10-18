@@ -158,6 +158,10 @@ class AdaptiveConfig:
     # Shell command run (non-blocking) after each checkpoint save; {adapter} and {step} are filled
     # in, e.g. an sbatch of the frozen race. Empty = off.
     eval_on_save: str = ""
+    # Eval cadence (10-18; default 0 = after every save, the old behaviour): launch eval_on_save
+    # only at GLOBAL steps divisible by eval_every (saving that adapter first if not a save step).
+    # The eval always runs as its own job; the training job never waits for it.
+    eval_every: int = 0
     # EARLY STOPPING (10-16j; user: lenient, "don't throw away good training"). The validation evals
     # launched by eval_on_save write JSON files {"step": k, <early_stop_metric>: v} matching
     # early_stop_glob (relative to the run's out dir). After every save the trainer reads all

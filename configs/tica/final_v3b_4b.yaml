@@ -121,6 +121,7 @@ rl:
     kind_layers: [8, 12, 16, 22, 26]
     concept_families: configs/tica/final_split_v3.json
     eval_on_save: "sbatch --parsable scripts/slurm/tica_val.sh final_v3b_4b {adapter} {step} /scratch/sneheel/next_chameleons_artifacts/tica/runs/final_v3b_4b/val configs/tica/final_split_v3.json"
+    eval_every: 50   # 10-18 (user): val race as its own job every 50 global steps (saves stay every 20)
     early_stop_glob: ""   # 10-18: off for the extension (val races logged only)
     early_stop_metric: val_score       # mean over families of "new probes beaten within 3 turns"
     early_stop_window: 3
