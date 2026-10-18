@@ -1,10 +1,11 @@
 # FINAL v4 (DRAFT 10-18, NOT LAUNCHED; docs/tica-v4-recipe.md): final_v3b_4b from scratch on split v5
 # (scripts/build_final_v5.py, REPLICATION 10-18f: 20 train = 4 per area; 38 held-out incl. the emotion and
 # safety families; dev merged into held-out) + the 10-17/18 levers:
-# - retry_hide_weight 3.0 (10-18b branch win; the ladder branch 6199432 may replace it)
+# - retry ladder 2x / 3x / 4x after 1 / 2 / 3+ consecutive catches (10-18i: best held-out arm, beat flat 3x)
 # - no off_match_weight (10-18: OFF turns caught 1.00 from s160 in v3b training; dropped, user)
 # - LoRA rank 32; 24 turns; switch prob 0.35, >= 8 turns per concept segment
-# - LR warmup -> 3e-4 -> cosine to 2e-4 by step 200, hold, cool down to 2e-5 over the last 150 steps
+# - LR warmup -> 3e-4 -> cosine to 1e-4 by step 200, hold, cool down to 1e-5 over the last 150 steps
+#   (held 2e-4 lost to 1e-4 in training AND held-out, 10-18i)
 # - 1200 fixed steps, no early stopping; held-out race every 50 global steps as its own job (logged only)
 # - curriculum: flat per-concept weights (no family level), cap 3x uniform, uniform for 50 steps then ramp to 0.7
 # - turn 0: fixed base probe until step 150, then a fresh fork-fit probe (the static dodge stops paying)
@@ -33,17 +34,17 @@ train:
   episodes_per_step: 8
   turns: 24         # 16 -> 24: more iterations per concept (24-turn MEMORY UNVERIFIED: smoke first)
   micro_batch: 1     # 10-16n: 16-turn episodes peaked at 40.0 GB of 40 with 2 (profile 5864657)
-  lr: 2.0e-4        # held LR (user 10-18; v3b held 1e-4). PENDING the lr2e4 branch (6199433)
+  lr: 1.0e-4        # held LR (v3b); 2e-4 tested 10-18 (6199433 / 6214447): worse on k2-k4 and held-out
   lr_peak: 3.0e-4       # 10-17i: warm up to 3e-4, cosine to 1e-4 by step 200 (user), then hold
   lr_decay_steps: 200
-  lr_cooldown_steps: 150   # end cooldown 2e-4 -> 2e-5 over the last 150 steps
-  lr_final: 2.0e-5
+  lr_cooldown_steps: 150   # end cooldown 1e-4 -> 1e-5 over the last 150 steps
+  lr_final: 1.0e-5
   warmup_steps: 10
   save_every: 20    # checkpoints (the held-out race runs every adaptive.eval_every = 50 steps)
   save_state: true  # 10-18: Adam moments + curriculum + RNG restored across resume chunks (no re-warmup)
   seed: 0
   # 10-16i: no pinning; the first probe of every concept is fit on the policy itself (first_probe)
-  objective: {hide_weight: 1.0, retry_hide_weight: 3.0, match_weight: 2.0, lm_weight: 0.1, hide_from_turn: 0, pin_first_turn: false,
+  objective: {hide_weight: 1.0, retry_hide_ladder: [2.0, 3.0, 4.0], match_weight: 2.0, lm_weight: 0.1, hide_from_turn: 0, pin_first_turn: false,
               pin_segment_first: false}
 rl:
   adaptive:

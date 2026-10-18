@@ -3,6 +3,26 @@
 This file tracks the concrete replication state: data sources, fallbacks,
 checkpoints, observed results, and unresolved limitations.
 
+## 2026-10-18i Retry ladder wins held-out; LR 2e-4 ruled out; v4 draft updated; baseline v3b at step ~505
+- Held-out races (24 turns, mixed kinds, no switches, 56 ep; branches 60 steps from s360, same draws), refits beaten /
+  beaten within 3 turns / pass per turn after turn 0 / refits:
+  ctl 0.81 / 0.61 / 0.191 / 283; A (progress) 0.86 / 0.70 / 0.248 / 343; B (flat 3x) 0.84 / 0.71 / 0.238 / 328;
+  L (ladder 2/3/4) 0.88 / 0.76 / 0.267 / 373 (6214446); lr2e4 0.79 / 0.57 / 0.164 / 244 (6214447).
+  Training (steps 31-60): L also had the best retry pass (0.347) and k3 / k4 (0.59 / 0.62).
+- RULED OUT (as a branch from s360): held LR 2e-4. Worse than ctl in training (k2-k4, retry pass 0.219 vs 0.283) and
+  held-out. Caveat: a mid-run jump, not a from-scratch 2e-4.
+- v4 draft: retry_hide_ladder [2, 3, 4] replaces retry_hide_weight 3.0; held LR back to 1e-4, cooldown to 1e-5.
+- Baseline v3b (no retry weighting), training pass by probe index, steps 440-500 (20-step windows): k1_first 1.00,
+  k1_switch 0.79-0.89, k2 0.73-0.80, k3 0.61-0.66, k4 0.56-0.71, k5 0.52-0.53, retry pass 0.33-0.37 (400-460: k2 0.69,
+  retry 0.32) -> still improving. Held-out static L20/24 detection on ON turns 0.58 (360-420) -> 0.43 (480-540); OFF 1.00.
+  Refit readability AUROC 0.9996 -> 0.9958 (share of refits < 0.99: 0.8% -> 13.6%): readability slowly eroding.
+  Val races (dev, small n, logged only) 380 / 400 / 450: pass 0.160 / 0.106 / 0.133, beaten 0.80 / 0.71 / 0.72: flat.
+  Step time 247 s (300-360) -> 346 s (480-540): refit reads grow with the probe bank.
+- Clarification: the earlier "v3b dodges the evasion detector" (10-17r, 10-18g) is the UNSUPERVISED Mahalanobis OOD
+  monitor (0.00 at s140, 0.06-0.19 at s400; v2 was caught 0.88-1.0). The 10-18h SUPERVISED detector is a different
+  monitor (trained on labelled evading turns of the model itself) and catches it (AUROC ~1.0). Neither was trained
+  against.
+
 ## 2026-10-18h Probe panel (s400 vs base) + supervised evasion detector; analysis tooling
 
 TOOLS (commits 656cb2d, bb75c02): scripts/tica_probe_panel.py (+ tica/panel.py, slurm wrapper) = the refit race with
