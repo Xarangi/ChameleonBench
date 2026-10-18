@@ -1,4 +1,8 @@
-# TICA final-run recipe (v4; revised 2026-10-17 after the user's decisions; nothing launched)
+# TICA final-run recipe (v4; revised 2026-10-18; draft config configs/tica/final_v4_4b.yaml, nothing launched)
+
+10-18 user decisions: more steps (1200), more turns (24), longer segments before a switch (>= 8 turns, switch
+prob 0.35), LoRA rank 32, held LR 2e-4 (branch test 6199433) + end cooldown, retry_hide_weight 3.0 (or the
+retry ladder, branch 6199432).
 
 User decisions (10-17): dev merged into held-out, fixed number of steps (no early stopping, no dev);
 3-5 train concepts per family; labels only keep NEGATIVES clean, positives trusted from the sources;
