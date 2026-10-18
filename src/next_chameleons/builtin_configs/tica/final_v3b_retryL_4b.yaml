@@ -1,4 +1,4 @@
-# 10-18 BRANCH (retryL): as retryctl/A/B (final_v3b_4b s360 + 60 steps) with the retry LADDER (3, 4, 5): 3x after one catch by the same probe (= retryB), 4x after two, 5x after three or more.
+# 10-18 BRANCH (retryL): as retryctl/A/B (final_v3b_4b s360 + 60 steps) with the retry LADDER (2, 3, 4) (user: more gradual): 2x after one catch by the same probe, 3x after two, 4x after three or more.
 # 10-17ad BRANCH (retryctl): final_v3b_4b resumed from its step-360 adapter (TICA_STEP_OFFSET=360), 60 steps; retry-learning test (ctl = unchanged, A = improve_weight 1.0 progress term, B = retry_hide_weight 3.0).
 # turn 0 judged by the base probe and HIDDEN from (no fork, no pin; first_probe switch_fork: topic switches
 # fork), per-turn tagged prompt layout (system prompt + "Monitor: ON/OFF" status line), monitor-off turns,
@@ -64,7 +64,7 @@ train:
   save_every: 20    # each save launches a dev-concept validation race (eval_on_save)
   seed: -360   # 10-18: + TICA_STEP_OFFSET 360 = seed 0, the same draws as retryctl/A/B (pre-fix)
   # 10-16i: no pinning; the first probe of every concept is fit on the policy itself (first_probe)
-  objective: {hide_weight: 1.0, retry_hide_ladder: [3.0, 4.0, 5.0], match_weight: 2.0, lm_weight: 0.1, hide_from_turn: 0, pin_first_turn: false,
+  objective: {hide_weight: 1.0, retry_hide_ladder: [2.0, 3.0, 4.0], match_weight: 2.0, lm_weight: 0.1, hide_from_turn: 0, pin_first_turn: false,
               pin_segment_first: false}
 rl:
   adaptive:

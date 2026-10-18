@@ -11,7 +11,12 @@ checkpoints, observed results, and unresolved limitations.
 - NOT the 10-11k turn-weighted hide (RULED OUT): that one weighted by EPISODE turn with costs < 1 (0.1-1.0) and
   diluted total hide pressure; the ladder keeps first tries at 1.0 and the weights are normalised per step.
 - Branches from final_v3b_4b s360 + 60 steps, same draws as retryctl/A/B (seed -360 + offset 360 = 0):
-  retryL ladder (3, 4, 5) job 6199432; lr2e4 (held LR 2e-4, objective unchanged) job 6199433.
+  retryL ladder (2, 3, 4) job 6199432 (user: more gradual; edited before start); lr2e4 (held LR 2e-4, objective unchanged) job 6199433.
+- CANCELLED the retry-weighted continuation (final_v3b_ext, 6198833-36; user: clean v3b baseline first, weighted
+  runs from scratch later). The original v3b continuation 400 -> 1000 (6198908-12) is THE baseline.
+- Monitor-OFF in training rollouts (answer format), base concept probe: OFF caught 0.85 (s0-80) -> 0.97 -> 1.00 from
+  s160 on (ON 0.98 -> 0.78, nobrief 0.92 -> 1.00). The leak behind off_match_weight was one free-generation check at
+  s160 (L12 OFF 0.25-0.58 vs base 0.83-0.92); not seen in training-format turns.
 - configs/tica/final_v4_4b.yaml DRAFT (not launched): split v4, rank 32, 24 turns, switch 0.35 / min segment 8,
   1200 steps, LR 3e-4 -> 2e-4 hold -> 2e-5 cooldown (150), retry_hide_weight 3, off_match 2, held-out race every 50.
 
