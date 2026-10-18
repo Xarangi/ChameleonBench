@@ -3,6 +3,18 @@
 This file tracks the concrete replication state: data sources, fallbacks,
 checkpoints, observed results, and unresolved limitations.
 
+## 2026-10-18d Retry ladder + LR-2e-4 branches; LR end cooldown; v4 draft config
+
+- New options (default off; tests green): objective.retry_hide_ladder (hide weight by the number of CONSECUTIVE catches
+  by the same active probe: ladder[min(n, len) - 1], n = 0 keeps 1.0; overrides retry_hide_weight) and
+  train.lr_cooldown_steps / lr_final (cosine to lr_final over the last N global steps, resume-chunk aware).
+- NOT the 10-11k turn-weighted hide (RULED OUT): that one weighted by EPISODE turn with costs < 1 (0.1-1.0) and
+  diluted total hide pressure; the ladder keeps first tries at 1.0 and the weights are normalised per step.
+- Branches from final_v3b_4b s360 + 60 steps, same draws as retryctl/A/B (seed -360 + offset 360 = 0):
+  retryL ladder (3, 4, 5) job 6199432; lr2e4 (held LR 2e-4, objective unchanged) job 6199433.
+- configs/tica/final_v4_4b.yaml DRAFT (not launched): split v4, rank 32, 24 turns, switch 0.35 / min segment 8,
+  1200 steps, LR 3e-4 -> 2e-4 hold -> 2e-5 cooldown (150), retry_hide_weight 3, off_match 2, held-out race every 50.
+
 ## 2026-10-18c v3b training-log analyses: concept stays readable; held-out-layer dodge grows; OFF turns clean
 
 - Refit probes fit on the model's own dodging states (runs/final_v3b_4b refits.jsonl, global steps): kept 0.994-1.000
