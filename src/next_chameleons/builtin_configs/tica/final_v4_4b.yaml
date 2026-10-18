@@ -5,7 +5,8 @@
 # - LoRA rank 32; 24 turns; switch prob 0.35, >= 8 turns per concept segment
 # - LR warmup -> 3e-4 -> cosine to 2e-4 by step 200, hold, cool down to 2e-5 over the last 150 steps
 # - 1200 fixed steps, no early stopping; held-out race every 50 global steps as its own job (logged only)
-# Open: turn-0 probe schedule, relative curriculum cap, thinking-mode scope (recipe "Open decisions").
+# - curriculum: relative caps 2x uniform (families and concepts), adaptive share 0.8
+# Open: turn-0 probe schedule, thinking-mode scope (recipe "Open decisions").
 name: final_v4_4b
 model:
   path: /scratch/sneheel/hf/hub/models--Qwen--Qwen3.5-4B/snapshots/851bf6e806efd8d0a36b00ddf55e13ccb7b8cd0a
@@ -83,7 +84,7 @@ rl:
     concept_sampling: thompson
     curriculum_prior: concept   # 10-17g: start uniform over CONCEPTS (v2 mix)
     curriculum_ramp_steps: 100
-    curriculum_mix_max: 0.5
+    curriculum_mix_max: 0.8   # 10-18 (user: more adaptive): 0.5 -> 0.8 adaptive share after the ramp
     first_probe: switch_fork   # 10-17h: turn 0 = base probe (hidden from, not pinned); switches fork
     off_turn_prob: 0.15        # 10-17i: "Monitor: OFF." turns, trained to match the base model
     refit_switch_max: 3       # 10-15g: a refit failing its gate -> another probe TYPE, never the old probe
@@ -91,7 +92,9 @@ rl:
     neg_label_thr: 0.5
     tts_gamma: 0.95
     tts_floor: 0.2
-    tts_cap: 0.3
+    tts_cap: 0.3              # probe kinds only (concepts: the relative caps below)
+    family_cap_rel: 2.0       # 10-18: a family gets at most 2x its uniform share (5 trained families -> 0.4)
+    concept_cap_rel: 2.0      # 10-18: a concept at most 2x its uniform share within the family (4 -> 0.5)
     tts_max_turns: 50
     # 10-16l: factored architecture x layer sampling; layers = train depths only (20/24/28/30 held out)
     kind_layers: [8, 12, 16, 22, 26]

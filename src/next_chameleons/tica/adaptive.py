@@ -318,6 +318,14 @@ class AdaptiveConfig:
     tts_floor: float = 0.2
     tts_cap: float = 0.3
     tts_max_turns: float = 50.0
+    # Stronger concept curriculum (10-18; user: "even more adaptive, across and within areas";
+    # defaults = the old behaviour). *_cap_rel > 0: cap = cap_rel / K (K = families, or concepts in
+    # the family) instead of tts_cap; *_power: difficulty weights ~ (expected turns) ** power.
+    # Probe-kind sampling keeps the tts_* settings.
+    concept_cap_rel: float = 0.0
+    concept_power: float = 1.0
+    family_cap_rel: float = 0.0
+    family_power: float = 1.0
 
 
 def load_extra_pos(cfg: AdaptiveConfig, concept: str) -> list[str]:

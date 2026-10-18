@@ -469,7 +469,9 @@ class AdaptiveSupervisedTrainer:
             if ac.concept_families:
                 fams = json.loads(Path(ac.concept_families).read_text()).get("families", {})
             self.concept_bandit = HierarchicalThompson(
-                {c: fams.get(c, "topic") for c in concepts}, **self._tts_kw())
+                {c: fams.get(c, "topic") for c in concepts},
+                family_kw={"cap_rel": ac.family_cap_rel, "power": ac.family_power},
+                **{**self._tts_kw(), "cap_rel": ac.concept_cap_rel, "power": ac.concept_power})
         # truncated no-grad reads (Policy._depth; exact). Config field, or TICA_TRUNC_READS=1
         # (evals of runs trained before the field existed).
         if cfg.adaptive.truncate_reads or os.environ.get("TICA_TRUNC_READS") == "1":

@@ -236,3 +236,29 @@ def test_probe_index_metrics():
     assert m["beatk_n_1"] == 2 and m["beatk_frac_1"] == 1.0 and m["beatk_turns_1"] == 1.5
     assert m["beatk_n_2"] == 2 and m["beatk_frac_2"] == 0.0
     assert m["beat1_first_frac"] == 1.0 and m["beat1_switch_frac"] == 1.0
+
+
+def test_relative_cap_and_power_curriculum():
+    from next_chameleons.tica.curriculum import DiscountedThompson, HierarchicalThompson
+
+    rng = random.Random(0)
+    recs = [{"kind": "hard", "turns": 40, "beaten": False}] + [
+        {"kind": k, "turns": 1, "beaten": True} for k in ("a", "b", "c") for _ in range(30)]
+    old = DiscountedThompson(["hard", "a", "b", "c"], floor=0.2, cap=0.3)
+    new = DiscountedThompson(["hard", "a", "b", "c"], floor=0.2, cap=0.3, cap_rel=2.0)
+    old.update(recs)
+    new.update(recs)
+    assert abs(old.probs(rng)["hard"] - 0.3) < 1e-9  # the absolute cap binds (uniform 0.25)
+    assert abs(new.probs(rng)["hard"] - 0.5) < 1e-9  # 2x uniform
+    flat = DiscountedThompson(["x", "y"], power=1.0)
+    sharp = DiscountedThompson(["x", "y"], power=2.0, cap_rel=2.0)
+    flat.cap = 1.0
+    for b in (flat, sharp):
+        b.update([{"kind": "x", "turns": 4, "beaten": True}, {"kind": "y", "turns": 1,
+                                                             "beaten": True}] * 20)
+    px = [b.probs(random.Random(3))["x"] for b in (flat, sharp)]
+    assert px[1] > px[0] > 0.5
+    h = HierarchicalThompson({"s": "topic", "m": "topic", "G": "language"},
+                             family_kw={"cap_rel": 1.5}, cap_rel=2.0)
+    assert h.fam.cap_rel == 1.5 and h.within["topic"].cap_rel == 2.0
+    assert DiscountedThompson(["a"]).cap_rel == 0.0  # default off

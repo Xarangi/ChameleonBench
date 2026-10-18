@@ -28,11 +28,16 @@ import random
 
 
 class DiscountedThompson:
-    def __init__(self, keys, gamma=0.95, floor=0.2, cap=0.3, max_turns=50.0):
+    def __init__(self, keys, gamma=0.95, floor=0.2, cap=0.3, max_turns=50.0, cap_rel=0.0,
+                 power=1.0):
         self.keys = list(keys)
         if not self.keys:
             raise ValueError("no arms")
         self.gamma, self.floor, self.max_turns = gamma, floor, max_turns
+        # cap_rel > 0 (10-18; default off): cap = cap_rel x the uniform share 1 / K instead of the
+        # absolute cap (which flattened small families: 0.3 <= 1 / K); power > 1 sharpens the
+        # difficulty weights (p ~ d ** power).
+        self.cap_rel, self.power = cap_rel, power
         self.cap = min(1.0, max(cap, 1.0 / len(self.keys)))
         self.B = {k: 0.0 for k in self.keys}  # discounted beats
         self.N = {k: 0.0 for k in self.keys}  # discounted judged turns at risk
@@ -57,11 +62,12 @@ class DiscountedThompson:
     def probs(self, rng: random.Random, keys=None) -> dict:
         keys = list(keys) if keys is not None else self.keys
         h = self.hazard_draw(rng)
-        d = {k: min(1.0 / max(h[k], 1e-9), self.max_turns) for k in keys}
+        d = {k: min(1.0 / max(h[k], 1e-9), self.max_turns) ** self.power for k in keys}
         tot = sum(d.values())
         K = len(keys)
         p = {k: self.floor / K + (1 - self.floor) * d[k] / tot for k in keys}
-        return cap_probs(p, max(self.cap, 1.0 / K))
+        cap = min(1.0, self.cap_rel / K) if self.cap_rel > 0 else self.cap
+        return cap_probs(p, max(cap, 1.0 / K))
 
     def sample(self, rng: random.Random, exclude=()) -> str | None:
         keys = [k for k in self.keys if k not in set(exclude)]
@@ -117,10 +123,11 @@ class HierarchicalThompson:
     """Concept sampling: FAMILY first (bandit over families), then the concept within its family
     (one bandit per family); p(c) = p(family) p(c | family)."""
 
-    def __init__(self, families: dict, **kw):
+    def __init__(self, families: dict, family_kw: dict | None = None, **kw):
         self.fam_of = dict(families)
         fams = sorted(set(self.fam_of.values()))
-        self.fam = DiscountedThompson(fams, **kw)
+        # family_kw (10-18): overrides for the FAMILY-level bandit (e.g. its own cap_rel / power)
+        self.fam = DiscountedThompson(fams, **{**kw, **(family_kw or {})})
         self.within = {f: DiscountedThompson([c for c, g in self.fam_of.items() if g == f], **kw)
                        for f in fams}
 
