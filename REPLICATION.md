@@ -3,6 +3,18 @@
 This file tracks the concrete replication state: data sources, fallbacks,
 checkpoints, observed results, and unresolved limitations.
 
+## 2026-10-17z "Base beats deception probes" = per-turn probe misses accumulated, NOT base evasion; NC-style per-turn view
+
+Per-turn detection (fraction of monitored turns caught), base model: DolusChat 0.83-0.89 (both variants, base and refit
+probes), insider trading 1.00, every topic / surface concept 1.00. The race's "beaten" = ANY undetected turn while the
+probe stands, so a ~12% per-turn miss rate gives 1 - 0.88^6 ~ 0.5 "beaten" over a 6-turn stand (observed 14-15/24).
+NC (arXiv 2512.11949) reports per-example TPR at 1% FPR, clean vs trigger: its DolusChat probe catches 55% clean (base
+model "misses" 45%), Apollo RepE 88%; so a base miss rate is expected and our per-turn 0.88 is STRONGER than NC's probe.
+Fix: for concepts whose base per-turn TPR < ~0.95 report the NC-style per-turn TPR drop vs base, not the race pass rate.
+Partial v3b step-300 (race running): refit-probe per-turn det DolusChat 0.74-0.77 vs base 0.88 (drop ~0.12); insider
+trading 0.99 vs 1.00 (no hiding against refits); fixed base probe 0.33-0.50 vs base 0.83-1.00 (the static dodge).
+No harmfulness concept is in any TICA eval (excluded by the guardrail).
+
 ## 2026-10-17y Safety eval concepts; step-300 CAPABILITY DROP; code first beats; v4 recipe drafted
 
 - scripts/build_safety_eval.py -> $RAW/tica/final_v3_safety_eval{,_inputs}.json (eval-only held-out): Apollo
