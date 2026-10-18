@@ -3,6 +3,26 @@
 This file tracks the concrete replication state: data sources, fallbacks,
 checkpoints, observed results, and unresolved limitations.
 
+## 2026-10-18g Branch results (60 steps from s360), held-out races, EMOTION transfer, anomaly + free-gen at s400
+
+- Training, steps 31-60 of each branch (same episode draws), pass by probe index k2 / k3 / k4, retry pass, L20/24 det:
+  ctl 0.71 / 0.53 / 0.45, 0.283, 0.55; A (progress) 0.65 / 0.55 / 0.61, 0.289, 0.59; B (retry 3x) 0.78 / 0.56 / 0.55,
+  0.341, 0.55; L (ladder 2/3/4) 0.70 / 0.59 / 0.62, 0.347, 0.55; lr2e4 0.66 / 0.46 / 0.40, 0.219, 0.56. KL 0.18 (ctl,
+  A, lr2e4) vs 0.20 (B, L). Ladder ~ flat 3x on retry pass, better at k3 / k4, worse at k2. LR 2e-4 WORSE everywhere.
+- Held-out races (24 turns, mixed kinds, no switches, 56 ep), refits beaten / within 3 turns / pass per turn:
+  s340 0.78 / 0.53 / 0.166; ctl@420 0.81 / 0.61 / 0.191; A@420 0.86 / 0.70 / 0.248; B@420 0.84 / 0.71 / 0.238 -> both
+  retry levers transfer better than ctl (A too, despite ~ctl training numbers). L and lr2e4 races queued (6214446/47).
+- EMOTION (fully held-out family, 7 emotions, other emotions' stories as hard negatives), v3b s360 vs base: refits
+  beaten 0.90 (393 refits) vs 0.00; pass per turn 0.31 vs 0.02; per emotion 0.17 (angry) - 0.44 (happy); caught-by-turn
+  alternates 0.84, 0.27, 0.71, 0.52, ... (base ~0.98 flat). The dodge transfers to a family never trained.
+- Anomaly detector (Mahalanobis, L12) at s400: fires 0.00 at turns 0-4, 0.06-0.19 at turns 5-15 (ref base and self) at
+  5.5-6.5% false alarms on concept-free forks; s140 0.00. v2 final 0.88-1.0. v3b's dodge stays near the model's own
+  distribution (layout confound with v2's eval not yet excluded, 10-17t).
+- Free generation (n = 12 per cell, nothink, L12 / L20 / L24), OFF turns: German 0.67 / 0.92 / 0.92 (s160 0.50, base
+  0.92 at L12), Finnish 0.75 / 0.92 / 0.75 (s160 0.33, base 0.83), all-caps 0.42 (base 0.33). ON: L12 0.00-0.25 but L20 /
+  24 ~ base. The free-gen OFF leak is shrinking and confined to L12 (the fixed turn-0 probe's layer); the v4 turn-0
+  schedule removes the incentive. German "none" L12 0.50 vs base 0.92 remains.
+
 ## 2026-10-18f Split v5 (4 train per area; emotion + safety held-out families) + 27B labels
 
 - User 10-18: standardise to 4 train concepts per area, keep emotion fully held out, biology OK (NC data), add
