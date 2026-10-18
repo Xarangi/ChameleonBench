@@ -352,3 +352,20 @@ def test_family_close_negatives():
     off = other_negatives(r1, texts, others, ["German"], 12, 0.0)
     assert off == [r2.choice(texts[r2.choice(others)]) for _ in range(12)]
     assert other_negatives(random.Random(0), texts, others, [], 6, 0.5).__len__() == 6
+
+
+def test_first_probe_fork_schedule():
+    from next_chameleons.tica.adaptive import AdaptiveConfig
+    from next_chameleons.tica.trainers.supervised import AdaptiveSupervisedTrainer
+
+    class T:
+        _step_offset = staticmethod(lambda: 100)
+
+    t = T()
+    for fp, n, step, want in [("switch_fork", 0, 500, "switch_fork"), ("switch_fork", 150, 49,
+                                                                      "switch_fork"),
+                              ("switch_fork", 150, 50, "fork"), ("base", 150, 500, "base")]:
+        t.cfg = type("C", (), {"adaptive": AdaptiveConfig(first_probe=fp,
+                                                          first_probe_fork_from_step=n)})()
+        t.step_k = step
+        assert AdaptiveSupervisedTrainer._first_probe_mode(t) == want

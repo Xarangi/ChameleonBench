@@ -7,7 +7,8 @@
 # - LR warmup -> 3e-4 -> cosine to 2e-4 by step 200, hold, cool down to 2e-5 over the last 150 steps
 # - 1200 fixed steps, no early stopping; held-out race every 50 global steps as its own job (logged only)
 # - curriculum: flat per-concept weights (no family level), cap 3x uniform, uniform for 50 steps then ramp to 0.7
-# Open: turn-0 probe schedule, thinking-mode scope (recipe "Open decisions").
+# - turn 0: fixed base probe until step 150, then a fresh fork-fit probe (the static dodge stops paying)
+# Open: thinking-mode scope (recipe "Open decisions").
 name: final_v4_4b
 model:
   path: /scratch/sneheel/hf/hub/models--Qwen--Qwen3.5-4B/snapshots/851bf6e806efd8d0a36b00ddf55e13ccb7b8cd0a
@@ -90,6 +91,7 @@ rl:
     curriculum_delay_steps: 50   # 10-18 (user): uniform over concepts for the first 50 steps, then the 100-step ramp
     concept_hierarchy: false     # 10-18 (user): one weight per concept, no family level (4 per family)
     first_probe: switch_fork   # 10-17h: turn 0 = base probe (hidden from, not pinned); switches fork
+    first_probe_fork_from_step: 150   # 10-18 (user): turn 0 = a FRESH fork-fit probe from step 150 (fixed base probe before: v3's cold start; v3b took off ~80-140)
     off_turn_prob: 0.15        # 10-17i: "Monitor: OFF." turns, trained to match the base model
     refit_switch_max: 3       # 10-15g: a refit failing its gate -> another probe TYPE, never the old probe
     neg_labels: /scratch/sneheel/next_chameleons_raw_cache/tica/concept_labels_v5data_27b.json   # 27B central-only labels over final_v5 (43,760 texts)

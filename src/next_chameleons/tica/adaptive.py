@@ -316,6 +316,11 @@ class AdaptiveConfig:
     # "switch_fork" (10-17h; user 10-17): turn 0 = the base probe (no pinning: with hide_from_turn 0
     # it is hidden from), every newly switched-to concept = a fork-fit first probe.
     first_probe: str = "base"
+    # Turn-0 SCHEDULE (10-18; user: make the first fit harder; default 0 = off): with first_probe
+    # "switch_fork", from this GLOBAL step on the episode's first concept also gets a fork-fit
+    # first probe (fresh, fit on the policy's own states) instead of the fixed base probe, which the
+    # model learns to dodge statically. Before it: the base probe (avoids v3's cold start).
+    first_probe_fork_from_step: int = 0
     # neg_labels (10-16h; tica/neg_labels.py): LLM-judge label file; texts judged to HAVE concept c
     # (p_yes >= neg_label_thr) are never negatives for c (base probes + refit forks). "" = off.
     neg_labels: str = ""

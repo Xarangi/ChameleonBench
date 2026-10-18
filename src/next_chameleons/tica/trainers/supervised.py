@@ -687,8 +687,8 @@ class AdaptiveSupervisedTrainer:
                 start = _start(s) if c == s.monitored else pool.concept_monitor(c).name
                 # "switch_fork" (10-17h): the episode's FIRST concept keeps its base probe; every
                 # newly switched-to concept gets a fork-fit first probe
-                fork = (acfg.first_probe == "fork" or (acfg.first_probe == "switch_fork"
-                                                       and c != s.monitored_at(0)))
+                fp = self._first_probe_mode()
+                fork = fp == "fork" or (fp == "switch_fork" and c != s.monitored_at(0))
                 if fork and ep_mode:
                     name = self._fork_first(i, s, c, convs[i], umsg[i], pending, ep_stats)
                     if name is not None:
@@ -1643,6 +1643,16 @@ class AdaptiveSupervisedTrainer:
             self.sampler.concept_weights = w
             for k, v in w.items():
                 metrics[f"concept_p_{k}"] = round(v, 3)
+
+    def _first_probe_mode(self) -> str:
+        """adaptive.first_probe; switch_fork -> fork from first_probe_fork_from_step (global)."""
+
+        ac = self.cfg.adaptive
+        n = ac.first_probe_fork_from_step
+        if (ac.first_probe == "switch_fork" and n > 0
+                and self.step_k + self._step_offset() >= n):
+            return "fork"
+        return ac.first_probe
 
     def _curriculum_lambda(self) -> float:
         """Weight of the adaptive (Thompson) part of the curriculum at this global step (10-17g)."""
