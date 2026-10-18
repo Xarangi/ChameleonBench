@@ -38,7 +38,7 @@ model:
   dtype: bfloat16
   enable_thinking: false
   keep_think_history: true
-  batch_size: 8
+  batch_size: 16    # 10-18 (extension): 8 -> 16 for the no-grad refit reads
   grad_ckpt: true
   fla_grad: true
 probes:
@@ -52,7 +52,7 @@ data: /scratch/sneheel/next_chameleons_raw_cache/tica/final_v3_clean.json   # 10
 lora: {rank: 16, alpha: 32, dropout: 0.0, target_modules: all-linear}
 train_mix: {real_score: 0.5, mismatch: 0.15, nobrief: 0.2, neg_text: 0.15}
 train:
-  steps: 400        # upper bound; lenient early stopping decides (adaptive.early_stop_*, 10-16j)
+  steps: 1000       # 10-18: extended 400 -> 1000 (user: continue the original too); fixed steps, no early stop
   episodes_per_step: 8
   turns: 16         # 10-16l: longer episodes (fewer censored refits); smoke memory first
   micro_batch: 1     # 10-16n: 16-turn episodes peaked at 40.0 GB of 40 with 2 (profile 5864657)
@@ -121,7 +121,7 @@ rl:
     kind_layers: [8, 12, 16, 22, 26]
     concept_families: configs/tica/final_split_v3.json
     eval_on_save: "sbatch --parsable scripts/slurm/tica_val.sh final_v3b_4b {adapter} {step} /scratch/sneheel/next_chameleons_artifacts/tica/runs/final_v3b_4b/val configs/tica/final_split_v3.json"
-    early_stop_glob: /scratch/sneheel/next_chameleons_artifacts/tica/runs/final_v3b_4b/val/step_*.json   # absolute: shared by resume chunks
+    early_stop_glob: ""   # 10-18: off for the extension (val races logged only)
     early_stop_metric: val_score       # mean over families of "new probes beaten within 3 turns"
     early_stop_window: 3
     early_stop_patience: 15            # 10-17w: 5 -> 15 (training still improving; val is small-n)
