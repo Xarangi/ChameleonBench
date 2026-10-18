@@ -394,6 +394,9 @@ class AdaptiveDefender:
             "thr": float(mon.normalize(thr, c)[0]),
             "detected": bool(raw[0] > thr[0]),
             "name": name,
+            # p on the loss scale (objectives.probe_prob): the next turn's progress term compares
+            # against it (10-17ad; before, defender reads carried no p and improve_weight was inert)
+            "p": float(torch.sigmoid((raw[0] - thr[0]) / mon.scale(c)[0])),
         }
 
     def best_catcher(self, pooled: dict[int, torch.Tensor], row: int) -> str | None:

@@ -711,6 +711,8 @@ class AdaptiveSupervisedTrainer:
                     deployed_i = dep_by[i][c]
                     active_name = dfd.active  # the newest probe (an older one may catch below)
                     read = dfd.score(active_name, pooled, i)
+                    active_p = read.get("p")  # the active probe's own p (an older catcher may
+                    # replace `read` below); the next turn's progress term compares against it
                     self._kind_outcome(i, active_name, t, read["detected"])
                     if cumulative and not read["detected"]:
                         # No circularity: an OLDER probe of this episode catching a fallback to
@@ -749,6 +751,7 @@ class AdaptiveSupervisedTrainer:
                         "novel": obs["novel"],
                         "heldout_det": det_ho,
                         "deployed": list(deployed_i),
+                        "active_p": active_p,
                     }
                     if obs["passed"]:
                         passed_turn.append(t)
@@ -1658,7 +1661,13 @@ class AdaptiveSupervisedTrainer:
                     # back to an old region); else only the active one.
                     cum = self.cfg.adaptive.episode_cumulative and role == "hide"
                     judge = names if cum else [mon]
-                    prev = tr.results[t - 1]["monitored"].get("p") if t > 0 else None
+                    # previous turn of THIS active probe (same concept, monitored): its own p for
+                    # the progress term, and whether it caught the model (a RETRY turn)
+                    pr = tr.results[t - 1] if t > 0 else {}
+                    same = (t > 0 and not pr.get("off") and pr.get("active_monitor") == mon
+                            and pr.get("concept", s.monitored) == c)
+                    prev = pr.get("active_p", pr.get("monitored", {}).get("p")) if same else None
+                    retry = bool(same and pr.get("monitored", {}).get("detected"))
                     for name in judge:
                         r = role
                         # First turn a probe ever judges in this episode: unanticipatable -> no
@@ -1675,7 +1684,8 @@ class AdaptiveSupervisedTrainer:
                             r = ("match" if cfg.pin_segment_first and c not in seen_c
                                  and name == mon else "motion")
                         out.append(Target(i, t, "monitored", name, c, r,
-                                          prev_p=prev if name == mon else None))
+                                          prev_p=prev if name == mon else None,
+                                          retry=retry and name == mon and r == "hide"))
                     seen.update(names)
                     seen_c.add(c)
                 elif s.cond in ("nobrief", "neg_text"):
@@ -1789,9 +1799,11 @@ class AdaptiveSupervisedTrainer:
         # Turn-weighted hide: fail-early-cheap, dodge-late-expensive (iteration). Weight per hide
         # target = progressive_cost(turns facing this monitor); normalised by the step total.
         hw = None
-        if acfg.hide_turn_weighted:
+        rw = cfg.objective.retry_hide_weight
+        if acfg.hide_turn_weighted or rw != 1.0:
             hw = [
-                progressive_cost(max(0, tg.turn - cfg.objective.hide_from_turn), acfg.miss_costs)
+                ((progressive_cost(max(0, tg.turn - cfg.objective.hide_from_turn), acfg.miss_costs)
+                  if acfg.hide_turn_weighted else 1.0) * (rw if tg.retry else 1.0))
                 if tg.role == "hide" else 0.0
                 for tg in targets
             ]

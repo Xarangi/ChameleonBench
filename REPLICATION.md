@@ -3,6 +3,27 @@
 This file tracks the concrete replication state: data sources, fallbacks,
 checkpoints, observed results, and unresolved limitations.
 
+## 2026-10-17ad Retry diagnosis: matched v2 vs v3b, falsify, retry branches launched from step 360
+
+- MATCHED long race (held-out, linear, 24 turns, no switches; v2 eval_final/long vs v3b eval_s340/long): beaten 0.88 vs
+  0.87; per-turn hazard v2 t2 0.66, t3 0.23, t4 0.38, t5 0.20, t6 0.15 / v3b t2 0.53, t3 0.33, t4 0.38, t5 0.18, t6 0.30
+  -> retries are NOT worse than v2 on a matched probe; the first try is (0.53 vs 0.66). RETRACTED (10-17ac/our reply):
+  "v3b has no caught/pass rhythm" -- it is phase-shifted by the turn-0 static dodge (segment position 0 passes 0.56).
+  The low retry hazard of the mixed-kind sanity races comes from deep-layer probes.
+- Falsified verdicts, short held-out linear race step 340: pass after the first turn 0.36 -> 0.15 (v2: 0.45 -> 0.03):
+  v3b USES the verdict, with a verdict-blind residual (incl. the turn-0 static dodge 0.25).
+- Retry learning over training: training retry pass (same probe caught the previous turn) 0.01 (s0-40) -> 0.20
+  (s320-360); held-out sanity retry hazard t3-5: s140 0.08-0.10, s300 0.10-0.16, s340 0.15-0.21.
+- Step 360 val 0.438 (best; topic 0.78, language 0.56, tone 0.42; k2 0.81, k3 0.85, k4 0.82).
+- BUG: improve_weight (progress term) was INERT in the defender path (dfd.score carried no "p" -> prev_p None). Fixed:
+  defender reads carry p, results carry active_p, prev_p = the previous turn's ACTIVE p of the same probe. New options
+  (default off): ObjectiveConfig.improve_margin (demand progress, not only "not worse"), retry_hide_weight (weight of
+  the active probe's hide target on retry turns). Tests: test_retry_targets_and_weight, test_improve_margin_demands_progress.
+- LAUNCHED from step 360 (TICA_STEP_OFFSET=360, 60 steps): final_v3b_retryctl_4b 6174722 (unchanged), retryA 6174723
+  (improve_weight 1.0, improve_margin 0.1), retryB 6174724 (retry_hide_weight 3.0). Readouts: training retry pass,
+  by-index, then a held-out race per arm.
+- Unconditional pursuit (10-12j) made dodging verdict-blind; a "move away" term must be conditional on a catch.
+
 ## 2026-10-17ac Turns-to-beat: the model has ONE good attempt per probe; retries rarely work
 
 Training refit probes, steps 281-360 (n=1188): beaten 0.53; within 1 turn 0.04, 2: 0.40, 3: 0.46, 5: 0.50; median 2;

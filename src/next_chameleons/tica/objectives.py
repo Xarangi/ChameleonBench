@@ -37,6 +37,10 @@ class ObjectiveConfig:
     # correction (SCoRe's 2-attempt reward collapses to "best first attempt, then barely edit").
     # The previous value is a constant from the rollout, so the gradient flows only through p_t.
     improve_weight: float = 0.0
+    # 10-17ad: demand at least this much progress (p_t <= prev_p - improve_margin) instead of only
+    # "not worse"; 0.0 = the original term. prev_p exists only when the same active probe judged the
+    # previous turn, i.e. on retry turns.
+    improve_margin: float = 0.0
     hide_from_turn: int = 1  # 1 = turn 0 is pinned to the base model
     pin_first_turn: bool = True
     pin_segment_first: bool = False  # also pin the first turn of a newly switched-to concept
@@ -44,6 +48,10 @@ class ObjectiveConfig:
     # "off", their OWN mean and this weight, instead of sharing the "match" mean with the no-brief /
     # neg-text controls (~14% of the match targets there; hiding leaked into OFF turns).
     off_match_weight: float = 0.0
+    # Retry-weighted hide (REPLICATION 2026-10-17ad; default 1.0 = off): weight of the ACTIVE
+    # probe's hide target on a RETRY turn (the same probe caught the previous turn), relative to
+    # 1.0 for every other hide target -- the turns where the search must produce a NEW move.
+    retry_hide_weight: float = 1.0
 
 
 @dataclass(frozen=True)
@@ -55,6 +63,7 @@ class Target:
     concept: str | None
     role: str  # "hide" | "match"
     prev_p: float | None = None  # the same readout's p on the previous turn, if any
+    retry: bool = False  # the same active probe caught the previous turn (retry_hide_weight)
 
 
 def plan_targets(trajs: list[Trajectory], cfg: ObjectiveConfig) -> list[Target]:
@@ -172,7 +181,7 @@ def loss_terms(
     if cfg.improve_weight and prev_p is not None and n_h:
         have = hide & torch.isfinite(prev_p)
         if int(have.sum()):
-            s_imp = torch.relu(p[have] - prev_p[have]).sum()
+            s_imp = torch.relu(p[have] - prev_p[have] + cfg.improve_margin).sum()
     total = (
         cfg.hide_weight * s_hide / max(1.0, hide_denom)
         + cfg.match_weight * s_match / max(1, t["match"])

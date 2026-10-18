@@ -384,3 +384,67 @@ def test_final_v3_factored_kinds_respect_held_out_depths():
     with pytest.raises(ValueError, match="held-out layers"):
         dataclasses.replace(cfg, rl=dataclasses.replace(
             cfg.rl, adaptive=dataclasses.replace(a, kind_layers=[12, 24])))
+
+
+def test_retry_targets_and_weight(tmp_path):
+    """Retry turns (the same active probe caught the previous turn) are flagged on the active hide
+    target, carry the previous turn's ACTIVE p, and retry_hide_weight reweights only them."""
+    from types import SimpleNamespace
+
+    import torch
+
+    from next_chameleons.tica.adaptive import AdaptiveConfig
+    from next_chameleons.tica.episodes import EpisodeSpec
+    from next_chameleons.tica.monitors import MonitorPool
+    from next_chameleons.tica.objectives import ObjectiveConfig, loss_terms
+    from next_chameleons.tica.trainers.supervised import (
+        AdaptiveSupervisedConfig,
+        AdaptiveSupervisedTrainer,
+    )
+    from test_tica_framework import bank as make_bank
+    from test_tica_framework import tiny_policy
+
+    pool = MonitorPool()
+    pool.add(make_bank(1, ["cats"]), round=0, family="concept_linear")
+    cfg = AdaptiveSupervisedConfig(
+        steps=1, episodes_per_step=1, turns=6, micro_batch=2, lr=1e-2, warmup_steps=1,
+        save_every=0, objective=ObjectiveConfig(hide_from_turn=0, pin_first_turn=False,
+                                                retry_hide_weight=3.0),
+        adaptive=AdaptiveConfig(refit_every=0, excuse_new_probe=True))
+    tr = AdaptiveSupervisedTrainer(tiny_policy(), pool, None, cfg, tmp_path)
+    spec = EpisodeSpec("real_score|cats|0", "real_score", ["a"] * 6, "cats", "cats", "concept_L1")
+    seq = [("m1", True), ("m1", True), ("m1", False), ("m2", True), ("m2", True), ("m2", False)]
+    res, dep = [], []
+    for t, (m, det) in enumerate(seq):
+        dep = [*dep, m] if m not in dep else dep
+        res.append({"concept": "cats", "active_monitor": m, "deployed": list(dep), "turn": t,
+                    "monitored": {"detected": det, "p": 0.1 * t, "name": m},
+                    "active_p": 0.5 + 0.1 * t})
+    tg = [x for x in tr._targets([SimpleNamespace(spec=spec, results=res)])
+          if x.monitor == res[x.turn]["active_monitor"]]
+    by = {x.turn: x for x in tg}
+    assert [by[t].retry for t in range(6)] == [False, True, True, False, True, True]
+    assert by[3].role == "motion"  # a new probe's first judgement is excused
+    assert abs(by[1].prev_p - 0.5) < 1e-9  # the previous turn's ACTIVE p, not the shown read
+    # weighting: a retry target counts 3x a first-try target, normalised by the weight sum
+    p = torch.tensor([0.5, 0.5])
+    ref = torch.zeros(2)
+    w = torch.tensor([1.0, 3.0])
+    loss, _ = loss_terms(p, ref, ["hide", "hide"], None, cfg.objective,
+                         {"hide": 2, "match": 0, "views": 1, "hide_w_sum": 4.0}, hide_w=w)
+    assert abs(float(loss) - 0.25) < 1e-6
+    assert ObjectiveConfig().retry_hide_weight == 1.0  # default off
+
+
+def test_improve_margin_demands_progress():
+    import torch
+
+    from next_chameleons.tica.objectives import ObjectiveConfig, loss_terms
+
+    p, ref, prev = torch.tensor([0.9]), torch.zeros(1), torch.tensor([0.9])
+    tot = {"hide": 1, "match": 0, "views": 1}
+    cfg0 = ObjectiveConfig(hide_weight=0.0, lm_weight=0.0, improve_weight=1.0)
+    cfg1 = ObjectiveConfig(hide_weight=0.0, lm_weight=0.0, improve_weight=1.0, improve_margin=0.1)
+    l0, _ = loss_terms(p, ref, ["hide"], None, cfg0, tot, prev_p=prev)
+    l1, _ = loss_terms(p, ref, ["hide"], None, cfg1, tot, prev_p=prev)
+    assert float(l0) == 0.0 and abs(float(l1) - 0.1) < 1e-6  # a stall costs only with the margin
