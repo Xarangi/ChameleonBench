@@ -11,7 +11,7 @@ RepE facts dishonesty is NOT used: its honest / dishonest persona lives in the p
 Output: the topic base + these concepts (Level1Data format) and the merged inputs map. Aggregates only.
 
   python scripts/build_concept_eval.py --out-data D.json --out-inputs I.json
-"""
+"""  # noqa: E501
 
 from __future__ import annotations
 
@@ -26,7 +26,7 @@ RAW = Path("/scratch/sneheel/next_chameleons_raw_cache")
 NAMES = {"german": ("German language", "language", "far"),
          "finnish": ("Finnish language", "language", "far"),
          "html": ("HTML markup", "format", "far"), "all-caps": ("all-caps text", "format", "far"),
-         "jokey": ("jokes and humor", "tone", "far"), "comforting": ("comforting tone", "tone", "far"),
+         "jokey": ("jokes and humor", "tone", "far"), "comforting": ("comforting tone", "tone", "far"),  # noqa: E501
          "confused": ("confusion", "tone", "far"),
          "biology-focused": ("biology", "subject", "near"),
          "chemistry-based": ("chemistry", "subject", "far"),
@@ -58,7 +58,7 @@ def main():
     ent = lambda xs: [{"id": text_id(x), "text": x} for x in xs]  # noqa: E731
     stats, meta = {}, {}
     by = defaultdict(list)
-    for line in open(RAW / "paper_benign_concepts" / "examples.jsonl"):
+    for line in open(RAW / "paper_benign_concepts" / "examples.jsonl"):  # noqa: SIM115
         r = json.loads(line)
         if r["rating"] >= 4 and r["response"].strip():
             by[r["concept"]].append((r["prompt"], r["response"]))
@@ -73,7 +73,7 @@ def main():
         stats[name] = len(rows)
         meta[name] = {"family": fam, "relation": rel, "source": "NC rated (gemma-2-27b)"}
     pairs = defaultdict(dict)
-    for line in open(RAW / "dolus_deception" / "examples.jsonl"):
+    for line in open(RAW / "dolus_deception" / "examples.jsonl"):  # noqa: SIM115
         r = json.loads(line)
         pairs[r["source_index"]][int(r["label"])] = r
     ok = [v for v in pairs.values() if 0 in v and 1 in v and v[1]["text"].strip()]

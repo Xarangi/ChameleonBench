@@ -24,7 +24,7 @@ def main():
     from vllm.inputs import TokensPrompt
     from vllm.lora.request import LoRARequest
 
-    P = json.load(open(a.prompts))
+    P = json.load(open(a.prompts))  # noqa: SIM115
     t0 = time.time()
     llm = LLM(model=a.model, dtype="bfloat16", gpu_memory_utilization=a.mem,
               enable_lora=bool(a.adapter), max_lora_rank=16, max_model_len=8192,

@@ -19,7 +19,7 @@ and the model are not (raw text / size): step 3 pulls them from Narval.
 cd ~/chameleons
 VENVS=/scratch/$USER/venvs bash scripts/env/q35t29_build.sh       # Qwen3.5 venv (transformers 5.x)
 tar -cf /scratch/$USER/venvs/q35t29.tar -C /scratch/$USER/venvs q35t29   # jobs unpack it node-local
-uv sync --extra dev                                                # main .venv (CPU tests; transformers 4.57.6)
+uv sync --extra dev --extra ml --extra analysis                     # main .venv (CPU tests need torch: ml extra; transformers 4.x)
 ```
 
 Never install transformers 5.x into the main `.venv`.
@@ -39,7 +39,8 @@ Also `scripts/slurm/_local_env.sh` expects the venv at `/scratch/<user>/venvs/q3
 ## 5. Checks (no GPU hours yet)
 
 ```bash
-OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1 uv run --extra dev pytest -q tests -k tica
+OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1 uv run --extra dev --extra ml --extra analysis pytest -q tests -k tica
+uv run --extra dev ruff check .
 PYTHONPATH=src /scratch/$USER/venvs/q35t29/bin/python -c "
 from next_chameleons.tica.config import load_run_config as l; c=l('final_v4_4b'); print(c.data, c.train.steps)"
 ```

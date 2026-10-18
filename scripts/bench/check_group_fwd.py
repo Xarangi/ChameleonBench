@@ -4,7 +4,7 @@ with the full per-answer forward (_fwd, grad checkpointing on, as in training) a
 shared-prompt forward (_fwd_group). Compares pooled reads, sampled-token log-probs and the LoRA
 gradient of loss = mean logp + pooled . v (cosine, relative norm); times both with grad; peak memory.
 Aggregates only.
-"""
+"""  # noqa: E501
 
 from __future__ import annotations
 
@@ -60,17 +60,17 @@ def main():
 
         def run(fn):
             pol.model.train()
-            for p in params:
+            for p in params:  # noqa: B023
                 p.grad = None
             torch.cuda.synchronize()
             torch.cuda.reset_peak_memory_stats()
             t0 = time.time()
-            lp, pooled = fn(grp, grad=True, want_logp=True)
-            loss = sum(x.mean() for x in lp) / len(lp) + (pooled[12] @ v).mean() * 1e-2
+            lp, pooled = fn(grp, grad=True, want_logp=True)  # noqa: B023
+            loss = sum(x.mean() for x in lp) / len(lp) + (pooled[12] @ v).mean() * 1e-2  # noqa: B023
             loss.backward()
             torch.cuda.synchronize()
             dt = time.time() - t0
-            gr = torch.cat([p.grad.flatten().float() for p in params])
+            gr = torch.cat([p.grad.flatten().float() for p in params])  # noqa: B023
             return ([x.detach() for x in lp], {L: t.detach() for L, t in pooled.items()}, gr,
                     dt, torch.cuda.max_memory_allocated() / 1e9)
 
@@ -81,7 +81,7 @@ def main():
         cos = lambda x, y: float(torch.nn.functional.cosine_similarity(x, y, dim=-1).min())  # noqa: E731
         row = {"hist_pairs": hist, "prompt_len": grp[0].start,
                "ans_len": [len(x.ids) - x.start for x in grp],
-               "logp_maxabs": max(float((x - y).abs().max()) for x, y in zip(lpA, lpB, strict=True)),
+               "logp_maxabs": max(float((x - y).abs().max()) for x, y in zip(lpA, lpB, strict=True)),  # noqa: E501
                "logp_sum_rel": abs(float(sum(x.sum() for x in lpA) - sum(x.sum() for x in lpB)))
                / abs(float(sum(x.sum() for x in lpA))),
                "pooled_cos_min": {L: cos(pA[L], pB[L]) for L in pA},
