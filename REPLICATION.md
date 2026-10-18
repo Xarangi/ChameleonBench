@@ -3,6 +3,18 @@
 This file tracks the concrete replication state: data sources, fallbacks,
 checkpoints, observed results, and unresolved limitations.
 
+## 2026-10-18a v3b FINISHED (step 400 = configured steps); held-out probe-type races (step 340)
+
+- Main run ended at step 400 (train.steps 400; r2/r3 exited "already at step 400"). Probe index 380-400: 1st fresh probe
+  0.88, after 1st refit 0.56, after 2nd 0.54, after 3rd 0.44 (still rising). Val 360 0.438, 380 0.435, 400 0.348 (noisy).
+- Held-out probe TYPES, short races (held-out concepts, 32 ep x 16 turns, switches), refit probes beaten: NC token ens8 0.76,
+  McKenzie attn-lite 0.74, linear 0.71 (trained type), maxpool@24 0.66, Bailey mean 0.63, GDM rolling attention 0.63,
+  ens8 MLP 0.61 / linear 0.60, spread5 0.57, linear@20 0.55, @24 0.51, @28 0.50, @30 0.43, Bailey max 0.50. Every type is
+  beaten; unseen ARCHITECTURES ~ trained types; unseen DEPTH (20-30) is the gap.
+- vs v2: per-turn pass in these short races is lower for v3b (e.g. Bailey 0.28 vs 0.41) BUT the short races are
+  confounded (switch segments start on a fresh fork for v3b vs the base probe for v2). MATCHED long races (no switches):
+  Bailey 0.85 vs 0.86, GDM 0.84 vs 0.82, linear 0.87 vs 0.88, linear@24 0.74 vs 0.76 -> parity with v2.
+
 ## 2026-10-17ad Retry diagnosis: matched v2 vs v3b, falsify, retry branches launched from step 360
 
 - MATCHED long race (held-out, linear, 24 turns, no switches; v2 eval_final/long vs v3b eval_s340/long): beaten 0.88 vs
