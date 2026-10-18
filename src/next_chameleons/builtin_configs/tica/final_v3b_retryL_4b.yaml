@@ -1,0 +1,165 @@
+# 10-18 BRANCH (retryL): as retryctl/A/B (final_v3b_4b s360 + 60 steps) with the retry LADDER (3, 4, 5): 3x after one catch by the same probe (= retryB), 4x after two, 5x after three or more.
+# 10-17ad BRANCH (retryctl): final_v3b_4b resumed from its step-360 adapter (TICA_STEP_OFFSET=360), 60 steps; retry-learning test (ctl = unchanged, A = improve_weight 1.0 progress term, B = retry_hide_weight 3.0).
+# turn 0 judged by the base probe and HIDDEN from (no fork, no pin; first_probe switch_fork: topic switches
+# fork), per-turn tagged prompt layout (system prompt + "Monitor: ON/OFF" status line), monitor-off turns,
+# curriculum ramp from uniform-over-concepts (lam 0 -> 0.5 over 100 steps), LR 3e-4 -> 1e-4 cosine over 200 steps.
+# FINAL v3 (REPLICATION 2026-10-16h; DRAFT, not launched): final_v2_4b + exact speed-ups (truncate_reads,
+# refit_batched_fits) + adaptive defender curriculum (discounted Thompson over probe kinds AND concepts
+# on turns-to-beat; tica/curriculum.py) + first_probe "fork" with NO pinning (10-16i) + refit type switching
+# on gate failure (10-15g) + label-cleaned negatives (10-16h) + more fork negatives (10-16f). Everything
+# else identical to final_v2 (see its header).
+# FINAL v2 DODGER (REPLICATION 2026-10-15e; user 10-15: "a final interesting model with proper probes ... a
+# bunch in, a bunch out, across topics where both in and out include concepts ... train it properly after
+# taking into account everything"). From the BASE model. Everything learned 10-14 / 10-15 is folded in:
+# - CONCEPTS (configs/tica/final_split_v2.json, scripts/build_final_base.py, published data only): train =
+#   13 DBpedia topics + German (language) + all-caps (format) + jokey, comforting (tone); held-out = 8 topics +
+#   Finnish, HTML, confused (held-out members of TRAINED families) + deception (DolusChat; held-out FAMILY).
+#   Leak check: scripts/tica_concept_leak.py.
+# - PROBES: train kinds span the depth (linear at 12 / 16 / 22 / 26, a deep 4-layer ensemble 16-26) and the
+#   pooling / classifier axes at 12 (max, NC attention, RL-Obf attention, 4-layer linear / MLP ensembles).
+#   HELD OUT: single layers 20 / 24 (depth interpolation), 28 / 30 (extrapolation), unseen combos (maxpool@24),
+#   unseen architectures (GDM rolling attention, McKenzie x3, RL-Obf max / attn-max, rollmax, meandiff),
+#   unseen layer aggregation (8-layer ensembles, NC token ensemble, Bailey 30-layer mean, max-over-layers
+#   band 4-28, depth-spread majority vote after 2602.00750). Static base probes at 20 / 24 (any-of)
+#   are logged every rollout. RunConfig refuses a train kind that reads a held-out layer.
+#   RL-Obf max / attn-max moved OUT of training: they fail the refit gate even on easy synthetic data
+#   (bench 5651307: AUROC 0.78 / 0.95 -> mostly rejected refits).
+# - REFIT DATA x1.33-2: 128 pos / 128 other (half hard) / 64 concept-free / 32 no-prompt (was 96/96/48/24).
+# - PROTOCOL: first turn of a newly switched-to concept pinned to the base model (pin_segment_first), as
+#   turn 0 is: first encounter caught by construction (fixes the eval's segment-position-0 artefact).
+# - CAPABILITY: KL(base || policy) on every trained turn incl. hiding turns, reference = the unmonitored
+#   counterfactual conversation (kl_weight 1.0); retain-set KL on base answers to Dolly + GSM8K-train
+#   (anchor 0.5); GSM8K forks inside episodes under the brief: RFT on correct samples (0.5) + KL to the base
+#   answering the bare problem on all samples (1.0). No-brief GSM8K had drifted 0.83 -> 0.675 without these.
+# - SPEED (exact up to bf16 rounding of the LoRA merge): merged_reads, refit_np_cache, batched token-ensemble
+#   fits, persistent Triton tarball cache (_local_env.sh).
+name: final_v3b_retryL_4b
+model:
+  path: /scratch/sneheel/hf/hub/models--Qwen--Qwen3.5-4B/snapshots/851bf6e806efd8d0a36b00ddf55e13ccb7b8cd0a
+  dtype: bfloat16
+  enable_thinking: false
+  keep_think_history: true
+  batch_size: 8
+  grad_ckpt: true
+  fla_grad: true
+probes:
+  dir: /scratch/sneheel/next_chameleons_artifacts/tica/l1_base/qwen35_4b/probes
+  pool_layers: primary
+  held_out_layers: [20, 24]
+out: /scratch/sneheel/next_chameleons_artifacts/tica/runs/final_v3b_retryL_4b
+episodes: {feedback: verdict, hidden: false, format: answer, layout: tagged,
+           inputs: /scratch/sneheel/next_chameleons_raw_cache/tica/final_v3_inputs.json}
+data: /scratch/sneheel/next_chameleons_raw_cache/tica/final_v3_clean.json   # 10-16p: v3 + judge-confirmed positives (filter_positives_by_labels.py; 27B cross-check kappa 0.71)
+lora: {rank: 16, alpha: 32, dropout: 0.0, target_modules: all-linear}
+train_mix: {real_score: 0.5, mismatch: 0.15, nobrief: 0.2, neg_text: 0.15}
+train:
+  steps: 60        # 10-17ad branch from final_v3b_4b step 360
+  episodes_per_step: 8
+  turns: 16         # 10-16l: longer episodes (fewer censored refits); smoke memory first
+  micro_batch: 1     # 10-16n: 16-turn episodes peaked at 40.0 GB of 40 with 2 (profile 5864657)
+  lr: 1.0e-4
+  lr_peak: 3.0e-4       # 10-17i: warm up to 3e-4, cosine to 1e-4 by step 200 (user), then hold
+  lr_decay_steps: 200
+  warmup_steps: 10
+  save_every: 20    # each save launches a dev-concept validation race (eval_on_save)
+  seed: -360   # 10-18: + TICA_STEP_OFFSET 360 = seed 0, the same draws as retryctl/A/B (pre-fix)
+  # 10-16i: no pinning; the first probe of every concept is fit on the policy itself (first_probe)
+  objective: {hide_weight: 1.0, retry_hide_ladder: [3.0, 4.0, 5.0], match_weight: 2.0, lm_weight: 0.1, hide_from_turn: 0, pin_first_turn: false,
+              pin_segment_first: false}
+rl:
+  adaptive:
+    adaptive: false
+    refit_mode: episode
+    episode_fork: {pos: 128, np: 32, other: 160, free: 128}   # 10-16f: more threshold negatives
+    episode_extra_pos: ""
+    episode_bank_first: false
+    episode_keep: false
+    episode_cumulative: true
+    episode_refit_prob: 1.0
+    excuse_new_probe: true
+    single_pass: true
+    incremental_rollout: true
+    reloc_every: 5
+    refit_every: 0
+    refit_when_ready: false
+    refit_as_start: false
+    refit_min_auroc: 0.95
+    refit_min_tpr_np: 0.8
+    refit_min_each: 24
+    refit_buf_cap: 512
+    refit_C: 1.0
+    refit_cv_folds: 5
+    refit_max_bank: 24
+    pursuit: true
+    motion: conditional
+    stay_weight: 1.0
+    stay_offset: true
+    pursuit_from_turn: 1
+    pursuit_window: 1
+    pursuit_weight: 1.0
+    pursuit_temp: 0.3
+    pursuit_leash: 0.5
+    pursuit_radius: 1.2
+    episode_refit_kind: mixed
+    # 10-16l: single-layer ARCHITECTURES (placed at a sampled kind_layers depth) + multi-layer kinds
+    episode_refit_kinds: [linear, maxpool, attnpool, rlobf_attn, ens4_linear, ens4_mlp, ensdeep4_linear]
+    episode_kind_sampling: thompson   # 10-16g (was prioritized)
+    episode_kind_eps: 0.3
+    concept_sampling: thompson
+    curriculum_prior: concept   # 10-17g: start uniform over CONCEPTS (v2 mix)
+    curriculum_ramp_steps: 100
+    curriculum_mix_max: 0.5
+    first_probe: switch_fork   # 10-17h: turn 0 = base probe (hidden from, not pinned); switches fork
+    off_turn_prob: 0.15        # 10-17i: "Monitor: OFF." turns, trained to match the base model
+    refit_switch_max: 3       # 10-15g: a refit failing its gate -> another probe TYPE, never the old probe
+    neg_labels: /scratch/sneheel/next_chameleons_raw_cache/tica/concept_labels_v3e.json   # 10-16n: audit over final_v3_eval (superset)
+    neg_label_thr: 0.5
+    tts_gamma: 0.95
+    tts_floor: 0.2
+    tts_cap: 0.3
+    tts_max_turns: 50
+    # 10-16l: factored architecture x layer sampling; layers = train depths only (20/24/28/30 held out)
+    kind_layers: [8, 12, 16, 22, 26]
+    concept_families: configs/tica/final_split_v3.json
+    eval_on_save: ""
+    early_stop_glob: ""
+    early_stop_metric: val_score       # mean over families of "new probes beaten within 3 turns"
+    early_stop_window: 3
+    early_stop_patience: 15            # 10-17w: 5 -> 15 (training still improving; val is small-n)
+    early_stop_min_delta: 0.01
+    early_stop_min_steps: 200          # 10-17i: not before the 200-step LR decay ends
+    # capability (KL to base; tests/test_tica_kl_anchor.py)
+    kl_weight: 1.0
+    kl_ref: nobrief
+    kl_topk: 64
+    anchor_weight: 0.5
+    anchor_n: 8
+    anchor_pool: 256
+    anchor_max_new: 256
+    anchor_cache: /scratch/sneheel/next_chameleons_artifacts/tica/runs/final_v3b_retryL_4b/anchor_cache.json  # shared by resume chunks
+    cap_gen_weight: 0.5
+    cap_gen_kl_weight: 1.0
+    cap_gen_kl_all: true
+    cap_gen_episodes: 4
+    cap_gen_samples: 2
+    cap_gen_max_new: 400
+    cap_gen_temperature: 1.0
+    cap_gen_hide: true
+    cap_gen_pool: /scratch/sneheel/next_chameleons_artifacts/tica/runs/mathrl_4b/base_gens.json
+    # speed (REPLICATION 2026-10-15d)
+    merged_reads: true
+    refit_np_cache: true
+    truncate_reads: true      # 10-16c (exact)
+    refit_batched_fits: true  # 10-16c (MLP ensembles)
+final:
+  split: final_split_v3.json
+  n_train_concepts: 0       # all 17 train concepts
+  train_refit_kinds: [linear, maxpool, attnpool, rlobf_attn, ens4_linear, ens4_mlp, ensdeep4_linear]
+  heldout_refit_kinds: [linear@20, linear@24, linear@28, linear@30, maxpool@24, gdm_rollattn,
+                        mck_rollmean40, mck_attnlite, mck_softmax, rlobf_max, rlobf_attn_max, rollmax,
+                        meandiff, ens8_linear, ens8_mlp, nc_ens8_tok, bailey_ens_tok,
+                        bailey_ens_tok_max, spread5_linear]
+  concept_switch_prob: 0.5
+  switch_min_segment: 5   # 10-16l (was 3)
+  switch_max: 2
+  switch_return_prob: 0.25

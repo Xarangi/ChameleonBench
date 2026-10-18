@@ -448,3 +448,51 @@ def test_improve_margin_demands_progress():
     l0, _ = loss_terms(p, ref, ["hide"], None, cfg0, tot, prev_p=prev)
     l1, _ = loss_terms(p, ref, ["hide"], None, cfg1, tot, prev_p=prev)
     assert float(l0) == 0.0 and abs(float(l1) - 0.1) < 1e-6  # a stall costs only with the margin
+
+
+def test_retry_ladder_counts_consecutive_catches(tmp_path):
+    """retry_n = consecutive catches by the same active probe; the ladder weights by it."""
+    from types import SimpleNamespace
+
+    from next_chameleons.tica.adaptive import AdaptiveConfig
+    from next_chameleons.tica.episodes import EpisodeSpec
+    from next_chameleons.tica.monitors import MonitorPool
+    from next_chameleons.tica.objectives import ObjectiveConfig, retry_weight
+    from next_chameleons.tica.trainers.supervised import (
+        AdaptiveSupervisedConfig,
+        AdaptiveSupervisedTrainer,
+    )
+    from test_tica_framework import bank as make_bank
+    from test_tica_framework import tiny_policy
+
+    pool = MonitorPool()
+    pool.add(make_bank(1, ["cats"]), round=0, family="concept_linear")
+    oc = ObjectiveConfig(hide_from_turn=0, pin_first_turn=False, retry_hide_ladder=(2.0, 3.0, 4.0))
+    cfg = AdaptiveSupervisedConfig(
+        steps=1, episodes_per_step=1, turns=7, micro_batch=2, lr=1e-2, warmup_steps=1,
+        save_every=0, objective=oc, adaptive=AdaptiveConfig(refit_every=0, excuse_new_probe=True))
+    tr = AdaptiveSupervisedTrainer(tiny_policy(), pool, None, cfg, tmp_path)
+    spec = EpisodeSpec("real_score|cats|0", "real_score", ["a"] * 7, "cats", "cats", "concept_L1")
+    seq = [("m1", True), ("m1", True), ("m1", True), ("m1", True), ("m1", True), ("m1", False),
+           ("m1", True)]
+    res = [{"concept": "cats", "active_monitor": m, "deployed": ["m1"], "turn": t,
+            "monitored": {"detected": d, "p": 0.5, "name": m}} for t, (m, d) in enumerate(seq)]
+    by = {x.turn: x for x in tr._targets([SimpleNamespace(spec=spec, results=res)])}
+    assert [by[t].retry_n for t in range(7)] == [0, 1, 2, 3, 4, 5, 0]
+    assert [retry_weight(oc, by[t]) for t in range(7)] == [1.0, 2.0, 3.0, 4.0, 4.0, 4.0, 1.0]
+    flat = ObjectiveConfig(retry_hide_weight=3.0)
+    assert [retry_weight(flat, by[t]) for t in (0, 1, 4, 6)] == [1.0, 3.0, 3.0, 1.0]
+    assert retry_weight(ObjectiveConfig(), by[3]) == 1.0  # both off
+
+
+def test_lr_cooldown_at_run_end():
+    from next_chameleons.tica.trainers.supervised import SupervisedConfig, lr_factor
+
+    c = SupervisedConfig(steps=100, lr=2e-4, warmup_steps=1, lr_cooldown_steps=20, lr_final=2e-5)
+    assert lr_factor(c, 50) == 1.0  # holds lr before the cooldown
+    assert abs(lr_factor(c, 100) - 0.1) < 1e-9  # lr_final at the run's end
+    assert 0.1 < lr_factor(c, 90) < 1.0
+    # a resume chunk (offset 60, 40 steps left) ends at the same global step 100
+    r = SupervisedConfig(steps=40, lr=2e-4, warmup_steps=1, lr_cooldown_steps=20, lr_final=2e-5)
+    assert abs(lr_factor(r, 30, offset=60) - lr_factor(c, 90)) < 1e-9
+    assert SupervisedConfig().lr_cooldown_steps == 0  # default off

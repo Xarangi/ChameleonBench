@@ -40,6 +40,7 @@ from next_chameleons.tica.objectives import (
     loss_terms,
     plan_targets,
     probe_prob,
+    retry_weight,
     summarize_stats,
 )
 
@@ -58,6 +59,10 @@ class SupervisedConfig:
     # chunks), then hold `lr`. 0 = the constant-after-warmup schedule.
     lr_peak: float = 0.0
     lr_decay_steps: int = 0
+    # Optional end cooldown (10-18; default 0 = off): over the LAST lr_cooldown_steps global steps
+    # of the run (chunk offset + steps), cosine from the schedule's value down to lr_final.
+    lr_cooldown_steps: int = 0
+    lr_final: float = 0.0
     grad_clip: float = 1.0
     save_every: int = 100
     eval_every: int = 0  # 0 = never (run evaluation as a separate job)
@@ -363,10 +368,15 @@ def lr_factor(cfg: SupervisedConfig, k: int, offset: int = 0) -> float:
     import math
 
     warm = min(1.0, (k + 1) / max(1, cfg.warmup_steps))
-    if cfg.lr_peak <= 0 or cfg.lr_decay_steps <= 0:
-        return warm
-    g = min(1.0, (offset + k) / cfg.lr_decay_steps)
-    target = cfg.lr + (cfg.lr_peak - cfg.lr) * 0.5 * (1 + math.cos(math.pi * g))
+    target = cfg.lr
+    if cfg.lr_peak > 0 and cfg.lr_decay_steps > 0:
+        g = min(1.0, (offset + k) / cfg.lr_decay_steps)
+        target = cfg.lr + (cfg.lr_peak - cfg.lr) * 0.5 * (1 + math.cos(math.pi * g))
+    cd = cfg.lr_cooldown_steps
+    if cd > 0:
+        start = offset + cfg.steps - cd  # global step where the cooldown begins
+        h = min(1.0, max(0.0, (offset + k - start) / cd))
+        target = cfg.lr_final + (target - cfg.lr_final) * 0.5 * (1 + math.cos(math.pi * h))
     return warm * target / cfg.lr
 
 
@@ -1668,6 +1678,14 @@ class AdaptiveSupervisedTrainer:
                             and pr.get("concept", s.monitored) == c)
                     prev = pr.get("active_p", pr.get("monitored", {}).get("p")) if same else None
                     retry = bool(same and pr.get("monitored", {}).get("detected"))
+                    n_retry = 0  # consecutive catches by this active probe just before turn t
+                    for u in range(t - 1, -1, -1):
+                        q = tr.results[u]
+                        if (q.get("off") or q.get("active_monitor") != mon
+                                or q.get("concept", s.monitored) != c
+                                or not q.get("monitored", {}).get("detected")):
+                            break
+                        n_retry += 1
                     for name in judge:
                         r = role
                         # First turn a probe ever judges in this episode: unanticipatable -> no
@@ -1685,7 +1703,8 @@ class AdaptiveSupervisedTrainer:
                                  and name == mon else "motion")
                         out.append(Target(i, t, "monitored", name, c, r,
                                           prev_p=prev if name == mon else None,
-                                          retry=retry and name == mon and r == "hide"))
+                                          retry=retry and name == mon and r == "hide",
+                                          retry_n=n_retry if name == mon and r == "hide" else 0))
                     seen.update(names)
                     seen_c.add(c)
                 elif s.cond in ("nobrief", "neg_text"):
@@ -1799,11 +1818,11 @@ class AdaptiveSupervisedTrainer:
         # Turn-weighted hide: fail-early-cheap, dodge-late-expensive (iteration). Weight per hide
         # target = progressive_cost(turns facing this monitor); normalised by the step total.
         hw = None
-        rw = cfg.objective.retry_hide_weight
-        if acfg.hide_turn_weighted or rw != 1.0:
+        oc = cfg.objective
+        if acfg.hide_turn_weighted or oc.retry_hide_weight != 1.0 or oc.retry_hide_ladder:
             hw = [
                 ((progressive_cost(max(0, tg.turn - cfg.objective.hide_from_turn), acfg.miss_costs)
-                  if acfg.hide_turn_weighted else 1.0) * (rw if tg.retry else 1.0))
+                  if acfg.hide_turn_weighted else 1.0) * retry_weight(oc, tg))
                 if tg.role == "hide" else 0.0
                 for tg in targets
             ]

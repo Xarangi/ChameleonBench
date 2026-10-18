@@ -52,6 +52,11 @@ class ObjectiveConfig:
     # probe's hide target on a RETRY turn (the same probe caught the previous turn), relative to
     # 1.0 for every other hide target -- the turns where the search must produce a NEW move.
     retry_hide_weight: float = 1.0
+    # Retry LADDER (10-18; default () = off, overrides retry_hide_weight when set): the active
+    # probe's hide weight after n consecutive catches by that same probe on this concept is
+    # ladder[min(n, len) - 1] (n = 0, a first try or a turn after a pass, keeps 1.0). Feedback about
+    # the probe accumulates with every catch, so later retries can be weighted more.
+    retry_hide_ladder: tuple[float, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -64,6 +69,7 @@ class Target:
     role: str  # "hide" | "match"
     prev_p: float | None = None  # the same readout's p on the previous turn, if any
     retry: bool = False  # the same active probe caught the previous turn (retry_hide_weight)
+    retry_n: int = 0  # consecutive catches by this active probe right before this turn (ladder)
 
 
 def plan_targets(trajs: list[Trajectory], cfg: ObjectiveConfig) -> list[Target]:
@@ -219,3 +225,12 @@ def summarize_stats(acc: dict[str, float]) -> dict[str, float]:
         "n_hide": nh,
         "n_match": nm,
     }
+
+
+def retry_weight(cfg: ObjectiveConfig, tg: Target) -> float:
+    """Hide-loss weight of a target from the retry settings (1.0 when both are off)."""
+
+    if cfg.retry_hide_ladder:
+        n = tg.retry_n
+        return float(cfg.retry_hide_ladder[min(n, len(cfg.retry_hide_ladder)) - 1]) if n else 1.0
+    return cfg.retry_hide_weight if tg.retry else 1.0
