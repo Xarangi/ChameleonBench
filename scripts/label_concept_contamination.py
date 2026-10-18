@@ -65,6 +65,16 @@ DESC_V4 = {
     "literature": "literature as a subject: books, authors, literary works or literary analysis",
     "computer code": "computer source code or programming as a central element",
     "HTML markup": "HTML markup or tags as a substantial part of the text",
+    # v4 concepts (REPLICATION 2026-10-17aa)
+    **{f"{lang} language": f"written in {lang}" for lang in (
+        "Japanese", "Arabic", "Hindi", "Portuguese", "Turkish", "Russian", "Greek", "Thai",
+        "Tamil")},
+    "SQL code": "SQL code (table definitions or queries) as a substantial part of the text",
+    "JSON data": "JSON data or a JSON schema as a substantial part of the text",
+    "JavaScript code": "JavaScript source code as a substantial part of the text",
+    "Python code": "Python source code as a substantial part of the text",
+    "finance": "finance as a central subject: money, investing, banking, markets or accounting",
+    "supportive tone": "a supportive, encouraging tone as a central feature",
 }
 FRAME_V4 = ("You label texts for training concept detectors. A property applies only if it is "
             "CENTRAL to the text: a main topic, or a pervasive property of how it is written - "
@@ -103,7 +113,8 @@ def main():
     for f in a.data:
         d = json.loads(Path(f).read_text())
         for c in d["concepts"]:
-            if c["concept"] not in concepts and c["concept"] not in SKIP:
+            if (c["concept"] not in concepts and c["concept"] not in SKIP
+                    and not c["concept"].startswith("deception:")):
                 concepts.append(c["concept"])
             for p in ("fit", "calib", "episode"):
                 for t in c[p]:

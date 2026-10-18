@@ -3,6 +3,24 @@
 This file tracks the concrete replication state: data sources, fallbacks,
 checkpoints, observed results, and unresolved limitations.
 
+## 2026-10-17aa Split v4 data built (train / heldout only); 27B negative labels launched; step-300 capability detail
+
+- User 10-17: merge dev into held-out (fixed-step training, no early stopping), at most 3-5 train members per family,
+  more languages and code-like concepts; labels only to keep NEGATIVES clean, positives trusted from sources; similar
+  concepts (maths / physics) are fine as separate concepts. No capability gate, nothing launched.
+- scripts/build_final_v4.py -> $RAW/tica/final_v4{,_inputs}.json + configs/tica/final_split_v4.json. Train: topics
+  sports / politics / astronomy / law / war; languages German, Spanish, Japanese, Arabic, Hindi; format all-caps, SQL
+  (gretel), JSON (glaive schemas), JavaScript (CodeSearchNet); tone jokes, comforting, casual; domain maths, chemistry,
+  literature, finance (finance-alpaca). Held-out: 10 topics; Finnish, French, Portuguese, Turkish, Russian, Greek, Thai,
+  Tamil; HTML, Python code (CodeAlpaca, Python-like); confusion, supportive; physics; safety DolusChat / roleplaying /
+  insider trading (response-only answers). Dropped: angry (56 rated NC rows), the other v3-train topics.
+- 27B labels (prompt v4 + new concept descriptions; safety skipped): jobs 6161165/66/70 (3 shards).
+- Step-300 held-out capability vs base (n=200 GSM8K): ARC 0.90 / 0.90, MMLU-STEM 0.68 / 0.70, MATH-500 0.61 / 0.63,
+  MBPP 0.76 / 0.75 -> unchanged; GSM8K 0.755 / 0.825 clean, 0.67 vs base 0.785-0.805 under a monitor -> a
+  GSM8K-specific drop. The thinking eval (boxed prompt) has step-300 GSM8K no-think 0.86 = base 0.86 -> likely the
+  capability.py GSM8K answer format, to check (extraction failures).
+- Safety races, step 300, per-turn detection vs base: DolusChat refit 0.76-0.77 vs 0.88; insider trading 0.99 vs 1.00.
+
 ## 2026-10-17z "Base beats deception probes" = per-turn probe misses accumulated, NOT base evasion; NC-style per-turn view
 
 Per-turn detection (fraction of monitored turns caught), base model: DolusChat 0.83-0.89 (both variants, base and refit
