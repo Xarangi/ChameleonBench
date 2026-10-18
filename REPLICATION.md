@@ -3,6 +3,21 @@
 This file tracks the concrete replication state: data sources, fallbacks,
 checkpoints, observed results, and unresolved limitations.
 
+## 2026-10-17ab v4 labels done + finance filter; per-kind / per-concept analysis at step 360; final-run recipe revised
+
+- 27B labels on final_v4 (3 shards merged: concept_labels_v4data_27b.json, 33,327 texts). Negative contamination
+  (final_v4_negreport.json): languages / syntax ~0; maths 16.7% of the free pool, Python code 10.6% (1,698 pool texts,
+  88% code-like: the pool contains code), casual 9.7% of other concepts' texts -> neg_labels needed. Own texts judged
+  yes: finance 0.30 (finance-alpaca = Alpaca + FiQA) -> final_v4_clean.json filters finance positives only (180 kept;
+  filter_positives_by_labels.py --only); held-out topics plays & poetry 0.52, fashion 0.57, buildings 0.65.
+- Training steps 300-360, refit probes beaten by kind: L8-16 0.55-0.95 for every architecture, L22/26 0.25-0.45 for
+  every architecture, ensdeep4 0.35 -> depth is the probe bottleneck. By concept (after 1st / 2nd refit): topics war /
+  politics / geography / spaceflight 0.84-0.94 / 0.46-0.75; maths 0.06 / 0.00, chemistry 0.11 / 0.00; segments 6-10 turns.
+- capability.py GSM8K = 2-shot, 256 new tokens; the boxed eval uses 1024 -> the step-300 GSM8K drop may be a length
+  cut-off; unchecked.
+- docs/tica-v4-recipe.md rewritten as the final-run recipe (fixed 800 steps, turn-0 schedule, relative cap, 20 turns,
+  off_match 2.0, open decisions listed). Nothing launched.
+
 ## 2026-10-17aa Split v4 data built (train / heldout only); 27B negative labels launched; step-300 capability detail
 
 - User 10-17: merge dev into held-out (fixed-step training, no early stopping), at most 3-5 train members per family,

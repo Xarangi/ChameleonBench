@@ -25,13 +25,16 @@ def main():
     ap.add_argument("--min-texts", type=int, default=100)
     ap.add_argument("--out", required=True)
     ap.add_argument("--report", default="")
+    ap.add_argument("--only", nargs="*", default=None,
+                    help="filter only these concepts (v4: sources trusted except mixed ones)")
     a = ap.parse_args()
     d = json.loads(Path(a.data).read_text())
     lab = json.loads(Path(a.labels).read_text())["labels"]
     rep = {}
     for c in d["concepts"]:
         name = c["concept"]
-        if name in SKIP:
+        if name in SKIP or name.startswith("deception:") or (a.only is not None
+                                                               and name not in a.only):
             continue
         before = {p: len(c[p]) for p in ("fit", "calib", "episode")}
         for p in ("fit", "calib", "episode"):
@@ -41,12 +44,13 @@ def main():
                      "kept_frac": round(sum(after.values()) / max(1, sum(before.values())), 3),
                      "below_min": sum(after.values()) < a.min_texts}
     d.setdefault("source", {})["positive_label_filter"] = {"labels": a.labels, "thr": a.thr,
-                                                           "report": rep}
+                                                           "only": a.only, "report": rep}
     Path(a.out).write_text(json.dumps(d))
     if a.report:
         Path(a.report).write_text(json.dumps(rep, indent=1))
     for k, v in sorted(rep.items(), key=lambda x: x[1]["kept_frac"]):
-        print(f"{k[:32]:32s} kept {v['kept_frac']:.2f} {v['after']}{'  BELOW MIN' if v['below_min'] else ''}")
+        low = "  BELOW MIN" if v["below_min"] else ""
+        print(f"{k[:32]:32s} kept {v['kept_frac']:.2f} {v['after']}{low}")
 
 
 if __name__ == "__main__":

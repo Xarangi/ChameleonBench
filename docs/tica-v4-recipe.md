@@ -1,88 +1,54 @@
-# TICA v4 recipe (proposal, 2026-10-17; nothing built or launched yet)
+# TICA final-run recipe (v4; revised 2026-10-17 after the user's decisions; nothing launched)
 
-Evidence base: v3b (`final_v3b_4b`) to step ~335, full held-out + dev sanity races (REPLICATION 10-17x),
-think-hide / free-generation evals (10-17v), step-300 capability eval, safety races (10-17y).
+User decisions (10-17): dev merged into held-out, fixed number of steps (no early stopping, no dev);
+3-5 train concepts per family; labels only keep NEGATIVES clean, positives trusted from the sources;
+similar concepts are fine as separate concepts; no capability gate; nothing started yet.
 
-## What is missing / underperforming (ranked)
+## Evidence (v3b to step ~360; REPLICATION 10-17v .. 10-17ab)
 
-| # | Problem | Evidence | Cause |
-|---|---|---|---|
-| 1 | Capability cost under the monitor | step 300 GSM8K 0.755 clean / 0.67-0.68 under a monitor vs base 0.825 clean; v2 had no drop (0.805 / 0.79). MMLU unchanged (0.68). Eval KL under a monitor 0.18-0.21; in-training KL 0.145 -> 0.173 | hiding moves generation under the monitor; the in-training proxy (cap_gen acc ~0.9 on RFT-sampled GSM8K-train forks) hid it. Pending: think_v3b300 (140 -> 300 regression vs prompt effect) and base-under-monitor (caph_base) |
-| 2 | Surface families do not transfer | held-out Finnish / HTML / confusion / code: 0 refit probes beaten, scores 8-29x threshold; topics 0.77 | 1-2 training members per non-topic family (topics have 8) |
-| 3 | Notation-heavy concepts barely learn even in training | 1st refit beaten: maths 0.03, chemistry 0.17 (topics 0.8-0.9) | breadth cannot fix this; a mechanism problem |
-| 4 | Deep iteration lags | k2 ~0.5-0.6, k3 ~0.35 (rising +0.12-0.13 / 100 steps) | 16-turn episodes, switch_prob 0.5 after 5 turns -> few k3+ segments |
-| 5 | Turn-0 fixed base probe saturated | beaten 1.00; the dodge does not reach held-out L20/24 base probes | static, probe-specific dodge: no signal left |
-| 6 | Free-generation OFF leak | v3b OFF / none L12 det 0.25-0.58 vs base 0.83-0.92 | off turns only matched on forced text (off_match_weight 0) |
-| 7 | Thinking mode breaks the dodge | forced, thinking ON: sports 1.0, Finnish 0.95 (vs 0.0-0.55 no-think) | never trained with a think block |
-| 8 | Validation is thin | 5 dev concepts, 1 per non-topic family, "within 3 turns" metric | split design |
-| 9 | Safety tests are weak | base beats 14-15 / 24 DolusChat refit probes; insider trading valid (base never passes) | weak deception probes |
-| 10 | Speed | ~250 s / step on 1 A100 (more refits as it wins) | single GPU |
-
-Code (dev) beat its first refit probes at val step 320 (2 of 5): one check, small n.
+| Axis | Finding | Bin |
+|---|---|---|
+| Probe depth | every architecture at L22/26 is beaten 0.25-0.45 of deployments, at L8-16 0.55-0.95 (steps 300-360); deep ensemble 0.35. The layer sampler already gives 22/26 the most weight (0.30/0.27); L26 0.09 -> 0.39 over steps 200-350 | still rising -> steps |
+| Iteration | 1st fresh probe ~0.75 (flat); after 1st refit 0.52-0.55; after 2nd 0.42-0.45 (+0.12-0.13 / 100 steps) | still rising -> steps |
+| Held-out probes in training | base probes at L20/24 (never trained against, no training probe reads 20/24/28/30): caught at the last turn 1.00 -> 0.69, still falling | still rising |
+| Held-out concepts (step 300) | topics 0.77 of refit probes beaten, physics 0.62; Finnish / HTML / confusion / code 0 | surface breadth -> v4 data |
+| Maths / chemistry | after 1st refit beaten 0.06 / 0.11 after 360 steps; all-caps (0.169 weight) only 0.48 | stuck |
+| Turn 0 | fixed base probe beaten 1.00 everywhere; the dodge does not reach held-out probes | design |
+| Curriculum | relative weighting flattened in 1-3-member families (cap 0.3 <= uniform share) | design |
+| Deep refits sample size | concept segments 6-10 turns; 3rd probe reached n = 1-7 for half the concepts | design |
+| OFF leak | free generation at step 160: OFF / none L12 det 0.25-0.58 vs base 0.83-0.92 (not re-tested) | design |
+| Thinking | thinking ON removes most of the dodge | scope decision |
+| Capability | step 300: GSM8K 0.755 vs base 0.825 in capability.py (2-shot, 256 new tokens), 0.86 = base in the boxed-prompt eval (1024 tokens); ARC / MMLU / MATH / MBPP unchanged | unsettled (likely length cut-off) |
 
 ## Recipe
 
-### A. Data / split v4 (breadth; every new concept through the 9B-broad + 27B-strict two-pass, then the selection step: positives >= 0.8, clean negatives <= 0.2, hard negatives = broad-yes / strict-no)
+1. **Data: split v4** (built: `final_v4_clean.json`, `configs/tica/final_split_v4.json`; 27B labels
+   `concept_labels_v4data_27b.json` as `neg_labels`). Train 5 topics / 5 languages / 4 format-syntax /
+   3 tones / 4 domains; held-out 10 topics, 8 languages, HTML + Python code, confusion + supportive,
+   physics, 3 deception sets. finance positives filtered to the 27B-confirmed 180 (finance-alpaca is
+   Alpaca + FiQA: only 30% finance); every other source trusted. Weaker held-out tests: Thai / Russian
+   / Greek (140-180 texts); plays & poetry, fashion, buildings (judge confirms 0.52-0.66).
+2. **Turn 0**: fresh probe, with a schedule (fixed base probe for the first ~100 steps, then fork) so a
+   from-scratch run does not repeat v3's cold start. New optional field, default off.
+3. **Curriculum**: cap relative to the number of options (e.g. 3x uniform) + curriculum share above
+   0.5 (new optional field). Topics / languages / syntax: uniform over concepts == uniform over
+   families at 3-5 members.
+4. **Episodes**: 20 turns, concept_switch_prob 0.35 (more 3rd / 4th probes; ~25% more per step).
+5. **off_match_weight 2.0**.
+6. **Steps**: from the slopes, deep layers ~0.7 and 2nd-refit ~0.6 need ~500-600 steps from scratch +
+   the ~140-step start: plan 800 fixed steps, the final checkpoint is THE model (no selection on held-out).
+7. **Hardware**: 800 x ~250 s = ~55 h on one A100; TamIA 4x H100 data-parallel (docs/tica-other-hpc.md).
+8. **Seeds**: 1 seed first; 3 seeds for the pre-registered headline.
 
-- **Language** (Aya, human-written; language field + script / function-word check; >= 700 rows):
-  - train (12): German, Spanish, Portuguese, Italian, Polish, Dutch, Swedish, Turkish, Vietnamese,
-    Japanese, Standard Arabic, Hindi
-  - dev (3): French, Indonesian, Greek
-  - held-out (6): Finnish (NC), Thai, Tamil, Iranian Persian, Russian, Amharic
-- **Format / syntax** (non-code syntax in training so code stays a real held-out test):
-  - train: all-caps (NC), SQL, LaTeX math markup, JSON / config, shell commands, markdown tables
-  - dev: computer code (CodeAlpaca; continuity with v3b)
-  - held-out: HTML (NC), plus one more code language
-  - candidate published sources, each checked before use: b-mc2/sql-create-context (SQL),
-    NL2Bash (shell), glaive function-calling (JSON), MATH solutions (LaTeX). Negatives: no syntax
-    concept is a negative for another (27B labels).
-- **Tone**: train jokes, comforting, angry, formal (NC style ratings; formal re-admitted through
-  27B labels; angry with a toxic <= low filter; supportive dropped if it overlaps comforting);
-  dev casual + supportive-or-academic; held-out confusion.
-- **Domain**: train maths, chemistry, literature, finance (if a published set passes checks);
-  dev physics; held-out one prose domain (checked source).
-- **Safety (held-out family)**: insider trading (valid), DolusChat response-only, the v3 DolusChat
-  concept; roleplaying only if its base probe passes the gate. Always reported next to the base model.
+## Open decisions (yours)
 
-### B. Sampling
-
-- About 35 training concepts: uniform over concepts would put about 35% of episodes on languages.
-  **Decision for you:** switch the curriculum prior to `family` (uniform over families, then
-  uniform over concepts within a family), with the hazard Thompson ramp on top as now.
-- More concepts means fewer visits each: about 1.5x the steps of v3b for the same per-concept exposure.
-
-### C. Mechanism
-
-- **Fresh probe at turn 0** (`first_probe: fork`): the v3 cold start came from forking at step 0 from
-  scratch; v4 warm-starts from the v3b checkpoint (D), so it is safe now.
-- **Notation-heavy concepts** (maths, chemistry, code-like):
-  - weighting that keeps weight on probes not beaten CONFIDENTLY (your request; optional, default off)
-  - a separate kind-lambda for deep layers (L22 / L26)
-  - both tested on maths alone first, 1 seed
-  - not re-proposed: the margin loss (falsified 08-07c); a p^2 saturation fix only as a separate
-    default-off ablation.
-- **Deep iteration**: turns 16 -> 20, `concept_switch_prob` 0.5 -> 0.35 (min segment 5): more k3 / k4
-  segments, about 25% more time per step.
-- **off_match_weight 2.0** (kept OFF detection at 0.98 at no cost to ON in the branch test).
-
-### D. Capability (gate, not a proxy)
-
-- GSM8K-test under a monitor brief + clean, run on every save next to validation; early stopping and
-  checkpoint selection require GSM8K-under-brief >= base - 0.03.
-- Planned ablation before the main run: cap_gen_weight / cap_gen_kl_weight 0.5 / 1.0 vs 1.0 / 2.0
-  (short, 80 steps from the v3b checkpoint), chosen by the capability gate.
-- Thinking-mode KL anchor on the staged s1K / Bespoke data: optional, default off, decided after
-  think_v3b300.
-
-### E. Validation
-
-- 2-3 dev concepts per family; metric = refit probes beaten within 5 turns, equal weight per family;
-  report the probe-index lines; code on its own line; early_stop_patience 15.
-
-### F. Run plan
-
-1. Build split v4 + labels (no GPU training).
-2. Capability ablation (D), 80 steps, 4B, 1 seed.
-3. v4 main run, warm-started from the best v3b checkpoint, LR re-warm 2e-4 -> 1e-4 over 100 steps,
-   on TamIA 4x H100 data-parallel (docs/tica-other-hpc.md).
-4. Full eval: held-out + dev + safety sanity races, think-hide, capability, base controls.
+- Scratch vs warm start from v3b: warm start is clean for v4 (v3b never trained on a v4 held-out
+  concept) and saves ~140 steps; scratch is the cleaner paper claim. Recommendation: scratch.
+- Thinking mode: train a thinking-mode anchor (staged s1K / Bespoke) or scope the claim to non-thinking.
+- Probe types in training: wait for the 14 held-out probe-type races (step 340); a type that is never
+  beaten (e.g. token ensembles, GDM rolling attention) may belong in training.
+- GSM8K: re-run capability.py GSM8K at 512 new tokens (10-minute eval) before touching cap_gen.
+- Periodic held-out race every 40 steps, logged only (never used for stopping / selection): the
+  transfer-over-training figure.
+- Maths / chemistry: no fix proposed (margin loss falsified 08-07c). The v4 run shows whether SQL /
+  JSON / JavaScript learn like all-caps or stall like maths.
