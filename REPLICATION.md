@@ -3,6 +3,17 @@
 This file tracks the concrete replication state: data sources, fallbacks,
 checkpoints, observed results, and unresolved limitations.
 
+## 2026-10-18c v3b training-log analyses: concept stays readable; held-out-layer dodge grows; OFF turns clean
+
+- Refit probes fit on the model's own dodging states (runs/final_v3b_4b refits.jsonl, global steps): kept 0.994-1.000
+  in every window, mean AUROC 0.9997 (s0-80) -> 0.998 (s320-400); refits with AUROC < 0.99: 0.006 -> 0.055. The concept
+  stays linearly readable: the model evades the deployed probes, it does not erase the concept (slowly harder to read).
+- Static base probes at L20/24 (never trained against), detection on monitored turns: 1.00 (s0-160) -> 0.89 -> 0.75 ->
+  0.64 (s320-400); monitor-OFF turns 1.00 in every window (no hiding when unmonitored at held-out layers); mismatch
+  (other concept monitored) 0.03-0.05. s240+: held-out detection 0.59 when the model beat the active probe vs 0.73
+  when caught -> beating the active probe partly carries to unseen layers.
+- Also queued: held-out races for retryA (6198915); original v3b continued 400 -> 1000 (6198908-12).
+
 ## 2026-10-18b Retry branches (s360 + 60 steps): retryB wins; v3b EXTENDED to 1000 from retryB
 
 - Training pass rate by probe index (segments that beat bank k; n in brackets), steps 31-60 of each branch
