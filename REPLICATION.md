@@ -3,6 +3,41 @@
 This file tracks the concrete replication state: data sources, fallbacks,
 checkpoints, observed results, and unresolved limitations.
 
+## 2026-10-18f Split v5 (4 train per area; emotion + safety held-out families) + 27B labels
+
+- User 10-18: standardise to 4 train concepts per area, keep emotion fully held out, biology OK (NC data), add
+  Java / computer science / a third held-out tone / more safety. scripts/build_final_v5.py (v4's builder with the v5
+  tables patched in; v4 reproducible) -> $RAW/tica/final_v5{,_inputs,_report}.json, configs/tica/final_split_v5.json
+  (+ builtin mirror). 20 train / 38 held-out; negatives = v4's pool (1,836 / 7,098 / 7,098).
+- TRAIN (n texts): topic sports, politics, astronomy, war 600 each (law and courts DROPPED, not held out: v1 conflict
+  rule); language German 375, Japanese 600, Arabic 600, Hindi 582 (Spanish DROPPED); format all-caps 361, SQL / JSON /
+  JavaScript 600; tone jokes 178, comforting 321, casual 227, FORMAL 228 (NC style, new); domain maths 600, chemistry
+  600, literature 301, finance 181 (27B positive filter, as v4).
+- HELD-OUT: 10 topics (600); 8 languages (Thai 180, Russian 236, Greek 252, Finnish 451, others 600); format HTML 410,
+  Python 600, JAVA 600 (CodeSearchNet shard 0; request from func_name + docstring); tone confusion 373, supportive 228,
+  CAUTIOUS 200 (TONEBANK, no licence stated -> eval only); domain physics 600, BIOLOGY 484 (NC benign biology-focused;
+  BIO_MAX filter off for this concept only; purity 0.75 because 372/511 rows are co-rated chemistry-based > 0.5 -> 105
+  at 0.5), COMPUTER SCIENCE 600 (arXiv cs.* primary, no math/stat cross-lists; 400 non-CS abstracts as hard negatives);
+  EMOTION family 7 x 400 (happy, sad, angry, afraid, guilty, surprised, calm; build_emotion_eval.emotion_concepts,
+  428 hard negatives each = other emotions' stories + 128 neutral); SAFETY family DolusChat 450, roleplaying 326,
+  insider trading 336, SYCOPHANCY 435 (diverse-deception gsm8k_sycophancy pairs; honest reply = hard negative).
+- NC style negatives: "formal" in the NC purity set would drop the academic / educational / informative pool 715 -> 26
+  (mostly formal-rated); kept as in v4, the 27B labels keep formal-central texts out of the formal probe's negatives.
+- ALIGNMENT FAKING LEFT OUT (user decision 10-18): diverse-deception alignment_faking_claude labels are REFUSAL (honest)
+  vs harmful COMPLIANCE (deceptive) by a refusal-keyword heuristic, plus harm_answers (compliant only): a harmfulness /
+  refusal concept carrying harmful text, not deception. CORRECTED framing: the 10-18 research summary listed it as
+  "deception, ~230 deceptive / 450 honest". Counts (150-3000 chars): 407 deceptive / 457 honest, 9 of 256 queries
+  paired -> addable technically (unpaired refusals as hard negatives), but not as a deception concept.
+- 27B labels (central-only v4 prompt + v5 descriptions: formal, cautious, Java, computer science, 7 emotions; deception:*
+  not judged): jobs 6200733-36 (4 shards, ~66 min each) -> concept_labels_v5data_27b.json (43,760 texts, 54 judged
+  concepts, 79,550 verified pairs). final_v5_negreport.json (share of negatives judged to HAVE the concept): formal tone
+  free pool 0.28 / other concepts 0.44 (broad concept; cleaned at fit time), maths 0.16 / 0.05, Python 0.11, biology
+  0.05, CS 0.06, emotions <= 0.02, Java / languages ~0. Own texts judged yes: finance 0.30 (filtered), plays & poetry 0.52,
+  fashion 0.57, surprised 0.67, buildings 0.69, happy 0.75, formal 0.86, biology 1.00, CS 0.97, cautious 0.99.
+- final_v5_clean.json (finance positives only, 181 kept). configs/tica/final_v4_4b.yaml points at final_v5_clean /
+  final_v5_inputs / concept_labels_v5data_27b / final_split_v5 (loads: 20 train, 38 held-out).
+- NOTE: cluster maintenance reservation POWEROUT20261027 (all nodes, 10-27 05:00 -> 11-03): a long v4 run must end before.
+
 ## 2026-10-18d Retry ladder + LR-2e-4 branches; LR end cooldown; v4 draft config
 
 - New options (default off; tests green): objective.retry_hide_ladder (hide weight by the number of CONSECUTIVE catches
