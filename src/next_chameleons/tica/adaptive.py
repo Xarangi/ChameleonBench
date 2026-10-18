@@ -299,6 +299,12 @@ class AdaptiveConfig:
     curriculum_prior: str = "family"
     curriculum_ramp_steps: int = 0
     curriculum_mix_max: float = 1.0
+    # 10-18 (default 0 = ramp from step 0): uniform only for the first curriculum_delay_steps global
+    # steps, then the ramp over curriculum_ramp_steps.
+    curriculum_delay_steps: int = 0
+    # 10-18 (default True = family first, then concept): False = one flat bandit over concepts
+    # (families still used for metrics), for splits with equal family sizes.
+    concept_hierarchy: bool = True
     # first_probe (10-16i; user: "fork at the first turn and catch right there"): "base" = the
     # concept's base-model probe judges its first turn (with objective.pin_first_turn /
     # pin_segment_first the model is pinned to the base there, so it is caught by construction);

@@ -199,6 +199,36 @@ def test_trainer_curriculum_lambda_ramps(tmp_path, monkeypatch):
                                                           curriculum_mix_max=mx)})()
         t.step_k = step
         assert abs(AdaptiveSupervisedTrainer._curriculum_lambda(t) - want) < 1e-12
+    # delay: uniform for 50 steps, then ramp to 0.7 over 100
+    for step, want in [(0, 0.0), (49, 0.0), (100, 0.35), (150, 0.7), (400, 0.7)]:
+        t.cfg = type("C", (), {"adaptive": AdaptiveConfig(
+            curriculum_ramp_steps=100, curriculum_mix_max=0.7, curriculum_delay_steps=50)})()
+        t.step_k = step
+        assert abs(AdaptiveSupervisedTrainer._curriculum_lambda(t) - want) < 1e-12
+
+
+def test_flat_concept_bandit(tmp_path):
+    from next_chameleons.tica.adaptive import AdaptiveConfig
+    from next_chameleons.tica.monitors import MonitorPool
+    from next_chameleons.tica.trainers.supervised import (
+        AdaptiveSupervisedConfig,
+        AdaptiveSupervisedTrainer,
+    )
+    from test_tica_framework import bank as make_bank
+    from test_tica_framework import tiny_policy
+
+    fam = tmp_path / "split.json"
+    fam.write_text('{"families": {"cats": "topic", "dogs": "animal", "fish": "animal"}}')
+    pool = MonitorPool()
+    pool.add(make_bank(1, ["cats", "dogs", "fish"]), round=0, family="concept_linear")
+    sampler = type("S", (), {"concepts": [type("C", (), {"concept": c})()
+                                          for c in ("cats", "dogs", "fish")]})()
+    for hier, nfam in ((True, 2), (False, 1)):
+        cfg = AdaptiveSupervisedConfig(steps=1, save_every=0, adaptive=AdaptiveConfig(
+            refit_every=0, concept_sampling="thompson", concept_families=str(fam),
+            concept_hierarchy=hier))
+        tr = AdaptiveSupervisedTrainer(tiny_policy(), pool, sampler, cfg, tmp_path / str(hier))
+        assert len(tr.concept_bandit.within) == nfam
 
 
 def test_off_match_weight_separates_off_turns():

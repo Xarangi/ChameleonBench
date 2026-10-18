@@ -469,7 +469,7 @@ class AdaptiveSupervisedTrainer:
             if ac.concept_families:
                 fams = json.loads(Path(ac.concept_families).read_text()).get("families", {})
             self.concept_bandit = HierarchicalThompson(
-                {c: fams.get(c, "topic") for c in concepts},
+                {c: (fams.get(c, "topic") if ac.concept_hierarchy else "all") for c in concepts},
                 family_kw={"cap_rel": ac.family_cap_rel, "power": ac.family_power},
                 **{**self._tts_kw(), "cap_rel": ac.concept_cap_rel, "power": ac.concept_power})
         # truncated no-grad reads (Policy._depth; exact). Config field, or TICA_TRUNC_READS=1
@@ -1584,9 +1584,11 @@ class AdaptiveSupervisedTrainer:
         """Weight of the adaptive (Thompson) part of the curriculum at this global step (10-17g)."""
 
         ac = self.cfg.adaptive
+        g = self.step_k + self._step_offset() - ac.curriculum_delay_steps
+        if g < 0:
+            return 0.0
         if ac.curriculum_ramp_steps <= 0:
             return float(ac.curriculum_mix_max)
-        g = self.step_k + self._step_offset()
         return float(ac.curriculum_mix_max) * min(1.0, g / ac.curriculum_ramp_steps)
 
     def _pick_kind(self, exclude=()) -> str | None:
