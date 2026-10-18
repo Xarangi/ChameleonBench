@@ -145,3 +145,35 @@ def test_selectivity_hidden_when_other_monitored():
     assert sel["false_alarm"][P] == 0.5
     # the dodging aggregate ignores selectivity records
     assert aggregate(recs, 2)["n_monitored"] == 1
+
+
+def _feats(shift, n=60, d=8, seed=0):
+    g = torch.Generator().manual_seed(seed)
+    meta, xs = [], []
+    for split in ("train", "heldout"):
+        for j in range(n):
+            kind = j % 3  # 0 dodging ON, 1 monitor-OFF turn, 2 no-brief episode
+            cond = "nobrief" if kind == 2 else "real_score"
+            meta.append({"cond": cond, "off": kind == 1, "turn": 1 + j % 5, "split": split})
+            x = torch.randn(2, d, generator=g)
+            if kind == 0:
+                x[:, 0] += shift  # the evasion direction (shared across concepts / splits)
+            xs.append(x)
+    return {"layers": [8, 24], "x": torch.stack(xs), "meta": meta}
+
+
+def test_evasion_detector_excess_and_labels():
+    from next_chameleons.tica.evasion_detector import excess, labels, run
+
+    meta = [{"cond": "real_score", "off": False, "turn": 0, "split": "train"},
+            {"cond": "real_score", "off": False, "turn": 2, "split": "train"},
+            {"cond": "real_score", "off": True, "turn": 3, "split": "train"},
+            {"cond": "nobrief", "off": False, "turn": 3, "split": "train"},
+            {"cond": "mismatch", "off": False, "turn": 3, "split": "train"}]
+    assert labels(meta, "off", "train")[0] == [1, 2]  # turn-0 positive dropped, mismatch unused
+    assert labels(meta, "both", "train")[1].tolist() == [1, 0, 0]
+    trained, base = _feats(4.0), _feats(0.0, seed=1)
+    rt = run(trained, trained, "both", C=1.0)
+    rb = run(base, base, "both", C=1.0)
+    assert rt["8"]["auroc"] > 0.95 and rb["8"]["auroc"] < 0.8
+    assert excess(rt, rb)["8"] > 0.2

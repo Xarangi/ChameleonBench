@@ -76,6 +76,9 @@ def main():
     ap.add_argument("--read-pos", type=int, default=40)
     ap.add_argument("--read-neg", type=int, default=56)
     ap.add_argument("--max-topics", type=int, default=0, help="random subset of the topics")
+    ap.add_argument("--dump-feats", help="save per-turn pooled features (.pt) for "
+                    "scripts/tica_evasion_detector.py")
+    ap.add_argument("--feat-layers", default="8,12,16,20,24")
     ap.add_argument("--model-path")
     ap.add_argument("--seed", type=int, default=1)
     ap.add_argument("--out", required=True)
@@ -94,7 +97,8 @@ def main():
         cfg.model.path = a.model_path
     cfg.rl.adaptive.episode_refit_kind = a.kind
     data, _, factory = build(cfg)
-    topics = select_topics(data, a.topics)
+    # "train+heldout": the union of several concept splits (evasion detector: train / test)
+    topics = [c for sp in a.topics.split("+") for c in select_topics(data, sp)]
     if a.max_topics and len(topics) > a.max_topics:  # fewer concepts = fewer panel fits
         topics = sorted(random.Random(a.seed).sample(sorted(topics), a.max_topics))
     train = set(cfg.episode_concepts)
@@ -120,6 +124,8 @@ def main():
         for L, m in zip(layers, mons, strict=False):
             pool.add(m, round=0, family="concept_linear", held_out=L in held)
         panel[c] = {}
+        if not pan_layers:
+            continue
         # (a) linear base probes at every panel depth: one multi-layer read (cached); per layer
         # only if some layer fails its gate
         try:
@@ -182,6 +188,9 @@ def main():
                       "failed": len(failed)}), flush=True)
     # every layer / token layer any panel probe reads
     need = set(pan_layers)
+    feat_layers = [int(x) for x in a.feat_layers.split(",") if x] if a.dump_feats else []
+    need |= set(feat_layers)
+    feats: list[torch.Tensor] = []  # per record: [n_feat_layers, d] fp16 (--dump-feats)
     tok_layers = set()
     for ms in panel.values():
         for m in ms.values():
@@ -294,6 +303,10 @@ def main():
                     if (a.read_every and t % a.read_every == 0 and not rec["off"] and dodge
                             and CONDITION_SPECS[cond]["brief"]):
                         rec["readability"] = readability(trj, t, c)
+                    if feat_layers:
+                        rec["split"] = data.split.get(tc or c)
+                        feats.append(torch.stack([pooled[L][i].float().cpu()
+                                                  for L in feat_layers]).half())
                     records.append(rec)
                 del pooled, tok
         ep0 += len(trajs)
@@ -312,6 +325,11 @@ def main():
                            for k in a.panel_kinds.split(",") if k}}
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(json.dumps(rep))
+    if feat_layers:  # activations + numeric labels only (evasion detector; never committed)
+        meta = [{k: r[k] for k in ("ep", "turn", "cond", "off", "concept", "text_concept",
+                                   "split", "detected")} for r in records]
+        torch.save({"layers": feat_layers, "x": torch.stack(feats), "meta": meta,
+                    "adapter": a.adapter, "base": a.base}, a.dump_feats)
     short = {k: v for k, v in agg.items() if k not in ("panel", "layer_profile_by_turn",
                                                         "readability_by_turn")}
     short["panel_det"] = {p: v["det"] for p, v in agg["panel"].items()}
