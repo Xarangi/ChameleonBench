@@ -1,7 +1,7 @@
 # FINAL v4 (DRAFT 10-18, NOT LAUNCHED; docs/tica-v4-recipe.md): final_v3b_4b from scratch on split v4
 # (21 train / 26 held-out concepts, dev merged into held-out) + the 10-17/18 levers:
 # - retry_hide_weight 3.0 (10-18b branch win; the ladder branch 6199432 may replace it)
-# - off_match_weight 2.0 (monitor-OFF turns their own match mean)
+# - no off_match_weight (10-18: OFF turns caught 1.00 from s160 in v3b training; dropped, user)
 # - LoRA rank 32; 24 turns; switch prob 0.35, >= 8 turns per concept segment
 # - LR warmup -> 3e-4 -> cosine to 2e-4 by step 200, hold, cool down to 2e-5 over the last 150 steps
 # - 1200 fixed steps, no early stopping; held-out race every 50 global steps as its own job (logged only)
@@ -39,7 +39,7 @@ train:
   save_every: 20    # each save launches a dev-concept validation race (eval_on_save)
   seed: 0
   # 10-16i: no pinning; the first probe of every concept is fit on the policy itself (first_probe)
-  objective: {hide_weight: 1.0, retry_hide_weight: 3.0, off_match_weight: 2.0, match_weight: 2.0, lm_weight: 0.1, hide_from_turn: 0, pin_first_turn: false,
+  objective: {hide_weight: 1.0, retry_hide_weight: 3.0, match_weight: 2.0, lm_weight: 0.1, hide_from_turn: 0, pin_first_turn: false,
               pin_segment_first: false}
 rl:
   adaptive:
