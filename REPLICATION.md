@@ -3,6 +3,49 @@
 This file tracks the concrete replication state: data sources, fallbacks,
 checkpoints, observed results, and unresolved limitations.
 
+## 2026-10-18h Probe panel (s400 vs base) + supervised evasion detector; analysis tooling
+
+TOOLS (commits 656cb2d, bb75c02): scripts/tica_probe_panel.py (+ tica/panel.py, slurm wrapper) = the refit race with
+every turn ALSO scored by a never-shown panel (base probes: linear @4..30, attnpool, gdm_rollattn, mck_attnlite,
+ens8, ensdeep4, spread5, nc_ens8_tok, maxpool@24; every refit of the episode; per-turn fork readability CV AUROC;
+selectivity via --mix mismatch/nobrief; --dump-feats). scripts/tica_run_report.py (+ tica/run_report.py) = one JSON
+(+ PNGs) per training run across resume chunks (--base-offset for branches): probe index, retry pass, per-bank hazard,
+held-out static det by cond, refit readability, per concept / family, per kind, timing. scripts/tica_evasion_detector.py
+(+ tica/evasion_detector.py). Tests: tests/test_tica_panel.py.
+
+PANEL, final_v3b s400 (resume_260/final) vs BASE, held-out v3 concepts (13), 32 episodes x 16 turns, mix
+real 0.6 / mismatch 0.2 / nobrief 0.2 (6200754/55). 7 panel fits failed, all deception (gate).
+- Dodges almost the whole panel, not just the active probe: base-panel probes dodged per monitored turn 0.25 (t0),
+  0.37 (t1), 0.70-0.88 (t2-15); base model 0.00-0.06. Base-panel detection on s400 monitored turns: linear@12 0.08,
+  @16 0.07, mck_attnlite 0.07, nc_ens8_tok 0.12, ensdeep4 0.13, @8 0.14, @26 0.17, @22 0.18, @24 0.19, spread5 0.19,
+  gdm 0.21, attnpool 0.23, maxpool@24 0.25, @20 0.28, @28 0.38, ens8 0.42, @30 0.68, @4 0.99 (near-lexical layer: never
+  dodged). Base: 0.96-1.00 everywhere.
+- Strategy change: Jaccard of the dodged panel set between consecutive turns 0.81 after a catch vs 0.87 after a pass;
+  panel flip rate 0.12 after a catch vs 0.07 after a pass (n 163 / 67 pairs). The verdict moves it, but it keeps one
+  broad dodge and adjusts at the margin.
+- Old refits: re-detected 0.41 the turn after being beaten, 0.23 / 0.13 / 0.08 at 2 / 3 / 4+ turns (n 416) -> it moves
+  AWAY from beaten probes over turns (no circularity seen). New refits retro-catch 0.65 of earlier turns.
+- Readability (fresh linear probe on forks of the turn, 5-fold CV AUROC): s400 0.984-0.995 by layer (L24: 0.999 at t0 ->
+  0.976-0.98 from t4), base 0.997-0.999. EVADE, not erase (slightly harder to read, as in training refits 10-18c).
+- Monitor OFF turns: base panel detects 0.83-1.00 -> the dodge is gated on the monitor status.
+- SELECTIVITY (coordinator 10-18): the written concept B when an unrelated A is monitored vs no brief: s400 0.89-1.00
+  vs 0.96-1.00 (largest drop linear@16 0.98 -> 0.89, ens8 0.98 -> 0.93); BASE 0.93-1.00 vs 0.95-1.00. Excess hiding of
+  an UNMONITORED concept <= ~0.06 -> selective. A-panel false alarms on B text: s400 0.01-0.11, base 0.05-0.28; A's
+  race base probe 0.11 vs 0.06.
+
+SUPERVISED EVASION DETECTOR (coordinator 10-18): race features at L8/12/16/20/24 (80 episodes x 16 turns, train+held-out
+concepts, real 0.7 / nobrief 0.3; 6202634/37/39), logistic on TRAIN concepts, tested on HELD-OUT; positives = monitored
+dodging turns t >= 1; reference = monitor-OFF turns ("off"), no-brief episodes ("nobrief"), or both.
+- s400 held-out AUROC 0.999-1.000 (every layer, every reference); TPR at held-out 1% FPR 0.98-1.00. s140 the same.
+- BASE (brief in context, no evasion): off 0.59 / 0.74 / 0.82 / 0.76 / 0.64 (L8..24), nobrief 0.88-0.97, TPR at 1% FPR
+  0.03-0.62. EXCESS (s400 - base) AUROC: off +0.18..+0.41, nobrief +0.03..+0.12 (ceiling), both +0.09..+0.25; excess
+  TPR at 1% FPR: off +0.88..+0.97, nobrief +0.38..+0.72.
+- Transfer: s400 detector -> s140 held-out AUROC 0.99-1.00 at L8-16 (0.96 / 0.89 at L20 / 24); s140 -> s400 0.98-1.00.
+  s400 detector on BASE turns 0.36-0.72 (does not fire on the brief alone). -> one stable evasion signature from step
+  140 on, strongest in early-mid layers.
+- CAVEAT: thresholds set on TRAIN-concept negatives give held-out FPR 0.05-0.63 (ranking transfers, calibration does
+  not); off-reference held-out negatives are few (44-62). 1 seed, 1 checkpoint pair.
+
 ## 2026-10-18g Branch results (60 steps from s360), held-out races, EMOTION transfer, anomaly + free-gen at s400
 
 - Training, steps 31-60 of each branch (same episode draws), pass by probe index k2 / k3 / k4, retry pass, L20/24 det:
