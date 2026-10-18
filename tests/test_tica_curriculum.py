@@ -338,3 +338,17 @@ def test_trainer_state_roundtrip(tmp_path, monkeypatch):
     tr3 = AdaptiveSupervisedTrainer(pol, pool, sampler, cfg, tmp_path / "c",
                                     resume_state=tmp_path / "missing.pt")
     assert abs(tr3.sched.get_last_lr()[0] - 1e-4) < 1e-12  # fresh: warmup step 1/10
+
+
+def test_family_close_negatives():
+    from next_chameleons.tica.trainers.supervised import other_negatives
+
+    texts = {"German": ["g"] * 5, "Japanese": ["j"] * 5, "sports": ["s"] * 5, "maths": ["m"] * 5}
+    others = ["German", "Japanese", "sports", "maths"]
+    out = other_negatives(random.Random(0), texts, others, ["German", "Japanese"], 20, 0.5)
+    assert len(out) == 20 and sum(x in "gj" for x in out[:10]) == 10
+    # off: identical to the original draw sequence
+    r1, r2 = random.Random(3), random.Random(3)
+    off = other_negatives(r1, texts, others, ["German"], 12, 0.0)
+    assert off == [r2.choice(texts[r2.choice(others)]) for _ in range(12)]
+    assert other_negatives(random.Random(0), texts, others, [], 6, 0.5).__len__() == 6

@@ -364,6 +364,16 @@ def uniform_kind(bandit, rng, exclude=()) -> str | None:
     return rng.choice(left) if left else None
 
 
+def other_negatives(rng, texts: dict, others: list, near: list, n: int, frac: float) -> list:
+    """n other-concept negatives for a refit fork: round(n * frac) from `near` (same-family
+    concepts, adaptive.family_neg_frac) and the rest from all `others`; a concept is drawn first,
+    then one of its texts. frac 0 / no near concepts = the original draws."""
+
+    n_near = round(n * frac) if near else 0
+    return ([rng.choice(texts[rng.choice(near)]) for _ in range(n_near)]
+            + [rng.choice(texts[rng.choice(others)]) for _ in range(n - n_near)])
+
+
 def lr_factor(cfg: SupervisedConfig, k: int, offset: int = 0, warm_up: bool = True) -> float:
     """LR multiplier (of cfg.lr) at local step k of a chunk starting at global step `offset`.
     Every chunk re-warms linearly over warmup_steps (fresh optimizer state); with lr_peak the
@@ -1132,10 +1142,16 @@ class AdaptiveSupervisedTrainer:
         rng = self.rng
         hard = self.hard_neg.get(concept) or []
         n_hard = min(len(hard), ef["other"] // 2)
+        # close negatives (adaptive.family_neg_frac): part of the other-concept draws come from
+        # the concept's own family
+        fam = self._families() if acfg.family_neg_frac > 0 else {}
+        near = [c for c in others if fam.get(concept) and fam.get(c) == fam[concept]]
+        pos_p = [("pos", x) for x in rng.sample(pos_t, min(ef["pos"], len(pos_t)))]
+        hard_p = [("neg", x) for x in rng.sample(hard, n_hard)]
         picks = (
-            [("pos", x) for x in rng.sample(pos_t, min(ef["pos"], len(pos_t)))]
-            + [("neg", x) for x in rng.sample(hard, n_hard)]
-            + [("neg", rng.choice(texts[rng.choice(others)])) for _ in range(ef["other"] - n_hard)]
+            pos_p + hard_p
+            + [("neg", x) for x in other_negatives(rng, texts, others, near,
+                                                   ef["other"] - n_hard, acfg.family_neg_frac)]
             + [("neg", x) for x in rng.sample(free_negs, min(ef["free"], len(free_negs)))]
         )
         pre = [dict(m) for m in prefix]

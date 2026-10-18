@@ -320,6 +320,12 @@ class AdaptiveConfig:
     # (p_yes >= neg_label_thr) are never negatives for c (base probes + refit forks). "" = off.
     neg_labels: str = ""
     neg_label_thr: float = 0.5
+    # CLOSE negatives (10-18; default 0 = off): this fraction of the other-concept negatives of a
+    # concept's base probe and refit forks comes from OTHER concepts of the SAME family
+    # (concept_families; e.g. Japanese vs the other languages, formal vs the other tones), the rest
+    # from all other concepts as before -- the probe must separate the concept from its neighbours,
+    # not only from far-away text. Hard negatives (hard_neg) and the free pool are unchanged.
+    family_neg_frac: float = 0.0
     tts_gamma: float = 0.95
     tts_floor: float = 0.2
     tts_cap: float = 0.3

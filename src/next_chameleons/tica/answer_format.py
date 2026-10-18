@@ -196,7 +196,9 @@ def fit_answer_probes(acfg, data, pol, concept, layers, opening, cache: Path | N
                       # the prompt layout changes every read (10-17a); legacy keys unchanged
                       **({"layout": opening.layout} if getattr(opening, "layout", "legacy")
                          != "legacy" else {}),
-                      **({"neg_splits": list(neg_splits)} if neg_splits else {})},
+                      **({"neg_splits": list(neg_splits)} if neg_splits else {}),
+                      **({"family_neg_frac": acfg.family_neg_frac}
+                         if getattr(acfg, "family_neg_frac", 0.0) else {})},
                      sort_keys=True)
     d = cache / hashlib.sha256(key.encode()).hexdigest()[:16] if cache else None
     if d is not None and (d / "quality.json").exists():
@@ -220,6 +222,13 @@ def _renamed(mons, layers, prefix):
         for L, m in zip(layers, mons, strict=True):
             m.name = f"{prefix}_L{L}"
     return mons
+
+
+def family_map(acfg) -> dict:
+    """{concept: family} from AdaptiveConfig.concept_families (a split json); {} when unset."""
+
+    f = getattr(acfg, "concept_families", "") or ""
+    return json.loads(Path(f).read_text()).get("families", {}) if f else {}
 
 
 def concept_fit_texts(data, concept: str, neg_splits: tuple[str, ...] | None = None) -> dict:
@@ -261,7 +270,18 @@ def _fit_answer_probes(acfg, data, pol, concept, layers, opening, neg_splits=Non
     free = neg_clean(data.negatives("fit"), concept, acfg)
     # broad concept-free pools (final_base_v2: 2.5k) are subsampled; older bases (209) unchanged
     free = rng.sample(free, 800) if len(free) > 800 else free
-    neg_t = rng.sample(others, 360) + free + hard
+    fr = float(getattr(acfg, "family_neg_frac", 0.0) or 0.0)
+    fam = family_map(acfg) if fr > 0 else {}
+    if fam.get(concept):  # close negatives (AdaptiveConfig.family_neg_frac)
+        near = set(neg_clean([x for c, ts in fit.items() if c != concept
+                              and fam.get(c) == fam[concept] for x in ts], concept, acfg))
+        near_l = [x for x in others if x in near]
+        far_l = [x for x in others if x not in near]
+        n_near = min(len(near_l), round(360 * fr))
+        neg_o = rng.sample(near_l, n_near) + rng.sample(far_l, min(len(far_l), 360 - n_near))
+    else:
+        neg_o = rng.sample(others, 360)
+    neg_t = neg_o + free + hard
     cal_t = data.concepts("calib", CONCEPT_SPLITS, only={concept})[0].texts
 
     def reads(texts):
