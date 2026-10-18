@@ -292,6 +292,9 @@ def main() -> None:
             branch_concepts=branch_concepts, branch_negatives=data.negatives("fit"),
             roots_only=only, prompts=prompts,
             inputs=(load_inputs(cfg.episodes.inputs) if cfg.episodes.format == "answer" else None),
+            # resume chunks restore optimizer / curriculum / RNG state (train.save_state)
+            resume_state=(str(Path(args.adapter) / "trainer_state.pt")
+                          if args.adapter and cfg.train.save_state else None),
         ).train()
     elif args.command == "rounds":
         from next_chameleons.tica.rounds import ArmsRace

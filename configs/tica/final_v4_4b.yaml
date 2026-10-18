@@ -1,5 +1,6 @@
-# FINAL v4 (DRAFT 10-18, NOT LAUNCHED; docs/tica-v4-recipe.md): final_v3b_4b from scratch on split v4
-# (21 train / 26 held-out concepts, dev merged into held-out) + the 10-17/18 levers:
+# FINAL v4 (DRAFT 10-18, NOT LAUNCHED; docs/tica-v4-recipe.md): final_v3b_4b from scratch on split v5
+# (scripts/build_final_v5.py, REPLICATION 10-18f: 20 train = 4 per area; 38 held-out incl. the emotion and
+# safety families; dev merged into held-out) + the 10-17/18 levers:
 # - retry_hide_weight 3.0 (10-18b branch win; the ladder branch 6199432 may replace it)
 # - no off_match_weight (10-18: OFF turns caught 1.00 from s160 in v3b training; dropped, user)
 # - LoRA rank 32; 24 turns; switch prob 0.35, >= 8 turns per concept segment
@@ -22,8 +23,8 @@ probes:
   held_out_layers: [20, 24]
 out: /scratch/sneheel/next_chameleons_artifacts/tica/runs/final_v4_4b
 episodes: {feedback: verdict, hidden: false, format: answer, layout: tagged,
-           inputs: /scratch/sneheel/next_chameleons_raw_cache/tica/final_v4_inputs.json}
-data: /scratch/sneheel/next_chameleons_raw_cache/tica/final_v4_clean.json   # split v4 (build_final_v4.py; finance positives 27B-filtered)
+           inputs: /scratch/sneheel/next_chameleons_raw_cache/tica/final_v5_inputs.json}
+data: /scratch/sneheel/next_chameleons_raw_cache/tica/final_v5_clean.json   # split v5 (build_final_v5.py; finance positives 27B-filtered)
 lora: {rank: 32, alpha: 64, dropout: 0.0, target_modules: all-linear}
 train_mix: {real_score: 0.5, mismatch: 0.15, nobrief: 0.2, neg_text: 0.15}
 train:
@@ -37,7 +38,8 @@ train:
   lr_cooldown_steps: 150   # end cooldown 2e-4 -> 2e-5 over the last 150 steps
   lr_final: 2.0e-5
   warmup_steps: 10
-  save_every: 20    # each save launches a dev-concept validation race (eval_on_save)
+  save_every: 20    # checkpoints (the held-out race runs every adaptive.eval_every = 50 steps)
+  save_state: true  # 10-18: Adam moments + curriculum + RNG restored across resume chunks (no re-warmup)
   seed: 0
   # 10-16i: no pinning; the first probe of every concept is fit on the policy itself (first_probe)
   objective: {hide_weight: 1.0, retry_hide_weight: 3.0, match_weight: 2.0, lm_weight: 0.1, hide_from_turn: 0, pin_first_turn: false,
@@ -90,7 +92,7 @@ rl:
     first_probe: switch_fork   # 10-17h: turn 0 = base probe (hidden from, not pinned); switches fork
     off_turn_prob: 0.15        # 10-17i: "Monitor: OFF." turns, trained to match the base model
     refit_switch_max: 3       # 10-15g: a refit failing its gate -> another probe TYPE, never the old probe
-    neg_labels: /scratch/sneheel/next_chameleons_raw_cache/tica/concept_labels_v4data_27b.json   # 27B central-only v4 labels (33,327 texts)
+    neg_labels: /scratch/sneheel/next_chameleons_raw_cache/tica/concept_labels_v5data_27b.json   # 27B central-only labels over final_v5 (43,760 texts)
     neg_label_thr: 0.5
     tts_gamma: 0.95
     tts_floor: 0.2
@@ -99,8 +101,8 @@ rl:
     tts_max_turns: 50
     # 10-16l: factored architecture x layer sampling; layers = train depths only (20/24/28/30 held out)
     kind_layers: [8, 12, 16, 22, 26]
-    concept_families: configs/tica/final_split_v4.json
-    eval_on_save: "sbatch --parsable scripts/slurm/tica_val.sh final_v4_4b {adapter} {step} /scratch/sneheel/next_chameleons_artifacts/tica/runs/final_v4_4b/val configs/tica/final_split_v4.json --topics heldout --episodes 32"   # HELD-OUT race, logged only
+    concept_families: configs/tica/final_split_v5.json
+    eval_on_save: "bash scripts/slurm/tica_val_local.sh final_v4_4b {adapter} {step} /scratch/sneheel/next_chameleons_artifacts/tica/runs/final_v4_4b/val configs/tica/final_split_v5.json --topics heldout --episodes 32"   # HELD-OUT race, logged only; on a whole node (tica_node.sh val slots) it runs locally, else sbatch
     eval_every: 50   # 10-18 (user): val race as its own job every 50 global steps (saves stay every 20)
     early_stop_glob: ""   # 10-18: off for the extension (val races logged only)
     early_stop_metric: val_score       # mean over families of "new probes beaten within 3 turns"
@@ -132,8 +134,8 @@ rl:
     truncate_reads: true      # 10-16c (exact)
     refit_batched_fits: true  # 10-16c (MLP ensembles)
 final:
-  split: final_split_v4.json
-  n_train_concepts: 0       # all 21 train concepts
+  split: final_split_v5.json
+  n_train_concepts: 0       # all 20 train concepts
   train_refit_kinds: [linear, maxpool, attnpool, rlobf_attn, ens4_linear, ens4_mlp, ensdeep4_linear]
   heldout_refit_kinds: [linear@20, linear@24, linear@28, linear@30, maxpool@24, gdm_rollattn,
                         mck_rollmean40, mck_attnlite, mck_softmax, rlobf_max, rlobf_attn_max, rollmax,

@@ -10,7 +10,7 @@ def _run(monkeypatch, tmp_path, save_every, eval_every, offset, steps):
     monkeypatch.setenv("TICA_STEP_OFFSET", str(offset))
     tr = object.__new__(AdaptiveSupervisedTrainer)
     saves, evals = [], []
-    tr.cfg = SimpleNamespace(steps=steps, save_every=save_every,
+    tr.cfg = SimpleNamespace(steps=steps, save_every=save_every, save_state=False,
                              adaptive=AdaptiveConfig(eval_every=eval_every))
     tr.out, tr.step_k, tr._wb, tr._wb_off = tmp_path, 0, None, True
 

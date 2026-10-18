@@ -292,3 +292,49 @@ def test_relative_cap_and_power_curriculum():
                              family_kw={"cap_rel": 1.5}, cap_rel=2.0)
     assert h.fam.cap_rel == 1.5 and h.within["topic"].cap_rel == 2.0
     assert DiscountedThompson(["a"]).cap_rel == 0.0  # default off
+
+
+def test_trainer_state_roundtrip(tmp_path, monkeypatch):
+    """save_state: Adam moments, bandits and RNG go to the newest checkpoint only; a resumed
+    trainer restores them and skips the LR re-warmup."""
+    import torch
+
+    from next_chameleons.tica.adaptive import AdaptiveConfig
+    from next_chameleons.tica.monitors import MonitorPool
+    from next_chameleons.tica.trainers.supervised import (
+        AdaptiveSupervisedConfig,
+        AdaptiveSupervisedTrainer,
+    )
+    from test_tica_framework import bank as make_bank
+    from test_tica_framework import tiny_policy
+
+    pool = MonitorPool()
+    pool.add(make_bank(1, ["cats", "dogs"]), round=0, family="concept_linear")
+    sampler = type("S", (), {"concepts": [type("C", (), {"concept": c})() for c in ("cats",
+                                                                                   "dogs")],
+                             "rng": random.Random(5)})()
+    cfg = AdaptiveSupervisedConfig(steps=1, save_every=0, lr=1e-3, warmup_steps=10,
+                                   save_state=True, adaptive=AdaptiveConfig(
+                                       refit_every=0, concept_sampling="thompson"))
+    pol = tiny_policy()
+    tr = AdaptiveSupervisedTrainer(pol, pool, sampler, cfg, tmp_path / "a")
+    loss = sum(p.sum() for p in tr.params)
+    loss.backward()
+    tr.opt.step()
+    tr.concept_bandit.update([{"concept": "cats", "turns": 7, "beaten": False}])
+    tr.rng.random()
+    for d in ("step_20", "step_40"):
+        (tr.out / d).mkdir()
+        tr._save_state(tr.out / d)
+    assert not (tr.out / "step_20" / "trainer_state.pt").exists()  # newest only
+    path = tr.out / "step_40" / "trainer_state.pt"
+    want = tr.rng.random()
+    tr.rng.setstate(torch.load(path, weights_only=False)["rng"])
+    tr2 = AdaptiveSupervisedTrainer(pol, pool, sampler, cfg, tmp_path / "b", resume_state=path)
+    assert tr2.rng.random() == want
+    assert tr2.concept_bandit.within["topic"].N["cats"] == 7.0
+    assert len(tr2.opt.state) == len(tr.opt.state) > 0
+    assert abs(tr2.sched.get_last_lr()[0] - 1e-3) < 1e-12  # no re-warmup
+    tr3 = AdaptiveSupervisedTrainer(pol, pool, sampler, cfg, tmp_path / "c",
+                                    resume_state=tmp_path / "missing.pt")
+    assert abs(tr3.sched.get_last_lr()[0] - 1e-4) < 1e-12  # fresh: warmup step 1/10

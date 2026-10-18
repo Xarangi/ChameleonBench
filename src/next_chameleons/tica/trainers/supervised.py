@@ -63,6 +63,10 @@ class SupervisedConfig:
     # of the run (chunk offset + steps), cosine from the schedule's value down to lr_final.
     lr_cooldown_steps: int = 0
     lr_final: float = 0.0
+    # Trainer state with checkpoints (10-18; default off): AdamW moments, curriculum bandits and RNG
+    # states go to <checkpoint>/trainer_state.pt (newest checkpoint only, to bound disk), and a
+    # chunk resumed from such a checkpoint restores them and skips the LR re-warmup.
+    save_state: bool = False
     grad_clip: float = 1.0
     save_every: int = 100
     eval_every: int = 0  # 0 = never (run evaluation as a separate job)
@@ -360,14 +364,14 @@ def uniform_kind(bandit, rng, exclude=()) -> str | None:
     return rng.choice(left) if left else None
 
 
-def lr_factor(cfg: SupervisedConfig, k: int, offset: int = 0) -> float:
+def lr_factor(cfg: SupervisedConfig, k: int, offset: int = 0, warm_up: bool = True) -> float:
     """LR multiplier (of cfg.lr) at local step k of a chunk starting at global step `offset`.
     Every chunk re-warms linearly over warmup_steps (fresh optimizer state); with lr_peak the
     target is cosine from lr_peak (global step 0) down to lr (global step lr_decay_steps)."""
 
     import math
 
-    warm = min(1.0, (k + 1) / max(1, cfg.warmup_steps))
+    warm = min(1.0, (k + 1) / max(1, cfg.warmup_steps)) if warm_up else 1.0
     target = cfg.lr
     if cfg.lr_peak > 0 and cfg.lr_decay_steps > 0:
         g = min(1.0, (offset + k) / cfg.lr_decay_steps)
@@ -446,8 +450,11 @@ class AdaptiveSupervisedTrainer:
 
     def __init__(self, policy, pool: MonitorPool, sampler, cfg: AdaptiveSupervisedConfig, out_dir,
                  branch_concepts=None, branch_negatives=None, roots_only=None, prompts=None,
-                 inputs=None, hard_neg=None):
+                 inputs=None, hard_neg=None, resume_state=None):
         self.policy, self.pool, self.sampler, self.cfg = policy, pool, sampler, cfg
+        # trainer_state.pt of the checkpoint this chunk resumes from (SupervisedConfig.save_state)
+        self._resume = (Path(resume_state) if resume_state and Path(resume_state).exists()
+                        else None)
         # (opening, render_feedback): repeat format by default; tica/answer_format for "answer".
         self.opening, self.render_feedback = prompts or (opening, render_feedback)
         self.inputs = inputs  # answer format {text_id: request} (capability forks strip it)
@@ -491,7 +498,9 @@ class AdaptiveSupervisedTrainer:
             raise ValueError("policy has no trainable parameters (attach a LoRA adapter)")
         self.opt = torch.optim.AdamW(self.params, lr=cfg.lr, weight_decay=cfg.weight_decay)
         off = self._step_offset()
-        self.sched = torch.optim.lr_scheduler.LambdaLR(self.opt, lambda k: lr_factor(cfg, k, off))
+        warm_up = self._resume is None  # restored Adam moments: no re-warmup
+        self.sched = torch.optim.lr_scheduler.LambdaLR(
+            self.opt, lambda k: lr_factor(cfg, k, off, warm_up))
         self.step_k = 0
         self.refit_k = 0
         self.refit_buf: RefitData | None = None
@@ -513,6 +522,45 @@ class AdaptiveSupervisedTrainer:
         self.kind_stats: dict[str, list[int]] = {}
         torch.manual_seed(cfg.seed + off)
         (self.out / "config.json").write_text(json.dumps(asdict(cfg), indent=1))
+        if self._resume is not None:
+            self._load_state(self._resume)
+
+    def _state_dict(self) -> dict:
+        return {"opt": self.opt.state_dict(), "kind_bandit": self.kind_bandit,
+                "concept_bandit": self.concept_bandit, "rng": self.rng.getstate(),
+                "sampler_rng": (self.sampler.rng.getstate()
+                                if hasattr(self.sampler, "rng") else None),
+                "torch_rng": torch.get_rng_state(),
+                "cuda_rng": (torch.cuda.get_rng_state_all() if torch.cuda.is_available()
+                             else None),
+                "global_step": self.step_k + self._step_offset()}
+
+    def _save_state(self, ckpt: Path) -> None:
+        """trainer_state.pt next to the adapter; older checkpoints' copies are removed."""
+
+        if not self.cfg.save_state:
+            return
+        for old in self.out.glob("*/trainer_state.pt"):
+            old.unlink(missing_ok=True)
+        tmp = ckpt / "trainer_state.pt.tmp"
+        torch.save(self._state_dict(), tmp)
+        tmp.replace(ckpt / "trainer_state.pt")
+
+    def _load_state(self, path: Path) -> None:
+        st = torch.load(path, map_location="cpu", weights_only=False)
+        self.opt.load_state_dict(st["opt"])
+        if st.get("kind_bandit") is not None and self.kind_bandit is not None:
+            self.kind_bandit = st["kind_bandit"]
+        if st.get("concept_bandit") is not None and self.concept_bandit is not None:
+            self.concept_bandit = st["concept_bandit"]
+        self.rng.setstate(st["rng"])
+        if st.get("sampler_rng") is not None and hasattr(self.sampler, "rng"):
+            self.sampler.rng.setstate(st["sampler_rng"])
+        torch.set_rng_state(st["torch_rng"])
+        if st.get("cuda_rng") is not None and torch.cuda.is_available():
+            torch.cuda.set_rng_state_all(st["cuda_rng"])
+        print(json.dumps({"resumed_state": str(path), "global_step": st.get("global_step")}),
+              flush=True)
 
     def _train_units(self, trajs, keys, layers, tok_layers=()):
         """Training forward units. Per-turn: one view per (traj, turn), length-sorted, micro_batch
@@ -2138,6 +2186,7 @@ class AdaptiveSupervisedTrainer:
             saved = bool(cfg.save_every and self.step_k % cfg.save_every == 0)
             if saved:
                 self.policy.save_adapter(self.out / f"step_{self.step_k}")
+                self._save_state(self.out / f"step_{self.step_k}")
             ev = cfg.adaptive.eval_every
             if (saved and not ev) or (ev and (self.step_k + self._step_offset()) % ev == 0):
                 if not saved:
@@ -2146,6 +2195,7 @@ class AdaptiveSupervisedTrainer:
             if saved and self._early_stop_check():
                 break
         self.policy.save_adapter(self.out / "final")
+        self._save_state(self.out / "final")
         if getattr(self, "_wb", None) is not None:
             self._wb.finish()
 
