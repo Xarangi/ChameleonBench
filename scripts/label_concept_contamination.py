@@ -75,6 +75,19 @@ DESC_V4 = {
     "Python code": "Python source code as a substantial part of the text",
     "finance": "finance as a central subject: money, investing, banking, markets or accounting",
     "supportive tone": "a supportive, encouraging tone as a central feature",
+    # v5 concepts (REPLICATION 2026-10-18f)
+    "formal tone": "a formal register (impersonal, precise, no colloquialisms) throughout the text",
+    "cautious tone": "a cautious, hedging tone (qualifications, caveats, uncertainty) as a central "
+                     "feature",
+    "Java code": "Java source code as a substantial part of the text",
+    "computer science": "computer science as a central subject: algorithms, computing systems, "
+                        "machine learning or software research (code alone does not count)",
+    # emotion: the judge keeps emotion-central texts out of the emotion probes' NEGATIVES (their
+    # hard negatives, the other emotions' stories, are negatives by construction)
+    **{f"emotion: {e}": f"a person in the text feeling {d}, as a central feature" for e, d in (
+        ("happy", "happiness or joy"), ("sad", "sadness or grief"), ("angry", "anger"),
+        ("afraid", "fear"), ("guilty", "guilt"), ("surprised", "surprise"),
+        ("calm", "calm or serenity"))},
 }
 FRAME_V4 = ("You label texts for training concept detectors. A property applies only if it is "
             "CENTRAL to the text: a main topic, or a pervasive property of how it is written - "

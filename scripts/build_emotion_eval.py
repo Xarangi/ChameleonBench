@@ -31,6 +31,40 @@ REQUEST = ("Write a short third-person story, around 150 words, about a person g
            "their day.")
 
 
+def emotion_concepts(seed: int = 0, n: int = 400, n_hard: int = 300):
+    """-> (concept dicts, {text_id: request}, per-emotion stats); shared with build_final_v5.py."""
+
+    df = pd.read_parquet(SRC)
+    df = df[df.text.str.len().between(150, 1500) & ~df.leaked.astype(bool)]
+    neutral = df[df.source.str.startswith("neutral")].text.str.strip().tolist()
+    ds = df[df.source.str.startswith("deepseek")]
+    pools = {e: list(dict.fromkeys(ds[ds.emotion == e].text.str.strip())) for e in EMOTIONS}
+    rng = random.Random(seed)
+    pos = {e: rng.sample(v, min(n, len(v))) for e, v in pools.items()}
+    used = {x for v in pos.values() for x in v}
+    spare = {e: [x for x in v if x not in used] for e, v in pools.items()}  # hard-neg pool
+    ent = lambda xs: [{"id": text_id(x), "text": x} for x in xs]  # noqa: E731
+    concepts, inputs, stats = [], {}, []
+    for e in EMOTIONS:
+        name = f"emotion: {e}"
+        r = random.Random(f"{seed}-{e}")
+        others = [x for o in EMOTIONS if o != e for x in spare[o]]
+        hard = r.sample(others, min(n_hard, len(others))) + neutral
+        r.shuffle(hard)
+        for x in pos[e] + hard:
+            inputs[text_id(x)] = REQUEST
+        fit, cal, ep = split3(pos[e], r)
+        hf, hc, he = split3(hard, r)
+        concepts.append({
+            "concept_id": f"emotion-{e}", "concept": name, "genre": "emotion", "split": "heldout",
+            "fit": ent(fit), "calib": ent(cal), "episode": ent(ep),
+            "hard_neg": {"fit": hf, "calib": hc, "episode": he}})
+        med = sorted(map(len, pos[e]))[len(pos[e]) // 2]
+        stats.append({"concept": name, "pos": len(pos[e]), "fit": len(fit),
+                      "hard_neg": len(hard), "median_chars": med})
+    return concepts, inputs, stats
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--base-data", default=str(TICA / "final_v3_clean.json"))
@@ -43,42 +77,20 @@ def main():
     a = ap.parse_args()
     data = json.loads(Path(a.base_data).read_text())
     inputs = json.loads(Path(a.base_inputs).read_text())
-    df = pd.read_parquet(SRC)
-    df = df[df.text.str.len().between(150, 1500) & ~df.leaked.astype(bool)]
-    neutral = df[df.source.str.startswith("neutral")].text.str.strip().tolist()
-    ds = df[df.source.str.startswith("deepseek")]
-    pools = {e: list(dict.fromkeys(ds[ds.emotion == e].text.str.strip())) for e in EMOTIONS}
-    rng = random.Random(a.seed)
-    pos = {e: rng.sample(v, min(a.n, len(v))) for e, v in pools.items()}
-    used = {x for v in pos.values() for x in v}
-    spare = {e: [x for x in v if x not in used] for e, v in pools.items()}  # hard-neg pool
-    ent = lambda xs: [{"id": text_id(x), "text": x} for x in xs]  # noqa: E731
     have = {c["concept"] for c in data["concepts"]}
-    for e in EMOTIONS:
-        name = f"emotion: {e}"
-        assert name not in have, name
-        r = random.Random(f"{a.seed}-{e}")
-        others = [x for o in EMOTIONS if o != e for x in spare[o]]
-        hard = r.sample(others, min(a.n_hard, len(others))) + neutral
-        r.shuffle(hard)
-        for x in pos[e] + hard:
-            inputs[text_id(x)] = REQUEST
-        fit, cal, ep = split3(pos[e], r)
-        hf, hc, he = split3(hard, r)
-        data["concepts"].append({
-            "concept_id": f"emotion-{e}", "concept": name, "genre": "emotion", "split": "heldout",
-            "fit": ent(fit), "calib": ent(cal), "episode": ent(ep),
-            "hard_neg": {"fit": hf, "calib": hc, "episode": he}})
-        med = sorted(map(len, pos[e]))[len(pos[e]) // 2]
-        print(json.dumps({"concept": name, "pos": len(pos[e]), "fit": len(fit),
-                          "hard_neg": len(hard), "median_chars": med}))
+    concepts, new_inputs, stats = emotion_concepts(a.seed, a.n, a.n_hard)
+    for c in concepts:
+        assert c["concept"] not in have, c["concept"]
+    data["concepts"] += concepts
+    inputs.update(new_inputs)
+    for st in stats:
+        print(json.dumps(st))
     data["source"] = {**(data["source"] if isinstance(data["source"], dict) else {}),
                       "emotion_eval": "build_emotion_eval.py (abotresol/emotion-story-corpora, "
                                       "MIT; DeepSeek parts; other emotions as hard negatives); "
                                       "eval-only"}
     Path(a.out_data).write_text(json.dumps(data))
     Path(a.out_inputs).write_text(json.dumps(inputs))
-
 
 if __name__ == "__main__":
     main()
