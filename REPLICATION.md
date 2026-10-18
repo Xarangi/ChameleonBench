@@ -17,7 +17,12 @@ checkpoints, observed results, and unresolved limitations.
   retry 0.32) -> still improving. Held-out static L20/24 detection on ON turns 0.58 (360-420) -> 0.43 (480-540); OFF 1.00.
   Refit readability AUROC 0.9996 -> 0.9958 (share of refits < 0.99: 0.8% -> 13.6%): readability slowly eroding.
   Val races (dev, small n, logged only) 380 / 400 / 450: pass 0.160 / 0.106 / 0.133, beaten 0.80 / 0.71 / 0.72: flat.
-  Step time 247 s (300-360) -> 346 s (480-540): refit reads grow with the probe bank.
+  Step time 106 s (0-60) -> 346 s (480-540). Cause = MORE REFITS, not slower ones: refits per step ~4 (0-60) -> ~20
+  (420-480) because the model passes more and every pass triggers a branch refit; per refit ~8-9 s read + ~4-5 s fit
+  (flat; reads already share the prefix KV); LoRA train 40-45 s and capability gen ~24 s flat.
+- Val step 500 (dev, 61 deployments): score 0.31, pass 0.136 (topic 0.59 / language 0.40 / tone 0.26 / domain 0.00).
+  Pass by step 360-500: 0.144 / 0.160 / 0.106 / 0.133 / 0.136 = plateau; dev domain 0.00 at every step. Full held-out
+  race at s500 (56 ep, same protocol as the branch races) launched 6258629 to compare with s340 / ctl@420.
 - Clarification: the earlier "v3b dodges the evasion detector" (10-17r, 10-18g) is the UNSUPERVISED Mahalanobis OOD
   monitor (0.00 at s140, 0.06-0.19 at s400; v2 was caught 0.88-1.0). The 10-18h SUPERVISED detector is a different
   monitor (trained on labelled evading turns of the model itself) and catches it (AUROC ~1.0). Neither was trained
