@@ -5,6 +5,21 @@ checkpoints, observed results, and unresolved limitations.
 
 TICA on a new machine: start at docs/tica/README.md (results digest, run ledger, open questions, aggregate snapshot).
 
+## 2026-10-19g Math-only run on the v4 recipe (capability terms ON); format answer-form lines; per-text data audit
+- No math run ever had the capability terms (no math config sets kl_weight / anchor_weight; KL added 10-15b).
+  configs/tica/final_v4_math_4b.yaml (+ builtin, split final_split_v5_math.json = train math only): v4 recipe with
+  one concept, 16 turns, no switches / turn budget, mix real 0.6 / nobrief 0.25 / neg_text 0.15 (no mismatch: needs a
+  2nd concept), 200 steps, frozen request file final_v5_elicit_r1_inputs.json. Jobs 6402427 (+ resume 6402428).
+  Read: training pass by turn vs mathsup_4b (0.61 at s62, no KL) and v3b math (0.09-0.11).
+- Format concepts now get the answer form appended (all-caps, HTML, SQL, JSON, JS / Python / Java): rebuild +
+  re-verify 6403271.
+- Per-text audit (27B, P(yes) < 0.5 counts): low "match" for languages (German 183 / 375, Finnish 240 / 451,
+  Japanese 193 / 600, Tamil 328 / 600), formal 112 / 228, cautious 111 / 200. Hand-check of 9 low-match pairs
+  (German, formal, cautious, Japanese): all answer their request -> the match judge is too strict, not bad data
+  (one Japanese vocabulary answer has wrong glosses: Aya quality, minor). Low "natural": Tamil 538 / 600, Thai
+  134 / 180, confusion 269 / 373 (absurd by design), Java 177, JavaScript 218 (docstring templates), deception
+  scenarios (unchanged by design).
+
 ## 2026-10-19f Elicit requests v5 built + 27B-verified (aggregates); rule = rewrite topics / emotions, + line for languages / tones
 - Rules (user 10-19): concepts whose source paired the response with its original prompt keep it (format, domain,
   safety); languages + "Respond in <L>."; tones (incl. jokes, confusion) + "Respond in a <adj> tone."; DBpedia topics
