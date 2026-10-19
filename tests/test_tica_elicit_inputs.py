@@ -23,28 +23,42 @@ def _data():
                          c("German language", ["g1", "g2"]), c("casual tone", ["t1", "t2"]),
                          c("all-caps text", ["a1", "a2"]), c("Python code", ["p1", "p2"]),
                          c("mathematical reasoning", ["m1", "m2"]),
-                         c("deception: roleplaying", ["d1", "d2"])]}
+                         c("deception: roleplaying", ["d1", "d2"]),
+                         c("jokes and humor", ["j1", "j2"])]}
 
 
 def test_every_non_task_positive_asks_for_its_concept():
     inputs = {i: ENC for i in ("s1", "s2")}
     inputs.update({i: "Write a story." for i in ("e1", "e2")})
     inputs.update({i: f"REQ-{i}" for i in ("g1", "g2", "t1", "t2", "a1", "a2", "p1", "p2",
-                                           "m1", "m2", "d1", "d2")})
+                                           "m1", "m2", "d1", "d2", "j1", "j2")})
     inputs["neg1"] = "untouched"
-    out, meta = bei.build(_data(), inputs)
+    rows, meta = bei.plan(_data(), inputs)
+    assert {r["id"] for r in rows if r["new"] is None} == {"s1", "s2", "e1", "e2"}  # LLM-written
+    assert not any(r["concept"].startswith("deception") and r["new"] != r["old"] for r in rows)
+    for r in rows:  # no LLM: template fallbacks
+        if r["new"] is None:
+            r["new"] = bei.fallback(r)
+    out = bei.finish(inputs, rows, meta, None)
     topic = 'Write a short encyclopedia entry about a subject related to "sports".'
     assert out["s1"] == out["s2"] == topic
     assert out["e2"].startswith("Write a story.") and "feels sad" in out["e2"]
     assert out["g1"] == "REQ-g1\n\nRespond in German."
     assert out["t2"] == "REQ-t2\n\nRespond in a casual tone."
+    assert out["j1"] == "REQ-j1\n\nRespond in a humorous, joking tone."  # jokes = a tone
     assert out["a1"].endswith("capital letters.")
     assert out["p1"] == "REQ-p1\n\nAnswer with Python code."
     assert out["m1"] == "REQ-m1" and out["d2"] == "REQ-d2" and out["neg1"] == "untouched"
     rules = {c: m["rule"] for c, m in meta["concepts"].items()}
-    assert rules["mathematical reasoning"].startswith("unchanged")
-    assert rules["deception: roleplaying"] == "unchanged (by design)"
+    assert rules["mathematical reasoning"] == "task" and rules["jokes and humor"] == "tone"
+    assert rules["deception: roleplaying"] == "excluded"
     assert meta["concepts"]["sports"]["rewritten"] == 2
+
+
+def test_clean_request():
+    assert bei.clean_request('Request: "Write an entry about X, a Swedish swimmer."\nmore') == (
+        "Write an entry about X, a Swedish swimmer.")
+    assert bei.clean_request("  ") is None and bei.clean_request("short") is None
 
 
 def test_probe_cache_key_changes_only_for_new_request_files(tmp_path):

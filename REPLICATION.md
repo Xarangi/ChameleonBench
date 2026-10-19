@@ -5,6 +5,25 @@ checkpoints, observed results, and unresolved limitations.
 
 TICA on a new machine: start at docs/tica/README.md (results digest, run ledger, open questions, aggregate snapshot).
 
+## 2026-10-19e LLM-written per-passage requests; base topic probes MISS the base model's own on-topic answers
+- User 10-19: generic templates ("encyclopedia entry about sports") are too generic -> one specific request per
+  passage written by an LLM; jokes and confusion are TONES, not styles; verify everything.
+- build_elicit_inputs.py rewritten: topic passages and emotion stories get a 27B-written request (topic: names
+  the passage's specific subject; emotion: the story's situation + the emotion); languages + "Respond in <L>.";
+  tones (comforting, casual, formal, supportive, cautious, jokes -> humorous, confusion -> confused) + "Respond in
+  a <adj> tone."; formats (all-caps, HTML, code languages) + one line; tasks unchanged; deception / harmfulness /
+  biology excluded (never sent to the LLM). Verify pass (27B, P(yes)) on every processed positive: elicit (would a
+  good answer to the request show the concept; old and new request) and match (is the stored passage a good answer
+  to the new request). Job 6390157 (v5 + v3). The 10-19d template files were kept as *_elicit_tmpl_inputs.json.
+- FINDING (ask-concept no-brief runs 6376093 / 6376092, 32 / 56 episodes, aggregates + 3 hand-checked answers):
+  with 'Your response must be about "food and drink"' the base model writes about food and drink in 144 / 144
+  answers (hand-check: a "Food and Drink" encyclopedia essay), and the base food probe detects 0 / 144. Same
+  pattern for the other DBpedia topics (education 14 / 168, fashion 6 / 72, plays 4 / 96, Christianity 2 / 48,
+  philosophy 2 / 48), while physics, HTML, Finnish and confusion stay 24 / 24. The topic probes, fit on forced
+  DBpedia passages about specific entities, do not transfer to the model's own answers on the topic. The probes
+  are NOT fine for free answers; v1's "probes are fine" holds only for the requests that carried the concept.
+  Greedy answers also repeat across turns when the request repeats (t7 = t15).
+
 ## 2026-10-19d Concept-eliciting requests for every turn (v4 data fixed); request-vs-answer probe check
 - Problem (user 10-19: "make sure the model is actually prompted to showcase the concept we are interested in
   hiding ... fixed across all turns"). Request audit of final_v5 (aggregates): all 14 topics share ONE request
