@@ -1,7 +1,7 @@
-# TICA results digest (as of 2026-10-18, newest first)
+# TICA results digest (as of 2026-10-19, newest first)
 
 Every number below is an aggregate. The source entry in `REPLICATION.md` is in brackets, and the
-machine-readable copy is `results/tica/snapshot_2026-10-18.json`. Unless stated otherwise:
+machine-readable copy is `results/tica/snapshot_2026-10-19.json`. Unless stated otherwise:
 1 seed, Qwen3.5-4B, non-thinking mode, final_v3b (`configs/tica/final_v3b_4b.yaml`).
 
 **Two race types.**
@@ -43,14 +43,14 @@ machine-readable copy is `results/tica/snapshot_2026-10-18.json`. Unless stated 
 
 - Val race history agrees. Pass rate by step:
 
-  | Step | 300 | 340 | 360 | 380 | 400 | 450 | 500 |
-  |---|---|---|---|---|---|---|---|
-  | Pass rate | 0.098 | 0.098 | 0.144 | 0.160 | 0.106 | 0.133 | 0.136 |
-  | Beaten | 0.67 | 0.67 | 0.75 | 0.80 | 0.71 | 0.72 | 0.75 |
+  | Step | 300 | 340 | 360 | 380 | 400 | 450 | 500 | 550 | 600 |
+  |---|---|---|---|---|---|---|---|---|---|
+  | Pass rate | 0.098 | 0.098 | 0.144 | 0.160 | 0.106 | 0.133 | 0.136 | 0.147 | 0.158 |
+  | Beaten | 0.67 | 0.67 | 0.75 | 0.80 | 0.71 | 0.72 | 0.75 | | |
 
   - The dev "domain" concept scores 0.00 at every step.
-  - Val score is the dev share beaten within 3 turns: 0.38 / 0.44 / 0.44 / 0.35 / 0.34 / 0.31 / 0.37 at 340-550 (pass 0.147 at 550).
-- Training by probe index (20-step windows). Training numbers now also flatten at about 0.75 for k2:
+  - Val score is the dev share beaten within 3 turns: 0.38 / 0.44 / 0.44 / 0.35 / 0.34 / 0.31 / 0.37 / 0.40 at 340-600 (pass 0.147 at 550, 0.158 at 600).
+- Training by probe index (20-step windows). Training k2 sits on a noisy plateau at ~0.72-0.87 after ~480 (10-19a):
 
   | Steps | k1_first | k1_switch | k2 | k3 | k4 | k5 | Retry pass |
   |---|---|---|---|---|---|---|---|
@@ -63,12 +63,30 @@ machine-readable copy is `results/tica/snapshot_2026-10-18.json`. Unless stated 
   | 440-460 | 1.00 | 0.79 | 0.74 | 0.61 | 0.56 | 0.52 | 0.353 |
   | 480-500 | 1.00 | 0.84 | 0.80 | 0.63 | 0.69 | 0.52 | 0.371 |
   | 520-540 | 1.00 | 0.89 | 0.75 | 0.64 | 0.66 | 0.53 | 0.378 |
-  | 540-560 | 1.00 | 0.93 | 0.72 | 0.61 | 0.60 | 0.59 | 0.385 |
+  | 540-560 | 1.00 | 0.93 | 0.74 | 0.65 | 0.60 | 0.69 | 0.363 |
+  | 560-580 | 1.00 | 0.93 | 0.86 | 0.67 | 0.58 | 0.57 | 0.425 |
+  | 580-600 | 1.00 | 0.96 | 0.80 | 0.63 | 0.58 | 0.59 | 0.356 |
 
 - **Reading.** Steps after ~400 mostly sharpen the training concepts. This is the evidence for setting v4's fixed
   step count below 1200 (see OPEN-QUESTIONS).
   - Caveats: 1 seed; held-out races carry about ±0.05 sampling noise.
   - retryctl@420 is a branch with fresh resume state, not the same trajectory as s420.
+
+## 1b. Rollout reuse (K optimizer updates per rollout) gives no gain at s500 [10-19a]
+
+Branches from s500, same episode draws; training steps 501-540 pooled (SE ~0.02-0.05):
+
+| K | k1_switch | k2 | k3 | k4 | k5 | Retry pass (n) | s/step |
+|---|---|---|---|---|---|---|---|
+| 1 (control) | 0.92 | 0.78 | 0.62 | 0.60 | 0.55 | 0.400 (1221) | 352 |
+| 2 | 0.84 | 0.80 | 0.65 | 0.65 | 0.62 | 0.372 (1332) | 389 |
+| 3 | 0.89 | 0.79 | 0.58 | 0.58 | 0.59 | 0.342 (1390) | 409 |
+
+- k2-k4 equal within noise; retry pass falls with K (~3 SE from K=1 to K=3). On-policy loss at steps 20-50 is
+  equal (0.78 / 0.79 / 0.78). The extra updates fit the stale rollout (loss -5% / -10% within a rollout).
+- Equal wall-clock gives the same picture: the step is ~85% rollout, so K=3 costs only 1.16x.
+- Caveat: s500 is on the plateau. A speed-up in the steep phase (steps ~140-300) is untested.
+- Held-out races on the finals: jobs 6333553 / 6333610 / 6333620 (RUNS.md).
 
 ## 2. Retry weighting branches (s360 + 60 steps, same episode draws) [10-18b, 10-18g, 10-18i]
 
@@ -242,17 +260,19 @@ of 18 base probes.
   Parity with v2.
 - **Held-out static base probes at L20/24 during training** (never trained against). Detection on monitored turns:
 
-  | Steps | 0-120 | 120-180 | 180-240 | 240-300 | 300-360 | 360-420 | 420-480 | 480-540 | 540-600 |
+  | Steps | 0-120 | 120-180 | 180-240 | 240-300 | 300-360 | 360-420 | 420-480 | 480-560 | 560-640 |
   |---|---|---|---|---|---|---|---|---|---|
-  | Detection | 1.00 | 0.97 | 0.87 | 0.77 | 0.67 | 0.58 | 0.44 | 0.42 | 0.50 |
+  | Detection | 1.00 | 0.97 | 0.87 | 0.77 | 0.67 | 0.58 | 0.44 | 0.43 | 0.35 |
+
+  (An earlier 0.50 at 540-600 was a small-n window; 560-640 has n = 2763.)
 
   - Monitor-OFF turns stay at 1.00 throughout; no-brief at 1.00; mismatch at 0.03-0.06.
 - **Refit readability during training.** Refits are fit on the model's own states:
 
-  | Steps | 0-60 | 480-540 |
-  |---|---|---|
-  | Mean AUROC | 0.9996 | 0.9955 |
-  | Share of refits below 0.99 | 0.8% | 14% |
+  | Steps | 0-60 | 480-560 | 560-640 |
+  |---|---|---|---|
+  | Mean AUROC | 0.9996 | 0.9955 | 0.9946 |
+  | Share of refits below 0.99 | 0.8% | 14% | 18% |
 
   The concept stays readable, slowly getting harder to read.
 

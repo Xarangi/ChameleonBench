@@ -35,7 +35,7 @@ lives in `REPLICATION.md` (newest first; it also holds the RULED-OUT ledger).
 | Results digest (numbers + caveats) | [RESULTS.md](RESULTS.md) |
 | Every run / branch / eval job | [RUNS.md](RUNS.md) |
 | Pending decisions, ideas, TamIA optimisations | [OPEN-QUESTIONS.md](OPEN-QUESTIONS.md) |
-| Aggregate-only numbers (no texts) | `results/tica/snapshot_2026-10-18.json` (`scripts/tica_results_snapshot.py`) |
+| Aggregate-only numbers (no texts) | `results/tica/snapshot_2026-10-19.json` (`scripts/tica_results_snapshot.py`) |
 | v4 recipe and decisions | `docs/tica-v4-recipe.md` |
 | TamIA quickstart (clone, envs, data sync, smoke, launch) | `docs/tica-v4-tamia.md` |
 | Other-cluster runbook, whole-node launcher, speed options | `docs/tica-other-hpc.md` |

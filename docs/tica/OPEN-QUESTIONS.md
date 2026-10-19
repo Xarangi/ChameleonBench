@@ -1,4 +1,4 @@
-# TICA open questions and pending decisions (2026-10-18)
+# TICA open questions and pending decisions (2026-10-19)
 
 The user decides the TamIA optimisations. Everything here is optional, and anything built for it is a config field
 that defaults OFF.
@@ -12,7 +12,7 @@ measurable, which suggests the GPU is already busy during reads. See RESULTS §3
 | Option | Expected gain | Cost | Changes results? |
 |---|---|---|---|
 | **Data-parallel episodes**: each GPU runs its own episodes and refits, then the gradients are all-reduced; the bandit and turn-0 state are shared (`docs/tica-other-hpc.md` option D) | ~1.6-1.8× on 2 GPUs, ~3-3.5× on 4 | 1-2 days | No (same protocol) |
-| **Rollout reuse** (`updates_per_rollout`, f0db642, default 1): K gradient updates per rollout | Up to ~2.5× more updates per hour at K = 3, if each extra update stays useful | Built; branches from s500 running (reuse1/2/3: 6315432-34, 10-18j) | Yes: slightly stale (verdicts and refits come from the pre-update model). Test vs control at equal wall-clock |
+| **Rollout reuse** (`updates_per_rollout`, f0db642, default 1): K gradient updates per rollout | Up to ~2.5× more updates per hour at K = 3, if each extra update stays useful | Built and tested from s500 (10-19a): **no gain**; k2-k4 equal within noise, retry pass falls with K (0.40 / 0.37 / 0.34). Not in v4. Untested in the steep phase (s140-300) | Yes: extra updates fit a stale rollout (loss -5% / -10% within a rollout) |
 | H100 instead of A100 | ~1.5-2× on reads and backward | none | No |
 | Bigger read batches / `micro_batch: 2` on 80 GB | Small (batch 16 did nothing on A100) | config | No |
 | GSM8K cap_gen on a spare GPU, one step ahead | ~7% (hides ~22 s) | ~0.5 day | Slightly (weights one step stale) |
@@ -34,7 +34,7 @@ Verify any speed-up the usual way: same draws, probe outputs agree within roundi
   - Training k2-k4 rose ~+0.15-0.25 over 340-500 meanwhile, so steps beyond ~350-500 on the same concepts sharpen the
     training concepts without helping transfer (10-18j). Breadth (v5's 20 train concepts) is the more likely lever.
     Decide v4's count from v4's own held-out curve.
-  - Training k2 also flattened at about 0.75 after ~480.
+  - Training k2 is on a noisy plateau at ~0.72-0.87 over 480-600 (10-19a); retry pass ~0.36-0.43.
   - v4 draft says 1200 steps. Consider about 600-800, fixed in advance (no checkpoint selection on held-out).
   - v4 is slower per step (24 turns, longer segments, so more refits) and starts from scratch, so its curve may
     differ. Run the held-out race every 50 steps (`eval_every: 50`) and log it only.

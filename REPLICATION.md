@@ -5,6 +5,33 @@ checkpoints, observed results, and unresolved limitations.
 
 TICA on a new machine: start at docs/tica/README.md (results digest, run ledger, open questions, aggregate snapshot).
 
+## 2026-10-19a Rollout reuse at s500: no gain, retry pass falls with K; baseline v3b to step ~605
+- Reuse branches done (reuse1 ctl 50 steps 6315432, reuse2 40 steps 6315433, reuse3 40 steps 6315434; all from s500,
+  same draws). Training, steps 501-540 pooled, beaten by probe index (SE ~0.02-0.05) and retry pass:
+  | K | k1_switch | k2 | k3 | k4 | k5 | retry pass (n) |
+  |---|---|---|---|---|---|---|
+  | 1 | 0.92 | 0.78 | 0.62 | 0.60 | 0.55 | 0.400 (1221) |
+  | 2 | 0.84 | 0.80 | 0.65 | 0.65 | 0.62 | 0.372 (1332) |
+  | 3 | 0.89 | 0.79 | 0.58 | 0.58 | 0.59 | 0.342 (1390) |
+  k2-k4 differ by < 1 SE. Retry pass (the largest-n metric) falls monotonically with K (~3 SE from K=1 to K=3).
+  On-policy loss at steps 20-50: 0.781 / 0.793 / 0.780 (no faster learning). Extra updates do fit the stale rollout:
+  last-vs-first update loss -4.8% (K=2), -9.9% (K=3). Cost: 352 / 389 / 409 s per step (train 44 / 87 / 121 s;
+  the step is ~85% rollout), so K=3 buys 3x updates for 1.16x time. Equal wall-clock (reuse1 at ~step 45 = reuse2's
+  4.3 h) gives the same picture. Anchor KL, cap-gen accuracy, OFF detection, relocation AUROC: no difference.
+- RULED OUT (as a branch from s500): updates_per_rollout 2 / 3. No gain detected and a retry-pass penalty; not
+  adopted for v4. Caveat: s500 is on the plateau (held-out flat since s340), so a speed-up in the steep phase
+  (steps ~140-300) is NOT ruled out; that needs a branch from s140-200.
+- Held-out races on the finals (56 ep, 24 turns, same args as 6258629): reuse1 (s550) 6333553, reuse2 (s540)
+  6333610, reuse3 (s540) 6333620 -> final_v3b_4b/sanity_full/reuse{K}_final_heldout.json.
+- Baseline v3b (chunk 6198909) at step ~605. Probe index, 20-step windows (k1_first 1.00 throughout):
+  540-560 k1_switch 0.93 / k2 0.74 / k3 0.65 / k4 0.60, retry 0.363; 560-580 0.93 / 0.86 / 0.67 / 0.58, retry 0.425;
+  580-600 0.96 / 0.80 / 0.63 / 0.58, retry 0.356. CORRECTION to 10-18j: k2 did not decline 0.80 -> 0.72; it is a
+  noisy plateau at ~0.72-0.87 (window-to-window +/-0.07).
+- Held-out static L20/24 base probes on ON turns: 0.43 (480-560) -> 0.35 (560-640, n 2763), still falling.
+  CORRECTION: the 0.50 at 540-600 was a small-n window. OFF / no-brief stay 1.00, mismatch 0.02.
+- Refit readability: share of refits with AUROC < 0.99 0.143 -> 0.176 (560-640; mean 0.9946, kept 0.978).
+- Val (dev) 600: score 0.40, pass 0.158 (550: 0.37 / 0.147); domain still 0.00.
+
 ## 2026-10-18j Held-out transfer PLATEAUED s340 -> s500; rollout-reuse speed test launched; baseline chain extended
 - Held-out race at s500 (6258629; 24 turns, mixed kinds, no switches, 56 ep), refits beaten / within 3 / pass per turn:
   s500 0.78 / 0.52 / 0.162 (n 246) vs s340 0.78 / 0.53 / 0.166 (n 238); by probe index k2 0.91 / k3 0.90 / k4 0.85 / k5

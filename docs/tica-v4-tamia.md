@@ -77,5 +77,6 @@ done
 
 ## Still open before launch (docs/tica-v4-recipe.md)
 
-- Split v5 data + 27B labels must exist on Narval (`final_v5_clean.json`, `concept_labels_v5data_27b.json`).
+- Split v5 data + 27B labels: present on Narval (`final_v5_clean.json`, `final_v5_inputs.json`,
+  `concept_labels_v5data_27b.json`; checked 10-19), so step 3 can pull them.
 - Turn-0 probe schedule; thinking-mode scope.

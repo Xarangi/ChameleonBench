@@ -35,14 +35,15 @@ if [ "$V3B" = 1 ]; then
   # adapters: s400 (= resume_260 final), s500 (resume_400 step_100) and the newest chunk's latest step
   rsync -a $N:$V/resume_260/adaptive/final $RL/final_v3b_4b/resume_260/adaptive/
   rsync -a $N:$V/resume_400/adaptive/step_100 $RL/final_v3b_4b/resume_400/adaptive/
-  rsync -a --include='*/' --include='adapter_*' --exclude='*' $N:$V/resume_520 $RL/final_v3b_4b/ || true
+  NEWEST=$(ssh $N "ls -d $V/resume_* | sort -V | tail -1")   # newest baseline chunk
+  rsync -a --include='*/' --include='adapter_*' --exclude='*' $N:$NEWEST $RL/final_v3b_4b/ || true
   # training logs (aggregate jsonl: steps, verdicts, refit stats; no texts) for tica_run_report.py
   rsync -a --include='*/' --include='train_log.jsonl' --include='turns.jsonl' --include='refits.jsonl' \
     --exclude='*' $N:$V/ $RL/final_v3b_4b/
   # eval JSONs (aggregates); no *_work dirs, no activation features (*.pt)
   rsync -a --exclude='*_work' --exclude='*.pt' --include='*/' --include='*.json' --include='*.png' \
     --exclude='*' $N:$V/{val,sanity_full,panel,evdet,eval_s140,eval_s340,eval_s400,report} $RL/final_v3b_4b/
-  for b in retryctl retryA retryB retryL lr2e4; do
+  for b in retryctl retryA retryB retryL lr2e4 reuse1 reuse2 reuse3; do
     mkdir -p $RL/final_v3b_${b}_4b/adaptive
     rsync -a $N:$RN/final_v3b_${b}_4b/adaptive/final $RL/final_v3b_${b}_4b/adaptive/ || true
     rsync -a $N:$RN/final_v3b_${b}_4b/adaptive/{train_log.jsonl,turns.jsonl,refits.jsonl} \

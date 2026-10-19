@@ -35,7 +35,7 @@
 | final_v3b_lr2e4_4b | held LR 2e-4 (seed −360) | s360, offset 360 | 60 | 6199433 | done (**ruled out**) | 10-18d, 10-18i |
 | final_v3b_ext_4b | retryB continued to 1000 | retryB s420 | - | 6198833-36 | CANCELLED (user: clean baseline first) | 10-18d |
 | **final_v3b_4b continuation** | v3b unchanged, steps 400 → 1000, val race every 50 steps, read batch 16 | v3b s400 | 400-1000 | 6198908 (400 → ~527, 12 h timeout, normal), 6198909 (running from s520), 6198911, 6198912, 6214592, 6315437 (6th; exits if already at 1000) | **running** (step ~555 on 10-18) | 10-18d, 10-18i, 10-18j |
-| rollout-reuse branches (10-18j): final_v3b_reuse{1,2,3}_4b | `updates_per_rollout` 1 (control) / 2 / 3: K optimizer updates per rollout (f0db642; K = 1 bit-identical). Compare at equal steps and equal wall-clock, then held-out races | v3b s500 (`resume_400/adaptive/step_100`), offset 500, seed −500 (same draws) | 50 / 40 / 40 | 6315432 / 6315433 / 6315434 | running | 10-18j |
+| rollout-reuse branches (10-18j): final_v3b_reuse{1,2,3}_4b | `updates_per_rollout` 1 (control) / 2 / 3: K optimizer updates per rollout (f0db642; K = 1 bit-identical). Compare at equal steps and equal wall-clock, then held-out races | v3b s500 (`resume_400/adaptive/step_100`), offset 500, seed −500 (same draws) | 50 / 40 / 40 | 6315432 / 6315433 / 6315434 | done: no gain, retry pass 0.40 / 0.37 / 0.34. Held-out races on finals (reuse1 = s550, reuse2/3 = s540): 6333553 / 6333610 / 6333620 → `final_v3b_4b/sanity_full/reuse{K}_final_heldout.json` | 10-18j, 10-19a |
 | final_v4_4b | DRAFT: split v5, rank 32, 24 turns, 1200 steps, ladder, LR 1e-4 + cooldown 1e-5, flat per-concept curriculum (share 0.7 after 50 steps), turn-0 fork from 150, family_neg_frac 0.5 | base | 1200 (to revisit) | - | **not launched** (TamIA) | 10-18d, f, i; `docs/tica-v4-recipe.md` |
 
 Chunk dirs for the v3b baseline:
@@ -67,7 +67,7 @@ chunk (6315437) is queued to reach 1000.
 | Capability (held-out benches) | s300 vs base | - | `eval_s300/capability*.json` | 10-17y, 10-17aa |
 | 27B negative labels, v5 data | - | 6200733-36 | `$RAW/tica/concept_labels_v5data_27b.json` | 10-18f |
 
-All of the eval outputs above are summarised, aggregates only, in `results/tica/snapshot_2026-10-18.json`.
+All of the eval outputs above are summarised, aggregates only, in `results/tica/snapshot_2026-10-19.json`.
 Regenerate it with:
 
 ```bash
