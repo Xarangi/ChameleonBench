@@ -85,10 +85,11 @@ done
 
 - Split v5 data + 27B labels: present on Narval (`final_v5_clean.json`, `final_v5_inputs.json`,
   `concept_labels_v5data_27b.json`; checked 10-19), so step 3 can pull them.
-- Requests (10-19d): v4 reads `final_v5_elicit_inputs.json` (scripts/build_elicit_inputs.py; every topic /
-  emotion / language / tone / style request asks for its concept; `_meta.json` lists the rule per concept). The
-  base-probe cache keys on it, so the first job refits every base probe. Gate before launch: the request-confound
-  check (scripts/tica_request_confound.py, REPLICATION 10-19d) shows probes read the answer, not the request.
+- Requests (10-19d..g, final rules): v4 reads `final_v5_elicit_inputs.json` (scripts/build_elicit_inputs.py). DBpedia
+  topics and emotions: one 27B-written request per text; languages + "Respond in <L>."; tones + "Respond in a <adj>
+  tone."; formats + their answer form (all-caps, HTML, SQL, JSON, JS / Python / Java); domain and deception keep
+  their original prompts; biology untouched. `_meta.json` has the rule and 27B checks per concept. The base-probe
+  cache keys on the request file, so the first job refits every base probe.
 - Turn-0 probe schedule; thinking-mode scope.
 - Turn budget (10-19): in the config (`final.turn_budget`, REPLICATION 10-19b). Check `budget_tail_frac` and
   `budget_switches` in the smoke's train_log.jsonl; memory at 24 turns is still unmeasured.

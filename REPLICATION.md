@@ -5,6 +5,18 @@ checkpoints, observed results, and unresolved limitations.
 
 TICA on a new machine: start at docs/tica/README.md (results digest, run ledger, open questions, aggregate snapshot).
 
+## 2026-10-19k Final v5 request file audited (format lines in); math-pilot free-generation records
+- 6403271 rebuild + re-verify, final rules: rule counts topic 14 / language 12 / tone 7 / format 7 / emotion 7 /
+  original 10 (math, chemistry, physics, finance, literature, CS, 4 deception) / excluded 1 (biology). Format elicit
+  old -> new: all-caps 0.21 -> 1.00, SQL 0.24 -> 0.99, HTML 0.90 -> 1.00, Python 0.93 -> 1.00, JSON / JS / Java
+  ~1.00. Invariants: every positive has a non-empty request; concept-free negatives, biology and deception requests
+  unchanged; no new keys. Open: JavaScript / Java requests are raw docstrings (natural 0.74 / 0.79). Stale, unused:
+  final_v3_elicit_inputs.json (intermediate rules; v3 dropped). docs/tica-v4-tamia.md updated to the final rules.
+- Math pilots without KL DID produce free math the probes missed (10-15c / 10-15h, per-turn GSM8K forks under the
+  brief, judge = the episode's deployed probes on the model's own solution): math s50 caught 0.00 at k0-k1 (accuracy
+  0.57 / 0.45 vs base 0.81 / 0.75), rising to 0.53 at k8 and 0.79 at k16; mathsup final k23 caught 0.38 with
+  accuracy 0.58 vs 0.84 (a steady ~0.2 capability tax under the brief). Those refits were linear @L12 only.
+
 ## 2026-10-19j CORRECTION: math arms learn k1 (static base dodge), not k2+ (refits); still early
 - 10-19i read "pass(t>=1) ~0" as "not learning". By probe index (turns.jsonl, real_score, monitored):
   k1_first (turn-0 base probe) beaten per 20 steps: full arm 0/89, 15/93, 50/96, 95/95 (s61-80), 36/39; minimal
