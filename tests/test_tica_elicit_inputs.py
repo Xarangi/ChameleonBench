@@ -45,14 +45,16 @@ def test_only_prompt_less_concepts_get_new_requests():
     assert out["g1"] == "REQ-g1\n\nRespond in German."
     assert out["t2"] == "REQ-t2\n\nRespond in a casual tone."
     assert out["j1"] == "REQ-j1\n\nRespond in a humorous, joking tone."  # jokes = a tone
-    for i in ("a1", "p1", "m1", "d2"):  # format, domain, safety keep their original prompt
+    assert out["a1"] == "REQ-a1\n\nWrite your entire response in capital letters."
+    assert out["p1"] == "REQ-p1\n\nAnswer with Python code."
+    for i in ("m1", "d2"):  # domain, safety keep their original prompt
         assert out[i] == f"REQ-{i}"
     assert out["neg1"] == "untouched"
     rules = {c: m["rule"] for c, m in meta["concepts"].items()}
     assert rules["sports"] == "topic" and rules["emotion: sad"] == "emotion"
     assert rules["German language"] == "language" and rules["jokes and humor"] == "tone"
-    assert {rules[c] for c in ("all-caps text", "Python code", "mathematical reasoning",
-                               "deception: roleplaying")} == {"original"}
+    assert rules["all-caps text"] == rules["Python code"] == "format"
+    assert {rules[c] for c in ("mathematical reasoning", "deception: roleplaying")} == {"original"}
     assert meta["concepts"]["sports"]["rewritten"] == 2
 
 

@@ -20,9 +20,12 @@ One instruction line appended to the original prompt:
   language  + "Respond in <L>."
   tone      + "Respond in a <adj> tone." (jokes -> humorous, joking; confusion -> confused,
             bewildered: tones of voice, as in the v5 family split)
-  original  every other concept keeps the prompt its source paired with the response (format:
-            all-caps / HTML / SQL / JSON / code; domain: math / science / finance / literature / CS;
-            safety: deception scenarios). Biology / harmfulness are never sent to the LLM.
+  format    + the answer form (user 10-19: "make sure we have always ensured an answer in the
+            correct way"): all-caps, HTML, SQL, JSON, JavaScript / Python / Java (the original SQL
+            and all-caps prompts never asked for SQL or capitals: 27B elicit 0.23 / 0.21)
+  original  every other concept keeps the prompt its source paired with the response (domain:
+            math / science / finance / literature / CS; safety: deception scenarios). Biology /
+            harmfulness are never sent to the LLM.
 Concept-free negatives keep their requests. Every user turn (turn 0, later turns, switches, refit
 forks, no-brief, capability and KL reads) reads the same {text_id: request} map, so all turns
 change.
@@ -57,6 +60,13 @@ LANGUAGE = "{req}\n\nRespond in {lang}."
 TONE = {"comforting tone": "comforting", "casual tone": "casual", "formal tone": "formal",
         "supportive tone": "supportive", "cautious tone": "cautious",
         "jokes and humor": "humorous, joking", "confusion": "confused, bewildered"}
+FORMAT = {
+    "all-caps text": "Write your entire response in capital letters.",
+    "HTML markup": "Format your response as HTML markup.",
+    "SQL code": "Answer with SQL code.", "JSON data": "Answer with JSON.",
+    "JavaScript code": "Answer with JavaScript code.", "Python code": "Answer with Python code.",
+    "Java code": "Answer with Java code.",
+}
 EXCLUDED = ("harmfulness", "biology")  # unchanged, never sent to the LLM (not even verified)
 MAXC = 1500  # passage characters shown to the LLM
 
@@ -88,6 +98,8 @@ def rule(concept: str, reqs: list[str], encyclopedia: str) -> tuple[str, str | N
         return "language", LANGUAGE.format(req="{req}", lang=concept[: -len(" language")])
     if concept in TONE:
         return "tone", f"{{req}}\n\nRespond in a {TONE[concept]} tone."
+    if concept in FORMAT:
+        return "format", f"{{req}}\n\n{FORMAT[concept]}"
     return "original", None
 
 
