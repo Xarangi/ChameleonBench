@@ -164,7 +164,7 @@ def ask_concept(fmt):
         return f"{render_feedback(cond, concept, shown, next_text, **kw)}\n\n{ask}"
 
     for f, g in ((opening, opening2), (render_feedback, render_feedback2)):
-        for k in ("tagged", "layout"):
+        for k in ("tagged", "layout", "inputs_path"):
             if hasattr(f, k):
                 setattr(g, k, getattr(f, k))
     return opening2, render_feedback2
@@ -180,13 +180,33 @@ def prompts(fmt: str = "repeat", inputs_path: str = INPUTS, layout: str = "legac
             raise ValueError("the tagged layout needs the answer format")
         return _opening, _render_feedback
     if fmt == "answer":
-        if layout == "tagged":
-            return tagged_prompts(load_inputs(inputs_path))
-        return answer_prompts(load_inputs(inputs_path))
+        mk = tagged_prompts if layout == "tagged" else answer_prompts
+        opening, render_feedback = mk(load_inputs(inputs_path))
+        opening.inputs_path = inputs_path  # the probe cache key reads it (_inputs_stamp)
+        return opening, render_feedback
     raise ValueError(fmt)
 
 
 CACHE = Path("/scratch/sneheel/next_chameleons_artifacts/tica/answer_probe_cache")
+
+
+# Request files that existed before the probe cache keyed on the request file (10-19d): their keys
+# stay unchanged. Any other file (e.g. the concept-eliciting *_elicit_inputs.json) changes every
+# read, so it gets its own cache entries.
+LEGACY_INPUTS = frozenset({
+    "level1_inputs.json", "level1_inputs_plus.json", "concept_eval_v1_inputs.json",
+    "final_base_v2_inputs.json", "final_ood_v1_inputs.json", "final_ood_v2_inputs.json",
+    "final_v3_inputs.json", "final_v3_eval_inputs.json", "final_v3_emotion_eval_inputs.json",
+    "final_v3_safety_eval_inputs.json", "final_v4_inputs.json", "final_v5_inputs.json",
+    "math_base_v1_inputs.json", "topic_base_v1_inputs.json"})
+
+
+def _inputs_stamp(opening) -> dict:
+    p = getattr(opening, "inputs_path", None)
+    if not p or Path(p).name in LEGACY_INPUTS:
+        return {}
+    st = Path(p).stat()
+    return {"inputs": Path(p).name, "inputs_size": st.st_size, "inputs_mtime": int(st.st_mtime)}
 
 
 _NOBRIEF_MEMO: dict = {}  # (model, layers, request, text) -> {layer: pooled base read}
@@ -220,7 +240,7 @@ def fit_answer_probes(acfg, data, pol, concept, layers, opening, cache: Path | N
                       "auroc": acfg.refit_min_auroc, "tpr": acfg.refit_min_tpr_np, "v": 1,
                       # the data file's CONTENT (size + mtime): a rebuilt base at the same path
                       # must not reuse probes fit on the old one (10-15e final_base_v2 rebuild)
-                      **_data_stamp(data), **neg_stamp(acfg),
+                      **_data_stamp(data), **neg_stamp(acfg), **_inputs_stamp(opening),
                       # the prompt layout changes every read (10-17a); legacy keys unchanged
                       **({"layout": opening.layout} if getattr(opening, "layout", "legacy")
                          != "legacy" else {}),

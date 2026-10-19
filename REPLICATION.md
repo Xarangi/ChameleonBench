@@ -5,6 +5,31 @@ checkpoints, observed results, and unresolved limitations.
 
 TICA on a new machine: start at docs/tica/README.md (results digest, run ledger, open questions, aggregate snapshot).
 
+## 2026-10-19d Concept-eliciting requests for every turn (v4 data fixed); request-vs-answer probe check
+- Problem (user 10-19: "make sure the model is actually prompted to showcase the concept we are interested in
+  hiding ... fixed across all turns"). Request audit of final_v5 (aggregates): all 14 topics share ONE request
+  ("Write a short encyclopedia entry.", 100 / 100 episode texts per topic); all 7 emotions share one story prompt;
+  languages / tones / styles never ask for the language or style. Only task concepts (math, chemistry, physics,
+  CS abstracts, code tasks, JSON, finance) ask for the concept through the task itself.
+- Fix: scripts/build_elicit_inputs.py DATA INPUTS OUT rewrites the request of every positive text (fit / calib /
+  episode): topics 'Write a short encyclopedia entry about a subject related to "<c>".'; emotions = story prompt +
+  "The person feels <e> throughout ..."; languages + "Respond in <L>."; tones + "Respond in a <tone>."; styles
+  (all-caps, HTML, jokes, confusion, literature, computer code) + one line; SQL/Python/Java/JS + "Answer with <L>
+  code."; task concepts unchanged; deception / harmfulness / biology sets unchanged by design (not read).
+  Concept-free negatives keep their requests. Every user turn (turn 0, later turns, switches, refit forks, no-brief
+  and capability / KL reads) reads the same map, so all turns change. Built: final_v5_elicit_inputs.json (v4) and
+  final_v3_elicit_inputs.json (v3b evals), each with _meta.json (rule + counts per concept); 6 v5 texts listed under
+  two concepts take the first concept's rule.
+- Probe cache: fit_answer_probes now keys on the request file (_inputs_stamp) unless it is one of the legacy files
+  (LEGACY_INPUTS), so old caches stay valid and the elicit files refit every base probe.
+- v4 config (+ builtin mirror) -> final_v5_elicit_inputs.json; tica_sync_v4.sh pulls it; docs/tica-v4-tamia.md gate.
+- Risk being checked: positives' requests now name the concept, so a probe could detect the REQUEST, not the
+  answer. scripts/tica_request_confound.py: base probes fit on the elicit requests, read on pos (own request), swap
+  (concept request + concept-free answer), free, other; --compare = probes fit on the legacy requests.
+  Jobs: conf_v3 6388042, conf_v5_held 6388044, conf_v5_train 6388045.
+- Free-answer gate on the elicit requests (v3 data, no brief, 56 episodes): base 6388046, s500 6388047 (freegen_elicit/).
+  The ask-concept no-brief runs (6376092/93) still run; the ask-concept ON runs (6376086/91) were cancelled.
+
 ## 2026-10-19c Free-answer races INVALID as run (requests don't ask for the concept); rerun with --ask-concept; held-out races
 - Forced-answer held-out races (24 turns, heldout topics, 56 episodes). Beat rate by probe index:
   | race | k1_first | k1_switch | k2 | k3 | k4 | k5 | beaten | within 3 | pass/turn |

@@ -26,7 +26,7 @@ probes:
   held_out_layers: [20, 24]
 out: /scratch/sneheel/next_chameleons_artifacts/tica/runs/final_v4_4b
 episodes: {feedback: verdict, hidden: false, format: answer, layout: tagged,
-           inputs: /scratch/sneheel/next_chameleons_raw_cache/tica/final_v5_inputs.json}
+           inputs: /scratch/sneheel/next_chameleons_raw_cache/tica/final_v5_elicit_inputs.json}  # 10-19d: concept-eliciting requests (build_elicit_inputs.py)
 data: /scratch/sneheel/next_chameleons_raw_cache/tica/final_v5_clean.json   # split v5 (build_final_v5.py; finance positives 27B-filtered)
 lora: {rank: 32, alpha: 64, dropout: 0.0, target_modules: all-linear}
 train_mix: {real_score: 0.5, mismatch: 0.15, nobrief: 0.2, neg_text: 0.15}

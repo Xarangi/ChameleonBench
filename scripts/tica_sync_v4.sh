@@ -20,7 +20,7 @@ mkdir -p $R/tica $R/capability $A/tica/runs/mathrl_4b $A/tica/l1_base/qwen35_4b 
 # model (HF cache layout; the config points at the snapshot dir), ~7 GB
 rsync -aL --info=progress2 $N:/scratch/sneheel/hf/hub/models--Qwen--Qwen3.5-4B /scratch/$USER/hf/hub/
 # train + held-out data (one file: final_v5_clean has both splits), inputs, 27B negative labels
-rsync -a $N:$SR/tica/{final_v5_clean.json,final_v5_inputs.json,concept_labels_v5data_27b.json} $R/tica/
+rsync -a $N:$SR/tica/{final_v5_clean.json,final_v5_inputs.json,final_v5_elicit_inputs.json,final_v5_elicit_inputs_meta.json,concept_labels_v5data_27b.json} $R/tica/
 # KL anchor (Dolly) + GSM8K (anchor + capability), GSM8K base generations (cap_gen_pool)
 rsync -a $N:$SR/tica/dolly15k $R/tica/
 rsync -a $N:$SR/capability/ $R/capability/
