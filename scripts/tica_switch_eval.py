@@ -29,7 +29,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from tica import build
 
-from next_chameleons.tica.answer_format import fit_answer_probes, prompts
+from next_chameleons.tica.answer_format import ask_concept, fit_answer_probes, prompts
 from next_chameleons.tica.config import load_run_config
 from next_chameleons.tica.data import CONCEPT_SPLITS, select_topics
 from next_chameleons.tica.episodes import EpisodeSampler
@@ -76,6 +76,9 @@ def main():
                     help="free (10-19b): the model writes its own answer every turn (greedy); "
                          "probes and refits read it as they read forced answers")
     ap.add_argument("--answer-max", type=int, default=320, help="--answers free: max new tokens")
+    ap.add_argument("--ask-concept", action="store_true",
+                    help="every request also says 'Your response must be about \"<concept>\"' "
+                         "(10-19c: most requests do not ask for the concept)")
     ap.add_argument("--gen-out", default="",
                     help="--answers free: JSONL of answers + verdicts for tica_free_judge.py "
                          "(scratch only: raw model text, never commit)")
@@ -161,7 +164,7 @@ def main():
     tr = AdaptiveSupervisedTrainer(
         pol, pool, sampler, asc, out.parent / (out.stem + "_work"),
         branch_concepts=data.concepts("fit", splits), branch_negatives=data.negatives("fit"),
-        roots_only=set(topics), prompts=fmt,
+        roots_only=set(topics), prompts=ask_concept(fmt) if a.ask_concept else fmt,
         hard_neg={c: data.hard_negatives(c, "fit") for c in topics})
     tr.falsify = a.falsify
     if a.answers == "free":
@@ -246,6 +249,7 @@ def main():
     rep = {"config": a.config, "adapter": a.adapter, "base": a.base, "topics": topics,
            "episodes": a.episodes, "turns": a.turns, "switch_prob": a.switch_prob,
            "falsify": a.falsify, "turn_budget": budget, "cond": a.cond, "answers": a.answers,
+           "ask_concept": a.ask_concept,
            "answer_max": a.answer_max if a.answers == "free" else None,
            "min_seg": a.min_seg, "return_prob": a.return_prob,
            "kind": cfg.rl.adaptive.episode_refit_kind, "base_probe_quality": quality,
