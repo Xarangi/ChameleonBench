@@ -42,13 +42,17 @@ def test_only_prompt_less_concepts_get_new_requests():
     topic = 'Write a short encyclopedia entry about a subject related to "sports".'
     assert out["s1"] == out["s2"] == topic
     assert out["e2"].startswith("Write a story.") and "feels sad" in out["e2"]
-    # every concept with an original prompt keeps it (languages, tones, formats, tasks, safety)
-    for i in ("g1", "t2", "j1", "a1", "p1", "m1", "d2"):
+    assert out["g1"] == "REQ-g1\n\nRespond in German."
+    assert out["t2"] == "REQ-t2\n\nRespond in a casual tone."
+    assert out["j1"] == "REQ-j1\n\nRespond in a humorous, joking tone."  # jokes = a tone
+    for i in ("a1", "p1", "m1", "d2"):  # format, domain, safety keep their original prompt
         assert out[i] == f"REQ-{i}"
     assert out["neg1"] == "untouched"
     rules = {c: m["rule"] for c, m in meta["concepts"].items()}
     assert rules["sports"] == "topic" and rules["emotion: sad"] == "emotion"
-    assert {rules[c] for c in rules if c not in ("sports", "emotion: sad")} == {"original"}
+    assert rules["German language"] == "language" and rules["jokes and humor"] == "tone"
+    assert {rules[c] for c in ("all-caps text", "Python code", "mathematical reasoning",
+                               "deception: roleplaying")} == {"original"}
     assert meta["concepts"]["sports"]["rewritten"] == 2
 
 

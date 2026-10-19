@@ -8,17 +8,21 @@ prompt, and language / tone / format requests never say to answer in that langua
 Forced answers carry the concept anyway, but a model writing its own answer leaves it out (free-
 answer race 10-19c: base model, no brief, food-and-drink answers detected 0 / 144).
 
-Rule (user 10-19: "whatever has original prompts provided to generate responses should be excluded
-and fine"): only concepts WITHOUT an original prompt get new requests, one per text, written by the
-LLM:
+Rules (user 10-19: "whatever has original prompts provided to generate responses should be excluded
+and fine"; "language and tone will get the instruction addition"). New requests, one per text,
+written by the LLM, for concepts WITHOUT an original prompt:
   topic     DBpedia abstracts (no prompt; the shared "Write a short encyclopedia entry." was ours):
             a request naming the passage's specific subject ("... about Karin Lundgren, a Swedish
             Olympic swimmer")
   emotion   story corpus (our builder used one emotion-free request): the story's situation + the
             emotion
-  original  every other concept keeps the prompt its source paired with the response (Aya and NC
-            prompts, SQL / JSON / code / math / science / finance tasks, TONEBANK, CS titles,
-            deception scenarios). Biology / harmfulness are never sent to the LLM.
+One instruction line appended to the original prompt:
+  language  + "Respond in <L>."
+  tone      + "Respond in a <adj> tone." (jokes -> humorous, joking; confusion -> confused,
+            bewildered: tones of voice, as in the v5 family split)
+  original  every other concept keeps the prompt its source paired with the response (format:
+            all-caps / HTML / SQL / JSON / code; domain: math / science / finance / literature / CS;
+            safety: deception scenarios). Biology / harmfulness are never sent to the LLM.
 Concept-free negatives keep their requests. Every user turn (turn 0, later turns, switches, refit
 forks, no-brief, capability and KL reads) reads the same {text_id: request} map, so all turns
 change.
@@ -49,6 +53,10 @@ from pathlib import Path
 SPLITS = ("fit", "calib", "episode")
 TOPIC = 'Write a short encyclopedia entry about a subject related to "{c}".'  # no-LLM fallback
 EMOTION = "{req} The person feels {e} throughout, and the story should make that feeling clear."
+LANGUAGE = "{req}\n\nRespond in {lang}."
+TONE = {"comforting tone": "comforting", "casual tone": "casual", "formal tone": "formal",
+        "supportive tone": "supportive", "cautious tone": "cautious",
+        "jokes and humor": "humorous, joking", "confusion": "confused, bewildered"}
 EXCLUDED = ("harmfulness", "biology")  # unchanged, never sent to the LLM (not even verified)
 MAXC = 1500  # passage characters shown to the LLM
 
@@ -76,6 +84,10 @@ def rule(concept: str, reqs: list[str], encyclopedia: str) -> tuple[str, str | N
         return "topic", TOPIC.format(c=concept)
     if concept.startswith("emotion: "):
         return "emotion", EMOTION.format(req="{req}", e=concept.split(": ", 1)[1])
+    if concept.endswith(" language"):
+        return "language", LANGUAGE.format(req="{req}", lang=concept[: -len(" language")])
+    if concept in TONE:
+        return "tone", f"{{req}}\n\nRespond in a {TONE[concept]} tone."
     return "original", None
 
 
