@@ -3,6 +3,28 @@
 This file tracks the concrete replication state: data sources, fallbacks,
 checkpoints, observed results, and unresolved limitations.
 
+TICA on a new machine: start at docs/tica/README.md (results digest, run ledger, open questions, aggregate snapshot).
+
+## 2026-10-18j Held-out transfer PLATEAUED s340 -> s500; rollout-reuse speed test launched; baseline chain extended
+- Held-out race at s500 (6258629; 24 turns, mixed kinds, no switches, 56 ep), refits beaten / within 3 / pass per turn:
+  s500 0.78 / 0.52 / 0.162 (n 246) vs s340 0.78 / 0.53 / 0.166 (n 238); by probe index k2 0.91 / k3 0.90 / k4 0.85 / k5
+  0.69 (s340 0.84 / 0.91 / 0.88 / 0.76). Per held-out concept unchanged within noise (Finnish 0.04 -> 0.09, fashion 0.14
+  -> 0.22, HTML 0.04 / 0.04, physics 0.07 / 0.07). => training k2-k4 rose ~+0.15-0.25 over steps 340-500 but held-out
+  transfer did not move: the extra steps sharpen the TRAINING concepts. Val (dev) 550: score 0.37, pass 0.147 (flat).
+  Implication for v4: more steps on the same concepts is not the lever for transfer; breadth (v5's 20 train concepts)
+  and the step count should be set from v4's own held-out curve (races every 50 steps).
+- updates_per_rollout (SupervisedConfig, default 1; f0db642): K optimizer updates per rollout (episodes, verdicts,
+  refits and targets collected once, forward with grad re-run on the current weights each update; LR schedule
+  advances once per step; logged train/* = the first, on-policy update; train/update_losses, update_gnorms per update).
+  K = 1 verified BIT-IDENTICAL to the previous code (18 LoRA tensors and loss after one step, KL anchor on).
+  Test: tests/test_tica_rollout_reuse.py.
+- Speed test (user 10-18): branches from v3b s500 (resume_400/step_100, TICA_STEP_OFFSET 500, seed -500 = same draws):
+  reuse1 (control, 50 steps) 6315432, reuse2 (40) 6315433, reuse3 (40) 6315434. Compare at equal steps and equal
+  wall-clock on k2-k4 / retry pass, then held-out races on the finals. Expected cost: +~40 s train (+~24 s cap gen) per
+  extra update on a ~350 s step.
+- Baseline chunk 6198908 hit its 12 h limit at ~step 527; 6198909 resumed from s520 (resume_520). At ~115 steps per
+  chunk the queued chunks end near step 980: 6th chunk queued (6315437; exits if already at 1000).
+
 ## 2026-10-18i Retry ladder wins held-out; LR 2e-4 ruled out; v4 draft updated; baseline v3b at step ~505
 - Held-out races (24 turns, mixed kinds, no switches, 56 ep; branches 60 steps from s360, same draws), refits beaten /
   beaten within 3 turns / pass per turn after turn 0 / refits:

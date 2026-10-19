@@ -4,6 +4,10 @@ Everything the final v4 run needs, from a fresh login on TamIA (or any Alliance 
 budget and the whole-node launcher: `docs/tica-other-hpc.md`. Recipe and decisions:
 `docs/tica-v4-recipe.md`. Config: `configs/tica/final_v4_4b.yaml`.
 
+Context from all previous runs (results digest, run ledger, open questions, aggregate snapshot):
+`docs/tica/README.md`. Optional: `bash scripts/tica_sync_v4.sh --with-v3b` also pulls the v3b adapters and
+aggregate eval outputs for analysis.
+
 ## 1. Code
 
 ```bash
