@@ -26,12 +26,14 @@ change.
 VERIFY (--llm): the 27B scores every processed positive twice (P(yes), aggregates only):
   elicit  would a good answer to the REQUEST clearly show the concept? (new and old request)
   match   is the stored PASSAGE a good answer to the new request? (forced answers stay coherent)
+  natural is the new request a clear, natural message a real user might send?
+--verify-only re-scores an existing OUT.json (no generation).
 Without --llm, topics / emotions fall back to fixed templates and nothing is verified (tests).
 
 Usage (vllm-serving env, scripts/slurm/build_elicit_inputs.sh):
   build_elicit_inputs.py --llm MODEL --set DATA.json,INPUTS.json,OUT.json [--set ...]
 Writes OUT.json and OUT_meta.json (per-concept rule, counts, verify rates) and OUT_scores.json
-({text_id: [elicit_old, elicit_new, match]}; numbers only).
+({text_id: [elicit_old, elicit_new, match, natural]}; numbers only).
 """
 
 from __future__ import annotations
@@ -146,8 +148,9 @@ def finish(inputs: dict[str, str], rows: list[dict], meta: dict, scores: dict | 
         m["llm_written"] = sum(bool(r.get("llm")) for r in rs)
         m["llm_fallback"] = sum(r.get("llm") is False for r in rs)
         if scores:
-            for k, j in (("elicit_old", 0), ("elicit_new", 1), ("match", 2)):
-                v = [scores[r["id"]][j] for r in rs if r["id"] in scores]
+            for k, j in (("elicit_old", 0), ("elicit_new", 1), ("match", 2), ("natural", 3)):
+                v = [scores[r["id"]][j] for r in rs
+                     if r["id"] in scores and len(scores[r["id"]]) > j]
                 m[k] = round(sum(p > 0.5 for p in v) / len(v), 3) if v else None
     for r in rows:
         out[r["id"]] = r["new"]
@@ -160,12 +163,18 @@ def main() -> None:
     ap.add_argument("--llm", help="vLLM model path (Qwen3.5-27B-FP8); omit = templates only")
     ap.add_argument("--tp", type=int, default=2)
     ap.add_argument("--mem", type=float, default=0.90)
+    ap.add_argument("--verify-only", action="store_true", help="score an existing OUT.json")
     a = ap.parse_args()
     sets = []
     for s in a.set:
         d, i, o = (Path(p) for p in s.split(","))
         inputs = json.loads(i.read_text())
         rows, meta = plan(json.loads(d.read_text()), inputs)
+        if a.verify_only:  # the requests already written to OUT.json
+            done = json.loads(o.read_text())
+            for r in rows:
+                r["new"] = done[r["id"]]
+                r["llm"] = r["rule"] in ("topic", "emotion") or None
         meta.update(data=str(d), inputs=str(i), builder=__file__, llm=a.llm)
         sets.append((o, inputs, rows, meta))
 
@@ -189,7 +198,7 @@ def main() -> None:
                   enable_prefix_caching=True, max_num_seqs=256, max_num_batched_tokens=32768,
                   tensor_parallel_size=a.tp)
         # 1) write a request per topic passage / emotion story
-        gen = [r for _, _, rows, _ in sets for r in rows if r["new"] is None]
+        gen = [r for _, _, rows, _ in sets for r in rows if r["new"] is None]  # none if verify-only
         prompts = [chat(GEN_TOPIC.format(c=r["concept"], x=r["text"][:MAXC]) if r["rule"] == "topic"
                         else GEN_EMOTION.format(e=r["concept"].split(": ", 1)[1],
                                                 x=r["text"][:MAXC])) for r in gen]
@@ -209,6 +218,12 @@ def main() -> None:
                         "Would a good answer to this request clearly have this property: "
                         f"{concept_desc(c, 'v4')}? Answer Yes or No.")
 
+        def natural(req):
+            return chat(f'A user sends this request to an assistant:\n"""\n{req[-MAXC:]}\n"""\n\n'
+                        "Is this a clear, natural-sounding request that a real user might send "
+                        "(not garbled, not contradictory, not padded with odd instructions)? "
+                        "Answer Yes or No.")
+
         def match(req, x):
             return chat(f'Request:\n"""\n{req[-MAXC:]}\n"""\n\nResponse:\n"""\n{x[:MAXC]}\n"""\n\n'
                         "Is the response a relevant, reasonable answer to the request? "
@@ -221,7 +236,8 @@ def main() -> None:
                     continue
                 items += [(k, r["id"], 0, elicit(r["old"], r["concept"])),
                           (k, r["id"], 1, elicit(r["new"], r["concept"])),
-                          (k, r["id"], 2, match(r["new"], r["text"]))]
+                          (k, r["id"], 2, match(r["new"], r["text"])),
+                          (k, r["id"], 3, natural(r["new"]))]
         outs = llm.generate([p for *_, p in items],
                             SamplingParams(temperature=0.0, max_tokens=1, logprobs=20),
                             use_tqdm=False)
@@ -230,7 +246,8 @@ def main() -> None:
             lp = o.outputs[0].logprobs[0]
             py = sum(math.exp(lp[t].logprob) for t in yes if t in lp)
             pn = sum(math.exp(lp[t].logprob) for t in no if t in lp)
-            scores_by[k].setdefault(tid, [0.0, 0.0, 0.0])[j] = py / (py + pn) if py + pn else 0.0
+            p_yes = py / (py + pn) if py + pn else 0.0
+            scores_by[k].setdefault(tid, [0.0, 0.0, 0.0, 0.0])[j] = p_yes
         print(f"verified {len(items)} items {time.time() - t0:.0f}s", flush=True)
     else:
         for _, _, rows, _ in sets:
@@ -248,7 +265,8 @@ def main() -> None:
         for c, m in meta["concepts"].items():
             print(f"  {c[:28]:28s} {m['split'] or '':8s} {m['rule']:9s} "
                   f"{m['rewritten']:4d}/{m['texts']:4d} llm {m['llm_written']:4d} "
-                  f"elicit {m.get('elicit_old')} -> {m.get('elicit_new')} match {m.get('match')}")
+                  f"elicit {m.get('elicit_old')} -> {m.get('elicit_new')} match {m.get('match')} "
+                  f"natural {m.get('natural')}")
         print("  shared texts skipped:", meta["shared_texts_skipped"])
 
 
