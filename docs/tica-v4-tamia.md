@@ -55,7 +55,13 @@ from next_chameleons.tica.config import load_run_config as l; c=l('final_v4_4b')
 salloc --account=aip-<pi> --gres=gpu:h100:4 --time=2:00:00 --mem=0   # whole node
 bash scripts/slurm/tica_l3covert.sh final_v4_4b --steps 20 \
   --out /scratch/$USER/next_chameleons_artifacts/tica/runs/final_v4_smoke
+# data-parallel episodes (10-19b; docs/tica-other-hpc.md option D): N GPUs, episodes_per_step / N each
+TICA_DP=2 bash scripts/slurm/tica_l3covert.sh final_v4_4b --steps 20 \
+  --out /scratch/$USER/next_chameleons_artifacts/tica/runs/final_v4_dp2_smoke
 ```
+
+Data-parallel: check `dp/sec_rollout_max` vs `dp/sec_rollout_min` (load balance) in train_log.jsonl and a
+`dp_param_drift` line at saves in the job log. Resume chunks inherit `TICA_DP` but need the GPUs again.
 
 Check `max_mem_gb` and `sec` in `final_v4_smoke/adaptive/train_log.jsonl` (Narval A100, 16 turns:
 28.8 GB, 150-330 s/step), and that `trainer_state.pt` lands next to the step-20 adapter.
@@ -80,3 +86,7 @@ done
 - Split v5 data + 27B labels: present on Narval (`final_v5_clean.json`, `final_v5_inputs.json`,
   `concept_labels_v5data_27b.json`; checked 10-19), so step 3 can pull them.
 - Turn-0 probe schedule; thinking-mode scope.
+- Turn budget (10-19): in the config (`final.turn_budget`, REPLICATION 10-19b). Check `budget_tail_frac` and
+  `budget_switches` in the smoke's train_log.jsonl; memory at 24 turns is still unmeasured.
+- Free-generation check (10-19b): if the s500 free-generation races show avoidance or a forced-only skill, v4 needs
+  free-answer episodes before launch (docs/tica/OPEN-QUESTIONS.md).

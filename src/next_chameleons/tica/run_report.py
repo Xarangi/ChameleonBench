@@ -170,7 +170,7 @@ def heldout_by_cond(turns: list[dict], window: int = 80) -> dict:
 
     acc = defaultdict(lambda: defaultdict(lambda: [0, 0]))
     for r in turns:
-        if r.get("heldout_det") is None:
+        if r.get("heldout_det") is None or r.get("tail"):  # tail: turn-budget unjudged turns
             continue
         c = "real" if r.get("cond") in DODGE else r.get("cond")
         if r.get("off"):

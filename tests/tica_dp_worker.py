@@ -16,7 +16,7 @@ import torch
 sys.path.insert(0, str(Path(__file__).parent))
 
 
-def build(out: Path, steps: int = 2, **over):
+def build(out: Path, steps: int = 2, budget: bool = False, **over):
     from next_chameleons.tica.adaptive import AdaptiveConfig
     from next_chameleons.tica.answer_format import text_id
     from next_chameleons.tica.episodes import ConceptTexts, EpisodeSpec
@@ -73,7 +73,15 @@ def build(out: Path, steps: int = 2, **over):
                     txt = self.rng.sample(cats, 2) + self.rng.sample(dogs, T - 2)
                     meta = {"monitored_turns": ["cats", "cats", "dogs", "dogs", "dogs"]}
                 cond = "nobrief" if kind == 3 else "real_score"
-                out.append(EpisodeSpec(f"{cond}|{c}|{k}", cond, txt, c, c, base, meta=meta))
+                bud = None
+                if budget and cond == "real_score":  # turn budget (10-19b): R 1 / M 2 / S 2
+                    seq = ["cats", "dogs"] if kind == 1 else [c]
+                    pools = {x: self.rng.sample(cats if x == "cats" else dogs, 2 * T) for x in seq}
+                    txt, meta = list(pools[seq[0]][:T]), {"monitored_turns": [seq[0]] * T}
+                    bud = {"R": 1, "M": 2, "S": 2, "seq": seq, "k": 0, "pt": 0, "done": False,
+                           "pools": pools, "used": {x: (T if x == seq[0] else 0) for x in seq}}
+                out.append(EpisodeSpec(f"{cond}|{c}|{k}", cond, txt, c, c, base, meta=meta,
+                                       budget=bud))
             return out
 
     q = [{"question": "1+1?", "answer": "2"}, {"question": "2+2?", "answer": "4"}]
@@ -141,7 +149,8 @@ def state(tr, pol, recs) -> dict:
     }
 
 
-def run(rank: int, world: int, out: str, port: int, steps: int = 2) -> None:
+def run(rank: int, world: int, out: str, port: int, steps: int = 2,
+        budget: bool = False) -> None:
     """mp.spawn entry: rank `rank` of `world` (gloo); saves <out>/rank{rank}.pt."""
 
     os.environ.update(MASTER_ADDR="127.0.0.1", MASTER_PORT=str(port), WORLD_SIZE=str(world),
@@ -152,7 +161,7 @@ def run(rank: int, world: int, out: str, port: int, steps: int = 2) -> None:
 
         dist.init_process_group("gloo", rank=rank, world_size=world)
     d = Path(out)
-    tr, pol = build(d / "run", steps=steps)
+    tr, pol = build(d / "run", steps=steps, budget=budget)
     recs = [tr.step() for _ in range(steps)]
     torch.save(state(tr, pol, recs), d / f"rank{rank}.pt")
     if world > 1:

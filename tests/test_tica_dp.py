@@ -24,7 +24,7 @@ def _port() -> int:
         return s.getsockname()[1]
 
 
-def _spawn(world: int, out: Path, steps: int) -> list[dict]:
+def _spawn(world: int, out: Path, steps: int, budget: bool = False) -> list[dict]:
     import torch.multiprocessing as mp
 
     out.mkdir(parents=True)
@@ -35,7 +35,7 @@ def _spawn(world: int, out: Path, steps: int) -> list[dict]:
     try:
         from tica_dp_worker import run
 
-        mp.spawn(run, args=(world, str(out), _port(), steps), nprocs=world, join=True)
+        mp.spawn(run, args=(world, str(out), _port(), steps, budget), nprocs=world, join=True)
     finally:
         os.environ["PYTHONPATH"] = env
     return [torch.load(out / f"rank{r}.pt", weights_only=False) for r in range(world)]
@@ -106,3 +106,21 @@ def test_dp_rejects_unsupported_settings(tmp_path, monkeypatch):
     monkeypatch.setattr(dp, "world", lambda: (2, 0))
     with pytest.raises(ValueError, match="episode_keep"):
         build(tmp_path / "run", episode_keep=True)
+
+
+def test_two_ranks_match_one_process_with_turn_budget(tmp_path):
+    """v4 runs the turn budget (10-19b) data-parallel: online switches / tails on each rank's own
+    episodes give the same step as one process."""
+    steps = 2
+    (one,) = _spawn(1, tmp_path / "w1", steps, budget=True)
+    r0, r1 = _spawn(2, tmp_path / "w2", steps, budget=True)
+    for n in r0["lora"]:
+        assert torch.equal(r0["lora"][n], r1["lora"][n]), n
+        assert torch.allclose(one["lora"][n], r0["lora"][n], atol=1e-5, rtol=1e-4), n
+    for k in ("rng", "kind_bandit", "concept_bandit", "kind_stats", "deploy_log", "seg_log"):
+        assert r0[k] == one[k], k
+    for a, b in zip(one["recs"], r0["recs"], strict=True):
+        for k in ("rollout/pass_rate", "rollout/budget_tail_frac", "rollout/budget_switches",
+                  "rollout/ep_refits", "n_targets"):
+            assert a.get(k) == b.get(k), (k, a.get(k), b.get(k))
+    assert sum(r["rollout/budget_switches"] for r in one["recs"]) > 0

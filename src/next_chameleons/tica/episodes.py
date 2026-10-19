@@ -89,6 +89,10 @@ class EpisodeSpec:
     meta: dict = field(default_factory=dict)
     feedback: str = "score"  # "score" | "verdict"
     named: bool = True  # False = hidden-concept brief and feedback
+    # turn budget (final.turn_budget, 10-19): mutable per-episode state for budget_action /
+    # budget_switch (concept order, fresh text pools, runway / max-turns / switch-segment sizes).
+    # The rollout rewrites meta["monitored_turns"] and texts from the next turn on at each switch.
+    budget: dict | None = None
 
     def text(self, t: int) -> str:
         return self.texts[t] if len(self.texts) > 1 else self.texts[0]
@@ -269,11 +273,15 @@ class EpisodeSampler:
         switch_min_segment: int = 3,
         switch_max: int = 2,
         switch_return_prob: float = 0.0,
+        budget: dict | None = None,
     ) -> None:
         self.concepts = [c for c in concepts if pool.trainable(c.concept)]
+        self.budget = budget  # {"R", "M", "S"} (final.turn_budget); None = fixed schedules
         # Mid-episode concept switches (real_score episodes only): see _switch_schedule.
         self.switch_prob, self.switch_min = switch_prob, switch_min_segment
         self.switch_max, self.switch_return = switch_max, switch_return_prob
+        if budget and (not fresh or hidden):
+            raise ValueError("the turn budget needs fresh texts and named episodes")
         if switch_prob and (not fresh or hidden or len(self.concepts) < 2):
             raise ValueError("concept switches need fresh texts, named episodes, >= 2 concepts")
         if not self.concepts:
@@ -349,7 +357,9 @@ class EpisodeSampler:
                     probe_concept=turn_concepts[0],
                     probe_match=turn_concepts[0] == monitored,
                 )
-            if (cond == "real_score" and self.switch_prob
+            if cond == "real_score" and self.budget:
+                texts, meta["monitored_turns"], budget = self._budget_episode(c)
+            elif (cond == "real_score" and self.switch_prob
                     and self.rng.random() < self.switch_prob):
                 order = self._switch_schedule(c.concept)
                 if order is not None:
@@ -383,10 +393,31 @@ class EpisodeSampler:
                     meta=meta,
                     feedback=self.feedback,
                     named=not self.hidden,
+                    budget=budget if cond == "real_score" and self.budget else None,
                 )
             )
             self._n += 1
         return out
+
+    def _budget_episode(self, c: ConceptTexts) -> tuple[list[str], list[str], dict]:
+        """Turn-budget episode (final.turn_budget): concept order drawn up front (switching
+        episodes: switch_max further concepts, returns as in switch_schedule), switch POINTS
+        decided online by budget_action. Each concept gets (#appearances x turns) fresh texts."""
+
+        seq = [c.concept]
+        if self.switch_prob and len(self.concepts) > 1 and self.rng.random() < self.switch_prob:
+            others = [o.concept for o in self.concepts if o.concept != c.concept]
+            seq = switch_sequence(self.rng, c.concept, others, self.switch_max, self.switch_return,
+                                  weights=self.concept_weights)
+        by = {o.concept: o for o in self.concepts}
+        pools = {}
+        for k in dict.fromkeys(seq):
+            src, n = by[k].texts, self.turns * seq.count(k)
+            pools[k] = self.rng.sample(src, n) if len(src) >= n else self.rng.choices(src, k=n)
+        texts = list(pools[c.concept][: self.turns])
+        b = {**self.budget, "seq": seq, "k": 0, "pt": 0, "done": False, "pools": pools,
+             "used": {k: (self.turns if k == c.concept else 0) for k in pools}}
+        return texts, [c.concept] * self.turns, b
 
 
 def _segments(rng: random.Random, turns: int, k: int, min_seg: int) -> list[int]:
@@ -411,6 +442,16 @@ def switch_schedule(
         return None
     k = rng.randint(1, kmax)
     cuts = _segments(rng, turns, k, min_seg)
+    seq = switch_sequence(rng, first, others, k, return_prob, weights=weights)
+    bounds = [0, *cuts, turns]
+    return [seq[j] for j in range(k + 1) for _ in range(bounds[j], bounds[j + 1])]
+
+
+def switch_sequence(rng: random.Random, first: str, others: list[str], k: int, return_prob: float,
+                    weights: dict[str, float] | None = None) -> list[str]:
+    """first + k switched-to concepts: each differs from the current one; with return_prob a switch
+    returns to an EARLIER concept of the episode, else a new one (curriculum weights if given)."""
+
     seq, seen = [first], [first]
     for _ in range(k):
         back = [x for x in seen if x != seq[-1]]
@@ -424,8 +465,59 @@ def switch_schedule(
                    else rng.choice(cand))
         seq.append(nxt)
         seen.append(nxt)
-    bounds = [0, *cuts, turns]
-    return [seq[j] for j in range(k + 1) for _ in range(bounds[j], bounds[j + 1])]
+    return seq
+
+
+def budget_action(b: dict, t: int, turns: int, off: list[bool], judged: bool,
+                  passed: bool) -> str | None:
+    """Turn budget (final.turn_budget, 10-19): after turn t of a monitored episode, what happens
+    at t + 1. b = spec.budget (mutated: pt = judged turns of the active probe, k = current segment
+    index into seq, done). off[u] = turn u is unjudged (monitor-OFF). Returns
+      "refit"    passed, and >= R judged turns remain before the segment's hard edge
+      "switch"   next concept from t + 1 (passed without runway, a loss after M judged turns, or
+                 the forced first switch at turn T - S); only with >= S turns left
+      "end"      no new probe fits: turns t + 1.. are an unjudged tail
+      "continue" same probe next turn
+    None once the episode has ended or at its last turn. The first segment of a switching episode
+    has its hard edge at T - S until it switches, so the first switch is guaranteed."""
+
+    if b["done"] or t >= turns - 1:
+        return None
+    if judged:
+        b["pt"] += 1
+    owed = b["k"] == 0 and len(b["seq"]) > 1  # the guaranteed switch has not happened yet
+    edge = turns - b["S"] if owed else turns
+    runway = sum(1 for u in range(t + 1, edge) if not off[u])
+    can_switch = b["k"] + 1 < len(b["seq"]) and turns - (t + 1) >= b["S"]
+    if passed:
+        act = "refit" if runway >= b["R"] else ("switch" if can_switch else "end")
+    elif judged and b["pt"] >= b["M"]:
+        act = "switch" if can_switch else "end"
+    elif owed and t + 1 >= edge:
+        act = "switch"
+    else:
+        act = "continue"
+    if act in ("refit", "switch"):
+        b["pt"] = 0
+    if act == "switch":
+        b["k"] += 1
+    if act == "end":
+        b["done"] = True
+    return act
+
+
+def budget_switch(spec: EpisodeSpec, t_next: int) -> str:
+    """Apply a budget switch: from t_next on, monitor (and show texts of) spec.budget's next
+    concept, with fresh texts from its pool. Returns the new concept."""
+
+    b = spec.budget
+    c = b["seq"][b["k"]]
+    mt = spec.meta["monitored_turns"]
+    for u in range(t_next, len(mt)):
+        mt[u] = c
+        spec.texts[u] = b["pools"][c][b["used"][c]]
+        b["used"][c] += 1
+    return c
 
 
 def schedule_texts(

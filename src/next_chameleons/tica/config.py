@@ -157,6 +157,20 @@ class FinalConfig:
     switch_min_segment: int = 3  # turns per concept segment (>= 3: fail, pass, re-caught)
     switch_max: int = 2  # switches per switching episode (as many as fit)
     switch_return_prob: float = 0.25  # P(a switch returns to an earlier concept of the episode)
+    # TURN BUDGET (10-19, default off): switch points follow the race instead of being drawn
+    # in advance (episodes.budget_action). Every probe (first probe, refit, switch probe) is
+    # deployed only with >= budget_min_runway judged turns before the next hard boundary, and
+    # stands at most budget_max_turns judged turns (not beaten by then = a loss -> switch, or the
+    # episode ends). No cap on refits per segment. A switching episode's first segment ends by
+    # turn T - budget_switch_seg, so its first switch is guaranteed and gets >= budget_switch_seg
+    # turns; later switches only after a loss / a pass without runway, with >= budget_switch_seg
+    # turns left (up to switch_max). Once no new probe fits, the remaining turns are an unjudged
+    # tail without loss (shown "Monitor: OFF"). concept_switch_prob = share of real_score episodes
+    # with switches; switch_min_segment is unused.
+    turn_budget: bool = False
+    budget_min_runway: int = 5
+    budget_max_turns: int = 8
+    budget_switch_seg: int = 8
 
 
 @dataclass
@@ -234,6 +248,10 @@ class RunConfig:
             f = self.final
             kw.update(switch_prob=f.concept_switch_prob, switch_min_segment=f.switch_min_segment,
                       switch_max=f.switch_max, switch_return_prob=f.switch_return_prob)
+        if self.final.turn_budget:
+            f = self.final
+            kw.update(budget={"R": f.budget_min_runway, "M": f.budget_max_turns,
+                              "S": f.budget_switch_seg})
         return kw
 
     def rounds_config(self) -> RoundsConfig:

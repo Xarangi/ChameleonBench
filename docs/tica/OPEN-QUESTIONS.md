@@ -11,7 +11,7 @@ measurable, which suggests the GPU is already busy during reads. See RESULTS §3
 
 | Option | Expected gain | Cost | Changes results? |
 |---|---|---|---|
-| **Data-parallel episodes**: each GPU runs its own episodes and refits, then the gradients are all-reduced; the bandit and turn-0 state are shared (`docs/tica-other-hpc.md` option D) | ~1.6-1.8× on 2 GPUs, ~3-3.5× on 4 | 1-2 days | No (same protocol) |
+| **Data-parallel episodes**: each GPU runs its own episodes and refits, then the gradients are all-reduced; the bandit and turn-0 state are shared (`docs/tica-other-hpc.md` option D) | Modelled from v3b step-500 logs: ~1.5× on 2 GPUs, ~2.0× on 4 (the step waits for the slowest GPU's refits; perfect balance 1.8× / 3.2×) | **BUILT 10-19** (`TICA_DP=N`; CPU-tested: 2 ranks = 1 process, also with the turn budget). GPU smoke not run yet | No (same protocol; per-episode RNG streams, so not draw-for-draw equal to an old 1-GPU run) |
 | **Rollout reuse** (`updates_per_rollout`, f0db642, default 1): K gradient updates per rollout | Up to ~2.5× more updates per hour at K = 3, if each extra update stays useful | Built and tested from s500 (10-19a): **no gain**; k2-k4 equal within noise, retry pass falls with K (0.40 / 0.37 / 0.34). Not in v4. Untested in the steep phase (s140-300) | Yes: extra updates fit a stale rollout (loss -5% / -10% within a rollout) |
 | H100 instead of A100 | ~1.5-2× on reads and backward | none | No |
 | Bigger read batches / `micro_batch: 2` on 80 GB | Small (batch 16 did nothing on A100) | config | No |
@@ -27,6 +27,14 @@ measurable, which suggests the GPU is already busy during reads. See RESULTS §3
 Verify any speed-up the usual way: same draws, probe outputs agree within rounding.
 
 ## 2. v4 run settings
+
+- **Episodes / turn budget (decided 10-19, built, REPLICATION 10-19b).** 24 turns; every probe >= 5 judged turns of runway
+  and <= 8; no refit cap; first switch guaranteed by turn 16 (>= 8 turns for the new concept); later switches after a
+  loss; unjudged tail once no new probe fits. In the v4 config. Reference: v3b s500 under the same rules (6338434).
+- **Free generation (open, 10-19b).** Training and races teacher-force the answer. Free-generation races (s500 and base,
+  ON / no-brief) + 27B judge test whether the dodge holds on the model's own text and whether the concept and the task
+  survive. If passes come with the concept missing (avoidance), or are much rarer than forced (forced-only skill),
+  add free-answer episodes to v4 BEFORE launch.
 
 - **Step count.**
   - Held-out transfer stopped improving after ~s340: the held-out race at s500 equals s340 (0.78 / 0.52 / 0.162 vs

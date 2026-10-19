@@ -273,6 +273,8 @@ from next_chameleons.tica.episodes import (  # noqa: E402
     MONITOR_OFF,
     MONITOR_ON,
     MONITOR_SWITCH,
+    budget_action,
+    budget_switch,
     render_feedback,
 )
 from next_chameleons.tica.level1 import opening  # noqa: E402
@@ -908,10 +910,22 @@ class AdaptiveSupervisedTrainer:
         off = ctx["off"] if ctx is not None else [
             [d and t >= 1 and self.rng.random() < acfg.off_turn_prob for t in range(T)]
             for d in dodging]
+        # Turn budget (final.turn_budget, 10-19): switch points follow the race (_budget_step);
+        # tail[i][t] = turns after the episode's last probe (shown "Monitor: OFF"; no loss, no
+        # stats). Specs without a budget never change either.
+        tail = [[False] * T for _ in specs]
+        free = getattr(self, "free_answers", None)  # eval only: the model writes its answers
+        gen_fin = None
         roll_tok = self._refit_token_layers(plp)
         for t in range(T):
-            for c, s in zip(convs, specs, strict=True):
-                c.append({"role": "assistant", "content": s.text(t)})
+            if free:  # tica_switch_eval --answers free (10-19b): greedy, read as a forced one
+                gens = pol.generate(convs, free["max_new"])
+                gen_fin = [g["finished"] for g in gens]
+                for c, g in zip(convs, gens, strict=True):
+                    c.append({"role": "assistant", "content": g["text"]})
+            else:
+                for c, s in zip(convs, specs, strict=True):
+                    c.append({"role": "assistant", "content": s.text(t)})
             if acfg.first_probe in ("fork", "switch_fork") and ep_mode:
                 # create this turn's new defenders (fork-fit first probes) BEFORE the read, so a
                 # first probe at a layer nothing else reads (e.g. linear@26) is read this turn
@@ -945,8 +959,12 @@ class AdaptiveSupervisedTrainer:
                                          "name": base_mon.name},
                            "active_monitor": dfd.active, "turn": t, "off": True, "concept": c,
                            "heldout_det": det_ho, "deployed": list(dep_by[i][c])}
-                    ep_stats["off"] += 1
-                    ep_stats["off_det"] += det
+                    if tail[i][t]:
+                        res["tail"] = True
+                    else:
+                        ep_stats["off"] += 1
+                        ep_stats["off_det"] += det
+                    self._budget_step(s, i, t, off, tail, judged=False, passed=False)
                     shown, shown_cond = (0.0, 1.0), "none"
                 elif dfd is not None:
                     self._ep_acts[(i, t)] = pooled[plp][i : i + 1].detach()
@@ -1008,13 +1026,18 @@ class AdaptiveSupervisedTrainer:
                         th = read["thr"]
                         shown = (th - 1.0, th) if read["detected"] else (th + 1.0, th)
                     shown_cond = s.cond
+                    bact = self._budget_step(s, i, t, off, tail, judged=True,
+                                             passed=obs["passed"])
                     if ep_mode and obs["passed"]:
                         if (i, c) in last_refit:
                             ep_stats["recov"].append(t - last_refit.pop((i, c)))
                         catcher = None
-                        if t < T - 1 and acfg.episode_bank_first:
+                        if t < T - 1 and acfg.episode_bank_first and bact != "end":
                             catcher = dfd.best_catcher(pooled, i)  # a member that catches it
-                        if catcher is not None:  # quick mode: switch, no fork
+                        if bact == "end":  # turn budget: no new probe fits; the rest is a tail
+                            dfd.active = read["name"]
+                            res["episode_refit"] = "end"
+                        elif catcher is not None:  # quick mode: switch, no fork
                             dfd.active, dfd.stage_turn = catcher, 0
                             ep_stats["switch"] += 1
                             last_refit[(i, c)] = t
@@ -1101,6 +1124,8 @@ class AdaptiveSupervisedTrainer:
                     elif s.cond == "neg_text":
                         self.refit_buf.add("neg", pooled, i, cap)
                     shown, shown_cond = (0.0, 1.0), s.cond
+                if gen_fin is not None:
+                    res["gen_finished"] = gen_fin[i]
                 tr.convs.append([dict(x) for x in convs[i]])
                 tr.results.append(res)
                 if t < T - 1:
@@ -1156,13 +1181,18 @@ class AdaptiveSupervisedTrainer:
             if v:
                 metrics_sw = sum(v) / len(v)
                 ep_stats[f"sw_{k}"] = metrics_sw
+        n_tail = sum(bool(r.get("tail")) for tr in trajs_all for r in tr.results)
         metrics = {
-            "pass_rate": len(passed_turn) / max(1, n_dodge * T),
+            "pass_rate": len(passed_turn) / max(1, n_dodge * T - n_tail),
             "mean_pass_turn": (sum(passed_turn) / len(passed_turn))
             if passed_turn
             else float("nan"),
             "bank_size": len(pool.entries) if ctx is None else ctx["bank_size"],
         }
+        bud = [tr.spec.budget for tr in trajs_all if tr.spec.budget is not None]
+        if bud:  # turn budget: share of unjudged tail turns, switches made
+            metrics["budget_tail_frac"] = n_tail / max(1, n_dodge * T)
+            metrics["budget_switches"] = sum(b["k"] for b in bud)
         metrics.update({k: v for k, v in ep_stats.items() if k.startswith("sw_")})
         for kind, (cg, jd) in self.kind_stats.items():
             metrics[f"kind_catch_{kind}"] = round(cg / max(1, jd), 3)
@@ -1808,7 +1838,8 @@ class AdaptiveSupervisedTrainer:
                     "thr": None if mon.get("thr") is None else round(float(mon["thr"]), 4),
                     "by": mon.get("name"), "heldout_det": r.get("heldout_det"),
                     "off": bool(r.get("off")), "n_deployed": len(r.get("deployed") or []),
-                    "refit": r.get("episode_refit"), "tried": r.get("refit_kinds_tried")})
+                    "refit": r.get("episode_refit"), "tried": r.get("refit_kinds_tried"),
+                    **({"tail": True} if r.get("tail") else {})})
         if rows and self.rank == 0:  # data-parallel: rank 0 holds every episode
             self.out.mkdir(parents=True, exist_ok=True)
             with open(self.out / "turns.jsonl", "a") as f:
@@ -1974,6 +2005,21 @@ class AdaptiveSupervisedTrainer:
                     out.update(int(x) for x in acfg.kind_layers)  # factored: any train depth
         return sorted(out)
 
+    def _budget_step(self, s, i, t, off, tail, *, judged, passed):
+        """Turn budget (final.turn_budget): decide turn t + 1 (episodes.budget_action) and apply
+        it -- a switch rewrites the spec's concept / texts from t + 1, an end turns the rest of the
+        episode into an unjudged tail. None for episodes without a budget."""
+
+        if s.budget is None:
+            return None
+        act = budget_action(s.budget, t, len(off[i]), off[i], judged, passed)
+        if act == "switch":
+            budget_switch(s, t + 1)
+        elif act == "end":
+            for u in range(t + 1, len(off[i])):
+                off[i][u] = tail[i][u] = True
+        return act
+
     def _targets(self, trajs):
         cfg = self.cfg.objective
         out = []
@@ -1983,6 +2029,8 @@ class AdaptiveSupervisedTrainer:
             seen_c: set[str] = set()  # concepts monitored on earlier turns of this episode
             for t, res in enumerate(tr.results):
                 c = res.get("concept", s.monitored)  # concept monitored at this turn
+                if res.get("tail"):  # turn budget: unjudged tail after the last probe, no loss
+                    continue
                 if s.cond in DODGE_CONDS and res.get("off"):  # monitor-off turn: act normal
                     out.append(Target(i, t, "monitored", res["monitored"]["name"], c,
                                       "off" if cfg.off_match_weight > 0 else "match"))
@@ -2050,6 +2098,8 @@ class AdaptiveSupervisedTrainer:
         acc = defaultdict(list)
         for tr in trajs:
             for r in tr.results:
+                if r.get("tail"):
+                    continue
                 tag = "t0" if r["turn"] == 0 else "tN"
                 acc[f"det_{tr.spec.cond}_{tag}"].append(float(r["monitored"]["detected"]))
                 acc[f"detturn_{tr.spec.cond}_{r['turn']}"].append(float(r["monitored"]["detected"]))

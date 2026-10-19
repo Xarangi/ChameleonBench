@@ -37,7 +37,9 @@ similar concepts are fine as separate concepts; no capability gate; nothing star
 3. **Curriculum**: cap relative to the number of options (e.g. 3x uniform) + curriculum share above
    0.5 (new optional field). Topics / languages / syntax: uniform over concepts == uniform over
    families at 3-5 members.
-4. **Episodes**: 20 turns, concept_switch_prob 0.35 (more 3rd / 4th probes; ~25% more per step).
+4. **Episodes** (10-19): 24 turns with the TURN BUDGET (final.turn_budget; REPLICATION 10-19b): every probe gets
+   >= 5 judged turns of runway and stands <= 8; no refit cap; first switch guaranteed by turn 16; later switches after
+   a loss; an unjudged tail once no new probe fits. Held-out races use the same rules.
 5. **off_match_weight 2.0**.
 6. **Steps**: from the slopes, deep layers ~0.7 and 2nd-refit ~0.6 need ~500-600 steps from scratch +
    the ~140-step start: plan 800 fixed steps, the final checkpoint is THE model (no selection on held-out).

@@ -66,6 +66,19 @@ def main():
                     help="override adaptive.first_probe (10-16i: fork = the first probe of every "
                          "concept is fit on the policy's own states at that turn)")
     ap.add_argument("--seed", type=int, default=1)
+    ap.add_argument("--turn-budget", default="",
+                    help="R,M,S: turn-budget episodes (final.turn_budget, 10-19): every probe gets "
+                         ">= R judged turns of runway and stands <= M; first switch by T - S. "
+                         "--switch-prob = share of episodes with switches; --min-seg unused")
+    ap.add_argument("--cond", default="real_score", choices=["real_score", "nobrief"],
+                    help="nobrief: the same requests without the monitor brief (control)")
+    ap.add_argument("--answers", default="forced", choices=["forced", "free"],
+                    help="free (10-19b): the model writes its own answer every turn (greedy); "
+                         "probes and refits read it as they read forced answers")
+    ap.add_argument("--answer-max", type=int, default=320, help="--answers free: max new tokens")
+    ap.add_argument("--gen-out", default="",
+                    help="--answers free: JSONL of answers + verdicts for tica_free_judge.py "
+                         "(scratch only: raw model text, never commit)")
     ap.add_argument("--out", required=True)
     a = ap.parse_args()
 
@@ -132,11 +145,13 @@ def main():
         for L, m in zip(layers, mons, strict=False):
             pool.add(m, round=0, family="concept_linear", held_out=L in held)
     pool = pool.to(pol.device)
+    budget = (dict(zip("RMS", (int(x) for x in a.turn_budget.split(",")), strict=True))
+              if a.turn_budget else None)
     sampler = EpisodeSampler(
         data.concepts("episode", splits, only=set(topics)), data.negatives("episode"), pool,
-        mix={"real_score": 1.0}, turns=a.turns, seed=a.seed, feedback=cfg.episodes.feedback,
+        mix={a.cond: 1.0}, turns=a.turns, seed=a.seed, feedback=cfg.episodes.feedback,
         switch_prob=a.switch_prob, switch_min_segment=a.min_seg, switch_max=a.max_switches,
-        switch_return_prob=a.return_prob)
+        switch_return_prob=a.return_prob, budget=budget)
     tcfg = dataclasses.replace(cfg.train, turns=a.turns, episodes_per_step=a.batch,
                                seed=a.seed)
     asc = AdaptiveSupervisedConfig(
@@ -149,6 +164,9 @@ def main():
         roots_only=set(topics), prompts=fmt,
         hard_neg={c: data.hard_negatives(c, "fit") for c in topics})
     tr.falsify = a.falsify
+    if a.answers == "free":
+        tr.free_answers = {"max_new": a.answer_max}
+    gen_f = open(a.gen_out, "w") if a.gen_out else None  # noqa: SIM115
     # eval only: refits MAY sit at the held-out layers (linear@20 / @24 are held-out probe kinds);
     # training excludes them so that they stay held out
     tr._heldout_layers = lambda: set()
@@ -172,6 +190,20 @@ def main():
         with ctx, mctx:
             trajs, m = tr.rollout(specs)
         all_trajs.extend(trajs)
+        if gen_f is not None:
+            for j, trj in enumerate(trajs):
+                for t, r in enumerate(trj.results):
+                    if r.get("tail"):
+                        continue
+                    conv = trj.convs[t]
+                    gen_f.write(json.dumps({
+                        "ep": b + j, "turn": t, "cond": trj.spec.cond,
+                        "concept": r.get("concept", trj.spec.monitored),
+                        "off": bool(r.get("off")), "detected": bool(r["monitored"]["detected"]),
+                        "passed": not r["monitored"]["detected"],
+                        "finished": r.get("gen_finished"),
+                        "answer": conv[-1]["content"], "user": conv[-2]["content"]}) + "\n")
+            gen_f.flush()
         tr.pool.entries = [e for e in tr.pool.entries if e.monitor.name not in set(tr._transient)]
         tr._transient = []
         for k_, v_ in m.items():
@@ -187,6 +219,8 @@ def main():
             n_sw += sum(x != y for x, y in itertools.pairwise(mt))
             start = 0
             for t, r in enumerate(trj.results):
+                if r.get("tail"):  # turn budget: unjudged tail after the last probe
+                    continue
                 if t > 0 and mt[t] != mt[t - 1]:
                     if seg_open:  # previous segment ended unbeaten (censored)
                         seg_beat.append((t - start, False))
@@ -211,7 +245,8 @@ def main():
     mean = lambda v: sum(v) / len(v) if v else None  # noqa: E731
     rep = {"config": a.config, "adapter": a.adapter, "base": a.base, "topics": topics,
            "episodes": a.episodes, "turns": a.turns, "switch_prob": a.switch_prob,
-           "falsify": a.falsify,
+           "falsify": a.falsify, "turn_budget": budget, "cond": a.cond, "answers": a.answers,
+           "answer_max": a.answer_max if a.answers == "free" else None,
            "min_seg": a.min_seg, "return_prob": a.return_prob,
            "kind": cfg.rl.adaptive.episode_refit_kind, "base_probe_quality": quality,
            "base_probe_failed": failed, "data": cfg.data,
@@ -246,6 +281,8 @@ def main():
            **beat_summary([{"kind": "segment", "turns": n, "beaten": b}
                            for n, b in seg_beat], prefix="segbeat_"),
            "sec": round(time.time() - t0)}
+    if gen_f is not None:
+        gen_f.close()
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(json.dumps(rep, indent=1))
     print(json.dumps({k: rep[k] for k in ("pass_rate_after_first_turn",
