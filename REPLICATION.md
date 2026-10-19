@@ -5,6 +5,15 @@ checkpoints, observed results, and unresolved limitations.
 
 TICA on a new machine: start at docs/tica/README.md (results digest, run ledger, open questions, aggregate snapshot).
 
+## 2026-10-19j CORRECTION: math arms learn k1 (static base dodge), not k2+ (refits); still early
+- 10-19i read "pass(t>=1) ~0" as "not learning". By probe index (turns.jsonl, real_score, monitored):
+  k1_first (turn-0 base probe) beaten per 20 steps: full arm 0/89, 15/93, 50/96, 95/95 (s61-80), 36/39; minimal
+  0/89, 0/93, 0/96, 10/95, 93/93 (s81-100), 36/36. Refits after a turn-0 pass: ~2,500 refit-probe turns per arm,
+  pass 0.00 for EVERY kind (ensembles, attn / max pool, single-layer linear @8-26; best linear@12 0.01-0.02).
+  So both arms learn the static dodge of the base probe in ~60-80 steps; no refit has been beaten yet. Refits only
+  began at s21-60, so the arms have ~30-50 steps of refit exposure (v3b k2 took off around s80-140 overall).
+  Not yet evidence that KL / cap_gen block math; read again at s200.
+
 ## 2026-10-19i Base probes DO catch the base model's own answers (with eliciting requests); math-only arms ~0; no-KL arm
 - Probe transfer (6392489; base model, no brief, v5 held-out, 32 answers / concept at T 0.7, 10-19f requests): base
   probe TPR on FREE answers 0.91-1.00 for every non-deception concept (forced 1.00), FPR on other concepts' free
