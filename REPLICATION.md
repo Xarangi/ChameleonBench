@@ -5,6 +5,19 @@ checkpoints, observed results, and unresolved limitations.
 
 TICA on a new machine: start at docs/tica/README.md (results digest, run ledger, open questions, aggregate snapshot).
 
+## 2026-10-19n DEPTH PANEL hide term (default off) + universal math-hider fast run
+- objective.panel_weight + adaptive.panel_layers (default 0 / []): the answer-format base probes are also fit at the
+  panel layers (training layers only; config refuses held-out ones) and join the pool as family "panel" (never an
+  episode monitor, selectivity or held-out readout: MonitorPool.trainable / concept_monitor(s) skip it). On every
+  monitored HIDE turn each panel probe of the concept is a "panel" target with its own mean and weight
+  (loss = ... + panel_weight * mean p^2). tests/test_tica_depth_panel.py (4). (Mistake caught: the first write
+  overwrote tests/test_tica_panel.py; restored from git, new tests in their own file.)
+- final_v4_math_univ_4b (+ builtin; user 10-19: "universal math hider across probes and refits ... lr 3e-4 ... fast
+  initial signals"): pursuit off, turn 0 = fresh fork-fit zoo probe, refit zoo 8-26, panel at 8 / 16 / 22 / 26
+  (weight 0.5), episode KL 1.0 + retain anchor 0.5 (no cap_gen, lm 0), retry ladder, CONSTANT LR 3e-4 (lr_peak 0),
+  150 steps. Job 6428268.
+- Test runs: this repo's pytest config prints no summary under -q; exit 0 = pass (83 passed in the related files).
+
 ## 2026-10-19m Pursuit OFF (v4 + new math arms); Bailey ensembles read all layers; zoo-judged turn 0 arm
 - Pursuit / stay (motion conditional, on since 10-11 in every config) act on the PRIMARY layer only (supervised.py
   _ep_acts = pooled[plp], plp = base probe layer 12); never ablated against the refit zoo. User 10-19: off.

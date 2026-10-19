@@ -250,6 +250,9 @@ def main() -> None:
             prompts = fmt_prompts("answer", cfg.episodes.inputs, cfg.episodes.layout)
             held = [int(x) for x in cfg.probes.held_out_layers]
             layers = [cfg.primary_layer()] + [h for h in held if h != cfg.primary_layer()]
+            # depth panel (adaptive.panel_layers, 10-19n): extra base probes, family "panel"
+            panel = [int(x) for x in cfg.rl.adaptive.panel_layers if int(x) not in layers]
+            layers += panel
             multi = len(cfg.episode_concepts) > 1
             pool = MonitorPool()
             # Multi-concept (topic base, REPLICATION 10-14p): one base probe set per TRAIN concept,
@@ -265,7 +268,8 @@ def main() -> None:
                     print(json.dumps({"answer_base_probes": quality, "concept": concept}),
                           flush=True)
                     for L, m in zip(layers, mons, strict=True):
-                        pool.add(m, round=0, family="concept_linear", held_out=L in held)
+                        pool.add(m, round=0, family="panel" if L in panel else "concept_linear",
+                                 held_out=L in held)
                 pool.save(out / "answer_pool")
             if data_parallel:
                 dp.barrier()

@@ -57,6 +57,11 @@ class ObjectiveConfig:
     # ladder[min(n, len) - 1] (n = 0, a first try or a turn after a pass, keeps 1.0). Feedback about
     # the probe accumulates with every catch, so later retries can be weighted more.
     retry_hide_ladder: tuple[float, ...] = ()
+    # Depth PANEL (REPLICATION 2026-10-19n; default 0 = off): weight of a hide term on fixed BASE
+    # probes at adaptive.panel_layers, on every monitored hide turn (role "panel", its own mean).
+    # The active probe and the refits stay the main targets; the panel pushes the dodge to spread
+    # over depth (math arms 10-19: dodged layer-12 refits only, other depths stayed readable).
+    panel_weight: float = 0.0
 
 
 @dataclass(frozen=True)
@@ -165,7 +170,9 @@ def loss_terms(
     # "motion" targets carry no probe loss (only the caller's motion terms): neither hide nor match.
     match = torch.tensor([r == "match" for r in roles], device=p.device, dtype=torch.bool)
     off = torch.tensor([r == "off" for r in roles], device=p.device, dtype=torch.bool)
+    panel = torch.tensor([r == "panel" for r in roles], device=p.device, dtype=torch.bool)
     n_h, n_m, n_o = int(hide.sum()), int(match.sum()), int(off.sum())
+    n_p = int(panel.sum())
     n_v = int(nll.numel()) if nll is not None else 0
     t = totals or {"hide": n_h, "match": n_m, "off": n_o, "views": n_v}
     zero = p.sum() * 0.0
@@ -180,6 +187,7 @@ def loss_terms(
         hide_denom = t["hide"]
     s_match = ((p[match] - p_ref[match]) ** 2).sum() if n_m else zero
     s_off = ((p[off] - p_ref[off]) ** 2).sum() if n_o else zero
+    s_panel = (p[panel] ** 2).sum() if n_p else zero
     s_lm = nll.sum() if nll is not None else zero
     # Progress term: a hide turn is penalised for being WORSE than the same episode's previous
     # turn. prev_p is a constant from the rollout, so the gradient flows only through p_t.
@@ -194,6 +202,7 @@ def loss_terms(
         + cfg.off_match_weight * s_off / max(1, t.get("off", n_o))
         + cfg.improve_weight * s_imp / max(1, t["hide"])
         + cfg.lm_weight * s_lm / max(1, t["views"])
+        + cfg.panel_weight * s_panel / max(1, t.get("panel", n_p))
     )
     stats = {
         "hide_sq": float(s_hide.detach()),
@@ -206,6 +215,9 @@ def loss_terms(
         "n_hide": n_h,
         "n_match": n_m,
         "n_views": n_v,
+        "panel_sq": float(s_panel.detach()),
+        "panel_p": float(p[panel].sum().detach()) if n_p else 0.0,
+        "n_panel": n_p,
     }
     return total, stats
 
@@ -224,6 +236,9 @@ def summarize_stats(acc: dict[str, float]) -> dict[str, float]:
         "nll": acc["nll"] / nv if nv else nan,
         "n_hide": nh,
         "n_match": nm,
+        **({"panel_mse": acc["panel_sq"] / acc["n_panel"],
+            "panel_p": acc["panel_p"] / acc["n_panel"], "n_panel": acc["n_panel"]}
+           if acc.get("n_panel") else {}),
     }
 
 

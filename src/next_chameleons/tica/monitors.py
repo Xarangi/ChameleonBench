@@ -370,7 +370,10 @@ class MonitorPool:
         raise KeyError(name)
 
     def trainable(self, concept: str | None = None) -> list[PoolEntry]:
-        return [e for e in self.entries if not e.held_out and e.monitor.covers(concept)]
+        # family "panel" (objective.panel_weight): fixed base probes used ONLY as extra hide
+        # targets, never an episode's monitor, a selectivity readout or a held-out readout
+        return [e for e in self.entries if not e.held_out and e.family != "panel"
+                and e.monitor.covers(concept)]
 
     def sample(self, rng: random.Random, concept: str | None) -> PoolEntry:
         """Uniform over trainable monitors that cover `concept`."""
@@ -387,6 +390,7 @@ class MonitorPool:
             if (
                 isinstance(e.monitor, ConceptProbeBank)
                 and not e.held_out
+                and e.family != "panel"
                 and e.monitor.covers(concept)
             ):
                 return e.monitor
@@ -400,8 +404,15 @@ class MonitorPool:
             for e in self.entries
             if isinstance(e.monitor, ConceptProbeBank)
             and not e.held_out
+            and e.family != "panel"
             and e.monitor.covers(concept)
         ]
+
+    def panel(self, concept: str) -> list[str]:
+        """Names of the depth-panel probes (family "panel") covering `concept`."""
+
+        return [e.monitor.name for e in self.entries
+                if e.family == "panel" and e.monitor.covers(concept)]
 
     @property
     def layers(self) -> list[int]:

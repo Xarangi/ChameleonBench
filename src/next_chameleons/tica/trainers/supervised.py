@@ -170,6 +170,7 @@ class SupervisedTrainer:
             "hide": sum(tg.role == "hide" for tg in targets),
             "match": sum(tg.role == "match" for tg in targets),
             "off": sum(tg.role == "off" for tg in targets),
+            "panel": sum(tg.role == "panel" for tg in targets),
             "views": len(views),
         }
         loss_sum = 0.0
@@ -2081,6 +2082,9 @@ class AdaptiveSupervisedTrainer:
                                           prev_p=prev if name == mon else None,
                                           retry=retry and name == mon and r == "hide",
                                           retry_n=n_retry if name == mon and r == "hide" else 0))
+                    if role == "hide" and cfg.panel_weight > 0:  # depth panel (10-19n)
+                        out.extend(Target(i, t, "panel", name, c, "panel")
+                                   for name in self.pool.panel(c))
                     seen.update(names)
                     seen_c.add(c)
                 elif s.cond in ("nobrief", "neg_text"):
@@ -2196,6 +2200,7 @@ class AdaptiveSupervisedTrainer:
             "hide": sum(tg.role == "hide" for tg in targets),
             "match": sum(tg.role == "match" for tg in targets),
             "off": sum(tg.role == "off" for tg in targets),
+            "panel": sum(tg.role == "panel" for tg in targets),
             "views": len(keys),
         }
         # Turn-weighted hide: fail-early-cheap, dodge-late-expensive (iteration). Weight per hide

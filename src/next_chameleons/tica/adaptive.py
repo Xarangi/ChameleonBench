@@ -327,6 +327,10 @@ class AdaptiveConfig:
     # first probe (fresh, fit on the policy's own states) instead of the fixed base probe, which the
     # model learns to dodge statically. Before it: the base probe (avoids v3's cold start).
     first_probe_fork_from_step: int = 0
+    # Depth PANEL layers (10-19n; [] = off; used with objective.panel_weight > 0): the answer-format
+    # base probes are also fit at these layers (training layers only, never held-out ones) and join
+    # the pool as family "panel": extra fixed hide targets on every monitored hide turn.
+    panel_layers: list = field(default_factory=list)
     # neg_labels (10-16h; tica/neg_labels.py): LLM-judge label file; texts judged to HAVE concept c
     # (p_yes >= neg_label_thr) are never negatives for c (base probes + refit forks). "" = off.
     neg_labels: str = ""

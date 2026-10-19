@@ -100,7 +100,7 @@ def test_bailey_max_fires_if_any_layer_fires():
     xs = {L: P[L][:2] for L in Ls}
     assert (mx.logits(xs) >= mean.logits(xs) - 1e-6).all()
     band = z.kind_layers("bailey_ens_tok_max", 12)
-    assert min(band) == 4 and max(band) == 28 and 20 in band and 24 in band  # 10-19: held-out depths back in
+    assert min(band) == 4 and max(band) == 28 and 20 in band and 24 in band  # 10-19: all depths
 
 
 def test_merged_reads_match_and_restore_exactly():
