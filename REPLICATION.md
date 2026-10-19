@@ -5,6 +5,21 @@ checkpoints, observed results, and unresolved limitations.
 
 TICA on a new machine: start at docs/tica/README.md (results digest, run ledger, open questions, aggregate snapshot).
 
+## 2026-10-19h Step-time audit; capability-term ablation (math-only, minimal set); language script check
+- Step time (v3b, last 40 steps): 390 s = rollout 346 (branch refits 337: ~19 refits / step x ~17 s; reads 221, fits
+  116) + train 44 + cap_gen 27 + anchor 2. Early steps (0-60): ~105 s (0.4-1.2 refits / step). Step time tracks the
+  number of PASSES (one refit each); the capability terms are ~8%. The 10-19g "2 h for 20 steps" estimate used late
+  step times: wrong, ~35-40 min early.
+- Capability terms were never ablated one by one. Math-only minimal arm final_v4_math_min_4b (+ builtin):
+  identical to final_v4_math_4b except cap_gen OFF and lm_weight 0 (kept: episode KL 1.0, anchor 0.5, match 2.0).
+  Jobs 6404994 (+ resume 6404995). Read: pass by turn + GSM8K / MMLU with and without the brief afterwards.
+- Language scripts (requests minus the added line; passages): Japanese / Arabic / Tamil 1.00 / 1.00; Russian,
+  Greek 0.99; Thai 0.98; Hindi requests 0.93 (passages 1.00). Latin: French / Portuguese / Turkish requests in the
+  language (English function words 0.00); NC German / Finnish requests are English (0.62 / 0.65) -> the added
+  "Respond in <L>." is what asks for the language. Low 27B "natural" for Tamil / Thai is not a script problem.
+- JavaScript requests = "Write a JavaScript function `name`: " + the raw JSDoc comment (/*!, @param {T} ...): clear
+  to a programmer, unnatural as a user message.
+
 ## 2026-10-19g Math-only run on the v4 recipe (capability terms ON); format answer-form lines; per-text data audit
 - No math run ever had the capability terms (no math config sets kl_weight / anchor_weight; KL added 10-15b).
   configs/tica/final_v4_math_4b.yaml (+ builtin, split final_split_v5_math.json = train math only): v4 recipe with
