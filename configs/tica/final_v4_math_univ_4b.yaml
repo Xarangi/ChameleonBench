@@ -1,6 +1,7 @@
 # UNIVERSAL MATH HIDER, fast-signal run (REPLICATION 2026-10-19n; user 10-19: "train a universal math hider across
 # probes and refits ... lr 3e-4 like v3b ... initial signals fast"). = final_v4_math_univ_4b (pursuit off, turn 0
-# judged by a fresh zoo probe, refit zoo at 8-26, minimal capability set: episode KL 1.0 + retain anchor 0.5) +
+# judged by a fresh in-training-zoo probe, refit with the in-training zoo at 8-26; held-out kinds / depths stay out)
+# with v4's FULL capability set (episode KL 1.0, retain anchor 0.5, GSM8K-while-hiding 0.5 + KL 1.0, lm 0.1) +
 # DEPTH PANEL: fixed base probes at layers 8 / 16 / 22 / 26 as extra hide targets (weight 0.5) on every monitored
 # hide turn + CONSTANT LR 3e-4 (no decay), 150 steps.
 # ZOO-TURN-0 arm (REPLICATION 2026-10-19m; user 10-19: turn 0 should be judged by the in-training zoo, not one
@@ -64,7 +65,7 @@ train:
   save_state: true  # 10-18: Adam moments + curriculum + RNG restored across resume chunks (no re-warmup)
   seed: 0
   # 10-16i: no pinning; the first probe of every concept is fit on the policy itself (first_probe)
-  objective: {hide_weight: 1.0, retry_hide_ladder: [2.0, 3.0, 4.0], match_weight: 2.0, panel_weight: 0.5, lm_weight: 0.0, hide_from_turn: 0, pin_first_turn: false,
+  objective: {hide_weight: 1.0, retry_hide_ladder: [2.0, 3.0, 4.0], match_weight: 2.0, panel_weight: 0.5, lm_weight: 0.1, hide_from_turn: 0, pin_first_turn: false,
               pin_segment_first: false}
 rl:
   adaptive:
@@ -144,8 +145,8 @@ rl:
     anchor_pool: 256
     anchor_max_new: 256
     anchor_cache: /scratch/sneheel/next_chameleons_artifacts/tica/runs/final_v4_math_univ_4b/anchor_cache.json  # shared by resume chunks
-    cap_gen_weight: 0.0       # ablation: off
-    cap_gen_kl_weight: 0.0    # ablation: off
+    cap_gen_weight: 0.5       # restored (v4): solve GSM8K while hiding
+    cap_gen_kl_weight: 1.0
     cap_gen_kl_all: true
     cap_gen_episodes: 4
     cap_gen_samples: 2

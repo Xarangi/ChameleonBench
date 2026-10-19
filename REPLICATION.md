@@ -5,6 +5,16 @@ checkpoints, observed results, and unresolved limitations.
 
 TICA on a new machine: start at docs/tica/README.md (results digest, run ledger, open questions, aggregate snapshot).
 
+## 2026-10-19o Universal math hider relaunched on 2 GPUs (DP) with the full v4 capability set + no-panel control
+- Refits / turn-0 probes = the IN-TRAINING zoo only (episode_refit_kinds at kind_layers 8-26); held-out kinds and
+  depths (20 / 24 / 28 / 30, gdm, mck, ens8, nc_ens8, bailey, spread5) stay out.
+- final_v4_math_univ_4b: cap_gen 0.5 + KL 1.0 and lm 0.1 RESTORED (the minimal arm showed they are not what blocks
+  math: full vs minimal both ~0.4% refit passes). Launched TICA_DP=2 (first GPU use of data-parallel episodes;
+  4 episodes per rank): 6428983. Control final_v4_math_univ_nopanel_4b (panel off, otherwise identical, 1 GPU):
+  6428984.
+- Stopped (signal in hand): nokl 6410942 (s~150: KL slows but is not the wall), nopur 6426690, zoo0 6426831 (both
+  subsumed by the univ pair). Superseded 1-GPU univ 6428268 cancelled before it started.
+
 ## 2026-10-19n DEPTH PANEL hide term (default off) + universal math-hider fast run
 - objective.panel_weight + adaptive.panel_layers (default 0 / []): the answer-format base probes are also fit at the
   panel layers (training layers only; config refuses held-out ones) and join the pool as family "panel" (never an
