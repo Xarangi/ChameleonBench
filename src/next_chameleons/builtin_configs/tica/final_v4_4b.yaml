@@ -71,7 +71,7 @@ rl:
     refit_C: 1.0
     refit_cv_folds: 5
     refit_max_bank: 24
-    pursuit: true
+    pursuit: false   # 10-19 (user): off -- it acts at the primary layer (12) only; never ablated vs the refit zoo
     motion: conditional
     stay_weight: 1.0
     stay_offset: true

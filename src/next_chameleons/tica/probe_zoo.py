@@ -797,7 +797,8 @@ def fit_lit(kind, P, N, *, name, layer, concept, g, device):
 # - nc_ens8_tok: Neural Chameleons obf_reps: per-layer token-level Linear(d,1), Adam lr 5e-4,
 #   wd 1e-5, eps 1e-5, batch 64 tokens, 5 epochs. Layers NOT STATED -> ours ENS_LAYERS["ens8"].
 # - bailey_ens_tok: Bailey obfuscated-activations TrainableMetric: Adam lr 1e-3, wd 1e-5, batch 64
-#   tokens, 1 epoch, ALL layers -> ours all 32 except the held-out eval layers 20 / 24.
+#   tokens, 1 epoch, ALL layers -> ours all 32 (10-19: 20 / 24 back in; it is an eval-only kind, so
+#   reading the held-out depths leaks nothing into training; was "all except 20 / 24").
 #   Deviation (memory): fork token states are an evenly spaced subset of <= TOK_KEEP tokens per
 #   answer per layer (training AND gate scoring); live turns are scored on all tokens.
 # ---------------------------------------------------------------------------------------------
@@ -805,7 +806,7 @@ MCK_KINDS = ("mck_attnlite", "mck_softmax", "mck_rollmean40")
 TOKENS_ENS_KINDS = TOKENS_ENS
 TOK_KEEP = 32
 TOKENS_ENS_LAYERS = {"nc_ens8_tok": ENS_LAYERS["ens8"],
-                     "bailey_ens_tok": [L for L in range(32) if L not in (20, 24)]}
+                     "bailey_ens_tok": list(range(32))}
 # bailey_ens_tok_max (10-15d): Bailey-style per-layer token probes, but the monitor fires if ANY
 # layer does (max over layers of the per-layer token-mean scores) instead of the layer average,
 # which hidden layers can outvote. Not in Bailey et al. Restricted to the band 4..28: with FORCED
@@ -814,7 +815,7 @@ TOKENS_ENS_LAYERS = {"nc_ens8_tok": ENS_LAYERS["ens8"],
 # policy cannot change) and the last ones are next-token specialised; under a max either end would
 # decide the verdict for reasons unrelated to concept hiding (and the noisiest layer sets the
 # threshold). Held-out eval layers 20 / 24 excluded as for bailey_ens_tok.
-TOKENS_ENS_LAYERS["bailey_ens_tok_max"] = [L for L in range(4, 29) if L not in (20, 24)]
+TOKENS_ENS_LAYERS["bailey_ens_tok_max"] = list(range(4, 29))
 
 
 class _MckNet(torch.nn.Module):

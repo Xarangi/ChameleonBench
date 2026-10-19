@@ -5,6 +5,18 @@ checkpoints, observed results, and unresolved limitations.
 
 TICA on a new machine: start at docs/tica/README.md (results digest, run ledger, open questions, aggregate snapshot).
 
+## 2026-10-19m Pursuit OFF (v4 + new math arms); Bailey ensembles read all layers; zoo-judged turn 0 arm
+- Pursuit / stay (motion conditional, on since 10-11 in every config) act on the PRIMARY layer only (supervised.py
+  _ep_acts = pooled[plp], plp = base probe layer 12); never ablated against the refit zoo. User 10-19: off.
+  final_v4_4b (+ builtin): pursuit false. Hypothesis for the math arms' layer-12-only dodge: both the turn-0 static
+  probe (L12 until s150) and pursuit act at L12. Caveat: v3b had the same L12 forces yet dodged topics at all depths.
+- New math arms (minimal capability set, 200 steps): final_v4_math_nopur_4b (pursuit off; 6426690) and
+  final_v4_math_zoo0_4b (pursuit off + first_probe fork: turn 0 = a fresh fork-fit zoo probe, kind + layer by
+  Thompson, from step 0; 6426831). Note: first_probe_fork_from_step 0 means OFF (fixed base probe), hence first_probe fork.
+  10-16r: v3's cold start was NOT caused by fork turn-0 probes (the base-probe bisection was equally stuck).
+- bailey_ens_tok reads all 32 layers, bailey_ens_tok_max 4-28 incl. 20 / 24 (eval-only kinds; was "except the
+  held-out depths"). test_tica_refit_speed updated.
+
 ## 2026-10-19l Prior-work comparison (setups, layers, defender) -> our refit defender is far stronger; layer proposal
 - Read from papers (agent report; details UNVERIFIED where noted): Neural Chameleons (2512.11949): 11 benign
   training concepts (German, HTML, Finnish, maths, ...), FIXED pre-generated data, loss lambda_LM 0.1 (KL to the base
