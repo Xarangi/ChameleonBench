@@ -5,6 +5,37 @@ checkpoints, observed results, and unresolved limitations.
 
 TICA on a new machine: start at docs/tica/README.md (results digest, run ledger, open questions, aggregate snapshot).
 
+## 2026-10-19b TURN BUDGET built (v4 on); free-generation races launched; baseline chain stopped
+- Problem (10-19): concept switch points were drawn when the episode was created, blind to the race. At steps 520-607,
+  33% of refits were never beaten before their concept ended (531 / 1625). In the s500 held-out race, 20 / 53 unbeaten
+  refits had < 5 turns. 82% of beaten refits were beaten within 5 turns; 96% within 9.
+- Built: final.turn_budget (default off; episodes.budget_action / budget_switch, rollout `_budget_step`).
+  - Every refit is deployed only with >= R judged turns before the segment's hard edge, and stands <= M judged turns.
+    Unbeaten after M = a loss -> switch, if >= S turns are left; else the episode ends.
+  - No cap on refits per segment.
+  - A switching episode's first segment ends by T - S, so its first switch is guaranteed and gets >= S turns.
+    Later switches come after a loss or a pass without runway, with >= S turns left, up to switch_max.
+  - Concept order (incl. returns) is drawn up front; texts are fresh per concept, never repeated.
+  - Once no new probe fits, the rest of the episode is an unjudged TAIL: shown "Monitor: OFF", no loss, excluded from
+    rollout metrics / pass rate / run_report; turns.jsonl rows carry "tail". Metrics budget_tail_frac, budget_switches.
+  - Tests: tests/test_tica_turn_budget.py (scenarios, 3000 random races for the invariants, sampler, rollout, v4).
+- v4 draft (user 10-19): turns 24, R 5 / M 8 / S 8, concept_switch_prob 1.0, switch_max 2. The held-out race in
+  eval_on_save uses the same rules (--switch-prob 1.0 --turn-budget 5,8,8). Not launched.
+- Reference race under the new rules: v3b s500, held-out, 56 ep, 24 turns, budget 5,8,8, switch prob 1.0 (6338434) ->
+  sanity_full/s500_budget_heldout.json. Old and new numbers are not directly comparable.
+- FREE-GENERATION race (user 10-19: "does it still do the thing while dodging?"). Training and every race so far
+  teacher-force the answer passage. New: tica_switch_eval.py --answers free (greedy answer each turn, read by the probes
+  and refits exactly like a forced answer), --cond nobrief (same requests, no monitor brief), --gen-out (answers JSONL
+  on scratch only). scripts/tica_free_judge.py (+ slurm/tica_free_judge.sh): 27B judge, aggregates only:
+  - concept present (v4 central-property label prompt);
+  - "relevant, coherent answer to the request";
+  - caps share, HTML tags, length;
+  - split by passed / caught (monitored turns >= 1), by cond, by concept.
+  Jobs (held-out, 56 ep, 24 turns, mixed kinds, no switches = the s500 forced race's args): s500 ON 6338430, s500
+  no-brief 6338431, base ON 6338432, base no-brief 6338433 -> final_v3b_4b/freegen/. The judge runs on the four JSONL.
+- Baseline v3b chain stopped (user 10-19: saturated): queued chunks 6198911 / 6198912 / 6214592 / 6315437 cancelled;
+  6198909 runs to its time limit (~step 640).
+
 ## 2026-10-19a Rollout reuse at s500: no gain, retry pass falls with K; baseline v3b to step ~605
 - Reuse branches done (reuse1 ctl 50 steps 6315432, reuse2 40 steps 6315433, reuse3 40 steps 6315434; all from s500,
   same draws). Training, steps 501-540 pooled, beaten by probe index (SE ~0.02-0.05) and retry pass:

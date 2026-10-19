@@ -28,6 +28,14 @@ Verify any speed-up the usual way: same draws, probe outputs agree within roundi
 
 ## 2. v4 run settings
 
+- **Episodes / turn budget (decided 10-19, built, REPLICATION 10-19b).** 24 turns; every probe >= 5 judged turns of runway
+  and <= 8; no refit cap; first switch guaranteed by turn 16 (>= 8 turns for the new concept); later switches after a
+  loss; unjudged tail once no new probe fits. In the v4 config. Reference: v3b s500 under the same rules (6338434).
+- **Free generation (open, 10-19b).** Training and races teacher-force the answer. Free-generation races (s500 and base,
+  ON / no-brief) + 27B judge test whether the dodge holds on the model's own text and whether the concept and the task
+  survive. If passes come with the concept missing (avoidance), or are much rarer than forced (forced-only skill),
+  add free-answer episodes to v4 BEFORE launch.
+
 - **Step count.**
   - Held-out transfer stopped improving after ~s340: the held-out race at s500 equals s340 (0.78 / 0.52 / 0.162 vs
     0.78 / 0.53 / 0.166), and the val pass rate has been flat since 360 (val 550: score 0.37, pass 0.147).

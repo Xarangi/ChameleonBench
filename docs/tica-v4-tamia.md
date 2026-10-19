@@ -80,3 +80,7 @@ done
 - Split v5 data + 27B labels: present on Narval (`final_v5_clean.json`, `final_v5_inputs.json`,
   `concept_labels_v5data_27b.json`; checked 10-19), so step 3 can pull them.
 - Turn-0 probe schedule; thinking-mode scope.
+- Turn budget (10-19): in the config (`final.turn_budget`, REPLICATION 10-19b). Check `budget_tail_frac` and
+  `budget_switches` in the smoke's train_log.jsonl; memory at 24 turns is still unmeasured.
+- Free-generation check (10-19b): if the s500 free-generation races show avoidance or a forced-only skill, v4 needs
+  free-answer episodes before launch (docs/tica/OPEN-QUESTIONS.md).
