@@ -258,6 +258,12 @@ class AdaptiveConfig:
     # updates; same random draws). bench 5820449: ens4_mlp gate 10.5 s -> 2.7 s. (Batched
     # logistic fits were tried and dropped: LBFGS is already as fast, 1.8 vs 1.7 s.)
     refit_batched_fits: bool = False
+    # episode_rng (10-19; default off = the original draws): per-episode RNG streams (seeded in
+    # episode order from the trainer RNG) for every in-rollout draw (defender, refit texts, refit
+    # kind), deterministic refit names (fit seeds) and one stream per shared turn-0 probe. An
+    # episode's draws then no longer depend on the other episodes, which is what data-parallel
+    # episodes need (tica/dp.py; always on when the world size is > 1).
+    episode_rng: bool = False
     # refit_switch_max (10-15g; user: "we don't want the quality fallback"): when a refit fails its
     # gate, fit up to this many OTHER probe types (prioritized draw without the failed ones) instead
     # of leaving the old, already-dodged probe in charge. 0 = the original fallback. Each attempt is

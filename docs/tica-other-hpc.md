@@ -171,7 +171,7 @@ which only speeds the backward, buys little. The levers are the refits and the g
 | **A. Pack 4 independent runs per node** (`tica_node.sh cfgA cfgB cfgC cfgD`) | none | 4× throughput vs one run per job | ablations, bisections, seeds (e.g. a 4-arm A/B/B1/B2 round = 1 node-hour) |
 | **B. Final run + local validation** (`tica_node.sh final val val -`, `tica_val_local.sh`) | none (done) | validation no longer queues separately; early stopping sees results sooner | the final run |
 | **C. Bigger read batches on 80 GB** (`model.batch_size` 8 -> 32, `episode_fork_batch`) + `micro_batch: 2` | config only | refit reads are the largest cost; maybe ~1.2-1.5x per step (measure) | every run |
-| **D. 4-GPU data-parallel episodes** (2 episodes per GPU, gradient all-reduce, shared bandit / turn-0 probe state). Parallelises the refits, the dominant cost | 1–2 days | ~3–3.5× per step for ONE run | the final run, if its wall-clock matters |
+| **D. Data-parallel episodes** (BUILT 10-19, `src/next_chameleons/tica/dp.py`; `TICA_DP=N` or `tica_node.sh CFG + ...`): each GPU runs episodes_per_step / N episodes with their refits, gradient all-reduce, bandits / pursuit / RNG kept identical. Parallelises the refits, the dominant cost | done | from the v3b step-500 logs: ~1.5× on 2 GPUs, ~2.0× on 4 (the step waits for the slowest rank; perfect balance would be 1.8× / 3.2×) | the final run, if its wall-clock matters |
 | **D2. GSM8K sampling on a spare GPU, one step ahead** (1-step-stale weights) | ~0.5 day | hides ~27 s (~13–20%) | with D or alone |
 | **E. Bigger model** (Qwen3.5-9B fits on 80 GB) | config + probe refit | — | after a clean 4B result |
 
@@ -184,8 +184,16 @@ which only speeds the backward, buys little. The levers are the refits and the g
   headline needs it, or the closest ablation.
 - Set `micro_batch: 2` after the smoke confirms memory.
 
-Use packed 4-config jobs (option A) for the remaining ablations. Option D is worth building only if
-we iterate on single long runs often; the 24 h limit is already met without it.
+Use packed 4-config jobs (option A) for the remaining ablations.
+
+**Data-parallel episodes (option D).** `TICA_DP=2 sbatch --gres=gpu:a100:2 --mem=128G
+--cpus-per-task=12 scripts/slurm/tica_l3covert.sh CFG` (single node; one process per GPU, rank 0
+logs / checkpoints / runs eval_on_save; resume chunks inherit `TICA_DP`). Whole node:
+`tica_node.sh CFG + val val` = CFG on GPUs 0-1, validation on 2-3. A data-parallel run always uses
+per-episode RNG streams (`adaptive.episode_rng`), so it does not reproduce a 1-GPU run of the same
+config draw for draw; `episode_rng: true` on 1 GPU does (tests/test_tica_dp.py). Not supported (the
+trainer refuses): episode_keep, episode_bank_first, adaptive best-catcher switching, exo_prob,
+prioritized kind sampling. Diagnostics computed from rank 0's episodes only: `reloc_auroc_*`.
 
 **Before the first real job:** run a 20-step smoke of the chosen config to measure step time and
 memory on H100. Use the node layout so the GPUs are not wasted: e.g.
@@ -196,4 +204,5 @@ memory on H100. Use the node layout so the GPUs are not wasted: e.g.
 - Read the cluster profile (account, gres, paths, venv) from one file instead of hard-coding it in
   every script.
 - Turn `eval_on_save` into a launcher choice: `sbatch` or `local` (the node slot).
-- Add data-parallel episodes (option D) for single-run speed.
+- Data-parallel episodes (option D): done 10-19 (single node). Multi-node would need a real
+  MASTER_ADDR and one launcher per node.

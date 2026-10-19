@@ -174,8 +174,14 @@ def main() -> None:
         run_windows(args)
         return
 
+    from next_chameleons.tica import dp
     from next_chameleons.tica.config import load_run_config
 
+    # data-parallel episodes (TICA_DP=N in scripts/slurm/tica_l3covert.sh: WORLD_SIZE / RANK set,
+    # one visible GPU per process); adaptive only
+    data_parallel = dp.init_from_env()
+    if data_parallel and args.command != "adaptive":
+        raise SystemExit("data-parallel episodes: adaptive only")
     cfg = load_run_config(args.config)
     if args.model_path:  # e.g. a node-local copy of the snapshot (faster loading)
         cfg.model.path = args.model_path
@@ -228,6 +234,8 @@ def main() -> None:
         pol = factory(args.adapter, True)
         from next_chameleons.tica.vllm_gen import maybe_attach
 
+        if data_parallel and os.environ.get("TICA_VLLM") == "1":
+            raise SystemExit("data-parallel episodes: no colocated vLLM")
         maybe_attach(pol, cfg.model.path, out / "vllm")  # TICA_VLLM=1: colocated vLLM generation
         prompts = None
         if cfg.episodes.format == "answer":
@@ -246,16 +254,22 @@ def main() -> None:
             pool = MonitorPool()
             # Multi-concept (topic base, REPLICATION 10-14p): one base probe set per TRAIN concept,
             # fit against other TRAIN concepts only (no dev / held-out concept shapes a trained
-            # probe), named per concept.
-            for k, concept in enumerate(cfg.episode_concepts):
-                mons, quality = fit_answer_probes(
-                    cfg.rl.adaptive, data, pol, concept, layers, prompts[0],
-                    neg_splits=("train",) if multi else None,
-                    rename=f"answer_base_c{k}" if multi else None)
-                print(json.dumps({"answer_base_probes": quality, "concept": concept}), flush=True)
-                for L, m in zip(layers, mons, strict=True):
-                    pool.add(m, round=0, family="concept_linear", held_out=L in held)
-            pool.save(out / "answer_pool")
+            # probe), named per concept. Data-parallel: rank 0 fits and saves, every rank loads
+            # the saved pool (identical base probes everywhere).
+            if dp.is_main():
+                for k, concept in enumerate(cfg.episode_concepts):
+                    mons, quality = fit_answer_probes(
+                        cfg.rl.adaptive, data, pol, concept, layers, prompts[0],
+                        neg_splits=("train",) if multi else None,
+                        rename=f"answer_base_c{k}" if multi else None)
+                    print(json.dumps({"answer_base_probes": quality, "concept": concept}),
+                          flush=True)
+                    for L, m in zip(layers, mons, strict=True):
+                        pool.add(m, round=0, family="concept_linear", held_out=L in held)
+                pool.save(out / "answer_pool")
+            if data_parallel:
+                dp.barrier()
+                pool = MonitorPool.load(out / "answer_pool")
         elif cfg.start_pool:  # start from a saved bank (base probe + branch refits)
             default_pool = pool  # built from probes dir; carries the held-out (eval-only) monitors
             pool = MonitorPool.load(cfg.start_pool)
@@ -296,6 +310,10 @@ def main() -> None:
             resume_state=(str(Path(args.adapter) / "trainer_state.pt")
                           if args.adapter and cfg.train.save_state else None),
         ).train()
+        if data_parallel:
+            import torch.distributed as dist
+
+            dist.destroy_process_group()
     elif args.command == "rounds":
         from next_chameleons.tica.rounds import ArmsRace
 

@@ -26,4 +26,27 @@ t0=$(date +%s); mkdir -p $LOCAL; cp -rL $SNAP/. $LOCAL/; echo "model copy: $(( $
 nvidia-smi --query-gpu=name,memory.total --format=csv
 cd /home/sneheel/chameleons
 echo "Running: adaptive --config $CFG $* (snapshot $LOCAL)"
-env PYTHONPATH=src $PY scripts/tica.py adaptive --config "$CFG" --model-path "$LOCAL" "$@"
+# TICA_DP=N (default 1 = one process): data-parallel episodes (src/next_chameleons/tica/dp.py), one
+# process per GPU on this node; rank r sees only the r-th GPU of the allocation. A failed rank stops
+# the others (they would wait in a collective forever).
+N=${TICA_DP:-1}
+if (( N <= 1 )); then
+  env PYTHONPATH=src $PY scripts/tica.py adaptive --config "$CFG" --model-path "$LOCAL" "$@"
+  exit 0
+fi
+IFS=, read -ra GPUS <<< "${CUDA_VISIBLE_DEVICES:-$(seq -s, 0 $(( N - 1 )))}"
+(( ${#GPUS[@]} >= N )) || { echo "TICA_DP=$N needs $N GPUs (visible: ${CUDA_VISIBLE_DEVICES:-})"; exit 1; }
+export MASTER_ADDR=127.0.0.1 MASTER_PORT=${MASTER_PORT:-$(( 20000 + ${SLURM_JOB_ID:-$$} % 20000 ))}
+export WORLD_SIZE=$N
+echo "data-parallel episodes: $N ranks on GPUs ${GPUS[*]:0:$N} (port $MASTER_PORT)"
+PIDS=()
+for (( r = 0; r < N; r++ )); do
+  CUDA_VISIBLE_DEVICES=${GPUS[$r]} RANK=$r LOCAL_RANK=$r env PYTHONPATH=src $PY scripts/tica.py \
+    adaptive --config "$CFG" --model-path "$LOCAL" "$@" &
+  PIDS+=($!)
+done
+rc=0
+for _ in "${PIDS[@]}"; do
+  if ! wait -n; then rc=1; kill "${PIDS[@]}" 2>/dev/null || true; fi
+done
+exit $rc

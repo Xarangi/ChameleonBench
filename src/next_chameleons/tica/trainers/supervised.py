@@ -26,6 +26,7 @@ import json
 import os
 import random
 import time
+import zlib
 from collections import defaultdict
 from contextlib import nullcontext
 from dataclasses import asdict, dataclass, field
@@ -249,6 +250,7 @@ class SupervisedTrainer:
 
 
 # --------------------------------------------------------------------- adaptive covert arm (Arm A)
+from next_chameleons.tica import dp  # noqa: E402
 from next_chameleons.tica.adaptive import (  # noqa: E402
     AdaptiveConfig,
     AdaptiveDefender,
@@ -463,6 +465,9 @@ class AdaptiveSupervisedTrainer:
     Reuses the loss (hide active monitor on turns >= hide_from_turn, pin turn 0, match selectivity)
     and the length-sorted micro-batching of SupervisedTrainer."""
 
+    world, rank = 1, 0  # data-parallel world size / rank (set in __init__ from tica/dp.py)
+    _ep_ctx: dict | None = None  # per-rollout episode streams (episode_rng / data-parallel)
+
     def __init__(self, policy, pool: MonitorPool, sampler, cfg: AdaptiveSupervisedConfig, out_dir,
                  branch_concepts=None, branch_negatives=None, roots_only=None, prompts=None,
                  inputs=None, hard_neg=None, resume_state=None):
@@ -525,6 +530,22 @@ class AdaptiveSupervisedTrainer:
         self._bank_validated = False
         self.base_names = {e.monitor.name for e in pool.entries}
         self.rng = random.Random(cfg.seed + off)  # + off: resume chunks draw afresh
+        # Data-parallel episodes (tica/dp.py; world size from the launcher, 1 = off): per-episode
+        # RNG streams are implied; the features whose state couples episodes INSIDE a rollout are
+        # not supported (their state would differ between ranks).
+        self.world, self.rank = dp.world()
+        if self.world > 1:
+            ac_ = cfg.adaptive
+            bad = {"refit_mode != 'episode'": ac_.refit_mode != "episode",
+                   "episode_keep": ac_.episode_keep, "episode_bank_first": ac_.episode_bank_first,
+                   "adaptive (best-catcher switch)": ac_.adaptive, "exo_prob": ac_.exo_prob > 0,
+                   "episode_kind_sampling='prioritized'":
+                       ac_.episode_kind_sampling == "prioritized",
+                   "episodes_per_step not divisible by the world size":
+                       cfg.episodes_per_step % self.world != 0}
+            if any(bad.values()):
+                raise ValueError("data-parallel episodes do not support: "
+                                 + ", ".join(k for k, v in bad.items() if v))
         # Pursuit (adaptive.pursuit): running centroid at the concept layer + per-step (i,t) acts;
         # one PursuitState per monitored concept (multi-concept: the clouds differ).
         self.pursuit_by: dict[str, PursuitState] = {}
@@ -536,7 +557,8 @@ class AdaptiveSupervisedTrainer:
         self._kind_first: dict[tuple, int] = {}
         self.kind_stats: dict[str, list[int]] = {}
         torch.manual_seed(cfg.seed + off)
-        (self.out / "config.json").write_text(json.dumps(asdict(cfg), indent=1))
+        if self.rank == 0:
+            (self.out / "config.json").write_text(json.dumps(asdict(cfg), indent=1))
         if self._resume is not None:
             self._load_state(self._resume)
 
@@ -553,7 +575,7 @@ class AdaptiveSupervisedTrainer:
     def _save_state(self, ckpt: Path) -> None:
         """trainer_state.pt next to the adapter; older checkpoints' copies are removed."""
 
-        if not self.cfg.save_state:
+        if not self.cfg.save_state or self.rank != 0:  # data-parallel: rank 0 (states agree)
             return
         for old in self.out.glob("*/trainer_state.pt"):
             old.unlink(missing_ok=True)
@@ -634,6 +656,146 @@ class AdaptiveSupervisedTrainer:
 
         return chunks, run
 
+    # ---- episode streams / data-parallel episodes (adaptive.episode_rng, tica/dp.py) ----------
+
+    def _episode_streams(self, specs):
+        """Per-rollout context for adaptive.episode_rng (always on in data-parallel runs), or None
+        (the original draws). Drawn from the trainer RNG in episode order, identically on every
+        rank: one stream seed per episode, the turn-0 shared-probe seed and the monitor-off turns;
+        this rank keeps episodes rank, rank + world, ... (`specs` / `gidx`)."""
+
+        acfg = self.cfg.adaptive
+        if not (acfg.episode_rng or self.world > 1):
+            self._ep_ctx = None
+            return None
+        T = self.cfg.turns
+        seeds = [self.rng.randrange(1 << 62) for _ in specs]
+        t0_seed = self.rng.randrange(1 << 62)
+        off = [[s.cond in DODGE_CONDS and t >= 1 and self.rng.random() < acfg.off_turn_prob
+                for t in range(T)] for s in specs]
+        gidx = list(range(self.rank, len(specs), self.world))
+        self._ep_ctx = {
+            "gspecs": list(specs), "gidx": gidx, "specs": [specs[g] for g in gidx],
+            "erng": [random.Random(seeds[g]) for g in gidx], "off": [off[g] for g in gidx],
+            "n": [0] * len(gidx), "t0_seed": t0_seed, "t0_uses": defaultdict(int), "t0_fit": {},
+            "step": self.step_k + self._step_offset(),
+            "kind_stats0": {k: list(v) for k, v in self.kind_stats.items()},
+            "kind_of0": set(self._kind_of)}
+        return self._ep_ctx
+
+    def _erng(self, i: int) -> random.Random:
+        """Episode i's stream (episode streams), else the trainer RNG (the original draws)."""
+        return self._ep_ctx["erng"][i] if self._ep_ctx is not None else self.rng
+
+    def _ep_tag(self, i: int) -> dict:
+        """Turns-to-beat records carry their episode under episode streams (merge order)."""
+        return {"_ep": i} if self._ep_ctx is not None else {}
+
+    def _ep_kw(self, i: int) -> dict:
+        """_episode_refit kwargs under episode streams: the episode's stream and the next
+        deterministic probe name (names seed the probe fits)."""
+
+        ctx = self._ep_ctx
+        if ctx is None:
+            return {}
+        ctx["n"][i] += 1
+        return {"rng": ctx["erng"][i],
+                "name": f"ep_refit_s{ctx['step']}_e{ctx['gidx'][i]}_{ctx['n'][i]}"}
+
+    @staticmethod
+    def _slim(tr: Trajectory) -> Trajectory:
+        """For the all-gather: convs[t] is the final conversation's prefix through turn t."""
+        return Trajectory(tr.spec, [tr.convs[-1]] if tr.convs else [], tr.results, tr.feedback)
+
+    @staticmethod
+    def _unslim(tr: Trajectory) -> Trajectory:
+        last = tr.convs[0] if tr.convs else []
+        return Trajectory(tr.spec, [[dict(m) for m in last[: 2 * t + 2]]
+                                    for t in range(len(tr.results))], tr.results, tr.feedback)
+
+    def _merge_rollout(self, trajs, passed_turn, ep_stats, pending, seg_pending, last_refit,
+                       deploy_start, seg_start):
+        """Every rank's rollout records -> the step's records in episode order, applied
+        identically on every rank (one rank: the same records, canonically ordered). Returns
+        (all trajectories, passes, ep_stats, censored refits); sets the merged deploy / segment /
+        refit logs, kind_stats / kind map, the pursuit acts (_g_acts, ordered as one process
+        inserts them: turn, then episode) and ctx["bank_size"]."""
+
+        ctx = self._ep_ctx
+        gidx, multi = ctx["gidx"], self.world > 1
+
+        def tagged(log, start, open_):
+            recs = log[start:] + [{**v, "beaten": False} for v in open_.values()]
+            del log[start:]
+            return [{**r, "_ep": gidx[r["_ep"]]} for r in recs]
+
+        k0 = ctx["kind_stats0"]
+        part = {
+            "gidx": gidx,
+            "trajs": [self._slim(tr) for tr in trajs] if multi else trajs,
+            "passed": passed_turn, "stats": ep_stats, "cens": len(last_refit),
+            "dep": tagged(self.deploy_log, deploy_start, pending),
+            "seg": tagged(self.seg_log, seg_start, seg_pending),
+            "refits": [{**r, "episode": gidx[r["episode"]]} for r in self._refit_log],
+            "kind_delta": {k: [v[0] - k0.get(k, [0, 0])[0], v[1] - k0.get(k, [0, 0])[1]]
+                           for k, v in self.kind_stats.items()},
+            "kind_of": {n: k for n, k in self._kind_of.items() if n not in ctx["kind_of0"]},
+            "acts": {(gidx[i], t): (a.cpu() if multi else a)
+                     for (i, t), a in self._ep_acts.items()},
+            "acts_c": {(gidx[i], t): c for (i, t), c in self._ep_concept.items()},
+            "names": [e.monitor.name for e in self.pool.entries],
+            "t0_fit": dict(ctx["t0_fit"]), "t0_uses": dict(ctx["t0_uses"]),
+            "read_sec": getattr(self, "_refit_read_sec", 0.0)}
+        parts = dp.gather(part) if multi else [part]
+        g_trajs: list = [None] * len(ctx["gspecs"])
+        for pt in parts:
+            for g, tr in zip(pt["gidx"], pt["trajs"], strict=True):
+                g_trajs[g] = self._unslim(tr) if multi else tr
+        stats: dict = {}
+        for pt in parts:
+            for k, v in pt["stats"].items():
+                stats[k] = stats.get(k, [] if isinstance(v, list) else 0) + v
+        # turns-to-beat records: episode order (stable: each episode's own order kept)
+        for key, log in (("dep", self.deploy_log), ("seg", self.seg_log)):
+            recs = sorted((r for pt in parts for r in pt[key]), key=lambda r: r["_ep"])
+            log += [{k: v for k, v in r.items() if k != "_ep"} for r in recs]
+        refits, seen_t0 = [], set()
+        for r in sorted((r for pt in parts for r in pt["refits"]),
+                        key=lambda r: (r["episode"], r["turn"], r["attempt"])):
+            if "t0_key" in r:  # a shared turn-0 probe: one fit (several ranks may have fit it)
+                if r["t0_key"] in seen_t0:
+                    continue
+                seen_t0.add(r["t0_key"])
+                r = {k: v for k, v in r.items() if k != "t0_key"}
+            refits.append(r)
+        self._refit_log = refits
+        ks: dict = {k: list(v) for k, v in k0.items()}
+        for pt in parts:
+            for k, (a, b) in pt["kind_delta"].items():
+                cur = ks.setdefault(k, [0, 0])
+                cur[0], cur[1] = cur[0] + a, cur[1] + b
+        self.kind_stats = ks
+        for pt in parts:
+            self._kind_of.update(pt["kind_of"])
+        acts = {k: v for pt in parts for k, v in pt["acts"].items()}
+        conc = {k: v for pt in parts for k, v in pt["acts_c"].items()}
+        order = sorted(acts, key=lambda k: (k[1], k[0]))
+        self._g_acts = {k: acts[k] for k in order}
+        self._g_concept = {k: conc[k] for k in order}
+        ctx["bank_size"] = len({n for pt in parts for n in pt["names"]})
+        # shared turn-0 probes: one fit per key, the other episodes opening on it share it
+        t0_fit = {k: v for pt in parts for k, v in pt["t0_fit"].items()}
+        uses: dict = defaultdict(int)
+        for pt in parts:
+            for k, v in pt["t0_uses"].items():
+                uses[k] += v
+        stats["first_att"] = stats.get("first_att", 0) + len(t0_fit)
+        stats["first_acc"] = stats.get("first_acc", 0) + sum(v is not None for v in t0_fit.values())
+        stats["first_shared"] = sum(uses[k] - 1 for k, v in t0_fit.items() if v is not None)
+        self._refit_read_sec = sum(pt["read_sec"] for pt in parts)
+        passed = [t for pt in parts for t in pt["passed"]]
+        return g_trajs, passed, stats, sum(pt["cens"] for pt in parts)
+
     @torch.no_grad()
     def rollout(self, specs):
         """Teacher-forced lockstep rollout with a per-episode defender. Returns trajectories whose
@@ -641,6 +803,11 @@ class AdaptiveSupervisedTrainer:
 
         acfg, pol, pool = self.cfg.adaptive, self.policy, self.pool
         T = self.cfg.turns
+        # episode_rng / data-parallel: per-episode streams; this rank runs its share of the specs
+        ctx = self._episode_streams(specs)
+        spec0 = specs[0]  # the run's first spec (refit buffer concept, pursuit layer)
+        if ctx is not None:
+            specs = ctx["specs"]
         trajs = [Trajectory(s) for s in specs]
         convs = [
             [
@@ -701,17 +868,17 @@ class AdaptiveSupervisedTrainer:
                 elif acfg.first_probe not in ("base", "fork", "switch_fork"):
                     raise ValueError(acfg.first_probe)
                 def_by[i][c] = AdaptiveDefender(pool, c, acfg, start=start,
-                                                rng=random.Random(self.rng.randrange(1 << 30)))
+                                                rng=random.Random(self._erng(i).randrange(1 << 30)))
                 dep_by[i][c] = [def_by[i][c].active]
             return def_by[i][c]
 
         dodging = [s.cond in DODGE_CONDS for s in specs]
         if self.refit_buf is None:
-            self.refit_buf = RefitData(layers=pool.layers, concept=specs[0].monitored)
+            self.refit_buf = RefitData(layers=pool.layers, concept=spec0.monitored)
         # Track the centroid / per-turn acts always (turn_move is reported for the pursuit-OFF
         # control too); the pursuit LOSS term is gated on acfg.pursuit below. One centroid per
         # concept (multi-concept runs): concept clouds sit in different places.
-        plp = self._plp = pool.concept_monitor(specs[0].monitored).layer
+        plp = self._plp = pool.concept_monitor(spec0.monitored).layer
         self._ep_acts, self._ep_concept, self._kind_first = {}, {}, {}
         # Held-out monitors (e.g. L20, never in the training bank): scored every turn for the
         # GENERALISATION -- does the dodge transfer to a probe never trained against, or is it
@@ -738,8 +905,9 @@ class AdaptiveSupervisedTrainer:
         self._t0_first = {}  # first_probe="fork": turn-0 probes shared per concept (this rollout)
         inc_state: dict = {}  # incremental_rollout: per-episode caches, freed with the rollout
         # Monitor-off turns (off_turn_prob): drawn per monitored episode, never turn 0.
-        off = [[d and t >= 1 and self.rng.random() < acfg.off_turn_prob
-                for t in range(T)] for d in dodging]
+        off = ctx["off"] if ctx is not None else [
+            [d and t >= 1 and self.rng.random() < acfg.off_turn_prob for t in range(T)]
+            for d in dodging]
         roll_tok = self._refit_token_layers(plp)
         for t in range(T):
             for c, s in zip(convs, specs, strict=True):
@@ -804,7 +972,8 @@ class AdaptiveSupervisedTrainer:
                             self.deploy_log.append({**pending.pop((i, c)), "beaten": True})
                     if (i, c) not in seg_seen:  # first judged turn of concept c in episode i
                         seg_seen.add((i, c))
-                        seg_pending[(i, c)] = {"concept": c, "kind": "segment", "turns": 0}
+                        seg_pending[(i, c)] = {"concept": c, "kind": "segment", "turns": 0,
+                                               **self._ep_tag(i)}
                     if (i, c) in seg_pending:
                         seg_pending[(i, c)]["turns"] += 1
                         if obs["passed"]:
@@ -849,7 +1018,8 @@ class AdaptiveSupervisedTrainer:
                             dfd.active, dfd.stage_turn = catcher, 0
                             ep_stats["switch"] += 1
                             last_refit[(i, c)] = t
-                            pending[(i, c)] = {"kind": "bank", "turns": 0, "concept": c}
+                            pending[(i, c)] = {"kind": "bank", "turns": 0, "concept": c,
+                                               **self._ep_tag(i)}
                             res["episode_refit"] = "bank"
                         elif t < T - 1 and s.monitored_at(t + 1) != c:
                             # the next turn monitors another concept: no fork now; if the episode
@@ -857,25 +1027,26 @@ class AdaptiveSupervisedTrainer:
                             # refits at that point)
                             dfd.active = read["name"]
                             res["episode_refit"] = "switch"
-                        elif t < T - 1 and self.rng.random() >= acfg.episode_refit_prob:
+                        elif t < T - 1 and self._erng(i).random() >= acfg.episode_refit_prob:
                             dfd.active = read["name"]  # no refit this time: same probe next turn
                             res["episode_refit"] = "skip"
                         elif t < T - 1:  # fork at the turn after the pass -> active from t+1
                             dfd.active = read["name"]  # refit, or keep the dodged probe
                             t_ep = time.time()
-                            bank, info = self._episode_refit(s, convs[i], shown, c, t + 1)
+                            bank, info = self._episode_refit(s, convs[i], shown, c, t + 1,
+                                                             **self._ep_kw(i))
                             self._log_refit(info, i, t + 1, c, 0, time.time() - t_ep)
                             tried = [info.get("kind")]
                             # refit_switch_max (10-15g): a refit that fails its quality gate is
                             # NOT replaced by the old (already dodged) probe; another probe TYPE is
                             # fit instead (same sample sizes), up to refit_switch_max more types.
                             while bank is None and len(tried) <= acfg.refit_switch_max:
-                                k2 = self._pick_kind(exclude=tried)
+                                k2 = self._pick_kind(exclude=tried, rng=self._erng(i))
                                 if k2 is None:
                                     break
                                 t_sw = time.time()
                                 bank, info = self._episode_refit(s, convs[i], shown, c, t + 1,
-                                                                 kind=k2)
+                                                                 kind=k2, **self._ep_kw(i))
                                 self._log_refit(info, i, t + 1, c, len(tried),
                                                 time.time() - t_sw)
                                 tried.append(k2)
@@ -902,7 +1073,7 @@ class AdaptiveSupervisedTrainer:
                                 ep_stats["auroc"].append(info["auroc"])
                                 last_refit[(i, c)] = t
                                 pending[(i, c)] = {"kind": info.get("kind", "linear"),
-                                                   "turns": 0, "concept": c}
+                                                   "turns": 0, "concept": c, **self._ep_tag(i)}
                 else:
                     base = pool.concept_monitor(s.monitored) if s.text_concept else None
                     if base is not None:
@@ -950,12 +1121,20 @@ class AdaptiveSupervisedTrainer:
                                                     named=s.named, **kw))
                     tr.feedback.append(fb)
                     convs[i].append({"role": "user", "content": fb})
+        n_cens, trajs_all = len(last_refit), trajs
+        if ctx is not None:  # episode streams: every rank's records merged (dp: all-gathered)
+            trajs_all, passed_turn, ep_stats, n_cens = self._merge_rollout(
+                trajs, passed_turn, ep_stats, pending, seg_pending, last_refit, deploy_start,
+                seg_start)
+            pending, seg_pending = {}, {}  # censored records are already in the merged logs
+            dodging = [s.cond in DODGE_CONDS for s in ctx["gspecs"]]
+        self._g_trajs = trajs_all  # every episode of the step (cap_gen, logs)
         n_dodge = sum(dodging)
         # Concept switches: detection on the first turn of each new segment (caught by
         # construction ~1) and the pass rate on the later turns of switched-to segments; returns =
         # segments that come back to an earlier concept (all of its old probes judge).
         sw = {"seg_first": [], "seg_later": [], "ret_first": []}
-        for tr in trajs:
+        for tr in trajs_all:
             mt = tr.spec.meta.get("monitored_turns")
             if not mt or tr.spec.cond not in DODGE_CONDS:
                 continue
@@ -982,13 +1161,13 @@ class AdaptiveSupervisedTrainer:
             "mean_pass_turn": (sum(passed_turn) / len(passed_turn))
             if passed_turn
             else float("nan"),
-            "bank_size": len(pool.entries),
+            "bank_size": len(pool.entries) if ctx is None else ctx["bank_size"],
         }
         metrics.update({k: v for k, v in ep_stats.items() if k.startswith("sw_")})
         for kind, (cg, jd) in self.kind_stats.items():
             metrics[f"kind_catch_{kind}"] = round(cg / max(1, jd), 3)
         if ep_mode:
-            ep_stats["cens"] = len(last_refit)  # accepted refits never passed again this episode
+            ep_stats["cens"] = n_cens  # accepted refits never passed again this episode
             r = ep_stats["recov"]
             self.deploy_log += [{**v, "beaten": False} for v in pending.values()]
             metrics.update(beat_summary(self.deploy_log[deploy_start:]))
@@ -1009,7 +1188,7 @@ class AdaptiveSupervisedTrainer:
                                                                            for r in rs))
             self._curriculum_update(self.deploy_log[deploy_start:], self.seg_log[seg_start:],
                                     metrics)
-            metrics.update(probe_index_metrics(trajs))
+            metrics.update(probe_index_metrics(trajs_all))
             metrics.update({
                 "ep_refits": ep_stats["att"],
                 "ep_refits_accepted": ep_stats["acc"],
@@ -1039,7 +1218,7 @@ class AdaptiveSupervisedTrainer:
                 / max(1, ep_stats["att"]),
             })
             metrics.update(self._flush_refit_log())
-        self._flush_turn_log(trajs)
+        self._flush_turn_log(trajs_all)
         return trajs, metrics
 
     @torch.no_grad()
@@ -1085,44 +1264,71 @@ class AdaptiveSupervisedTrainer:
         this very turn (conv ends with this turn's user message + answer; forks replace both with
         render(x) + x). Deployed like an accepted refit; None (base probe) if the gate fails."""
 
-        pol, pool = self.policy, self.pool
+        pol, pool, ctx = self.policy, self.pool, self._ep_ctx
         t0_key = (c, s.cond, bool(getattr(s, "named", True))) if len(conv) == 2 else None
         if t0_key is not None and t0_key in self._t0_first:
             # TURN 0 has no history: the fork set (opening(x) + x for the concept's texts) depends
             # only on the concept and the current weights, so one fork-fit first probe per concept
             # per rollout serves every episode that opens on it (10-16o speed-up; same probe
             # distribution, one fit instead of one per episode)
+            if ctx is not None:
+                ctx["t0_uses"][t0_key] += 1
+            if self._t0_first[t0_key] is None:  # episode streams: a failed shared fit stays failed
+                return None
             name, kind = self._t0_first[t0_key]
-            pending[(i, c)] = {"kind": kind, "turns": 0, "concept": c, "first": True}
-            ep_stats["first_shared"] = ep_stats.get("first_shared", 0) + 1
+            pending[(i, c)] = {"kind": kind, "turns": 0, "concept": c, "first": True,
+                               **self._ep_tag(i)}
+            if ctx is None:  # episode streams: counted when the ranks' records merge
+                ep_stats["first_shared"] = ep_stats.get("first_shared", 0) + 1
             return name
+        kw, ks = {}, None
+        if ctx is not None and t0_key is not None:
+            # episode streams: the shared turn-0 probe has its own stream and name, so every rank
+            # that needs it fits the same probe (no-prompt reads uncached: same batches everywhere)
+            ks = "|".join(map(str, t0_key))
+            kw = {"rng": random.Random(f"{ctx['t0_seed']}|{ks}"), "np_cache": False,
+                  "name": f"ep_first_s{ctx['step']}_{zlib.crc32(ks.encode())}"}
+            ctx["t0_uses"][t0_key] += 1
+        elif ctx is not None:
+            kw = self._ep_kw(i)
         t_ep = time.time()
-        bank, info = self._episode_refit(s, conv[:-2], None, c, None, fork_msg=render)
+        bank, info = self._episode_refit(s, conv[:-2], None, c, None, fork_msg=render, **kw)
         self._log_refit({**info, "first_probe": True}, i, len(conv) // 2 - 1, c, 0,
                         time.time() - t_ep)
+        if ks is not None:
+            self._refit_log[-1]["t0_key"] = ks  # one fit per key once the ranks merge
         ep_stats["sec"] += time.time() - t_ep
-        ep_stats["first_att"] = ep_stats.get("first_att", 0) + 1
+        count = ks is None  # shared turn-0 fits under episode streams: counted at the merge
+        if count:
+            ep_stats["first_att"] = ep_stats.get("first_att", 0) + 1
         if bank is None:
+            if ks is not None:
+                self._t0_first[t0_key] = ctx["t0_fit"][t0_key] = None
             return None
         bank = bank.to(pol.device)
         pool.add(bank, round=self.step_k, family="episode_refit")
         self._transient.append(bank.name)
         self._kind_of[bank.name] = info.get("kind", "linear")
-        ep_stats["first_acc"] = ep_stats.get("first_acc", 0) + 1
+        if count:
+            ep_stats["first_acc"] = ep_stats.get("first_acc", 0) + 1
         pending[(i, c)] = {"kind": info.get("kind", "linear"), "turns": 0, "concept": c,
-                           "first": True}
+                           "first": True, **self._ep_tag(i)}
         if t0_key is not None:
             self._t0_first[t0_key] = (bank.name, info.get("kind", "linear"))
+            if ks is not None:
+                ctx["t0_fit"][t0_key] = bank.name
         return bank.name
 
     def _episode_refit(self, s, prefix, shown, concept=None, turn=None, kind=None,
-                       fork_msg=None):
+                       fork_msg=None, rng=None, name=None, np_cache=True):
         """refit_mode="episode": fork this conversation at the turn AFTER its pass (prefix ends with
         the passing answer; each fork = prefix + the shown "not caught" verdict + one follow-up) and
         fit a fresh probe at the concept layer. Shared-prefix reads (one cached forward of the
         history). Positives: in-context concept follow-ups + half the no-prompt concept turns;
         negatives: in-context other-concept + concept-free follow-ups; the other no-prompt half is
-        the out-of-context TPR gate. Same construction as scripts/tica_frozen_race.py."""
+        the out-of-context TPR gate. Same construction as scripts/tica_frozen_race.py.
+        rng / name / np_cache (episode streams): the episode's stream, a deterministic probe name
+        (it seeds the fit) and whether no-prompt reads may come from the rollout cache."""
 
         acfg, pol = self.cfg.adaptive, self.policy
         t_read0 = time.time()
@@ -1144,7 +1350,7 @@ class AdaptiveSupervisedTrainer:
         else:
             free_negs = self.branch_negatives
         others = [c for c in texts if c != concept and texts[c]]
-        rng = self.rng
+        rng = rng if rng is not None else self.rng
         hard = self.hard_neg.get(concept) or []
         n_hard = min(len(hard), ef["other"] // 2)
         # close negatives (adaptive.family_neg_frac): part of the other-concept draws come from
@@ -1168,7 +1374,7 @@ class AdaptiveSupervisedTrainer:
              {"role": "assistant", "content": x}]
             for _, x in picks
         ]
-        full_kind = kind or self._pick_kind()  # e.g. "linear@22": single-layer kind at layer 22
+        full_kind = kind or self._pick_kind(rng=rng)  # e.g. "linear@22": kind at layer 22
         kind, Lo = split_kind(full_kind)
         if Lo is not None:
             L = Lo
@@ -1190,7 +1396,7 @@ class AdaptiveSupervisedTrainer:
             for x in nps
         ]
         nt = {} if kind in ZOO_TOKEN else None
-        if acfg.refit_np_cache:  # shared across the rollout's refits (same weights, same texts)
+        if acfg.refit_np_cache and np_cache:  # shared across the rollout's refits (same weights)
             nall = self._np_reads(nps, np_convs, Ls, nt, keep)
         else:
             nall = (pol.pooled_incremental(np_convs, Ls, {}, token_out=nt, token_keep=keep)
@@ -1201,8 +1407,9 @@ class AdaptiveSupervisedTrainer:
             torch.cuda.synchronize()
         self._refit_read_sec = getattr(self, "_refit_read_sec", 0.0) + time.time() - t_read0
         sec_read = round(time.time() - t_read0, 2)  # per-refit read time (refits.jsonl)
-        self.refit_k += 1
-        name = f"ep_refit_{self.refit_k}"
+        if name is None:
+            self.refit_k += 1
+            name = f"ep_refit_{self.refit_k}"
         if kind != "linear":  # literature probe bank (probe_zoo), same gate
             if kind in ZOO_TOKENS_ENS:
                 pos_q = [q for q, (k_, _) in enumerate(picks) if k_ == "pos"]
@@ -1286,6 +1493,12 @@ class AdaptiveSupervisedTrainer:
             forks.append(fork)
         if not forks:
             return {"cap_gen/n_forks": 0}
+        gen_seed = None
+        if self.world > 1:  # data-parallel: rank 0 generates and backpropagates for every rank
+            gen_seed = self.rng.randrange(1 << 30)  # drawn on every rank (shared RNG)
+            self._share_monitors({x for m in meta for x in m["names"]})
+            if self.rank != 0:
+                return {}
         n = acfg.cap_gen_samples
         convs = [f for f in forks for _ in range(n)]
         was, bs = pol.model.training, pol.batch_size
@@ -1293,7 +1506,8 @@ class AdaptiveSupervisedTrainer:
         pol.batch_size = len(convs)  # one batched call
         try:
             gens = pol.generate(convs, acfg.cap_gen_max_new, temperature=acfg.cap_gen_temperature,
-                                seed=self.rng.randrange(1 << 30))
+                                seed=(self.rng.randrange(1 << 30) if gen_seed is None
+                                      else gen_seed))
         finally:
             pol.batch_size = bs
             pol.model.train(was)
@@ -1383,6 +1597,28 @@ class AdaptiveSupervisedTrainer:
                      "sec_cap_train": round(time.time() - t0 - t_gen, 1)})
         return info
 
+    def _share_monitors(self, names: set) -> None:
+        """Data-parallel cap_gen: rank 0 needs the probes (named in `names`) that other ranks'
+        episodes deployed this step; each rank sends copies of its own, rank 0 adds the missing
+        ones as transient pool entries (dropped with the step's other episode probes)."""
+
+        import copy
+
+        have = {e.monitor.name: e.monitor for e in self.pool.entries}
+        own = set(self._transient)
+        mine = {n: copy.deepcopy(have[n]).to("cpu") for n in sorted(names)
+                if n in have and n in own}
+        got = dp.gather(mine)
+        if self.rank != 0:
+            return
+        for part in got:
+            for n, mon in part.items():
+                if n not in have:
+                    self.pool.add(mon.to(self.policy.device), round=self.step_k,
+                                  family="episode_refit")
+                    self._transient.append(n)
+                    have[n] = mon
+
     def _anchor_items(self) -> list[list[dict]]:
         """The retain set: anchor_pool general prompts with the BASE model's greedy answers,
         generated once (one batched call) and cached as JSON."""
@@ -1421,8 +1657,14 @@ class AdaptiveSupervisedTrainer:
         (base top-k + tail targets computed this step). Backward here, before the optimizer step."""
 
         acfg, pol, t0 = self.cfg.adaptive, self.policy, time.time()
+        if self.world > 1 and not hasattr(self, "_anchor"):  # rank 0 writes the cache first
+            if self.rank == 0:
+                self._anchor_items()
+            dp.barrier()
         pool = self._anchor_items()
         convs = self.rng.sample(pool, min(acfg.anchor_n, len(pool)))
+        if self.rank != 0:  # data-parallel: rank 0 adds the anchor gradient (drawn everywhere)
+            return {}
         views = [pol.view(c) for c in convs]
         s_kl = 0.0
         for a in range(0, len(views), 2):
@@ -1567,7 +1809,7 @@ class AdaptiveSupervisedTrainer:
                     "by": mon.get("name"), "heldout_det": r.get("heldout_det"),
                     "off": bool(r.get("off")), "n_deployed": len(r.get("deployed") or []),
                     "refit": r.get("episode_refit"), "tried": r.get("refit_kinds_tried")})
-        if rows:
+        if rows and self.rank == 0:  # data-parallel: rank 0 holds every episode
             self.out.mkdir(parents=True, exist_ok=True)
             with open(self.out / "turns.jsonl", "a") as f:
                 for row in rows:
@@ -1579,10 +1821,11 @@ class AdaptiveSupervisedTrainer:
         recs = getattr(self, "_refit_log", [])
         if not recs:
             return {}
-        self.out.mkdir(parents=True, exist_ok=True)
-        with open(self.out / "refits.jsonl", "a") as f:
-            for r in recs:
-                f.write(json.dumps(r) + "\n")
+        if self.rank == 0:  # data-parallel: the merged records of every rank
+            self.out.mkdir(parents=True, exist_ok=True)
+            with open(self.out / "refits.jsonl", "a") as f:
+                for r in recs:
+                    f.write(json.dumps(r) + "\n")
         m = {}
         for r in recs:
             k = r["kind"]
@@ -1670,10 +1913,12 @@ class AdaptiveSupervisedTrainer:
             return float(ac.curriculum_mix_max)
         return float(ac.curriculum_mix_max) * min(1.0, g / ac.curriculum_ramp_steps)
 
-    def _pick_kind(self, exclude=()) -> str | None:
+    def _pick_kind(self, exclude=(), rng=None) -> str | None:
         """A refit kind ("mixed": prioritized / uniform over episode_refit_kinds). exclude: kinds
-        that already failed the gate at this refit (refit_switch_max); None when none is left."""
+        that already failed the gate at this refit (refit_switch_max); None when none is left.
+        rng: the draws' stream (default the trainer RNG; episode streams pass the episode's)."""
         acfg = self.cfg.adaptive
+        rng = rng if rng is not None else self.rng
         if acfg.episode_refit_kind != "mixed":
             return None if acfg.episode_refit_kind in exclude else acfg.episode_refit_kind
         if acfg.first_kind and acfg.first_kind not in exclude:
@@ -1687,17 +1932,17 @@ class AdaptiveSupervisedTrainer:
                     and set(self.kind_bandit.keys) != set(acfg.episode_refit_kinds)):
                 self.kind_bandit = self._make_kind_bandit()  # kinds changed after init (evals)
             lam = self._curriculum_lambda()
-            if lam < 1.0 and self.rng.random() >= lam:  # ramp (10-17g): a uniform kind
-                k = uniform_kind(self.kind_bandit, self.rng, exclude)
+            if lam < 1.0 and rng.random() >= lam:  # ramp (10-17g): a uniform kind
+                k = uniform_kind(self.kind_bandit, rng, exclude)
                 if k is not None:
                     return k
-            return self.kind_bandit.sample(self.rng, exclude=exclude)
+            return self.kind_bandit.sample(rng, exclude=exclude)
         if acfg.episode_kind_sampling == "prioritized":
-            return self.rng.choices(kinds, kind_weights(self.kind_stats, kinds,
-                                                        acfg.episode_kind_eps))[0]
+            return rng.choices(kinds, kind_weights(self.kind_stats, kinds,
+                                                   acfg.episode_kind_eps))[0]
         if acfg.episode_kind_sampling != "uniform":
             raise ValueError(acfg.episode_kind_sampling)
-        return self.rng.choice(kinds)
+        return rng.choice(kinds)
 
     def _pstate(self, concept: str, layer: int) -> PursuitState:
         if concept not in self.pursuit_by:
@@ -1826,18 +2071,26 @@ class AdaptiveSupervisedTrainer:
             self._bank_validated = True
             print(json.dumps(bank_info), flush=True)
         with (pol.merged() if cfg.adaptive.merged_reads else nullcontext()):  # rollout reads
-            trajs, extra = self.rollout(specs)
+            trajs, extra = self.rollout(specs)  # this rank's episodes (data-parallel: a share)
         t_roll = time.time() - t0
-        metrics = self._rollout_metrics(trajs)
+        dp_info = {}
+        if self.world > 1:  # load balance: every rank waits for the slowest rollout
+            rolls = dp.gather(round(t_roll, 1))
+            dp_info = {"dp/world": self.world, "dp/sec_rollout_max": max(rolls),
+                       "dp/sec_rollout_min": min(rolls)}
+        metrics = self._rollout_metrics(self._g_trajs)
         targets = self._targets(trajs)
         acfg = cfg.adaptive
         # Pursuit: update the running centroid from this step's dodge activations, then the hide
         # targets that have at least one recent-turn activation to be pushed off.
         plp = getattr(self, "_plp", None)
         epc = self._ep_concept
+        # every episode's acts (episode streams: merged over ranks, in one process's order)
+        acts_all, epc_all = ((self._g_acts, self._g_concept) if self._ep_ctx is not None
+                             else (self._ep_acts, epc))
         by_c = defaultdict(list)
-        for kk, a in self._ep_acts.items():
-            by_c[epc[kk]].append(a)
+        for kk, a in acts_all.items():
+            by_c[epc_all[kk]].append(a)
         for cc, acts in by_c.items():  # one centroid / scale per monitored concept
             self._pstate(cc, plp).update(torch.cat(acts).to(pol.device))
 
@@ -1858,12 +2111,12 @@ class AdaptiveSupervisedTrainer:
         n_pursuit = max(1, len(pursuit_ks))
         # Direct "is it moving" signal, independent of the loss: mean ||a_t - a_{t-1}|| over dodge
         # turns at the concept layer (normalised by the cloud scale).
-        if plp is not None and self._ep_acts:
+        if plp is not None and acts_all:
             moves = [
-                (float((self._ep_acts[(i_, t_)] - self._ep_acts[(i_, t_ - 1)]).norm()),
-                 self.pursuit_by[epc[(i_, t_)]].scale)
-                for (i_, t_) in self._ep_acts
-                if same_seg(i_, t_)
+                (float((acts_all[(i_, t_)] - acts_all[(i_, t_ - 1)]).norm()),
+                 self.pursuit_by[epc_all[(i_, t_)]].scale)
+                for (i_, t_) in acts_all
+                if (i_, t_ - 1) in acts_all and epc_all.get((i_, t_ - 1)) == epc_all.get((i_, t_))
             ]
             if moves:
                 metrics["turn_move"] = sum(m for m, _ in moves) / len(moves)
@@ -1907,6 +2160,14 @@ class AdaptiveSupervisedTrainer:
                 for tg in targets
             ]
             totals["hide_w_sum"] = sum(hw)
+        n_views, n_targets = len(keys), len(targets)
+        if self.world > 1:  # each rank's loss is its share of the STEP's means: global totals
+            tk = sorted(totals)
+            tot = dp.sum_floats([float(totals[k]) for k in tk] + [len(pursuit_ks), n_targets])
+            totals = {k: (v if k == "hide_w_sum" else round(v))
+                      for k, v in zip(tk, tot, strict=False)}
+            n_pursuit = max(1, round(tot[len(tk)]))
+            n_views, n_targets = totals["views"], round(tot[-1])
         n_upd = max(1, int(cfg.updates_per_rollout))
         upd_losses, upd_gnorms = [], []
         for u in range(n_upd):
@@ -1987,10 +2248,12 @@ class AdaptiveSupervisedTrainer:
                 loss_sum += float(loss.detach())
                 for k2, v in st.items():
                     acc[k2] += v
-            cap_info = (self._cap_gen_step(trajs)
+            cap_info = (self._cap_gen_step(self._g_trajs)
                         if acfg.cap_gen_weight > 0 or acfg.cap_gen_kl_weight > 0 else {})
             if acfg.anchor_weight > 0:  # optional retain-set KL anchor (off by default)
                 cap_info |= self._anchor_step()
+            if self.world > 1:  # data-parallel: the step's gradient = the sum over ranks
+                dp.allreduce_grads(self.params)
             gnorm = torch.nn.utils.clip_grad_norm_(self.params, cfg.grad_clip)
             self.opt.step()
             pol.weights_version = getattr(pol, "weights_version", 0) + 1  # vLLM re-sync
@@ -1999,6 +2262,16 @@ class AdaptiveSupervisedTrainer:
             if u == 0:  # logged train/* stats = the on-policy (first) update, as before
                 acc0, loss0, gnorm0, cap0 = acc, loss_sum, gnorm, cap_info
         acc, loss_sum, gnorm, cap_info = acc0, loss0, gnorm0, cap0
+        if self.world > 1:  # logged sums over every rank (cap_info: rank 0's, it ran them)
+            parts = dp.gather({"acc": dict(acc), "loss": loss_sum, "upd": upd_losses,
+                               "kl_fb": kl_fb})
+            acc = defaultdict(float)
+            for pt in parts:
+                for k_, v_ in pt["acc"].items():
+                    acc[k_] += v_
+            loss_sum = sum(pt["loss"] for pt in parts)
+            upd_losses = [sum(x) for x in zip(*(pt["upd"] for pt in parts), strict=True)]
+            kl_fb = sum(pt["kl_fb"] for pt in parts)
         t_train = time.time() - t0 - t_roll
         self.sched.step()
         self.step_k += 1
@@ -2052,8 +2325,8 @@ class AdaptiveSupervisedTrainer:
             "grad_norm": float(gnorm),
             **({"train/update_losses": upd_losses, "train/update_gnorms": upd_gnorms}
                if n_upd > 1 else {}),
-            "n_views": len(keys),
-            "n_targets": len(targets),
+            "n_views": n_views,
+            "n_targets": n_targets,
             "sec": round(time.time() - t0, 2),
             "sec_rollout": round(t_roll, 1),
             "sec_train": round(t_train, 1),
@@ -2068,9 +2341,11 @@ class AdaptiveSupervisedTrainer:
             **reloc_info,
             **refit_info,
             **bank_info,
+            **dp_info,
         }
-        with (self.out / "train_log.jsonl").open("a") as fh:
-            fh.write(json.dumps(rec) + "\n")
+        if self.rank == 0:
+            with (self.out / "train_log.jsonl").open("a") as fh:
+                fh.write(json.dumps(rec) + "\n")
         return rec
 
     def _relocation_diag(self) -> dict:
@@ -2218,28 +2493,39 @@ class AdaptiveSupervisedTrainer:
 
     def train(self):
         cfg = self.cfg
+        main = self.rank == 0  # data-parallel: rank 0 logs, checkpoints and launches evals
         while self.step_k < cfg.steps:
             rec = self.step()
-            wb = self._wandb()
+            wb = self._wandb() if main else None
             if wb is not None:
                 wb.log({k: v for k, v in rec.items() if isinstance(v, (int, float))},
                        step=self.step_k)
-            if self.step_k % 10 == 0 or self.step_k == 1:
+            if main and (self.step_k % 10 == 0 or self.step_k == 1):
                 print(json.dumps({k: (round(v, 4) if isinstance(v, float) else v)
                                   for k, v in rec.items()}), flush=True)
             saved = bool(cfg.save_every and self.step_k % cfg.save_every == 0)
-            if saved:
+            if saved and main:
                 self.policy.save_adapter(self.out / f"step_{self.step_k}")
                 self._save_state(self.out / f"step_{self.step_k}")
+            if saved and self.world > 1:  # the ranks' weights must agree (same updates)
+                sums = dp.params_checksum(self.params)
+                if main and max(sums) != min(sums):
+                    print(json.dumps({"dp_param_drift": sums}), flush=True)
             ev = cfg.adaptive.eval_every
-            if (saved and not ev) or (ev and (self.step_k + self._step_offset()) % ev == 0):
+            if main and ((saved and not ev)
+                         or (ev and (self.step_k + self._step_offset()) % ev == 0)):
                 if not saved:
                     self.policy.save_adapter(self.out / f"step_{self.step_k}")
                 self._eval_on_save(self.out / f"step_{self.step_k}")
-            if saved and self._early_stop_check():
+            stop = saved and main and self._early_stop_check()
+            if self.world > 1 and saved:
+                stop = bool(dp.broadcast(stop))
+            if stop:
                 break
-        self.policy.save_adapter(self.out / "final")
-        self._save_state(self.out / "final")
+        if main:
+            self.policy.save_adapter(self.out / "final")
+            self._save_state(self.out / "final")
+        dp.barrier()
         if getattr(self, "_wb", None) is not None:
             self._wb.finish()
 
@@ -2292,7 +2578,10 @@ class AdaptiveSupervisedTrainer:
         line = cmd.format(adapter=adapter, step=self.step_k + self._step_offset())
         try:
             # a nested sbatch must not inherit this job's SLURM_* settings (e.g. memory per node)
-            env = {k: v for k, v in os.environ.items() if not k.startswith("SLURM_")}
+            # (nor this run's data-parallel rendezvous variables)
+            dp_env = {"WORLD_SIZE", "RANK", "LOCAL_RANK", "MASTER_ADDR", "MASTER_PORT", "TICA_DP"}
+            env = {k: v for k, v in os.environ.items()
+                   if not k.startswith("SLURM_") and k not in dp_env}
             r = subprocess.run(shlex.split(line), capture_output=True, text=True, timeout=120,
                                env=env, cwd=str(Path(__file__).resolve().parents[4]))
             msg = (r.stdout + r.stderr).strip()
