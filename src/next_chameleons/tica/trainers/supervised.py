@@ -67,6 +67,11 @@ class SupervisedConfig:
     # states go to <checkpoint>/trainer_state.pt (newest checkpoint only, to bound disk), and a
     # chunk resumed from such a checkpoint restores them and skips the LR re-warmup.
     save_state: bool = False
+    # updates_per_rollout (10-18j, default 1 = unchanged): optimizer updates per rollout. The
+    # rollout (episodes, verdicts, refits, targets) is collected once and reused K times; each
+    # update re-runs the forward with grad on the current weights. The LR schedule still advances
+    # once per step.
+    updates_per_rollout: int = 1
     grad_clip: float = 1.0
     save_every: int = 100
     eval_every: int = 0  # 0 = never (run evaluation as a separate job)
@@ -1884,9 +1889,6 @@ class AdaptiveSupervisedTrainer:
                 if ks:
                     local = [pos[tkey[k]] for k in ks]
                     ref[ks] = probe_prob(pool, pooled, local, [targets[k] for k in ks]).detach()
-        pol.model.train()
-        self.opt.zero_grad(set_to_none=True)
-        acc = defaultdict(float)
         totals = {
             "hide": sum(tg.role == "hide" for tg in targets),
             "match": sum(tg.role == "match" for tg in targets),
@@ -1905,84 +1907,98 @@ class AdaptiveSupervisedTrainer:
                 for tg in targets
             ]
             totals["hide_w_sum"] = sum(hw)
-        loss_sum = 0.0
-        kl_ref, kl_fb = (self._kl_targets(trajs, chunks) if acfg.kl_weight > 0 else (None, 0))
-        for chunk in chunks:
-            ckeys, pooled, nll = run(chunk, grad=True, with_nll=True, kl_ref=kl_ref)
-            pos = {kk: j for j, kk in enumerate(ckeys)}
-            ks = [k for k, kk in enumerate(tkey) if kk in pos]
-            local = [pos[tkey[k]] for k in ks]
-            p = probe_prob(pool, pooled, local, [targets[k] for k in ks])
-            prev = torch.tensor(
-                [targets[k].prev_p if targets[k].prev_p is not None else float("nan") for k in ks],
-                device=pol.device,
-            )
-            hw_chunk = (
-                torch.tensor([hw[k] for k in ks], device=pol.device) if hw is not None else None
-            )
-            loss, st = loss_terms(
-                p, ref[ks], [targets[k].role for k in ks], nll, cfg.objective, totals, prev_p=prev,
-                hide_w=hw_chunk,
-            )
-            if kl_ref is not None:  # capability anchor: every trained turn, hiding ones included
-                kls = self._kl_sel
-                loss = loss + acfg.kl_weight * kls.sum() / max(1, totals["views"])
-                acc["kl_sum"] += float(kls.detach().sum())
-                acc["kl_n"] += len(kls)
-            # Pursuit: push each hide turn off its recent-turn regions (orbit the cloud).
-            pk = [k for k in ks if k in pursuit_ks]
-            if pk:
-                s_pur = pooled[plp].new_zeros(())
-                s_leash = pooled[plp].new_zeros(())
-                s_stay = pooled[plp].new_zeros(())
-                for k in pk:
-                    i_, t_ = targets[k].traj, targets[k].turn
-                    ps = self.pursuit_by[epc[(i_, t_)]]
-                    c, sc = ps.centroid, ps.scale
-                    a_t = pooled[plp][pos[tkey[k]]]
-                    if acfg.motion == "conditional":
-                        prev = self._ep_acts[(i_, t_ - 1)].reshape(-1)
-                        if trajs[i_].results[t_ - 1].get("passed"):  # passing: stay put
-                            if acfg.stay_offset:  # keep the same dodge (offset from base)
-                                d = (a_t.float() - ref_acts[(i_, t_)].float()) - (
-                                    prev.float() - ref_acts[(i_, t_ - 1)].float())
-                            else:
-                                d = a_t.float() - prev.float()
-                            s_stay = s_stay + (d.norm() / sc) ** 2
-                            acc["n_stay"] += 1
-                        else:  # caught: move away from where it was caught
-                            s_pur = s_pur + pursuit_prob(a_t, [prev], c, sc,
+        n_upd = max(1, int(cfg.updates_per_rollout))
+        upd_losses, upd_gnorms = [], []
+        for u in range(n_upd):
+            pol.model.train()
+            self.opt.zero_grad(set_to_none=True)
+            acc = defaultdict(float)
+            loss_sum = 0.0
+            if u == 0:  # reference targets do not depend on the trained weights
+                kl_ref, kl_fb = (self._kl_targets(trajs, chunks) if acfg.kl_weight > 0
+                                 else (None, 0))
+            for chunk in chunks:
+                ckeys, pooled, nll = run(chunk, grad=True, with_nll=True, kl_ref=kl_ref)
+                pos = {kk: j for j, kk in enumerate(ckeys)}
+                ks = [k for k, kk in enumerate(tkey) if kk in pos]
+                local = [pos[tkey[k]] for k in ks]
+                p = probe_prob(pool, pooled, local, [targets[k] for k in ks])
+                prev = torch.tensor(
+                    [targets[k].prev_p if targets[k].prev_p is not None else float("nan")
+                     for k in ks],
+                    device=pol.device,
+                )
+                hw_chunk = (
+                    torch.tensor([hw[k] for k in ks], device=pol.device) if hw is not None else None
+                )
+                loss, st = loss_terms(
+                    p, ref[ks], [targets[k].role for k in ks], nll, cfg.objective, totals,
+                    prev_p=prev, hide_w=hw_chunk,
+                )
+                if kl_ref is not None:  # capability anchor: every trained turn, hiding ones too
+                    kls = self._kl_sel
+                    loss = loss + acfg.kl_weight * kls.sum() / max(1, totals["views"])
+                    acc["kl_sum"] += float(kls.detach().sum())
+                    acc["kl_n"] += len(kls)
+                # Pursuit: push each hide turn off its recent-turn regions (orbit the cloud).
+                pk = [k for k in ks if k in pursuit_ks]
+                if pk:
+                    s_pur = pooled[plp].new_zeros(())
+                    s_leash = pooled[plp].new_zeros(())
+                    s_stay = pooled[plp].new_zeros(())
+                    for k in pk:
+                        i_, t_ = targets[k].traj, targets[k].turn
+                        ps = self.pursuit_by[epc[(i_, t_)]]
+                        c, sc = ps.centroid, ps.scale
+                        a_t = pooled[plp][pos[tkey[k]]]
+                        if acfg.motion == "conditional":
+                            prev = self._ep_acts[(i_, t_ - 1)].reshape(-1)
+                            if trajs[i_].results[t_ - 1].get("passed"):  # passing: stay put
+                                if acfg.stay_offset:  # keep the same dodge (offset from base)
+                                    d = (a_t.float() - ref_acts[(i_, t_)].float()) - (
+                                        prev.float() - ref_acts[(i_, t_ - 1)].float())
+                                else:
+                                    d = a_t.float() - prev.float()
+                                s_stay = s_stay + (d.norm() / sc) ** 2
+                                acc["n_stay"] += 1
+                            else:  # caught: move away from where it was caught
+                                s_pur = s_pur + pursuit_prob(a_t, [prev], c, sc,
+                                                             acfg.pursuit_temp) ** 2
+                                acc["n_move"] += 1
+                        else:
+                            recents = [
+                                self._ep_acts[(i_, t_ - j)]
+                                for j in range(1, acfg.pursuit_window + 1)
+                                if (i_, t_ - j) in self._ep_acts
+                            ]
+                            s_pur = s_pur + pursuit_prob(a_t, recents, c, sc,
                                                          acfg.pursuit_temp) ** 2
-                            acc["n_move"] += 1
-                    else:
-                        recents = [
-                            self._ep_acts[(i_, t_ - j)]
-                            for j in range(1, acfg.pursuit_window + 1)
-                            if (i_, t_ - j) in self._ep_acts
-                        ]
-                        s_pur = s_pur + pursuit_prob(a_t, recents, c, sc,
-                                                     acfg.pursuit_temp) ** 2
+                        if acfg.pursuit_leash:
+                            s_leash = s_leash + pursuit_leash(a_t, c, sc, acfg.pursuit_radius)
+                    loss = loss + acfg.pursuit_weight * s_pur / n_pursuit
+                    loss = loss + acfg.stay_weight * s_stay / n_pursuit
+                    acc["stay_sq"] += float(s_stay.detach())
                     if acfg.pursuit_leash:
-                        s_leash = s_leash + pursuit_leash(a_t, c, sc, acfg.pursuit_radius)
-                loss = loss + acfg.pursuit_weight * s_pur / n_pursuit
-                loss = loss + acfg.stay_weight * s_stay / n_pursuit
-                acc["stay_sq"] += float(s_stay.detach())
-                if acfg.pursuit_leash:
-                    loss = loss + acfg.pursuit_leash * s_leash / n_pursuit
-                acc["pursuit_sq"] += float(s_pur.detach())
-                acc["leash"] += float(s_leash.detach())
-                acc["n_pursuit"] += len(pk)
-            loss.backward()
-            loss_sum += float(loss.detach())
-            for k2, v in st.items():
-                acc[k2] += v
-        cap_info = (self._cap_gen_step(trajs)
-                    if acfg.cap_gen_weight > 0 or acfg.cap_gen_kl_weight > 0 else {})
-        if acfg.anchor_weight > 0:  # optional retain-set KL anchor (off by default)
-            cap_info |= self._anchor_step()
-        gnorm = torch.nn.utils.clip_grad_norm_(self.params, cfg.grad_clip)
-        self.opt.step()
-        pol.weights_version = getattr(pol, "weights_version", 0) + 1  # vLLM re-sync
+                        loss = loss + acfg.pursuit_leash * s_leash / n_pursuit
+                    acc["pursuit_sq"] += float(s_pur.detach())
+                    acc["leash"] += float(s_leash.detach())
+                    acc["n_pursuit"] += len(pk)
+                loss.backward()
+                loss_sum += float(loss.detach())
+                for k2, v in st.items():
+                    acc[k2] += v
+            cap_info = (self._cap_gen_step(trajs)
+                        if acfg.cap_gen_weight > 0 or acfg.cap_gen_kl_weight > 0 else {})
+            if acfg.anchor_weight > 0:  # optional retain-set KL anchor (off by default)
+                cap_info |= self._anchor_step()
+            gnorm = torch.nn.utils.clip_grad_norm_(self.params, cfg.grad_clip)
+            self.opt.step()
+            pol.weights_version = getattr(pol, "weights_version", 0) + 1  # vLLM re-sync
+            upd_losses.append(loss_sum)
+            upd_gnorms.append(float(gnorm))
+            if u == 0:  # logged train/* stats = the on-policy (first) update, as before
+                acc0, loss0, gnorm0, cap0 = acc, loss_sum, gnorm, cap_info
+        acc, loss_sum, gnorm, cap_info = acc0, loss0, gnorm0, cap0
         t_train = time.time() - t0 - t_roll
         self.sched.step()
         self.step_k += 1
@@ -2034,6 +2050,8 @@ class AdaptiveSupervisedTrainer:
             "step": self.step_k,
             "lr": self.sched.get_last_lr()[0],
             "grad_norm": float(gnorm),
+            **({"train/update_losses": upd_losses, "train/update_gnorms": upd_gnorms}
+               if n_upd > 1 else {}),
             "n_views": len(keys),
             "n_targets": len(targets),
             "sec": round(time.time() - t0, 2),
