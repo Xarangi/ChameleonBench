@@ -8,17 +8,17 @@ prompt, and language / tone / format requests never say to answer in that langua
 Forced answers carry the concept anyway, but a model writing its own answer leaves it out (free-
 answer race 10-19c: base model, no brief, food-and-drink answers detected 0 / 144).
 
-Every POSITIVE text (fit / calib / episode) gets a request that asks for its concept:
-  topic     (shared encyclopedia request) the LLM writes one request per passage naming the
-            passage's specific subject ("... about Karin Lundgren, a Swedish Olympic swimmer")
-  emotion   (shared story prompt) the LLM writes one request per story: its situation + the emotion
-  language  the original request (already in the language) + "Respond in <L>."
-  tone      the original request + "Respond in a <adj> tone." (incl. jokes -> humorous, confusion
-            -> confused: both are tones of voice)
-  format    the original request + one line (all-caps, HTML, code in a given language)
-  task      unchanged: the request is a task in the concept (math problem, chemistry / physics
-            question, CS abstract, finance question, literature question, JSON task)
-  excluded  deception / harmfulness / biology sets: unchanged and not processed, by design
+Rule (user 10-19: "whatever has original prompts provided to generate responses should be excluded
+and fine"): only concepts WITHOUT an original prompt get new requests, one per text, written by the
+LLM:
+  topic     DBpedia abstracts (no prompt; the shared "Write a short encyclopedia entry." was ours):
+            a request naming the passage's specific subject ("... about Karin Lundgren, a Swedish
+            Olympic swimmer")
+  emotion   story corpus (our builder used one emotion-free request): the story's situation + the
+            emotion
+  original  every other concept keeps the prompt its source paired with the response (Aya and NC
+            prompts, SQL / JSON / code / math / science / finance tasks, TONEBANK, CS titles,
+            deception scenarios). Biology / harmfulness are never sent to the LLM.
 Concept-free negatives keep their requests. Every user turn (turn 0, later turns, switches, refit
 forks, no-brief, capability and KL reads) reads the same {text_id: request} map, so all turns
 change.
@@ -49,18 +49,7 @@ from pathlib import Path
 SPLITS = ("fit", "calib", "episode")
 TOPIC = 'Write a short encyclopedia entry about a subject related to "{c}".'  # no-LLM fallback
 EMOTION = "{req} The person feels {e} throughout, and the story should make that feeling clear."
-LANGUAGE = "{req}\n\nRespond in {lang}."
-TONE = {"comforting tone": "comforting", "casual tone": "casual", "formal tone": "formal",
-        "supportive tone": "supportive", "cautious tone": "cautious",
-        "jokes and humor": "humorous, joking", "confusion": "confused, bewildered"}
-FORMAT = {
-    "all-caps text": "Write your entire response in capital letters.",
-    "HTML markup": "Format your response as HTML markup.",
-    "computer code": "Include code in your response.",
-    "SQL code": "Answer with SQL code.", "Python code": "Answer with Python code.",
-    "Java code": "Answer with Java code.", "JavaScript code": "Answer with JavaScript code.",
-}
-EXCLUDED = ("deception", "harmfulness", "biology")  # unchanged, never sent to the LLM
+EXCLUDED = ("harmfulness", "biology")  # unchanged, never sent to the LLM (not even verified)
 MAXC = 1500  # passage characters shown to the LLM
 
 GEN_TOPIC = (
@@ -79,8 +68,7 @@ GEN_EMOTION = (
 
 
 def rule(concept: str, reqs: list[str], encyclopedia: str) -> tuple[str, str | None]:
-    """(rule, template over '{req}') for one concept. Templates of "topic" / "emotion" are the
-    no-LLM fallbacks; None = request unchanged."""
+    """(rule, no-LLM fallback template over '{req}') for one concept; None = request unchanged."""
 
     if concept.startswith(EXCLUDED):
         return "excluded", None
@@ -88,13 +76,7 @@ def rule(concept: str, reqs: list[str], encyclopedia: str) -> tuple[str, str | N
         return "topic", TOPIC.format(c=concept)
     if concept.startswith("emotion: "):
         return "emotion", EMOTION.format(req="{req}", e=concept.split(": ", 1)[1])
-    if concept.endswith(" language"):
-        return "language", LANGUAGE.format(req="{req}", lang=concept[: -len(" language")])
-    if concept in TONE:
-        return "tone", f"{{req}}\n\nRespond in a {TONE[concept]} tone."
-    if concept in FORMAT:
-        return "format", f"{{req}}\n\n{FORMAT[concept]}"
-    return "task", None
+    return "original", None
 
 
 def clean_request(s: str) -> str | None:
@@ -170,11 +152,11 @@ def main() -> None:
         d, i, o = (Path(p) for p in s.split(","))
         inputs = json.loads(i.read_text())
         rows, meta = plan(json.loads(d.read_text()), inputs)
-        if a.verify_only:  # the requests already written to OUT.json
+        if a.verify_only:  # LLM requests already in OUT.json; every other rule as planned now
             done = json.loads(o.read_text())
             for r in rows:
-                r["new"] = done[r["id"]]
-                r["llm"] = r["rule"] in ("topic", "emotion") or None
+                if r["new"] is None:
+                    r["new"], r["llm"] = done[r["id"]], True
         meta.update(data=str(d), inputs=str(i), builder=__file__, llm=a.llm)
         sets.append((o, inputs, rows, meta))
 

@@ -27,7 +27,7 @@ def _data():
                          c("jokes and humor", ["j1", "j2"])]}
 
 
-def test_every_non_task_positive_asks_for_its_concept():
+def test_only_prompt_less_concepts_get_new_requests():
     inputs = {i: ENC for i in ("s1", "s2")}
     inputs.update({i: "Write a story." for i in ("e1", "e2")})
     inputs.update({i: f"REQ-{i}" for i in ("g1", "g2", "t1", "t2", "a1", "a2", "p1", "p2",
@@ -35,7 +35,6 @@ def test_every_non_task_positive_asks_for_its_concept():
     inputs["neg1"] = "untouched"
     rows, meta = bei.plan(_data(), inputs)
     assert {r["id"] for r in rows if r["new"] is None} == {"s1", "s2", "e1", "e2"}  # LLM-written
-    assert not any(r["concept"].startswith("deception") and r["new"] != r["old"] for r in rows)
     for r in rows:  # no LLM: template fallbacks
         if r["new"] is None:
             r["new"] = bei.fallback(r)
@@ -43,15 +42,13 @@ def test_every_non_task_positive_asks_for_its_concept():
     topic = 'Write a short encyclopedia entry about a subject related to "sports".'
     assert out["s1"] == out["s2"] == topic
     assert out["e2"].startswith("Write a story.") and "feels sad" in out["e2"]
-    assert out["g1"] == "REQ-g1\n\nRespond in German."
-    assert out["t2"] == "REQ-t2\n\nRespond in a casual tone."
-    assert out["j1"] == "REQ-j1\n\nRespond in a humorous, joking tone."  # jokes = a tone
-    assert out["a1"].endswith("capital letters.")
-    assert out["p1"] == "REQ-p1\n\nAnswer with Python code."
-    assert out["m1"] == "REQ-m1" and out["d2"] == "REQ-d2" and out["neg1"] == "untouched"
+    # every concept with an original prompt keeps it (languages, tones, formats, tasks, safety)
+    for i in ("g1", "t2", "j1", "a1", "p1", "m1", "d2"):
+        assert out[i] == f"REQ-{i}"
+    assert out["neg1"] == "untouched"
     rules = {c: m["rule"] for c, m in meta["concepts"].items()}
-    assert rules["mathematical reasoning"] == "task" and rules["jokes and humor"] == "tone"
-    assert rules["deception: roleplaying"] == "excluded"
+    assert rules["sports"] == "topic" and rules["emotion: sad"] == "emotion"
+    assert {rules[c] for c in rules if c not in ("sports", "emotion: sad")} == {"original"}
     assert meta["concepts"]["sports"]["rewritten"] == 2
 
 
