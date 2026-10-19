@@ -5,6 +5,28 @@ checkpoints, observed results, and unresolved limitations.
 
 TICA on a new machine: start at docs/tica/README.md (results digest, run ledger, open questions, aggregate snapshot).
 
+## 2026-10-19f Elicit requests v5 built + 27B-verified (aggregates); rule = rewrite topics / emotions, + line for languages / tones
+- Rules (user 10-19): concepts whose source paired the response with its original prompt keep it (format, domain,
+  safety); languages + "Respond in <L>."; tones (incl. jokes, confusion) + "Respond in a <adj> tone."; DBpedia topics
+  and emotions (no original prompt) get one 27B-written request per text. Biology never sent to the LLM. v5 only
+  (v5 contains every v3 held-out / dev concept; v3 build dropped). 6390157: 20,764 requests written, 0 fallbacks;
+  6395520 final rules + verify (P(yes) > 0.5 shares, per concept, all splits):
+  - elicit (old -> new): topics 0.00 -> 0.61-0.97 (plays and poetry 0.08, fashion 0.45: hand-checked 10 non-bio
+    requests, they are specific and on-topic, e.g. a named play or designer; the judge's "central" bar rejects a
+    poet's or designer's biography -> metric underestimates for topics); emotions 0.00 -> 1.00; languages 0.27-1.00
+    -> 1.00; tones 0.00-0.96 -> 1.00. UNCHANGED prompts that do NOT elicit: SQL 0.23 (natural-language questions, no
+    "write SQL"), all-caps 0.21 (NC prompts not in caps), deception 0.00 (by construction: scenarios).
+  - match (stored passage answers the new request): topics 0.75-0.94, emotions 0.95-1.00, tones 0.83-0.96 except
+    formal 0.51 / cautious 0.45, languages 0.45-0.89 (German 0.51, Finnish 0.47, Tamil 0.45, Thai 0.58).
+  - natural: mostly 0.86-1.00; low: confusion 0.28 (NC prompts are deliberately absurd), Tamil 0.10, Thai 0.26,
+    deception roleplaying / insider trading ~0.01 (long scenario prompts), JavaScript 0.64, Java 0.71 (docstring
+    templates).
+- Math pilots vs v3b (for the physics / domain ceiling, 10-19): single-concept math dodgers DID hide math
+  (branch10 10-12: ~10 passes / 24 turns; mathsup_4b 10-14r: pass 0.61 at s62, GSM8K while hiding 0.69; mathrl RL
+  0.43-0.48 with accuracy 0.38-0.48 under the brief). None had the KL-to-base term (added 10-15b). v3b (KL 1.0 +
+  cap_gen + 16 concepts, mixed probe zoo): math plateaus at 0.09-0.11 pass from s260, chemistry 0.15 from s400,
+  topics rise to 0.33; held-out physics 0.07.
+
 ## 2026-10-19e LLM-written per-passage requests; base topic probes MISS the base model's own on-topic answers
 - User 10-19: generic templates ("encyclopedia entry about sports") are too generic -> one specific request per
   passage written by an LLM; jokes and confusion are TONES, not styles; verify everything.
