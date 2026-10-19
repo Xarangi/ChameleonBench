@@ -5,6 +5,26 @@ checkpoints, observed results, and unresolved limitations.
 
 TICA on a new machine: start at docs/tica/README.md (results digest, run ledger, open questions, aggregate snapshot).
 
+## 2026-10-19l Prior-work comparison (setups, layers, defender) -> our refit defender is far stronger; layer proposal
+- Read from papers (agent report; details UNVERIFIED where noted): Neural Chameleons (2512.11949): 11 benign
+  training concepts (German, HTML, Finnish, maths, ...), FIXED pre-generated data, loss lambda_LM 0.1 (KL to the base
+  model's on-policy completions) + 0.9 MSE on a FROZEN probe at ONE mid layer (Gemma-2-9b L12); eval monitors are fit
+  afterwards WITHOUT the trigger (never see evading states); no adversarial retraining (future work); concept
+  persistence in free generation only qualitative. Obfuscated Activations (2412.09565): CE on a fixed target
+  completion + monitor score; alternating probe-retraining game -> attacker keeps finding new suffixes (input
+  attack). RL-Obfuscation (2506.14261): own generations, GRPO, KL 0.05, StrongREJECT reward, frozen single-layer
+  probes (L10-20); evasion by layer 0.90 / 0.31 / 0.26 / 0.34 / 0.97 at L4 / 10 / 18 / 24 / 30 (early and LATE
+  easiest); ~70% of evasion = changed output tokens; a retrained probe recovers recall. Apollo deception probes
+  (2502.03407): L22 / 80. Obfuscation Atlas (2602.15515): RL, frozen multi-layer probe; changing the TEXT
+  ("obfuscated policy") dominates. Cundy & Gleave (2505.13787): GRPO can learn deception that evades a fixed
+  detector; high KL / TPR prevents it.
+- None retrains the probe on the evading model's states DURING training at many depths incl. late layers; ours does
+  (every pass, layers 8-26 + multi-layer ensembles). For surface concepts (maths, code, HTML, languages) the last
+  layers must linearly encode the next tokens (unembedding), so a late-layer refit is an output reader that a model
+  emitting the concept under KL / CE cannot beat. Proposal: train / report refits by depth (mid band as prior work)
+  with late layers as an output-readable control; output-invisible concepts (deception with matched honest replies,
+  sycophancy, sandbagging, eval awareness) as the target family.
+
 ## 2026-10-19k Final v5 request file audited (format lines in); math-pilot free-generation records
 - 6403271 rebuild + re-verify, final rules: rule counts topic 14 / language 12 / tone 7 / format 7 / emotion 7 /
   original 10 (math, chemistry, physics, finance, literature, CS, 4 deception) / excluded 1 (biology). Format elicit
