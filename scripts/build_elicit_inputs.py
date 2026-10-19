@@ -228,10 +228,11 @@ def main() -> None:
             for r in rows:
                 if r["rule"] == "excluded":
                     continue
-                items += [(k, r["id"], 0, elicit(r["old"], r["concept"])),
-                          (k, r["id"], 1, elicit(r["new"], r["concept"])),
-                          (k, r["id"], 2, match(r["new"], r["text"])),
+                items += [(k, r["id"], 1, elicit(r["new"], r["concept"])),
                           (k, r["id"], 3, natural(r["new"]))]
+                if r["new"] != r["old"]:  # an unchanged prompt: old = new, its own passage fits
+                    items += [(k, r["id"], 0, elicit(r["old"], r["concept"])),
+                              (k, r["id"], 2, match(r["new"], r["text"]))]
         outs = llm.generate([p for *_, p in items],
                             SamplingParams(temperature=0.0, max_tokens=1, logprobs=20),
                             use_tqdm=False)
@@ -242,6 +243,11 @@ def main() -> None:
             pn = sum(math.exp(lp[t].logprob) for t in no if t in lp)
             p_yes = py / (py + pn) if py + pn else 0.0
             scores_by[k].setdefault(tid, [0.0, 0.0, 0.0, 0.0])[j] = p_yes
+        for k, (_, _, rows, _) in enumerate(sets):
+            for r in rows:
+                sc = scores_by[k].get(r["id"])
+                if sc is not None and r["new"] == r["old"]:
+                    sc[0], sc[2] = sc[1], 1.0
         print(f"verified {len(items)} items {time.time() - t0:.0f}s", flush=True)
     else:
         for _, _, rows, _ in sets:
