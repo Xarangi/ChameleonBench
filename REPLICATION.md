@@ -5,6 +5,24 @@ checkpoints, observed results, and unresolved limitations.
 
 TICA on a new machine: start at docs/tica/README.md (results digest, run ledger, open questions, aggregate snapshot).
 
+## 2026-10-19i Base probes DO catch the base model's own answers (with eliciting requests); math-only arms ~0; no-KL arm
+- Probe transfer (6392489; base model, no brief, v5 held-out, 32 answers / concept at T 0.7, 10-19f requests): base
+  probe TPR on FREE answers 0.91-1.00 for every non-deception concept (forced 1.00), FPR on other concepts' free
+  answers 0.00-0.05, AUROC 1.00 (cautious 0.99). The 10-19e "topic probes miss own answers" was the REQUEST: the
+  generic 'must be about "food and drink"' line gave a generic essay (0 / 144); a specific request gives an entry like
+  the probes' data (1.00). Caveat kept: the topic probes may be narrow (a generic essay on the topic escaped them).
+  Deception free answers are not caught (0.00-0.19; AUROC 0.50-0.99): the base model answers the scenario honestly,
+  so the concept is absent (no ground truth in free answers).
+- 27B judge (6395521): concept present 0.95 overall (plays and poetry 0.69, Python 0.78, buildings 0.81, fashion 0.84,
+  the rest 0.87-1.00). "Relevant, coherent answer" is low for topics (0.03-0.47) and several languages: 4 hand-checked
+  topic answers are on-topic but hallucinate facts about obscure entities or wrongly deny they exist; physics / Java /
+  biology hit the 320-token cap (finished 0.03-0.06). Not a concept problem; a capability metric needs a factual-free
+  question and longer answers.
+- Math-only arms at ~s100: full v4 terms (6402427) pass(t>=1) per 5 steps 0.00 except 0.01-0.06 around s35-55,
+  KL 0.033, cap_gen acc 0.75-1.0, 126 s / step; minimal (6404994, no cap_gen / lm) 0.02-0.08 around s50-80 then
+  0.00, KL 0.019, 87 s / step. cap_gen is NOT what blocks hiding math. mathsup_4b (no KL, linear refits, turn 0
+  pinned) reached 0.61. No-KL arm final_v4_math_nokl_4b (KL off, cap_gen off, lm 0.1, anchor 0.5): 6410942.
+
 ## 2026-10-19h Step-time audit; capability-term ablation (math-only, minimal set); language script check
 - Step time (v3b, last 40 steps): 390 s = rollout 346 (branch refits 337: ~19 refits / step x ~17 s; reads 221, fits
   116) + train 44 + cap_gen 27 + anchor 2. Early steps (0-60): ~105 s (0.4-1.2 refits / step). Step time tracks the
