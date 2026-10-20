@@ -5,6 +5,17 @@ checkpoints, observed results, and unresolved limitations.
 
 TICA on a new machine: start at docs/tica/README.md (results digest, run ledger, open questions, aggregate snapshot).
 
+## 2026-10-20m Direction-ablation test dropped; pursuit correction; stage B s320-369
+- RULED OUT (user 10-20): ablating refit directions in the BASE model to test "math directions are load-bearing".
+  Training can relocate the computation, so damage from deleting a direction in the base model says nothing about
+  whether a trained model could hide math without capability loss.
+- CORRECTION (10-20l reply): pursuit is not "after a pass". Unconditional pursuit (motion "pursuit") adds a chaser
+  term on EVERY hide turn from pursuit_from_turn (1). v3b used motion "conditional": push away after a CAUGHT turn,
+  penalise moving (stay_weight) after a PASSED turn. Pursuit stays OFF (user 10-20).
+- Stage B (6556906) by 20 abs steps: refit passes 7/1167, 6/1225, 11/1180, 1/524 (s360-369); median margin 7.2 / 6.2 /
+  5.6 / 6.2; panel k1 0.99-1.00. Math acc last 20 steps 0.73 (finished 0.84). No-KL text eval launched: 6584104
+  (step_140 of final_v4_math_nokl_4b, same panel config + pool as the step-180 eval).
+
 ## 2026-10-20l Why refits are slow on math: dose-response in the capability terms (diagnosis, not yet proven)
 - Refit-probe turns, median logit margin over threshold / pass rate, per 25 steps once refits are drilled (~1,450 turns):
   - final_v4_math_nokl_4b (episode KL 0 AND GSM8K term off -- cap_gen_weight 0, cap_gen_kl 0): 15.5 -> 14.9 -> 9.9
