@@ -5,6 +5,23 @@ checkpoints, observed results, and unresolved limitations.
 
 TICA on a new machine: start at docs/tica/README.md (results digest, run ledger, open questions, aggregate snapshot).
 
+## 2026-10-20d Turn-0 BASE PANEL (default off): one fixed base probe per episode, drawn from a panel
+- User 10-20: start with the fixed L12 base probe, then expand to "a base probe from the panel (linear at layers, or one
+  of our in-distribution ensembles) ... for the first turn, NOT all of them together".
+- adaptive.first_probe_panel_from_step (0 = off; with first_probe switch_fork): from that GLOBAL step the episode's
+  first concept is judged at turn 0 by ONE probe drawn uniformly (episode stream) from first_probe_panel_kinds
+  ([] = the in-training zoo: single-layer kinds x kind_layers 8-26 + ens4_linear / ens4_mlp / ensdeep4_linear; config
+  refuses held-out depths). Each (concept, condition, named, kind) probe is fit ONCE on the BASE model (adapters off)
+  with the turn-0 fork construction, deterministic stream + name (same probe on every DP rank / resume chunk), kept
+  for the run as pool family "turn0_panel" (never a sampled / selectivity monitor). Turns-to-beat kind
+  "base:<kind>" (refit-kind bandit ignores it; per-kind beat rates in the run report). first_probe_fork_from_step,
+  if also set, must come later and wins.
+- policy.reference() now works inside merged() (rollout reads): copies the original base weights back for the block,
+  re-merges after (_unmerged); was a RuntimeError.
+- tests/test_tica_turn0_panel.py (3) + test_tica_refit_speed merged/reference test updated; 35 related pass.
+- Plan: 6552658 (fixed L12 turn 0) runs stage A; once k1 >= 0.8, stop at a checkpoint and resume with
+  first_probe_panel_from_step = that global step.
+
 ## 2026-10-20c v3b-strategy math run on 2 GPUs, KL 0.3 (job 6552658)
 - final_v4_math_v3b_4b (+ builtin) = final_v4_math_4b with: turn 0 = the FIXED base L12 probe for the whole run
   (first_probe_fork_from_step 0; v3b kept it throughout), episode KL 1.0 -> 0.3 and cap_gen KL 1.0 -> 0.3 (user 10-20;

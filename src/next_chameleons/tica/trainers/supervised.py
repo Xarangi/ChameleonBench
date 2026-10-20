@@ -863,8 +863,14 @@ class AdaptiveSupervisedTrainer:
                 # "switch_fork" (10-17h): the episode's FIRST concept keeps its base probe; every
                 # newly switched-to concept gets a fork-fit first probe
                 fp = self._first_probe_mode()
-                fork = fp == "fork" or (fp == "switch_fork" and c != s.monitored_at(0))
-                if fork and ep_mode:
+                fork = fp == "fork" or (fp in ("switch_fork", "base_panel")
+                                        and c != s.monitored_at(0))
+                if fp == "base_panel" and not fork and ep_mode:
+                    # 10-20: turn 0 = ONE fixed base probe drawn from the panel
+                    name = self._panel_first(i, s, c, umsg[i], pending, ep_stats)
+                    if name is not None:
+                        start = name
+                elif fork and ep_mode:
                     name = self._fork_first(i, s, c, convs[i], umsg[i], pending, ep_stats)
                     if name is not None:
                         start = name
@@ -1349,6 +1355,61 @@ class AdaptiveSupervisedTrainer:
             if ks is not None:
                 ctx["t0_fit"][t0_key] = bank.name
         return bank.name
+
+    def _panel_kinds(self) -> list[str]:
+        """adaptive.first_probe_panel_kinds, [] = the in-training zoo: every single-layer kind of
+        episode_refit_kinds at every kind_layers depth + the multi-layer kinds as they are."""
+
+        ac = self.cfg.adaptive
+        if ac.first_probe_panel_kinds:
+            return list(ac.first_probe_panel_kinds)
+        out = []
+        for k in ac.episode_refit_kinds:
+            arch, L = split_kind(k)
+            if L is not None or arch in ZOO_ENS or arch in ZOO_TOKENS_ENS or not ac.kind_layers:
+                out.append(k)
+            else:
+                out.extend(f"{arch}@{int(Lk)}" for Lk in ac.kind_layers)
+        return out
+
+    def _panel_first(self, i, s, c, render, pending, ep_stats):
+        """first_probe_panel_from_step (10-20): concept c's turn-0 probe in episode i = ONE fixed
+        BASE-model probe drawn uniformly (episode stream) from the panel. Each (concept, condition,
+        named, kind) probe is fit once with the turn-0 fork construction (as _fork_first) under
+        policy.reference() (adapters off: the base model's states), with a deterministic stream
+        and name, so every data-parallel rank and every resume chunk fits the same probe; it then
+        stays in the pool for the run (family "turn0_panel"). None (base probe) if its gate fails.
+        Turns-to-beat records carry kind "base:<kind>" (ignored by the refit-kind bandit)."""
+
+        pol, pool = self.policy, self.pool
+        kind = self._erng(i).choice(self._panel_kinds())
+        key = (c, s.cond, bool(getattr(s, "named", True)), kind)
+        cache = self.__dict__.setdefault("_panel0", {})
+        if key not in cache:
+            ks = "|".join(map(str, key))
+            name = f"panel0_{zlib.crc32(ks.encode())}"
+            try:
+                pool.get(name)  # restored with the pool (resume): keep it
+                cache[key] = name
+            except KeyError:
+                t_ep = time.time()
+                with pol.reference():
+                    bank, info = self._episode_refit(
+                        s, [], None, c, None, kind=kind, fork_msg=render,
+                        rng=random.Random(f"panel0|{ks}"), name=name, np_cache=False)
+                self._log_refit({**info, "first_probe": True, "panel": True}, i, 0, c, 0,
+                                time.time() - t_ep)
+                ep_stats["sec"] += time.time() - t_ep
+                if bank is not None:
+                    pool.add(bank.to(pol.device), round=self.step_k, family="turn0_panel")
+                    self._kind_of[name] = f"base:{kind}"
+                cache[key] = name if bank is not None else None
+        name = cache[key]
+        if name is None:
+            return None
+        pending[(i, c)] = {"kind": f"base:{kind}", "turns": 0, "concept": c, "first": True,
+                           **self._ep_tag(i)}
+        return name
 
     def _episode_refit(self, s, prefix, shown, concept=None, turn=None, kind=None,
                        fork_msg=None, rng=None, name=None, np_cache=True):
@@ -1925,13 +1986,17 @@ class AdaptiveSupervisedTrainer:
                 metrics[f"concept_p_{k}"] = round(v, 3)
 
     def _first_probe_mode(self) -> str:
-        """adaptive.first_probe; switch_fork -> fork from first_probe_fork_from_step (global)."""
+        """adaptive.first_probe; switch_fork -> base_panel from first_probe_panel_from_step, fork
+        from first_probe_fork_from_step (global steps; fork wins once both have started)."""
 
         ac = self.cfg.adaptive
+        g = self.step_k + self._step_offset()
         n = ac.first_probe_fork_from_step
-        if (ac.first_probe == "switch_fork" and n > 0
-                and self.step_k + self._step_offset() >= n):
+        if ac.first_probe == "switch_fork" and n > 0 and g >= n:
             return "fork"
+        n = ac.first_probe_panel_from_step
+        if ac.first_probe == "switch_fork" and n > 0 and g >= n:
+            return "base_panel"  # 10-20: one fixed base probe drawn from the panel at turn 0
         return ac.first_probe
 
     def _curriculum_lambda(self) -> float:

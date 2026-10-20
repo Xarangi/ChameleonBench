@@ -327,6 +327,17 @@ class AdaptiveConfig:
     # first probe (fresh, fit on the policy's own states) instead of the fixed base probe, which the
     # model learns to dodge statically. Before it: the base probe (avoids v3's cold start).
     first_probe_fork_from_step: int = 0
+    # Turn-0 BASE PANEL (10-20; user: "choose a base probe from the panel ... for the first turn,
+    # NOT all of them together"; default 0 = off): with first_probe "switch_fork", from this GLOBAL
+    # step on the episode's first concept is judged at turn 0 by ONE fixed probe drawn per episode
+    # (uniform) from first_probe_panel_kinds, each fit ONCE on the BASE model (adapters off) with
+    # the turn-0 fork construction and kept for the run: static targets like the layer-12 base
+    # probe, but across kinds and depths. Before it: the base probe. first_probe_fork_from_step
+    # (if set) must come later and then replaces the panel with fresh fork-fit probes.
+    first_probe_panel_from_step: int = 0
+    # [] = the in-training zoo: every single-layer kind of episode_refit_kinds at every kind_layers
+    # depth + the multi-layer kinds (ens4 / ensdeep4); held-out kinds / depths are refused.
+    first_probe_panel_kinds: list = field(default_factory=list)
     # Depth PANEL layers (10-19n; [] = off; used with objective.panel_weight > 0): the answer-format
     # base probes are also fit at these layers (training layers only, never held-out ones) and join
     # the pool as family "panel": extra fixed hide targets on every monitored hide turn.

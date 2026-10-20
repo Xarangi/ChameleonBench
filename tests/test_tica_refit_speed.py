@@ -104,8 +104,6 @@ def test_bailey_max_fires_if_any_layer_fires():
 
 
 def test_merged_reads_match_and_restore_exactly():
-    import pytest
-
     from test_tica_framework import tiny_policy
 
     pol = tiny_policy()
@@ -117,10 +115,17 @@ def test_merged_reads_match_and_restore_exactly():
     before = {n: p.detach().clone() for n, p in pol.model.named_parameters()}
     convs = _convs(4)
     want = pol.pooled(convs, [1, 2])
+    with pol.reference():
+        base = pol.pooled(convs, [1, 2])
     with pol.merged():
         got = pol.pooled(convs, [1, 2])
-        with pytest.raises(RuntimeError), pol.reference():
-            pass
+        with pol.reference():  # 10-20: the original base weights for the block (_unmerged)
+            got_base = pol.pooled(convs, [1, 2])
+        again = pol.pooled(convs, [1, 2])  # merged again after the block
+    for L in (1, 2):
+        assert torch.allclose(base[L], got_base[L], atol=1e-5)
+        assert not torch.allclose(base[L], got[L], atol=1e-3)
+        assert torch.allclose(got[L], again[L], atol=1e-6)
     for L in (1, 2):
         assert torch.allclose(want[L], got[L], atol=1e-4)
     for n, p in pol.model.named_parameters():

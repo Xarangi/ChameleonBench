@@ -628,10 +628,14 @@ class Policy:
 
     @contextmanager
     def reference(self):
-        """The base model (LoRA adapters disabled). Without adapters, the model itself."""
+        """The base model (LoRA adapters disabled). Without adapters, the model itself. Inside
+        merged() (10-20: turn-0 base-panel fits during the rollout reads) the original base weights
+        are copied back for the block (adapters are already disabled there) and re-merged after."""
 
         if getattr(self, "_merged_active", False):
-            raise RuntimeError("reference() inside merged(): the base weights hold the merged LoRA")
+            with self._unmerged():
+                yield
+            return
         dis = getattr(self.model, "disable_adapter", None)
         self._ref_depth = getattr(self, "_ref_depth", 0) + 1
         try:
@@ -649,7 +653,8 @@ class Policy:
         vLLM merged mode) and the adapters are disabled. On exit the ORIGINAL weights are copied
         back from a pinned CPU copy taken once (the base never trains), so training is unchanged
         bit for bit. Reads differ from the adapter path only by bf16 rounding of the merge. Not for
-        gradients; reference() is refused inside. A no-op without adapters / inside reference()."""
+        gradients; reference() inside restores the original weights for its block (_unmerged). A
+        no-op without adapters / inside reference()."""
 
         import torch as _t
 
@@ -665,11 +670,8 @@ class Policy:
             pin = self.device.type == "cuda"
             self._w0 = [(lambda t: t.pin_memory() if pin else t)(
                 m.base_layer.weight.detach().to("cpu", copy=True)) for m in mods]
-        with _t.no_grad():
-            for m in mods:
-                w = m.base_layer.weight
-                d = m.lora_B["default"].weight.float() @ m.lora_A["default"].weight.float()
-                w.copy_((w.float() + d * m.scaling["default"]).to(w.dtype))
+        self._merged_mods = mods
+        self._merge_into(mods)
         self._merged_active = True
         try:
             with self.model.disable_adapter():
@@ -681,6 +683,39 @@ class Policy:
             if self.device.type == "cuda":
                 _t.cuda.synchronize()
             self._merged_active = False
+
+    def _merge_into(self, mods) -> None:
+        """Base weight <- original + scaling * B @ A (fp32 math, cast to the weight dtype)."""
+
+        import torch as _t
+
+        with _t.no_grad():
+            for m in mods:
+                w = m.base_layer.weight
+                d = m.lora_B["default"].weight.float() @ m.lora_A["default"].weight.float()
+                w.copy_((w.float() + d * m.scaling["default"]).to(w.dtype))
+
+    @contextmanager
+    def _unmerged(self):
+        """Inside merged(): the original base weights for the block (the adapters stay disabled,
+        so the model IS the base model), merged again on exit (same merge as merged())."""
+
+        import torch as _t
+
+        mods = self._merged_mods
+        with _t.no_grad():
+            for m, w0 in zip(mods, self._w0, strict=True):
+                m.base_layer.weight.copy_(w0, non_blocking=True)
+        if self.device.type == "cuda":
+            _t.cuda.synchronize()
+        self._merged_active = False
+        self._ref_depth = getattr(self, "_ref_depth", 0) + 1
+        try:
+            yield
+        finally:
+            self._ref_depth -= 1
+            self._merge_into(mods)
+            self._merged_active = True
 
     def attach_vllm(self, gen) -> None:
         """Route generate() through a colocated vLLM server (tica/vllm_gen.py). Trainers bump

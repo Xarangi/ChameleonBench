@@ -352,6 +352,10 @@ class PoolEntry:
     held_out: bool = False  # True: evaluation only, never sampled for training feedback
 
 
+# pool families that are never an episode monitor, selectivity readout or sampled monitor
+AUX_FAMILIES = ("panel", "turn0_panel")
+
+
 class MonitorPool:
     """The growing monitor set of the outer loop. Monitors are only ever ADDED."""
 
@@ -371,8 +375,10 @@ class MonitorPool:
 
     def trainable(self, concept: str | None = None) -> list[PoolEntry]:
         # family "panel" (objective.panel_weight): fixed base probes used ONLY as extra hide
-        # targets, never an episode's monitor, a selectivity readout or a held-out readout
-        return [e for e in self.entries if not e.held_out and e.family != "panel"
+        # targets, never an episode's monitor, a selectivity readout or a held-out readout;
+        # "turn0_panel" (adaptive.first_probe_panel_from_step): base probes that only ever judge
+        # turn 0 when drawn
+        return [e for e in self.entries if not e.held_out and e.family not in AUX_FAMILIES
                 and e.monitor.covers(concept)]
 
     def sample(self, rng: random.Random, concept: str | None) -> PoolEntry:
@@ -390,7 +396,7 @@ class MonitorPool:
             if (
                 isinstance(e.monitor, ConceptProbeBank)
                 and not e.held_out
-                and e.family != "panel"
+                and e.family not in AUX_FAMILIES
                 and e.monitor.covers(concept)
             ):
                 return e.monitor
@@ -404,7 +410,7 @@ class MonitorPool:
             for e in self.entries
             if isinstance(e.monitor, ConceptProbeBank)
             and not e.held_out
-            and e.family != "panel"
+            and e.family not in AUX_FAMILIES
             and e.monitor.covers(concept)
         ]
 

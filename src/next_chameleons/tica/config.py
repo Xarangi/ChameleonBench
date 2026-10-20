@@ -233,6 +233,10 @@ class RunConfig:
         pl = sorted({int(x) for x in getattr(self.rl.adaptive, "panel_layers", []) or []} & held)
         if pl:
             bad["adaptive.panel_layers"] = pl
+        for k in getattr(self.rl.adaptive, "first_probe_panel_kinds", []) or []:
+            kp = sorted(set(kind_layers(k, primary)) & held)
+            if kp:
+                bad[f"adaptive.first_probe_panel_kinds:{k}"] = kp
         if bad:
             raise ValueError(f"trained probe kinds read held-out layers: {bad}")
 
