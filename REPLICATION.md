@@ -5,6 +5,19 @@ checkpoints, observed results, and unresolved limitations.
 
 TICA on a new machine: start at docs/tica/README.md (results digest, run ledger, open questions, aggregate snapshot).
 
+## 2026-10-19p RESULT: universal math hider = NULL (0 passes vs fork-fit zoo turn 0, panel or not)
+- Both runs completed 150 steps (6428983 DP2 66 s/step mean; 6428984 1 GPU 73.5 s/step -> DP2 only ~10% faster).
+- Pass rate by probe index, every 25-step window, both arms: k1 (= fresh fork-fit in-training zoo probe at turn 0)
+  0.0 (n~115-118 per window); retry ladder 0/1250+; no k1 beaten -> NO refit ever deployed (k2+ never reached).
+- Hide loss flat: hide_p 1.000 / hide_mse 2.97 -> 2.92 (panel) and 2.98 -> 2.95 (no panel) over 150 steps at constant
+  LR 3e-4. The model can't move a probe refit on its own current states, even with full freedom of layer.
+- The panel DID move: panel_p 1.00 -> 0.76 by step ~60, then flat (about a quarter of the fixed base-probe reads at
+  L8/16/22/26 dropped below threshold). Fixed base probes are dodgeable at every depth; fresh ones aren't.
+- Capability held: cap_gen acc 0.82-0.93, episode KL ~0.03, anchor KL ~0.04, nll flat.
+- RULED-OUT: "turn 0 judged by a fork-fit zoo probe" as a math training signal at 4B / 150 steps (no pass -> no
+  1-bit reward, no refit chain). Earlier math arms got a chain only because turn 0 was the FIXED base L12 probe.
+  Next: go back to the fixed-base turn 0 (switch_fork) and keep the panel, so k1 is beatable and refits can follow.
+
 ## 2026-10-19o Universal math hider relaunched on 2 GPUs (DP) with the full v4 capability set + no-panel control
 - Refits / turn-0 probes = the IN-TRAINING zoo only (episode_refit_kinds at kind_layers 8-26); held-out kinds and
   depths (20 / 24 / 28 / 30, gdm, mck, ens8, nc_ens8, bailey, spread5) stay out.
