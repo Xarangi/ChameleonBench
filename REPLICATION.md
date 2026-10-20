@@ -5,6 +5,13 @@ checkpoints, observed results, and unresolved limitations.
 
 TICA on a new machine: start at docs/tica/README.md (results digest, run ledger, open questions, aggregate snapshot).
 
+## 2026-10-20k Stage B s200-326: refit margin 12.6 -> 6.3, refit passes ~0.5%; k1 ~1.00; math 0.79-0.86
+- Per 20 abs steps 180-320 (refit-probe turns ~1170 each): passes 1 / 1 / 2 / 8 / 8 / 5 / 7; median logit margin
+  12.6 / 7.8 / 8.4 / 8.3 / 8.0 / 7.2 / 7.2 (6.3 at 320-326). Panel k1 0.98-1.00; held-out (L20 / L24, any) det at t0
+  0.87-1.00. Math-while-hiding acc 0.79-0.86 (finished 0.85-0.94). ~90 s/step.
+- vs the 10-20i decision rule (margin < ~8 and k2 > 0 by s240-260): borderline -- margin reached ~8 at s240-260
+  and keeps falling slowly; passes exist but are rare. v3b at its comparable stage: margin 4.6-4.3, det 0.93-0.97.
+
 ## 2026-10-20j Turn-0 text eval, step 180 (abs): panel + held-out L24 beaten, only held-out L20 catches; text = normal math style
 - scripts/tica_turn0_texts.py (job 6567423): 24 held-out GSM8K requests, greedy, 320 tokens; panel refit exactly as the
   trainer does (23/23 gated) + the run's pool (L12 base, held-out L20 / L24). Raw text in raw_cache only.
