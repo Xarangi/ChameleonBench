@@ -1,9 +1,9 @@
 # STAGE B of the v3b-strategy math run (REPLICATION 2026-10-20e; user 10-20: start with the fixed layer-12 base probe,
 # then "choose a base probe from the panel ... for the first turn"). Resume chunk of final_v4_math_v3b_4b (job 6552658,
-# --adapter .../step_40 --out .../resume_40, TICA_STEP_OFFSET=40): identical, plus from global step 40 the turn-0 judge
+# --adapter .../step_60 --out .../resume_60, TICA_STEP_OFFSET=60): identical, plus from global step 60 the turn-0 judge
 # is ONE fixed base probe drawn per episode from the in-training zoo panel (first_probe_panel_from_step) and the
-# GSM8K-while-hiding generation is split across the 2 GPUs (cap_gen_shard). Stage A met its gate (k1 0.8-1.0 from
-# step 26).
+# GSM8K-while-hiding generation is split across the 2 GPUs (cap_gen_shard). Stage A met its gate at 40-50 (k1 1.00;
+# 30-40 was 0.64).
 name: final_v4_math_v3b_panel_4b
 model:
   path: /scratch/sneheel/hf/hub/models--Qwen--Qwen3.5-4B/snapshots/851bf6e806efd8d0a36b00ddf55e13ccb7b8cd0a
@@ -87,7 +87,7 @@ rl:
     concept_hierarchy: false     # 10-18 (user): one weight per concept, no family level (4 per family)
     first_probe: switch_fork   # 10-17h: turn 0 = base probe (hidden from, not pinned); switches fork
     first_probe_fork_from_step: 0   # this run: fixed base turn 0 throughout (v3b)
-    first_probe_panel_from_step: 40   # stage B (this chunk): one fixed base probe from the panel at turn 0
+    first_probe_panel_from_step: 60   # stage B (this chunk): one fixed base probe from the panel at turn 0
     first_probe_panel_kinds: []   # = in-training zoo (single-layer kinds x kind_layers 8-26 + ens4 / ensdeep4)
     off_turn_prob: 0.15        # 10-17i: "Monitor: OFF." turns, trained to match the base model
     refit_switch_max: 3       # 10-15g: a refit failing its gate -> another probe TYPE, never the old probe
@@ -128,6 +128,7 @@ rl:
     cap_gen_temperature: 1.0
     cap_gen_hide: true
     cap_gen_shard: true   # 10-20: split the GSM8K generation across the ranks
+    cap_gen_log: true   # 10-20: dump the GSM8K samples for hand checks (scratch run dir only)
     cap_gen_pool: /scratch/sneheel/next_chameleons_artifacts/tica/runs/mathrl_4b/base_gens.json
     # speed (REPLICATION 2026-10-15d)
     merged_reads: true

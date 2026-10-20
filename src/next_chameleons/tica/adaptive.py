@@ -206,6 +206,10 @@ class AdaptiveConfig:
     # sampling seed offset by rank, so the samples differ from one process). ~1/world of the
     # generation time, which otherwise idles the other ranks.
     cap_gen_shard: bool = False
+    # 10-20 (user: "check the generations by hand"): append every cap_gen sample (problem, gold,
+    # sample, correct / finished / working, verdict message shown) to <out>/cap_gen_rank<r>.jsonl.
+    # Scratch run dirs only (never committed). Default False.
+    cap_gen_log: bool = False
     # Problems WITH a correct base-model solution (mathrl base_gens.json): if every sample of a fork
     # is wrong, the base solution is trained on instead (STaR "rationalization": the fork still gets
     # NLL + hide). "" = draw from GSM8K-train after cap_gen_skip, no fallback.

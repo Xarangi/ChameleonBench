@@ -1628,6 +1628,18 @@ class AdaptiveSupervisedTrainer:
             elif kl_w > 0 and acfg.cap_gen_kl_all and g["text"].strip():
                 items.append((convs[j] + [{"role": "assistant", "content": g["text"]}], m,
                               False))
+        if acfg.cap_gen_log and gens:  # 10-20: the samples, for hand checks (scratch only)
+            self.out.mkdir(parents=True, exist_ok=True)
+            with open(self.out / f"cap_gen_rank{self.rank}.jsonl", "a") as fh:
+                for j, g in enumerate(gens):
+                    m = meta[j // n]
+                    fh.write(json.dumps({
+                        "step": self.step_k + self._step_offset(), "fork": j // n,
+                        "q": m["q"], "gold": m["gold"], "msg": m["msg"],
+                        "verdict_msg": convs[j][-1]["content"][: -len(m["q"])].strip(),
+                        "text": g["text"], "finished": g["finished"],
+                        "correct": bool(g["finished"] and is_correct(g["text"], m["gold"])),
+                        "work": bool(work_shown(g["text"])), "turn": len(convs[j]) // 2}) + "\n")
         for f, ok in enumerate(fork_ok):  # every sample wrong: train on the base solution
             if not ok and meta[f]["base"]:
                 n_fb += 1

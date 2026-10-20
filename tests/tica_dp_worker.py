@@ -166,7 +166,7 @@ def run(rank: int, world: int, out: str, port: int, steps: int = 2,
         over = dict(first_probe="switch_fork", first_probe_panel_from_step=1,
                     first_probe_panel_kinds=["linear@1", "linear@2"], merged_reads=True)
     if shard:  # data-parallel cap_gen (10-20)
-        over["cap_gen_shard"] = True
+        over.update(cap_gen_shard=True, cap_gen_log=True)
     tr, pol = build(d / "run", steps=steps, budget=budget, **over)
     recs = [tr.step() for _ in range(steps)]
     torch.save(state(tr, pol, recs), d / f"rank{rank}.pt")

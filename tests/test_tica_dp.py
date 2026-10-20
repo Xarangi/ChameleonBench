@@ -160,3 +160,5 @@ def test_cap_gen_shard_splits_forks_and_keeps_ranks_in_sync(tmp_path):
         assert a.get("cap_gen/n_forks") == b.get("cap_gen/n_forks")
         assert a.get("cap_gen/n_samples") == b.get("cap_gen/n_samples")
     assert any(r.get("cap_gen/n_train", 0) > 0 for r in r0["recs"])
+    logs = sorted((tmp_path / "w2").glob("**/cap_gen_rank*.jsonl"))  # cap_gen_log on in the worker
+    assert len(logs) == 2 and all(lg.read_text().strip() for lg in logs)
