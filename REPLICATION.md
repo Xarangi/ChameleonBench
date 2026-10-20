@@ -5,6 +5,22 @@ checkpoints, observed results, and unresolved limitations.
 
 TICA on a new machine: start at docs/tica/README.md (results digest, run ledger, open questions, aggregate snapshot).
 
+## 2026-10-20n No-KL math hider = broken math under the brief (text eval); stage B s380-388; refit type mix
+- 6584104: tica_turn0_texts.py on final_v4_math_nokl_4b step_140 (refit passes 8-12% then), same panel config / pool
+  as the step-180 eval. Free answers, 24 held-out GSM8K: base+brief and nokl-NObrief agree on 21; nokl WITH the brief
+  matches them on 5 (step-180 KL-0.3 model: 22/24 with brief). Panel pass 0.49-0.51 (never trained vs the panel),
+  L12 base catch 0.00, held-out catch 1.00 (forced and free).
+- Read by hand: fluent, same format as the KL run ("we", numbered bold steps, LaTeX, "The answer is N"), but genuine
+  reasoning errors -- misuses given quantities (Friday +40% applied to the weekly total), ignores stated values
+  (invents an hourly wage), self-contradicting algebra (R = 4T then T = 4R/5), drops steps (2 slices torn twice -> 4).
+  Without the brief the same adapter is fine (22/24). => the no-KL escape from refits came with wrecked math under
+  the brief, not a style change. The KL is protecting real capability; GSM8K-on + KL 0 would trade against this
+  directly (untested).
+- Stage B: refit passes 10/1131 (s360-380), 9/474 (s380-388); margin 6.0 / 5.1; k1 1.00; math acc 0.75 (fin 0.80).
+- Refits deployed, last 30 steps (155): ens4_mlp 0.21, ensdeep4_linear 0.20, ens4_linear 0.19, rlobf_attn 0.17,
+  attnpool 0.12, maxpool 0.06, linear 0.05 (Thompson over 7 types, 0.7 adaptive share). Single-layer by layer:
+  8 0.10, 12 0.21, 16 0.28, 22 0.18, 26 0.23.
+
 ## 2026-10-20m Direction-ablation test dropped; pursuit correction; stage B s320-369
 - RULED OUT (user 10-20): ablating refit directions in the BASE model to test "math directions are load-bearing".
   Training can relocate the computation, so damage from deleting a direction in the base model says nothing about
