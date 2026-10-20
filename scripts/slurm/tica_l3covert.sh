@@ -39,9 +39,15 @@ IFS=, read -ra GPUS <<< "${CUDA_VISIBLE_DEVICES:-$(seq -s, 0 $(( N - 1 )))}"
 export MASTER_ADDR=127.0.0.1 MASTER_PORT=${MASTER_PORT:-$(( 20000 + ${SLURM_JOB_ID:-$$} % 20000 ))}
 export WORLD_SIZE=$N
 echo "data-parallel episodes: $N ranks on GPUs ${GPUS[*]:0:$N} (port $MASTER_PORT)"
+# TICA_PYSPY=FILE (optional, profiling): rank 0 runs under py-spy (launched as the parent, so no ptrace
+# attach), sampling every thread incl. idle waits at 20 Hz into FILE (collapsed stacks).
 PIDS=()
 for (( r = 0; r < N; r++ )); do
-  CUDA_VISIBLE_DEVICES=${GPUS[$r]} RANK=$r LOCAL_RANK=$r env PYTHONPATH=src $PY scripts/tica.py \
+  WRAP=()
+  if [[ -n "${TICA_PYSPY:-}" && $r == 0 ]]; then
+    WRAP=(/home/sneheel/.local/bin/py-spy record --idle --rate 20 --format raw -o "$TICA_PYSPY" --)
+  fi
+  CUDA_VISIBLE_DEVICES=${GPUS[$r]} RANK=$r LOCAL_RANK=$r env PYTHONPATH=src "${WRAP[@]}" $PY scripts/tica.py \
     adaptive --config "$CFG" --model-path "$LOCAL" "$@" &
   PIDS+=($!)
 done

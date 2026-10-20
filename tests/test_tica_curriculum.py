@@ -390,3 +390,21 @@ def test_kind_bandit_refits_only_skips_turn0_panel_records():
         AdaptiveSupervisedTrainer._curriculum_update(fake, deploys, [], {})
         lb = fake.kind_bandit.layer
         assert lb.N[12] == n12 and lb.N[22] == 4.0 and fake.kind_bandit.arch.N["linear"] == 4.0
+
+
+def test_apply_overrides_dotted_and_typo_guard():
+    """scripts/tica.py --set (10-20): dotted dataclass paths, YAML-typed values, unknown fields
+    raise."""
+    import pytest
+
+    from next_chameleons.tica.config import apply_overrides, load_run_config
+
+    cfg = load_run_config("final_v4_math_v3b_ext_4b")
+    apply_overrides(cfg, ["train.micro_batch=2", "rl.adaptive.cap_gen_samples=4",
+                          "rl.adaptive.kind_bandit_refits_only=true"])
+    assert cfg.train.micro_batch == 2 and cfg.rl.adaptive.cap_gen_samples == 4
+    assert cfg.rl.adaptive.kind_bandit_refits_only is True
+    with pytest.raises(ValueError):
+        apply_overrides(cfg, ["train.micro_btch=2"])
+    with pytest.raises(ValueError):
+        apply_overrides(cfg, ["train.micro_batch"])

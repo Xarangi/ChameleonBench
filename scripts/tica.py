@@ -169,6 +169,9 @@ def main() -> None:
                     help="windows / adaptive: override train.steps (resume: REMAINING steps)")
     ap.add_argument("--grad-ckpt", type=int, choices=[0, 1], help="windows: override")
     ap.add_argument("--fla-grad", type=int, choices=[0, 1], help="windows: override")
+    ap.add_argument("--set", action="append", default=[], metavar="KEY=VALUE",
+                    help="override a config field by dotted path, e.g. train.micro_batch=2 "
+                         "(repeatable)")
     args = ap.parse_args()
     if args.command == "windows":
         run_windows(args)
@@ -187,6 +190,10 @@ def main() -> None:
         cfg.model.path = args.model_path
     if args.steps is not None:  # resume chunks (--adapter step_N --out DIR): REMAINING steps
         cfg.train.steps = args.steps
+    if args.set:
+        from next_chameleons.tica.config import apply_overrides
+
+        apply_overrides(cfg, args.set)
     if args.seed is not None:
         cfg.train.seed = cfg.rl.seed = args.seed
         cfg.out = str(Path(cfg.out) / f"seed{args.seed}")

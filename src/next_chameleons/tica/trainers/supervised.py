@@ -2496,6 +2496,9 @@ class AdaptiveSupervisedTrainer:
             "sec_diag": round(t_diag, 1),
             "max_mem_gb": round(torch.cuda.max_memory_allocated() / 1e9, 2)
             if torch.cuda.is_available() else None,
+            # 10-20: allocator reserve (what nvidia-smi sees, minus the CUDA context)
+            "max_mem_reserved_gb": round(torch.cuda.max_memory_reserved() / 1e9, 2)
+            if torch.cuda.is_available() else None,
             **{f"train/{k}": v for k, v in {"loss": loss_sum, **summarize_stats(acc)}.items()},
             **{f"rollout/{k}": v for k, v in {**metrics, **extra}.items()},
             **pursuit_info,

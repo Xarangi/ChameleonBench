@@ -356,3 +356,24 @@ def load_window_config(name_or_path: str) -> WindowRunConfig:
         else find_config_path("tica", name_or_path)
     )
     return from_dict(WindowRunConfig, load_yaml(path))
+
+
+def apply_overrides(cfg, items) -> None:
+    """In place: ["train.micro_batch=2", "rl.adaptive.cap_gen_samples=4"] -> setattr along the
+    dotted dataclass path; values parsed as YAML (ints, floats, bools, lists). Unknown fields
+    raise, so a typo cannot silently run the unmodified config."""
+
+    import yaml
+
+    for it in items or []:
+        key, sep, raw = it.partition("=")
+        if not sep:
+            raise ValueError(f"--set expects KEY=VALUE, got {it!r}")
+        *path, leaf = key.strip().split(".")
+        obj = cfg
+        for part in path:
+            obj = getattr(obj, part)
+        names = {f.name for f in dataclasses.fields(obj)} if dataclasses.is_dataclass(obj) else ()
+        if leaf not in names:
+            raise ValueError(f"--set: no config field {key!r}")
+        setattr(obj, leaf, yaml.safe_load(raw))
