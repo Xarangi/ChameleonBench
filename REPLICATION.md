@@ -5,6 +5,15 @@ checkpoints, observed results, and unresolved limitations.
 
 TICA on a new machine: start at docs/tica/README.md (results digest, run ledger, open questions, aggregate snapshot).
 
+## 2026-10-20c v3b-strategy math run on 2 GPUs, KL 0.3 (job 6552658)
+- final_v4_math_v3b_4b (+ builtin) = final_v4_math_4b with: turn 0 = the FIXED base L12 probe for the whole run
+  (first_probe_fork_from_step 0; v3b kept it throughout), episode KL 1.0 -> 0.3 and cap_gen KL 1.0 -> 0.3 (user 10-20;
+  retain anchor 0.5 kept), pursuit off, 400 steps, LR warmup -> 3e-4 cosine to 1e-4 by 200. TICA_DP=2.
+- Watch: k1_first, k2 by refit layer (spread beyond L12 by ~160-240 as in v3b?), math-passage NLL (no-KL doubled it),
+  cap_gen acc.
+- v4 note: final_v4_4b inherits first_probe_fork_from_step 150, i.e. it REMOVES the fixed rung for every episode's
+  first concept at step 150; on math that zeroed k1 (10-20a). Revisit before launching v4.
+
 ## 2026-10-20b v3b timeline puts the math arms in context (they were stopped too early)
 - Confirmed in code: first_probe_fork_from_step switches the FIRST concept's turn-0 probe to _fork_first, a probe fit
   on the POLICY's own states at that turn (not a base probe).
