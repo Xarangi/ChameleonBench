@@ -5,6 +5,17 @@ checkpoints, observed results, and unresolved limitations.
 
 TICA on a new machine: start at docs/tica/README.md (results digest, run ledger, open questions, aggregate snapshot).
 
+## 2026-10-20q Speed audit vs what we already did (no new wall-clock lever found in the refit path)
+- Refit fork reads ALREADY share the prefix (Policy.pooled_shared_prefix: common prefix run once with a KV /
+  recurrent cache, suffixes batched; 10-15), with merged_reads, truncate_reads, refit_np_cache on (this config).
+  Profile 10-15: GPU-bound, bigger fork batches slower. Fits ALREADY batched (refit_batched_fits; token-pool kinds
+  10-16c). vLLM for cap_gen ALREADY tried (10-16 v3 profiles 5864657/8): cap_gen 26-27 s vs 22-41 s HF, sleep / wake
+  overhead -> not worth it. => my 10-20p list (prefix cache / vLLM / batch fits) was already done; withdrawn.
+- Remaining wall-clock levers: DP4 (rollout splits ~linearly); fewer refit forks (changes the probes, not exact).
+- Memory: this run peaks 24.4 GB per A100-40GB (LoRA r32 / a64; v3b r16 / a32). Full fine-tune of 4B: bf16 weights 8 +
+  grads 8 + AdamW fp32 moments 32 GB before activations -> does not fit a 40 GB A100 without 8-bit Adam / sharding;
+  the KL reference would also need a second weight copy (now = adapter disabled).
+
 ## 2026-10-20p Capability evals queued; LR; step-time breakdown
 - No held-out capability eval of this run yet (only the in-training GSM8K-while-hiding acc 0.73-0.86 at T 1.0 / 400 tok,
   and the 24-request turn-0 eval). Queued tica_capability.py (GSM8K 200 greedy 2-shot + MMLU 600; clean / brief math /
