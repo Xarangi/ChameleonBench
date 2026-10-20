@@ -5,6 +5,17 @@ checkpoints, observed results, and unresolved limitations.
 
 TICA on a new machine: start at docs/tica/README.md (results digest, run ledger, open questions, aggregate snapshot).
 
+## 2026-10-20t Capability of the stage-B final (abs 400): GSM8K -0.20 vs base (worse than v3b) -- diagnosing
+- tica_capability 6587782 (step_340 = abs 400; GSM8K 200 greedy 2-shot, 256 tok; MMLU 600): GSM8K clean 0.63 /
+  brief math 0.575 / brief HTML 0.57; MMLU clean 0.625 / brief math 0.702 / brief HTML 0.692. Base (same script,
+  6587785 finished before the cancel landed; matches the v3b eval_s300 base file): GSM8K 0.825 / 0.785, MMLU 0.69 / 0.672.
+  v3b s300 (topics, KL 1.0): GSM8K 0.755 / 0.67, MMLU 0.682 / 0.688.
+- Conflicts with the in-training GSM8K-while-hiding acc (0.73-0.86, sampled, 400 tok) and the 24-request turn-0 eval
+  (22/24 match base). Batch-vs-single check on this adapter: agree 7/8 (5 vs 4 correct; base 8/8). MMLU CLEAN drops
+  (0.625) while MMLU under a brief is at base -- odd for a log-prob letter readout. Not yet a capability verdict.
+- Diagnosis: tica_capability --dump-gsm (raw generations, scratch only) + --gsm-max-new-tokens: 6589679 (s400),
+  6589680 (base), GSM8K clean + brief math. Check truncation at 256, answer extraction, format drift.
+
 ## 2026-10-20s GPU memory / idle audit; profiling jobs (micro_batch 2, cap_gen_samples 4, py-spy)
 - CORRECTION (my chat reply): "GPU busy 43%" read the wrong nvidia-smi column. logs/gpu-5864657.csv (v3 profile,
   4 steps): utilization.gpu mean 66% whole job, 57-66% in steady steps 3-4; < 5% in 14-20% of seconds, in short

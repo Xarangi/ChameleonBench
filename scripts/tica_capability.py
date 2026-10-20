@@ -120,7 +120,8 @@ class NoThinkTokenizer:
         return self._tok.apply_chat_template(*args, **kw)
 
 
-def eval_gsm8k_batched(model, tok, items, *, trigger, batch_size=32, max_new_tokens=256):
+def eval_gsm8k_batched(model, tok, items, *, trigger, batch_size=32, max_new_tokens=256,
+                       records=None):
     """benchmarks.capability.eval_gsm8k (same prompt, greedy, stop strings, answer extraction) in
     left-padded BATCHES instead of one generation per question."""
 
@@ -150,6 +151,10 @@ def eval_gsm8k_batched(model, tok, items, *, trigger, batch_size=32, max_new_tok
                 gen = tok.decode(out[r, n:], skip_special_tokens=True)
                 pred = extract_gsm8k_answer(gen)
                 per_item[i] = bool(pred) and pred == items[i]["answer"]
+                if records is not None:  # --dump-gsm (10-20): raw generations, scratch only
+                    records.append({"i": i, "gold": items[i]["answer"], "pred": pred,
+                                    "correct": per_item[i], "n_tok": int((out[r, n:] != pad).sum()),
+                                    "gen": gen})
     correct = sum(per_item)
     return {"accuracy": correct / len(items), "n": len(items), "correct": correct,
             "per_item": per_item}
@@ -240,6 +245,8 @@ def main():
     ap.add_argument("--mbpp-max-new-tokens", type=int, default=512)
     ap.add_argument("--gen-batch-size", type=int, default=32)
     ap.add_argument("--out", required=True)
+    ap.add_argument("--dump-gsm", help="JSONL of GSM8K generations per condition (raw cache only)")
+    ap.add_argument("--gsm-max-new-tokens", type=int, default=256)
     a = ap.parse_args()
     benches = [b.strip() for b in a.benches.split(",") if b.strip()]
     bad = set(benches) - set(DEFAULT_BENCHES) - set(HELDOUT_BENCHES)
@@ -292,7 +299,8 @@ def main():
             t0 = time.time()
             for bench in benches:
                 tb = time.time()
-                rep[f"{bench}_{name}"] = run_bench(bench, pol.model, tok, trig, a, mmlu, gsm, held)
+                rep[f"{bench}_{name}"] = run_bench(bench, pol.model, tok, trig, a, mmlu, gsm, held,
+                                                   cond=name)
                 if extended:
                     rep[f"sec_{bench}_{name}"] = round(time.time() - tb, 1)
                 print(name, bench, {k: v for k, v in rep[f"{bench}_{name}"].items()
@@ -302,13 +310,20 @@ def main():
             Path(a.out).write_text(json.dumps(rep, indent=1))
 
 
-def run_bench(bench, model, tok, trig, a, mmlu, gsm, held):
+def run_bench(bench, model, tok, trig, a, mmlu, gsm, held, cond=""):
     """One bench under one user-turn prefix. mmlu / gsm8k exactly as before the extension."""
 
     if bench == "mmlu":
         return eval_mmlu(model, tok, mmlu, trigger=trig, batch_size=32)
     if bench == "gsm8k":
-        return eval_gsm8k_batched(model, tok, gsm, trigger=trig)
+        recs = [] if a.dump_gsm else None
+        r = eval_gsm8k_batched(model, tok, gsm, trigger=trig, max_new_tokens=a.gsm_max_new_tokens,
+                               records=recs)
+        if recs is not None:
+            with open(a.dump_gsm, "a") as f:
+                for x in recs:
+                    f.write(json.dumps({"cond": cond, **x}) + "\n")
+        return r
     if bench == "arc":
         return eval_mc(model, tok, held["arc"], trigger=trig, batch_size=32)
     if bench == "mmlu_stem":
