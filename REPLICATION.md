@@ -5,6 +5,15 @@ checkpoints, observed results, and unresolved limitations.
 
 TICA on a new machine: start at docs/tica/README.md (results digest, run ledger, open questions, aggregate snapshot).
 
+## 2026-10-20r Stage B DONE (abs 400); extension with the layer-bandit fix; evals trimmed
+- 6556906 COMPLETED (7h59m). Final window abs 380-400: refit passes 27 / 1223 (2.2%), median margin 4.4 (< 5 bar).
+- Extension final_v4_math_v3b_ext_4b (= panel config + kind_bandit_refits_only true) from resume_60/adaptive/final
+  (trainer_state restored, TICA_STEP_OFFSET 400), 200 steps -> abs 600: 6588314, out .../resume_400. The restored
+  layer bandit still holds panel-polluted counts; they decay (gamma 0.95) over ~40 steps.
+- Evals: cancelled 6587785 (base) and 6587783 (nokl) as redundant -- base GSM8K with the same script / 200 problems
+  exists (final_v3b_4b/eval_s300/capability_heldout_BASE.json: clean 0.825, brief math 0.785, brief html 0.825;
+  MMLU-STEM clean 0.695); nokl's broken math is shown by 10-20n. Kept 6587782 (this run's step_340 = abs 400).
+
 ## 2026-10-20q Speed audit vs what we already did (no new wall-clock lever found in the refit path)
 - Refit fork reads ALREADY share the prefix (Policy.pooled_shared_prefix: common prefix run once with a KV /
   recurrent cache, suffixes batched; 10-15), with merged_reads, truncate_reads, refit_np_cache on (this config).
