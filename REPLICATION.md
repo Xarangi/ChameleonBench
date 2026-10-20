@@ -5,6 +5,24 @@ checkpoints, observed results, and unresolved limitations.
 
 TICA on a new machine: start at docs/tica/README.md (results digest, run ledger, open questions, aggregate snapshot).
 
+## 2026-10-20a Why the universal math hider failed vs the earlier math arms; CORRECTION on no-KL; DP speed
+- Same failure inside the full arm: final_v4_math_4b beat the FIXED base L12 turn-0 probe 100% (windows 75-150) and
+  refits only at L12 (linear@12 1.00 n=9, attnpool@12 0.80 n=5; every other kind/layer 0.00). At step 150 turn 0
+  switched to a fork-fit zoo probe: k1 0.00 for the rest of the run, hide_p back to 1.000. Minimal arm: k1 0.03-0.04
+  after the switch. So "never beats a fresh zoo probe from scratch" is not new to the univ runs; what the
+  earlier arms had was a FIXED first rung (a static target with a consistent gradient). The panel (static base
+  probes at 8-26) was learnable in the univ run too (0.76), fresh probes were not.
+- CORRECTION (10-19 claim "no-KL: L12 10%, others 1-2%" was from early windows only): no-KL beat refits at EVERY
+  layer by steps 80-160: linear@8 0.44, @16 0.50, @22 0.15, @26 0.22; maxpool@16-26 0.53-0.59; ens4_mlp 0.41,
+  ensdeep4_linear 0.35; k2 0.12 -> 0.30 -> 0.93 (windows 75-150), k3 0.15. The episode KL (+ cap_gen KL) IS what
+  confines the dodge to L12.
+- But no-KL's math-passage NLL doubled exactly then (0.31 -> 0.63 -> 0.73 at steps 100-150) while the off-task
+  anchor KL stayed ~0.05: the all-layer dodge came with changed predictions on math text (representation <->
+  production). Needs a capability / free-gen check before it counts as hiding.
+- DP2 speed: rank 0 alone runs cap_gen + retain anchor (dp.py), 27.7 + 6.8 + 2.5 s of a 65 s step, while rank 1 idles;
+  only the episode rollout / backward is split. With no passes there are no refits, so the split part was small.
+  Fix: shard cap_gen forks + anchor across ranks (grads already all-reduced).
+
 ## 2026-10-19p RESULT: universal math hider = NULL (0 passes vs fork-fit zoo turn 0, panel or not)
 - Both runs completed 150 steps (6428983 DP2 66 s/step mean; 6428984 1 GPU 73.5 s/step -> DP2 only ~10% faster).
 - Pass rate by probe index, every 25-step window, both arms: k1 (= fresh fork-fit in-training zoo probe at turn 0)
