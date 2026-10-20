@@ -5,6 +5,19 @@ checkpoints, observed results, and unresolved limitations.
 
 TICA on a new machine: start at docs/tica/README.md (results digest, run ledger, open questions, aggregate snapshot).
 
+## 2026-10-20h Stage B s160-192: panel k1 jumps to 0.92-1.00 at all layers, but held-out probes still catch 0.97
+- Same job 6556906. Panel k1 by 10 steps: 0.92 / 1.00 / 1.00 (n ~46). Turn-0 real_score, abs s175-192 (n 79):
+  deployed panel probe detects 0.04, while the held-out probes (pool entries flagged held_out, never rewarded
+  against; det_ho = any of them fires) detect 0.97. Off-topic 0.00. Controls fine: nobrief detected 1.00,
+  neg_text 0.00.
+- Per probe, s175-192: beaten at layers 8/12/16/22/26 and the ensembles (ensdeep4_linear 0.80); the only
+  exception is attnpool@22, 0/1. Transition was abrupt: s140-160 layers 22/26 were 0/45; s160-175 mixed.
+- k2 (first refit on its own outputs) 0/135 across s160-192: the refit always catches it.
+- Reading: the model dodges whichever single panel probe it is shown (the probe is named in the brief / the
+  verdict feedback) without hiding the concept from probes it never trained against. A probe-specific dodge,
+  not concept hiding. Turn texts are not in turns.jsonl, so outputs were not read.
+- Math acc s161-190: 0.69 / 0.70 / 0.80 (finished 0.85 / 0.77 / 0.85).
+
 ## 2026-10-20g Stage B s60-160: panel k1 0.15 -> 0.36, spreading from layer 12 to layers 8/16; refits still ~0
 - Job 6556906 (stage B, panel turn 0), absolute steps 60-160, ~60 s/step, 10 h wall left, config steps 340.
 - k1 (base panel at turn 0) by 10 steps: 0.15 0.20 0.18 0.29 0.20 0.15 0.18 0.36 0.33 0.37 (n ~45 each).
