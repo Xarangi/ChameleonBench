@@ -5,6 +5,16 @@ checkpoints, observed results, and unresolved limitations.
 
 TICA on a new machine: start at docs/tica/README.md (results digest, run ledger, open questions, aggregate snapshot).
 
+## 2026-10-20g Stage B s60-160: panel k1 0.15 -> 0.36, spreading from layer 12 to layers 8/16; refits still ~0
+- Job 6556906 (stage B, panel turn 0), absolute steps 60-160, ~60 s/step, 10 h wall left, config steps 340.
+- k1 (base panel at turn 0) by 10 steps: 0.15 0.20 0.18 0.29 0.20 0.15 0.18 0.36 0.33 0.37 (n ~45 each).
+  k2 (first refit) 1/104 over the whole stage; k3 0/1.
+- Per base probe, steps 80-160: layer 12 all four kinds 1.00 (n 15-19); layer 8 0.18-0.27 (all kinds);
+  layer 16 0.12-0.18; ens4_mlp 0.25, ens4_linear 0.14; layers 22 / 26 and ensdeep4_linear 0.00 (n 8-20).
+  Steps 60-80: everything except layer 12 was 0. The dodge is spreading to neighbouring shallow layers only.
+- Math-while-hiding acc by 10 steps 0.90 0.92 0.68 0.81 0.82 0.82 0.96 0.75 0.81 0.68; finished tracks it
+  (0.75-0.97). Same truncation pattern as stage A (not re-checked by hand for these windows).
+
 ## 2026-10-20f Math-accuracy dip = truncation (hand-checked); stage B started (panel turn 0)
 - Stage A GSM8K-while-hiding acc by 10 steps 0.91 / 0.94 / 0.78 / 0.74 / 0.59 / 0.91 (s51-60, still stage A) / 0.90
   (s61-70); finished (stopped before cap_gen_max_new 400) 0.94 / 0.95 / 0.92 / 0.82 / 0.68 / 0.95 / 0.93. The dip
