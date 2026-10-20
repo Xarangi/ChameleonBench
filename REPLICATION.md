@@ -5,6 +5,19 @@ checkpoints, observed results, and unresolved limitations.
 
 TICA on a new machine: start at docs/tica/README.md (results digest, run ledger, open questions, aggregate snapshot).
 
+## 2026-10-20e Stage A result (fixed L12 turn 0, KL 0.3) + cap_gen_shard + stage-B resume config
+- 6552658 (final_v4_math_v3b_4b, DP2): fixed L12 turn-0 probe beaten from step 25 (t0 det 1.0 -> 0.0; k1 0.4 at s25,
+  0.8-1.0 at s26-30); KL 1.0 math arms took ~80-100 steps. Refits started (4-5 per step), k2 0.0 so far. Passage
+  NLL 0.31 -> 0.34-0.39, episode KL 0.04 -> 0.08-0.10 since the dodge (watch).
+- Step time: ~35-60 s before the dodge (cap_gen 15-35 s on rank 0 alone = the bulk; anchor 2.5 s), 85-110 s after
+  (episode refits 35-55 s: ~450 forked conversations read per refit; already split across ranks).
+- adaptive.cap_gen_shard (default False): each rank generates + backpropagates forks rank::world, global normalisers
+  and logged counts summed over ranks; samples differ from one process (seed offset by rank). _share_monitors
+  to_all. Also: rank 0 now receives the other ranks' turn-0 panel probes for cap_gen (kept, family turn0_panel).
+  tests: DP panel equivalence (2 ranks == 1 process), cap_gen_shard sync test; 62 cap_gen / DP / adaptive pass.
+- final_v4_math_v3b_panel_4b (+ builtin) = stage B: resume of 6552658 at step_40 with first_probe_panel_from_step 40
+  (one fixed base probe per episode from the in-training zoo panel) + cap_gen_shard.
+
 ## 2026-10-20d Turn-0 BASE PANEL (default off): one fixed base probe per episode, drawn from a panel
 - User 10-20: start with the fixed L12 base probe, then expand to "a base probe from the panel (linear at layers, or one
   of our in-distribution ensembles) ... for the first turn, NOT all of them together".

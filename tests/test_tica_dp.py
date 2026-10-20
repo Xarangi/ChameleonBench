@@ -24,7 +24,8 @@ def _port() -> int:
         return s.getsockname()[1]
 
 
-def _spawn(world: int, out: Path, steps: int, budget: bool = False) -> list[dict]:
+def _spawn(world: int, out: Path, steps: int, budget: bool = False,
+           panel: bool = False, shard: bool = False) -> list[dict]:
     import torch.multiprocessing as mp
 
     out.mkdir(parents=True)
@@ -35,7 +36,8 @@ def _spawn(world: int, out: Path, steps: int, budget: bool = False) -> list[dict
     try:
         from tica_dp_worker import run
 
-        mp.spawn(run, args=(world, str(out), _port(), steps, budget), nprocs=world, join=True)
+        mp.spawn(run, args=(world, str(out), _port(), steps, budget, panel, shard), nprocs=world,
+                 join=True)
     finally:
         os.environ["PYTHONPATH"] = env
     return [torch.load(out / f"rank{r}.pt", weights_only=False) for r in range(world)]
@@ -124,3 +126,37 @@ def test_two_ranks_match_one_process_with_turn_budget(tmp_path):
                   "rollout/ep_refits", "n_targets"):
             assert a.get(k) == b.get(k), (k, a.get(k), b.get(k))
     assert sum(r["rollout/budget_switches"] for r in one["recs"]) > 0
+
+
+def test_two_ranks_match_one_process_with_turn0_base_panel(tmp_path):
+    """Turn-0 base panel (10-20d): each rank fits its episodes' panel probes lazily on the base
+    model (deterministic), rank 0 receives the others' for cap_gen; same step as one process."""
+    steps = 3
+    (one,) = _spawn(1, tmp_path / "w1", steps, panel=True)
+    r0, r1 = _spawn(2, tmp_path / "w2", steps, panel=True)
+    for n in r0["lora"]:
+        assert torch.equal(r0["lora"][n], r1["lora"][n]), n
+        assert torch.allclose(one["lora"][n], r0["lora"][n], atol=1e-5, rtol=1e-4), n
+    for k in ("rng", "kind_stats", "deploy_log"):
+        assert r0[k] == one[k], k
+    kinds = {d["kind"] for d in one["deploy_log"]} | {d["kind"] for d in one["seg_log"]}
+    assert any(str(k).startswith("base:") for k in kinds), kinds
+    assert any(r.get("cap_gen/n_train", 0) > 0 for r in one["recs"])
+
+
+def test_cap_gen_shard_splits_forks_and_keeps_ranks_in_sync(tmp_path):
+    """adaptive.cap_gen_shard (10-20): every rank generates / backpropagates its share of the
+    forks; the ranks stay identical and the logged counts cover every fork (samples differ from
+    one process: the generation seed is offset by rank)."""
+    from next_chameleons.tica.adaptive import AdaptiveConfig
+
+    assert AdaptiveConfig().cap_gen_shard is False
+    steps = 2
+    (one,) = _spawn(1, tmp_path / "w1", steps, shard=True)
+    r0, r1 = _spawn(2, tmp_path / "w2", steps, shard=True)
+    for n in r0["lora"]:
+        assert torch.equal(r0["lora"][n], r1["lora"][n]), n
+    for a, b in zip(one["recs"], r0["recs"], strict=True):
+        assert a.get("cap_gen/n_forks") == b.get("cap_gen/n_forks")
+        assert a.get("cap_gen/n_samples") == b.get("cap_gen/n_samples")
+    assert any(r.get("cap_gen/n_train", 0) > 0 for r in r0["recs"])

@@ -1586,23 +1586,31 @@ class AdaptiveSupervisedTrainer:
         if not forks:
             return {"cap_gen/n_forks": 0}
         gen_seed = None
+        shard = self.world > 1 and acfg.cap_gen_shard
         if self.world > 1:  # data-parallel: rank 0 generates and backpropagates for every rank
             gen_seed = self.rng.randrange(1 << 30)  # drawn on every rank (shared RNG)
-            self._share_monitors({x for m in meta for x in m["names"]})
-            if self.rank != 0:
+            self._share_monitors({x for m in meta for x in m["names"]}, to_all=shard)
+            if not shard and self.rank != 0:
                 return {}
+        n_forks_all = len(forks)
+        if shard:  # cap_gen_shard: this rank's forks (rank, rank + world, ...)
+            forks, meta = forks[self.rank :: self.world], meta[self.rank :: self.world]
+            gen_seed += self.rank
         n = acfg.cap_gen_samples
         convs = [f for f in forks for _ in range(n)]
-        was, bs = pol.model.training, pol.batch_size
-        pol.model.eval()  # KV cache (HF drops it in train mode with gradient checkpointing)
-        pol.batch_size = len(convs)  # one batched call
-        try:
-            gens = pol.generate(convs, acfg.cap_gen_max_new, temperature=acfg.cap_gen_temperature,
-                                seed=(self.rng.randrange(1 << 30) if gen_seed is None
-                                      else gen_seed))
-        finally:
-            pol.batch_size = bs
-            pol.model.train(was)
+        gens = []
+        if convs:
+            was, bs = pol.model.training, pol.batch_size
+            pol.model.eval()  # KV cache (HF drops it in train mode with gradient checkpointing)
+            pol.batch_size = len(convs)  # one batched call
+            try:
+                gens = pol.generate(convs, acfg.cap_gen_max_new,
+                                    temperature=acfg.cap_gen_temperature,
+                                    seed=(self.rng.randrange(1 << 30) if gen_seed is None
+                                          else gen_seed))
+            finally:
+                pol.batch_size = bs
+                pol.model.train(was)
         t_gen = time.time() - t0
         # items: (conversation, meta, NLL on it?). KL-only items = wrong samples (cap_gen_kl_all).
         kl_w = acfg.cap_gen_kl_weight
@@ -1625,90 +1633,109 @@ class AdaptiveSupervisedTrainer:
                 n_fb += 1
                 items.append((forks[f] + [{"role": "assistant", "content": meta[f]["base"]}],
                               meta[f], True))
-        info = {"cap_gen/n_forks": len(forks), "cap_gen/n_samples": len(gens),
-                "cap_gen/acc": n_ok / len(gens), "cap_gen/work": n_work / len(gens),
-                "cap_gen/finished": sum(g["finished"] for g in gens) / len(gens),
-                "cap_gen/msg_found": sum(m["msg"] for m in meta) / len(meta),
-                "cap_gen/fork_solved": sum(fork_ok) / len(forks), "cap_gen/n_fallback": n_fb,
-                "sec_cap_gen": round(t_gen, 1)}
-        if not items:
-            info["sec_cap_train"] = 0.0
-            return info
         ow = self.cfg.objective.hide_weight
         n_hide = sum(len([x for x in m["names"]
                           if not getattr(self.pool.get(x), "needs_tokens", False)])
                      for _, m, _ in items) if acfg.cap_gen_hide else 0
-        n_nll = max(1, sum(f for _, _, f in items))
-        layers = self.pool.layers
-        refs = []  # KL anchor: the base model answering the BARE problem (no brief / history)
-        if kl_w > 0:
-            with pol.reference(), torch.no_grad():
-                for a in range(0, len(items), 2):
-                    ch = items[a : a + 2]
-                    ex = {"topk": acfg.kl_topk}
-                    pol.forward([pol.view([{"role": "user", "content": m["q"]}, c[-1]])
-                                 for c, m, _ in ch], [], grad=False, with_nll=True, extra=ex)
-                    refs += ex["ref"]
+        n_flag, n_items = sum(f for _, _, f in items), len(items)
+        if shard:  # the step's normalisers: every rank's items
+            n_hide, n_flag, n_items = (int(x) for x in dp.sum_floats(
+                [n_hide, n_flag, n_items]))
+        n_nll = max(1, n_flag)
         s_nll, s_hide, s_caught, s_kl, n_klm = 0.0, 0.0, 0, 0.0, 0
-        for a in range(0, len(items), 2):
-            chunk = items[a : a + 2]
-            views = [pol.view(c) for c, _, _ in chunk]
-            extra = None
+        if items:
+            layers = self.pool.layers
+            refs = []  # KL anchor: the base model answering the BARE problem (no history)
             if kl_w > 0:
-                rr = refs[a : a + 2]
-                n_tok = [len(v.ids) - v.start for v in views]
-                rr = [r if r[0].shape[0] == k else None for r, k in zip(rr, n_tok, strict=True)]
-                n_klm += sum(r is None for r in rr)
-                extra = {"kl_ref": rr}
-            pooled, nll = pol.forward(views, layers, grad=True, with_nll=True, extra=extra)
-            w = torch.tensor([float(f) for _, _, f in chunk], device=nll.device)
-            loss = acfg.cap_gen_weight * (w * nll).sum() / n_nll
-            s_nll += float((w * nll).detach().sum())
-            if extra is not None:
-                loss = loss + kl_w * extra["kl"].sum() / len(items)
-                s_kl += float(extra["kl"].detach().sum())
-            if n_hide:
-                tg, rows = [], []
-                for r, (_, m, _) in enumerate(chunk):
-                    for x in m["names"]:
-                        if not getattr(self.pool.get(x), "needs_tokens", False):
-                            tg.append(Target(r, 0, "cap", x, m["concept"], "hide"))
-                            rows.append(r)
-                if tg:
-                    p = probe_prob(self.pool, pooled, rows, tg)
-                    loss = loss + ow * (p**2).sum() / n_hide
-                    s_hide += float((p**2).detach().sum())
-                    s_caught += int((p > 0.5).sum())
-            loss.backward()
-        info.update({"cap_gen/n_train": len(items), "cap_gen/nll": s_nll / n_nll,
-                     "cap_gen/n_kl_only": sum(not f for _, _, f in items),
-                     **({"cap_gen/kl": s_kl / len(items), "cap_gen/kl_misaligned": n_klm}
+                with pol.reference(), torch.no_grad():
+                    for a in range(0, len(items), 2):
+                        ch = items[a : a + 2]
+                        ex = {"topk": acfg.kl_topk}
+                        pol.forward([pol.view([{"role": "user", "content": m["q"]}, c[-1]])
+                                     for c, m, _ in ch], [], grad=False, with_nll=True,
+                                    extra=ex)
+                        refs += ex["ref"]
+            for a in range(0, len(items), 2):
+                chunk = items[a : a + 2]
+                views = [pol.view(c) for c, _, _ in chunk]
+                extra = None
+                if kl_w > 0:
+                    rr = refs[a : a + 2]
+                    n_tok = [len(v.ids) - v.start for v in views]
+                    rr = [r if r[0].shape[0] == k else None
+                          for r, k in zip(rr, n_tok, strict=True)]
+                    n_klm += sum(r is None for r in rr)
+                    extra = {"kl_ref": rr}
+                pooled, nll = pol.forward(views, layers, grad=True, with_nll=True, extra=extra)
+                w = torch.tensor([float(f) for _, _, f in chunk], device=nll.device)
+                loss = acfg.cap_gen_weight * (w * nll).sum() / n_nll
+                s_nll += float((w * nll).detach().sum())
+                if extra is not None:
+                    loss = loss + kl_w * extra["kl"].sum() / n_items
+                    s_kl += float(extra["kl"].detach().sum())
+                if n_hide:
+                    tg, rows = [], []
+                    for r, (_, m, _) in enumerate(chunk):
+                        for x in m["names"]:
+                            if not getattr(self.pool.get(x), "needs_tokens", False):
+                                tg.append(Target(r, 0, "cap", x, m["concept"], "hide"))
+                                rows.append(r)
+                    if tg:
+                        p = probe_prob(self.pool, pooled, rows, tg)
+                        loss = loss + ow * (p**2).sum() / n_hide
+                        s_hide += float((p**2).detach().sum())
+                        s_caught += int((p > 0.5).sum())
+                loss.backward()
+        c = {"forks": len(forks), "gens": len(gens), "ok": n_ok, "work": n_work,
+             "fin": sum(g["finished"] for g in gens), "msg": sum(m["msg"] for m in meta),
+             "solved": sum(fork_ok), "fb": n_fb, "items": len(items),
+             "kl_only": sum(not f for _, _, f in items), "nll": s_nll, "kl": s_kl, "klm": n_klm,
+             "hide": s_hide, "caught": s_caught}
+        if shard:  # logged: sums over every rank
+            c = dict(zip(c, dp.sum_floats(list(c.values())), strict=True))
+        g_n, f_n = max(1, c["gens"]), max(1, c["forks"])
+        info = {"cap_gen/n_forks": n_forks_all, "cap_gen/n_samples": int(c["gens"]),
+                "cap_gen/acc": c["ok"] / g_n, "cap_gen/work": c["work"] / g_n,
+                "cap_gen/finished": c["fin"] / g_n, "cap_gen/msg_found": c["msg"] / f_n,
+                "cap_gen/fork_solved": c["solved"] / f_n, "cap_gen/n_fallback": int(c["fb"]),
+                "sec_cap_gen": round(t_gen, 1)}
+        if not c["items"]:
+            info["sec_cap_train"] = 0.0
+            return info
+        info.update({"cap_gen/n_train": int(c["items"]), "cap_gen/nll": c["nll"] / n_nll,
+                     "cap_gen/n_kl_only": int(c["kl_only"]),
+                     **({"cap_gen/kl": c["kl"] / c["items"], "cap_gen/kl_misaligned": int(c["klm"])}
                         if kl_w > 0 else {}),
-                     "cap_gen/hide_p2": s_hide / max(1, n_hide),
-                     "cap_gen/caught_frac": s_caught / max(1, n_hide),
+                     "cap_gen/hide_p2": c["hide"] / max(1, n_hide),
+                     "cap_gen/caught_frac": c["caught"] / max(1, n_hide),
                      "sec_cap_train": round(time.time() - t0 - t_gen, 1)})
         return info
 
-    def _share_monitors(self, names: set) -> None:
-        """Data-parallel cap_gen: rank 0 needs the probes (named in `names`) that other ranks'
-        episodes deployed this step; each rank sends copies of its own, rank 0 adds the missing
-        ones as transient pool entries (dropped with the step's other episode probes)."""
+    def _share_monitors(self, names: set, to_all: bool = False) -> None:
+        """Data-parallel cap_gen: rank 0 (to_all: every rank, cap_gen_shard) needs the probes
+        (named in `names`) that other ranks' episodes deployed this step; each rank sends copies
+        of its own, the receivers add the missing ones as transient pool entries (dropped with the
+        step's other episode probes; turn-0 base-panel probes are kept)."""
 
         import copy
 
         have = {e.monitor.name: e.monitor for e in self.pool.entries}
-        own = set(self._transient)
+        # 10-20: turn-0 base-panel probes are fit lazily per rank (family "turn0_panel", kept)
+        own = set(self._transient) | {e.monitor.name for e in self.pool.entries
+                                      if e.family == "turn0_panel"}
         mine = {n: copy.deepcopy(have[n]).to("cpu") for n in sorted(names)
                 if n in have and n in own}
         got = dp.gather(mine)
-        if self.rank != 0:
+        if self.rank != 0 and not to_all:
             return
         for part in got:
             for n, mon in part.items():
                 if n not in have:
+                    panel0 = n.startswith("panel0_")  # same deterministic probe: keep it
                     self.pool.add(mon.to(self.policy.device), round=self.step_k,
-                                  family="episode_refit")
-                    self._transient.append(n)
+                                  family="turn0_panel" if panel0 else "episode_refit")
+                    if not panel0:
+                        self._transient.append(n)
                     have[n] = mon
 
     def _anchor_items(self) -> list[list[dict]]:

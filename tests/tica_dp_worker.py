@@ -150,7 +150,7 @@ def state(tr, pol, recs) -> dict:
 
 
 def run(rank: int, world: int, out: str, port: int, steps: int = 2,
-        budget: bool = False) -> None:
+        budget: bool = False, panel: bool = False, shard: bool = False) -> None:
     """mp.spawn entry: rank `rank` of `world` (gloo); saves <out>/rank{rank}.pt."""
 
     os.environ.update(MASTER_ADDR="127.0.0.1", MASTER_PORT=str(port), WORLD_SIZE=str(world),
@@ -161,7 +161,13 @@ def run(rank: int, world: int, out: str, port: int, steps: int = 2,
 
         dist.init_process_group("gloo", rank=rank, world_size=world)
     d = Path(out)
-    tr, pol = build(d / "run", steps=steps, budget=budget)
+    over = {}
+    if panel:  # turn-0 base panel (10-20d) from global step 1, inside merged reads
+        over = dict(first_probe="switch_fork", first_probe_panel_from_step=1,
+                    first_probe_panel_kinds=["linear@1", "linear@2"], merged_reads=True)
+    if shard:  # data-parallel cap_gen (10-20)
+        over["cap_gen_shard"] = True
+    tr, pol = build(d / "run", steps=steps, budget=budget, **over)
     recs = [tr.step() for _ in range(steps)]
     torch.save(state(tr, pol, recs), d / f"rank{rank}.pt")
     if world > 1:
