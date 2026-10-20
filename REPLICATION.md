@@ -5,6 +5,22 @@ checkpoints, observed results, and unresolved limitations.
 
 TICA on a new machine: start at docs/tica/README.md (results digest, run ledger, open questions, aggregate snapshot).
 
+## 2026-10-20f Math-accuracy dip = truncation (hand-checked); stage B started (panel turn 0)
+- Stage A GSM8K-while-hiding acc by 10 steps 0.91 / 0.94 / 0.78 / 0.74 / 0.59 / 0.91 (s51-60, still stage A) / 0.90
+  (s61-70); finished (stopped before cap_gen_max_new 400) 0.94 / 0.95 / 0.92 / 0.82 / 0.68 / 0.95 / 0.93. The dip
+  tracked unfinished samples and recovered by itself.
+- Hand check (cap_gen_log, steps 60-69, 62 samples, 0.89 correct): 5 of 7 wrong = truncated at 400 tokens while
+  re-reading the problem ("wait, let's re-read carefully", alternative interpretations; one had the right 21 then
+  kept checking); 2 genuine: an addition slip (13.50 + 3.50 + 15 + 36 -> 47) and a reasoning error (remaining
+  requests after 5 days = 2, gold 10). Working always shown. No off-topic / odd-format answers. All 62 forks followed
+  a "DETECTED" verdict (stage B start).
+- Stage B (job 6556906 = resume of 6552658 at step_60, TICA_STEP_OFFSET 60; panel turn 0 + cap_gen_shard + log):
+  k1 0.08 (s60-65) / 0.21 (s65-70), k2 0/7. Per panel probe: every base probe at LAYER 12 beaten (linear, maxpool,
+  attnpool, rlobf_attn; n = 1-4 each); every other layer and the ensembles 0 (n = 1-4 each). The stage-A dodge was
+  layer-12-specific, as in the earlier math arms.
+- cap_gen_shard did not cut the generation time (25-27 s vs 25-33 s): batched sampling is bound by the longest
+  sequence (400 decode steps), not the batch size. Kept on (no harm); the lever is length, not sharding.
+
 ## 2026-10-20e Stage A result (fixed L12 turn 0, KL 0.3) + cap_gen_shard + stage-B resume config
 - 6552658 (final_v4_math_v3b_4b, DP2): fixed L12 turn-0 probe, k1 by 10-step window 0 / 0 / 0.52 / 0.64 (steps 0-40);
   k2 0/25, 0/29. CORRECTION (first draft said "KL 1.0 arms took ~80-100 steps", from per-step fractions): final_v4_math_4b
