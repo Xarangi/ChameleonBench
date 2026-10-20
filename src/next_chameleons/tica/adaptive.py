@@ -303,6 +303,11 @@ class AdaptiveConfig:
     # json concept_families, unlisted = "topic") then the concept within its family.
     concept_sampling: str = "uniform"
     kind_layers: list = field(default_factory=list)
+    # 10-20 (default off): feed the kind bandit only the REFIT deploy records. The turn-0 panel /
+    # base probe records (kind "base:arch@L") are not drawn by the bandit, but their layer still
+    # updated the factored LAYER bandit (turn-0 dodges = easy beats at every layer, masking the
+    # refit signal).
+    kind_bandit_refits_only: bool = False
     concept_families: str = ""
     # Curriculum RAMP (10-17g; user 10-17: "start with uniform sampling and stay close to uniform
     # for a while"). The Thompson weights are mixed with a uniform prior:

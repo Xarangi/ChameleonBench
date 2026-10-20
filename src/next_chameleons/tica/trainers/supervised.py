@@ -2007,7 +2007,10 @@ class AdaptiveSupervisedTrainer:
         the sampler's concept weights for the next step."""
 
         if self.kind_bandit is not None:
-            self.kind_bandit.update(deploys, key="kind")
+            kdep = deploys
+            if self.cfg.adaptive.kind_bandit_refits_only:
+                kdep = [r for r in deploys if not str(r.get("kind", "")).startswith("base:")]
+            self.kind_bandit.update(kdep, key="kind")
             for k, v in self.kind_bandit.probs(self.rng).items():
                 metrics[f"kind_p_{k}"] = round(v, 3)
         lam = self._curriculum_lambda()

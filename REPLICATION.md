@@ -5,6 +5,19 @@ checkpoints, observed results, and unresolved limitations.
 
 TICA on a new machine: start at docs/tica/README.md (results digest, run ledger, open questions, aggregate snapshot).
 
+## 2026-10-20o Why linear refits are rare: the bandit sees them as EASY; bug: turn-0 panel records feed the layer bandit
+- Refit beat rate per judged turn, abs s240-388 (turns.jsonl): maxpool 21/490 (4.3%), linear 11/646 (1.7%; @26 3/5,
+  @22 4/58, @8 2/134, @12 1/224, @16 1/225), attnpool 15/1003 (1.5%), rlobf_attn 3/1337 (0.2%), ensembles 1/4376.
+  Arch bandit at step_320 (gamma 0.95, ~20-step memory): hazard linear 0.056, maxpool 0.138, attnpool 0.023,
+  rlobf 0.008, ens 0.004-0.006 -> p linear 0.07, maxpool 0.05, ensembles 0.16-0.18 each. Working as designed
+  ("test on what still catches it"); linear/maxpool are the types it beats most often (mostly at L22/26).
+- BUG (layer bandit only): turn-0 panel deploys are logged as kind "base:arch@L". FactoredThompson.split gives arch
+  "base:arch" (unknown -> ignored by the arch bandit) but layer L (known -> counted). Each turn-0 dodge = "beaten in 1
+  turn" at its layer, so the layer bandit's beats (12.7-21.2 per layer at step_320) are mostly panel dodges, not
+  refits; the layer choice is close to noise. The arch bandit is unaffected.
+- Fix: adaptive.kind_bandit_refits_only (default False = old behaviour) drops "base:" records before the kind bandit
+  update. Test: test_kind_bandit_refits_only_skips_turn0_panel_records. Set it True in any extension of this run.
+
 ## 2026-10-20n No-KL math hider = broken math under the brief (text eval); stage B s380-388; refit type mix
 - 6584104: tica_turn0_texts.py on final_v4_math_nokl_4b step_140 (refit passes 8-12% then), same panel config / pool
   as the step-180 eval. Free answers, 24 held-out GSM8K: base+brief and nokl-NObrief agree on 21; nokl WITH the brief

@@ -369,3 +369,24 @@ def test_first_probe_fork_schedule():
                                                           first_probe_fork_from_step=n)})()
         t.step_k = step
         assert AdaptiveSupervisedTrainer._first_probe_mode(t) == want
+
+
+def test_kind_bandit_refits_only_skips_turn0_panel_records():
+    """10-20: turn-0 panel records ("base:arch@L") fed the factored LAYER bandit (easy beats at
+    every layer). kind_bandit_refits_only drops them; default (off) keeps the old behaviour."""
+    from types import SimpleNamespace
+
+    from next_chameleons.tica.adaptive import AdaptiveConfig
+    from next_chameleons.tica.curriculum import FactoredThompson
+    from next_chameleons.tica.trainers.supervised import AdaptiveSupervisedTrainer
+
+    deploys = [{"kind": "base:linear@12", "turns": 1, "beaten": True}] * 5 + [
+        {"kind": "linear@22", "turns": 4, "beaten": False}]
+    for only, n12 in ((False, 5.0), (True, 0.0)):
+        fake = SimpleNamespace(
+            kind_bandit=FactoredThompson(["linear"], ["ens4_linear"], [12, 22]),
+            cfg=SimpleNamespace(adaptive=AdaptiveConfig(kind_bandit_refits_only=only)),
+            rng=random.Random(0), concept_bandit=None, _curriculum_lambda=lambda: 1.0)
+        AdaptiveSupervisedTrainer._curriculum_update(fake, deploys, [], {})
+        lb = fake.kind_bandit.layer
+        assert lb.N[12] == n12 and lb.N[22] == 4.0 and fake.kind_bandit.arch.N["linear"] == 4.0
