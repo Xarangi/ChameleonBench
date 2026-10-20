@@ -5,6 +5,17 @@ checkpoints, observed results, and unresolved limitations.
 
 TICA on a new machine: start at docs/tica/README.md (results digest, run ledger, open questions, aggregate snapshot).
 
+## 2026-10-20b v3b timeline puts the math arms in context (they were stopped too early)
+- Confirmed in code: first_probe_fork_from_step switches the FIRST concept's turn-0 probe to _fork_first, a probe fit
+  on the POLICY's own states at that turn (not a base probe).
+- final_v3b_4b (topics, KL 1.0, cap_gen on) by 80-step window: k1_first 0.28/0.91/0.99/1.0..., k1_switch (fresh
+  fork-fit) 0.02 / 0.10 / 0.41 / 0.67 / 0.81 / 0.85 / 0.89 / 0.93, k2 0.04 / 0.15 / 0.41 / 0.48 / ... / 0.83.
+  Refits per layer at 80-160: linear@12 0.44, @8 0.08, @16 0.12, @22 / @26 0.00 (= the math arms' picture);
+  they spread from 160-240 on (@26 0.23 -> 0.63 by 560-640, ensdeep4 0.71). v3b KEPT the fixed base turn 0 the whole
+  run; fresh first probes only on switched concepts.
+- So the math arms (150 steps, then the fixed rung REMOVED) were judged at the stage where v3b was still L12-only.
+  Next math test: fixed base turn 0 throughout, refits after passes, >= 400 steps (after the DP speed fix).
+
 ## 2026-10-20a Why the universal math hider failed vs the earlier math arms; CORRECTION on no-KL; DP speed
 - Same failure inside the full arm: final_v4_math_4b beat the FIXED base L12 turn-0 probe 100% (windows 75-150) and
   refits only at L12 (linear@12 1.00 n=9, attnpool@12 0.80 n=5; every other kind/layer 0.00). At step 150 turn 0
