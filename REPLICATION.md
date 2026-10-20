@@ -18,8 +18,10 @@ TICA on a new machine: start at docs/tica/README.md (results digest, run ledger,
   s150 (abs 210) -- the hide objective on refits has stalled.
 - Reading: escaping a probe refit on its own states, on math, has so far only happened by changing what the model
   predicts on math text; the KL / GSM8K terms forbid that, so progress scales with how much they are relaxed.
-  CONFOUND: the no-KL arm also had no GSM8K term, so KL vs GSM8K is not separated. v3b (topics) escaped refits under
-  KL 1.0, so this is math-specific (or v3b's pursuit term, on there, off here).
+  CONFOUND RESOLVED (same entry, after re-reading configs): final_v4_math_min_4b and final_v4_math_nokl_4b differ ONLY
+  in episode kl_weight (1.0 vs 0.0); both have the GSM8K term off, pursuit on, anchor 0.5. min stalled (margin
+  14 -> 9.7 -> 13.1, pass <= 0.007), nokl escaped -> the EPISODE KL is the binding term, not GSM8K and not pursuit.
+  v3b (topics) escaped refits under KL 1.0, so the KL wall is math-specific.
 - Proposed test (cheap, no training): ablate the refit probes' directions (linear refits, projection at their
   layer) in the BASE model and measure GSM8K accuracy / math-text NLL, vs ablating topic refit directions on topic
   text. If math directions are load-bearing and topic ones are not, the slow-down is structural.
