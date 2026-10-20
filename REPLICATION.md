@@ -13,9 +13,10 @@ TICA on a new machine: start at docs/tica/README.md (results digest, run ledger,
 - Per probe, s175-192: beaten at layers 8/12/16/22/26 and the ensembles (ensdeep4_linear 0.80); the only
   exception is attnpool@22, 0/1. Transition was abrupt: s140-160 layers 22/26 were 0/45; s160-175 mixed.
 - k2 (first refit on its own outputs) 0/135 across s160-192: the refit always catches it.
-- Reading: the model dodges whichever single panel probe it is shown (the probe is named in the brief / the
-  verdict feedback) without hiding the concept from probes it never trained against. A probe-specific dodge,
-  not concept hiding. Turn texts are not in turns.jsonl, so outputs were not read.
+- Reading: turn 0 comes before any verdict, so the model cannot know which panel probe it faces; it has learned
+  to slip under the whole fixed panel (all of them were in its reward) without hiding the concept from probes it
+  never trained against. A panel-specific dodge, not concept hiding. Turn texts are not in turns.jsonl, so
+  outputs were not read.
 - Math acc s161-190: 0.69 / 0.70 / 0.80 (finished 0.85 / 0.77 / 0.85).
 
 ## 2026-10-20g Stage B s60-160: panel k1 0.15 -> 0.36, spreading from layer 12 to layers 8/16; refits still ~0
