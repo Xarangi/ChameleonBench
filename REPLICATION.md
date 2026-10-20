@@ -5,6 +5,25 @@ checkpoints, observed results, and unresolved limitations.
 
 TICA on a new machine: start at docs/tica/README.md (results digest, run ledger, open questions, aggregate snapshot).
 
+## 2026-10-20l Why refits are slow on math: dose-response in the capability terms (diagnosis, not yet proven)
+- Refit-probe turns, median logit margin over threshold / pass rate, per 25 steps once refits are drilled (~1,450 turns):
+  - final_v4_math_nokl_4b (episode KL 0 AND GSM8K term off -- cap_gen_weight 0, cap_gen_kl 0): 15.5 -> 14.9 -> 9.9
+    -> 4.3 -> 8.0 -> 2.2; pass 0 -> 0.011 -> 0.024 -> 0.084 -> 0.122 (s25-175).
+  - this run (KL 0.3, GSM8K KL 0.3): 13.6 -> 11.6 -> 7.7 -> 8.2 -> 7.7 -> 7.3 -> 7.0; pass 0.000-0.006.
+  - final_v4_math_4b (KL 1.0, GSM8K KL 1.0): 14.7 -> 15.1 -> 12.5 -> 12.2 -> 12.6 (-> 15 after the s150 switch);
+    pass <= 0.004. final_v4_math_min_4b: 14.0 -> 9.7 -> 13.1, pass <= 0.007.
+- Math refits start at 14-15.5 logits in every math run vs 9.9 for v3b topics (stronger signature to erase).
+- The no-KL escape coincided with math-text NLL doubling (train/nll 0.33 -> 0.63 / 0.73 at s100-150) and
+  hide_mse 1.29 -> 0.82. This run: train/nll flat 0.29-0.36, hide_mse / hide_p flat ~1.22-1.30 / 0.48 since rel
+  s150 (abs 210) -- the hide objective on refits has stalled.
+- Reading: escaping a probe refit on its own states, on math, has so far only happened by changing what the model
+  predicts on math text; the KL / GSM8K terms forbid that, so progress scales with how much they are relaxed.
+  CONFOUND: the no-KL arm also had no GSM8K term, so KL vs GSM8K is not separated. v3b (topics) escaped refits under
+  KL 1.0, so this is math-specific (or v3b's pursuit term, on there, off here).
+- Proposed test (cheap, no training): ablate the refit probes' directions (linear refits, projection at their
+  layer) in the BASE model and measure GSM8K accuracy / math-text NLL, vs ablating topic refit directions on topic
+  text. If math directions are load-bearing and topic ones are not, the slow-down is structural.
+
 ## 2026-10-20k Stage B s200-326: refit margin 12.6 -> 6.3, refit passes ~0.5%; k1 ~1.00; math 0.79-0.86
 - Per 20 abs steps 180-320 (refit-probe turns ~1170 each): passes 1 / 1 / 2 / 8 / 8 / 5 / 7; median logit margin
   12.6 / 7.8 / 8.4 / 8.3 / 8.0 / 7.2 / 7.2 (6.3 at 320-326). Panel k1 0.98-1.00; held-out (L20 / L24, any) det at t0
