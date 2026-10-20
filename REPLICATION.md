@@ -5,6 +5,19 @@ checkpoints, observed results, and unresolved limitations.
 
 TICA on a new machine: start at docs/tica/README.md (results digest, run ledger, open questions, aggregate snapshot).
 
+## 2026-10-20i Refits 0 passes: compared with v3b by refit exposure and logit margin (not yet alarming)
+- Refit-probe turns (real_score, non-panel, monitored), this run by 20 abs steps 60-200: n 183 / 269 / 201 / 315 / 384
+  / 1112 / 944; det 1.00 throughout; median logit margin over threshold 15.5 / 12.7 / 15.1 / 18.3 / 17.5 / 13.6 / 12.8.
+  Refits kept 304/304, AUROC median 1.000.
+- final_v3b_4b (topics) by 40 steps 40-200: refit turns 1278 / 1991 / 2131 / 2231 (= 30-60/step vs ~5-15/step here
+  until s160); det 1.00 / 0.99 / 0.97 / 0.93; margin 9.9 / 6.3 / 4.6 / 4.3; later resumes 2.2 -> 0.0 (det 0.69-0.86).
+  Its refit AUROC was also ~1.000, so separability alone does not block passes.
+- Reading: this run only reached v3b's refit volume at s160 (when panel k1 -> 1.0 made every episode reach
+  refits). Margin since then 17.5 -> 13.6 -> 12.8, but math refits start ~6-8 logits deeper than v3b's topics
+  did (15-18 vs 9.9). The earlier math arms with KL had 0/2500 refit turns by s100; only the no-KL arm beat refits
+  (k2 0.12 -> 0.93 at 75-150, with math NLL doubling).
+- Decision point: s240-260. Concerning if margin is not below ~8 and k2 still 0 by then.
+
 ## 2026-10-20h Stage B s160-192: panel k1 jumps to 0.92-1.00 at all layers, but held-out probes still catch 0.97
 - Same job 6556906. Panel k1 by 10 steps: 0.92 / 1.00 / 1.00 (n ~46). Turn-0 real_score, abs s175-192 (n 79):
   deployed panel probe detects 0.04, while the held-out probes (pool entries flagged held_out, never rewarded
