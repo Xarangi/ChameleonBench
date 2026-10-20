@@ -5,6 +5,14 @@ checkpoints, observed results, and unresolved limitations.
 
 TICA on a new machine: start at docs/tica/README.md (results digest, run ledger, open questions, aggregate snapshot).
 
+## 2026-10-20p Capability evals queued; LR; step-time breakdown
+- No held-out capability eval of this run yet (only the in-training GSM8K-while-hiding acc 0.73-0.86 at T 1.0 / 400 tok,
+  and the 24-request turn-0 eval). Queued tica_capability.py (GSM8K 200 greedy 2-shot + MMLU 600; clean / brief math /
+  brief other): 6587782 final step_340 (abs 400, after 6556906), 6587783 nokl step_140, base with the same briefs.
+- LR: warm-up to 3e-4 (10 steps), cosine to 1e-4 by step 200, then held at 1e-4 (lr_final 1e-5 unused, cooldown 0).
+- Step time, last 40 steps (episodes_per_step 8 = 4 per GPU, DP2): 105 s = rollout 60 s (episode refits: read 54 +
+  fit 30 s as logged) + train 44 s (cap_gen 26, cap_train 7, anchor 2, episode backward ~9).
+
 ## 2026-10-20o Why linear refits are rare: the bandit sees them as EASY; bug: turn-0 panel records feed the layer bandit
 - Refit beat rate per judged turn, abs s240-388 (turns.jsonl): maxpool 21/490 (4.3%), linear 11/646 (1.7%; @26 3/5,
   @22 4/58, @8 2/134, @12 1/224, @16 1/225), attnpool 15/1003 (1.5%), rlobf_attn 3/1337 (0.2%), ensembles 1/4376.
