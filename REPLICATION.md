@@ -5,6 +5,20 @@ checkpoints, observed results, and unresolved limitations.
 
 TICA on a new machine: start at docs/tica/README.md (results digest, run ledger, open questions, aggregate snapshot).
 
+## 2026-10-20s GPU memory / idle audit; profiling jobs (micro_batch 2, cap_gen_samples 4, py-spy)
+- CORRECTION (my chat reply): "GPU busy 43%" read the wrong nvidia-smi column. logs/gpu-5864657.csv (v3 profile,
+  4 steps): utilization.gpu mean 66% whole job, 57-66% in steady steps 3-4; < 5% in 14-20% of seconds, in short
+  1-3 s gaps (25 s idle over steps 3-4). So the waste = many short gaps between kernels, not long stalls.
+- Peak: the 40.0 GB (max_memory_allocated) of 5864657 WAS the micro_batch-2 test (config.json micro_batch 2); mb1 =
+  28.0 GB (v3 smoke 5868247), 24.4 GB this run (math). nvidia-smi memory.used (29-39.8 GB) = allocator reserve +
+  context. New metric max_mem_reserved_gb. => micro_batch 2 is a RE-test of a known ~40 GB result under a lighter
+  config (math texts), expected ~36-38 GB allocated; loss is normalised by global target totals, so mb2 is exact up
+  to kernel numerics (same episodes: same seed / TICA_STEP_OFFSET).
+- New tooling: scripts/tica.py --set KEY=VALUE (dotted dataclass path, typo raises; test), TICA_PYSPY=FILE (rank 0
+  under py-spy record --idle, launched as parent), max_mem_reserved_gb.
+- Profiles from resume_60/adaptive/final, ext config, DP2, 6 steps, nvidia-smi 1 s: base + py-spy 6589171,
+  micro_batch 2 6589172, cap_gen_samples 4 (2 -> 4 per fork; more GSM8K signal, not a speed-up) 6589173.
+
 ## 2026-10-20r Stage B DONE (abs 400); extension with the layer-bandit fix; evals trimmed
 - 6556906 COMPLETED (7h59m). Final window abs 380-400: refit passes 27 / 1223 (2.2%), median margin 4.4 (< 5 bar).
 - Extension final_v4_math_v3b_ext_4b (= panel config + kind_bandit_refits_only true) from resume_60/adaptive/final
