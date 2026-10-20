@@ -6,8 +6,11 @@ checkpoints, observed results, and unresolved limitations.
 TICA on a new machine: start at docs/tica/README.md (results digest, run ledger, open questions, aggregate snapshot).
 
 ## 2026-10-20e Stage A result (fixed L12 turn 0, KL 0.3) + cap_gen_shard + stage-B resume config
-- 6552658 (final_v4_math_v3b_4b, DP2): fixed L12 turn-0 probe beaten from step 25 (t0 det 1.0 -> 0.0; k1 0.4 at s25,
-  0.8-1.0 at s26-30); KL 1.0 math arms took ~80-100 steps. Refits started (4-5 per step), k2 0.0 so far. Passage
+- 6552658 (final_v4_math_v3b_4b, DP2): fixed L12 turn-0 probe, k1 by 10-step window 0 / 0 / 0.52 / 0.64 (steps 0-40);
+  k2 0/25, 0/29. CORRECTION (first draft said "KL 1.0 arms took ~80-100 steps", from per-step fractions): final_v4_math_4b
+  k1 0.49 at 30-40, 0.79 at 40-50, 1.00 from 50; minimal 0.83 at 50-60; no-KL 0.62 at 40-50. So KL 0.3 is ~10 steps
+  earlier, not a different regime. Every arm had k2 ~0 until step ~80 (no-KL 0.07-0.30 at 70-120). Stage-B gate
+  (k1 >= 0.8 over a window) NOT met at step 40: switch at the step-60 checkpoint if met. Passage
   NLL 0.31 -> 0.34-0.39, episode KL 0.04 -> 0.08-0.10 since the dodge (watch).
 - Step time: ~35-60 s before the dodge (cap_gen 15-35 s on rank 0 alone = the bulk; anchor 2.5 s), 85-110 s after
   (episode refits 35-55 s: ~450 forked conversations read per refit; already split across ranks).
