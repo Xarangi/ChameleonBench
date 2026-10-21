@@ -5,6 +5,18 @@ checkpoints, observed results, and unresolved limitations.
 
 TICA on a new machine: start at docs/tica/README.md (results digest, run ledger, open questions, aggregate snapshot).
 
+## 2026-10-21ai Panel from the start works -> final_v4b_4b first_probe_panel_from_step 1; stay strongest on every metric so far
+- panel0, k1 (turn-0 panel probe beaten) by 10 steps: 0.05 (39) / 0.46 (46) / 0.79 (42) at 0-9 / 10-19 / 20-29, about 10
+  steps behind A on the single L12 rung (0.13 / 0.28 / 0.98). GSM 0.70-0.96, KL 0.04-0.08. k2 0 so far (A: from ~30).
+  final_v4b_4b (+ builtin): first_probe_panel_from_step 60 -> 1 (user preference: no mid-run switch).
+- A extension 120-129: k2 0.29 (24), k3 0.00 (7), GSM 0.80, KL 0.064.
+- fb600 by 20 abs steps (k2 n 42-92):
+  - bit: k2 0.66 / 0.62 / 0.59, k3 0.46 / 0.33 / 0.45, GSM 0.51 / 0.58 / 0.64;
+  - score: k2 0.66 / 0.82 / 0.64, k3 0.43 / 0.47 / 0.35, GSM 0.61 / 0.65 / 0.55;
+  - stay: k2 0.77 / 1.00, k3 0.55 / 0.69, k4 0.26 / 0.19, GSM 0.74 / 0.83, KL 0.061-0.066, held-out tN 0.68 / 0.52
+    (bit ~0.2).
+- Verdict races still pending (they run after the branches end, ~10-20 min).
+
 ## 2026-10-21ah STAY gives sustained success over repeated catches (search-like); score in between; panel from start is learnable
 - Pass hazard under the same refit, MATCHED window (each branch's steps 10-25 = abs 610-625), j = 1-6+:
   - bit: 0.069 (261) / 0.228 (206) / 0.084 (131) / 0.043 (92) / 0.056 (72) / 0.042 (212);
