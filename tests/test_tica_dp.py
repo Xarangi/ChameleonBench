@@ -25,7 +25,8 @@ def _port() -> int:
 
 
 def _spawn(world: int, out: Path, steps: int, budget: bool = False,
-           panel: bool = False, shard: bool = False, hclip: float = 0.0) -> list[dict]:
+           panel: bool = False, shard: bool = False, hclip: float = 0.0,
+           desync: bool = False) -> list[dict]:
     import torch.multiprocessing as mp
 
     out.mkdir(parents=True)
@@ -36,7 +37,7 @@ def _spawn(world: int, out: Path, steps: int, budget: bool = False,
     try:
         from tica_dp_worker import run
 
-        mp.spawn(run, args=(world, str(out), _port(), steps, budget, panel, shard, hclip),
+        mp.spawn(run, args=(world, str(out), _port(), steps, budget, panel, shard, hclip, desync),
                  nprocs=world, join=True)
     finally:
         os.environ["PYTHONPATH"] = env
@@ -177,3 +178,16 @@ def test_two_ranks_match_one_process_with_hide_grad_clip(tmp_path):
         for k in ("grad_norm_hide", "grad_norm_rest", "hide_clip_coef", "grad_norm"):
             assert _close(a[k], b[k], 1e-4), (k, a[k], b[k])
     assert any(r["hide_clip_coef"] < 1.0 for r in one["recs"])  # the clip was active
+
+
+def test_dp_sync_init_aligns_ranks_with_different_inits(tmp_path):
+    """train.dp_sync_init (10-21v): rank 1 starts from different LoRA weights (an unseeded init);
+    with the flag both ranks hold rank 0's weights after training (and match one process)."""
+
+    import torch
+
+    (one,) = _spawn(1, tmp_path / "w1", 1)
+    r0, r1 = _spawn(2, tmp_path / "w2", 1, desync=True)
+    for n, v in r0["lora"].items():
+        assert torch.equal(v, r1["lora"][n]), n
+        assert torch.allclose(v, one["lora"][n], atol=1e-5), n

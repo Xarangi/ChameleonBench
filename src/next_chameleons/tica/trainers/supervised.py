@@ -74,6 +74,10 @@ class SupervisedConfig:
     # 10-21 (default off): keep trainer_state.pt in EVERY checkpoint instead of the newest only, so
     # a run can be resumed with its optimizer state from any checkpoint (~0.5 GB each at r32).
     save_state_all: bool = False
+    # 10-21v (default off = unchanged): with data-parallel episodes, copy rank 0's trainable
+    # weights to every rank before training. A fresh LoRA is initialised unseeded per rank, so
+    # from-scratch DP runs otherwise train ranks holding DIFFERENT weights (dp_param_drift).
+    dp_sync_init: bool = False
     # updates_per_rollout (10-18j, default 1 = unchanged): optimizer updates per rollout. The
     # rollout (episodes, verdicts, refits, targets) is collected once and reused K times; each
     # update re-runs the forward with grad on the current weights. The LR schedule still advances
@@ -683,6 +687,8 @@ class AdaptiveSupervisedTrainer:
         # RNG streams are implied; the features whose state couples episodes INSIDE a rollout are
         # not supported (their state would differ between ranks).
         self.world, self.rank = dp.world()
+        if self.world > 1 and cfg.dp_sync_init:
+            dp.broadcast_params(self.params)
         if self.world > 1:
             ac_ = cfg.adaptive
             bad = {"refit_mode != 'episode'": ac_.refit_mode != "episode",

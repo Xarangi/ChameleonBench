@@ -145,6 +145,17 @@ def allreduce_tensors(ts) -> None:
             off += n
 
 
+def broadcast_params(params, src: int = 0) -> None:
+    """In place: every rank takes rank `src`'s parameter values (train.dp_sync_init, 10-21v)."""
+
+    d = _dist()
+    if d is None:
+        return
+    with torch.no_grad():
+        for p in params:
+            d.broadcast(p.data, src=src)
+
+
 def params_checksum(params) -> list[float]:
     """Per-rank float64 sum of all parameters (drift check: equal on every rank)."""
 

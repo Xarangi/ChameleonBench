@@ -44,6 +44,7 @@ train:
   warmup_steps: 10
   save_every: 20    # checkpoints (the held-out race runs every adaptive.eval_every = 50 steps)
   save_state: true  # 10-18: Adam moments + curriculum + RNG restored across resume chunks (no re-warmup)
+  dp_sync_init: true   # 10-21v: from-scratch DP ranks start from rank 0's LoRA init (unseeded init otherwise differs per rank)
   seed: 0
   # 10-16i: no pinning; the first probe of every concept is fit on the policy itself (first_probe)
   objective: {hide_weight: 1.0, retry_hide_ladder: [2.0, 3.0, 4.0], match_weight: 2.0, lm_weight: 0.1, hide_from_turn: 0, pin_first_turn: false,

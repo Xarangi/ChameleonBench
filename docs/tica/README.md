@@ -112,6 +112,8 @@ Every item is a config field defaulting to the old behaviour unless noted. REPLI
 | `objective.hide_loss: log` | NOT as built: ~ control from abs 380; from scratch it dodges 4x sooner but diverges by step 10 (unbounded hide gradient); a bounded variant is untested | 10-21i, 10-21l |
 | `adaptive.cap_adapt_target` (adaptive capability multiplier) | OPEN: best k2 + math, but held-out probes catch it 1.00 (narrow dodge); multiplier oscillates | 10-21i |
 | Model-written train texts (`final_v5_modelwritten_4b`) | build in progress | 10-21f, docs/tica/V4_MODEL_WRITTEN_DATA.md |
+| `train.dp_sync_init: true` (bug fix: from-scratch DP ranks otherwise train different LoRA inits) | set in final_v4_4b / final_v5_modelwritten_4b | 10-21v |
+| `objective.hide_loss: gce` + `hide_gce_q`; `train.hide_grad_clip` (separate clip of the hide gradient) | OPEN: from-scratch runs A (log + clip 0.5) / B (GCE 0.3) running; A keeps capability at original level | 10-21r, 10-21v |
 | Math collapse risk (degenerate loops, grad norm clipped >3, GSM8K-while-hiding < 0.3) | watch in every run | 10-20u |
 
 ## Hard rules (carried over)

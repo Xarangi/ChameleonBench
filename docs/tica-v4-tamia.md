@@ -85,8 +85,8 @@ done
 
 See `docs/tica/README.md` "Since 10-19" for evidence. Exact speed-ups and fixes (no science change):
 `rl.adaptive.refit_batched_logistic: true`, `refit_batched_rlobf: true`, `kind_bandit_refits_only: true`,
-`train.save_state_all: true`, `cap_gen_samples: 4`. Decided science changes: `refit_min_tpr_np: 0`,
-`refit_np_in_fit: false` (both already in `final_v5_modelwritten_4b`). Open (decide first): turn-0 schedule
+`train.save_state_all: true`, `cap_gen_samples: 4`, and `train.dp_sync_init: true` (already set in final_v4_4b; REQUIRED for from-scratch DP, 10-21v). Decided science changes: `refit_min_tpr_np: 0`,
+`refit_np_in_fit: false`, `refit_min_tpr_ic: 0.8` (all in `final_v5_modelwritten_4b`; 10-21o). Open (decide first): turn-0 schedule
 (final_v4_4b's fork-from-150 failed on math), KL 1.0 vs 0.3, `objective.hide_loss`, `cap_adapt_target`, and
 whether to train on the model-written data (`final_v5_modelwritten_4b`; its data files `final_v5_mw.json`,
 `final_v5_mw_elicit_inputs.json`, `concept_labels_v5mw_27b.json` must be synced from Narval once built).

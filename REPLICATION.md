@@ -5,6 +5,27 @@ checkpoints, observed results, and unresolved limitations.
 
 TICA on a new machine: start at docs/tica/README.md (results digest, run ledger, open questions, aggregate snapshot).
 
+## 2026-10-21v DP bug: from-scratch DP runs trained ranks with DIFFERENT weights; train.dp_sync_init (default off)
+- Found by the 10-21r agent: dp_param_drift checksums differ between ranks at every save of from-scratch DP2 runs
+  (original stage A 6552658: constant offset 12.65 at steps 20 / 40 / 60; scratch_logclip / scratch_gce too). Runs that
+  load a saved adapter (resume_60, extension, r380 arms, fb600) start equal and show no drift.
+- Cause: Policy creates a fresh LoRA via peft.get_peft_model without a shared seed, so lora_A differs per rank
+  (lora_B = 0, so outputs start equal). Both ranks then apply the same all-reduced update to different A matrices.
+  Each rank's rollouts come from a different model and the gradient mixes the two. Rank 0's adapter is what gets
+  saved. Affected: stage A of the main math lineage (steps 0-60), univ DP2 (6428983), the 10-21l/m log runs and the
+  current A / B runs. A / B match the original's condition, so their comparison stays like-for-like.
+- Fix: train.dp_sync_init (default off = unchanged): broadcast rank 0's trainable weights to every rank in the
+  trainer constructor (dp.broadcast_params). tests/test_tica_dp.py::test_dp_sync_init_aligns_ranks_with_different_inits
+  (rank 1 starts from shifted lora_A; with the flag both ranks end equal to each other and to one process); TICA DP and
+  refit tests on compute node 6622791 all pass. Set true in final_v4_4b and final_v5_modelwritten_4b (TamIA:
+  from scratch on 4 GPUs).
+- Interim A / B vs original MSE (from the agent's cmp.py):
+  - A (log + hide clip 0.5, step 33): k1 1.00 from step 20 (orig ~26); GSM8K-while-hiding 0.50-1.00, mostly
+    0.83-1.00; KL 0.06-0.10; total grad norm 0.6-1.6; the hide grad reaches 50-312 when fresh refits catch deeply, and
+    the clip scales it by 0.002-0.06.
+  - B (GCE q 0.3 / weight 0.6, step 30): k1 1.00 from step 6; GSM8K 0.00-1.00, mostly 0.33-0.83; KL 0.10-0.25;
+    worse capability than A.
+
 ## 2026-10-21u Score vs 1-bit feedback branches from the extension final (abs 600)
 - Question (10-21t): is the missing iteration (one retry jump, then decay) an INFORMATION limit? Score feedback shows
   the judging probe's 0-100 score vs threshold each turn (the strongest catcher's under cumulative judging), so the
