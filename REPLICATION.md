@@ -5,6 +5,19 @@ checkpoints, observed results, and unresolved limitations.
 
 TICA on a new machine: start at docs/tica/README.md (results digest, run ledger, open questions, aggregate snapshot).
 
+## 2026-10-21y Updates: ext also verdict-blind; GCE run cancelled (math < 0.3); logclip k2 resets at the panel switch; feedback branches early
+- Falsified verdicts, ext s580: pass after turn 0 0.075 real vs 0.082 falsify; k2 0.60 vs 0.75; caught at turn 2 0.62 vs
+  0.46. Both trained arms are verdict-blind. Cause (chat 10-21): the stay term is coded inside the pursuit block, so it
+  has been off in every math run since pursuit went off on 10-19 (stay_weight 1.0 in the config is inert). With
+  episode_refit_prob 1.0 the post-pass turn is caught whatever the model does, so a fixed turn-position move schedule
+  is near-optimal. v3b (pursuit + stay on) did use the verdict (10-17ad: 0.36 -> 0.15 under falsify).
+- B gce 6620903 CANCELLED at step ~58: GSM8K-while-hiding 0.25 / 0.26 at 40-49 / 50-59, KL 0.14 -> 0.19, grad norm 4-4.4
+  (k2 0.10-0.12 before stopping).
+- A logclip: k2 0.10 (48) at 40-49, then 0.00 at 50-59 and 60-69. At step 60 turn 0 switches from the fixed L12 probe
+  to the base panel (stage B schedule), as in the original. GSM 0.64-1.00, KL ~0.08.
+- fb600 (abs 600-619; k2 n 23-39): bit k2 0.51 / 0.75, GSM 0.57 / 0.47; score k2 0.56 / 0.78, GSM 0.63 / 0.65.
+  Held-out last turn 0.16-0.19 in both.
+
 ## 2026-10-21w Never-shown probe panel + falsified verdicts: layer-wide evasion except L20 (and L4 / 28 / 30); no verdict use; logclip k2 early
 - Never-shown panel (tica_probe_panel.py, math, 24 ep x 16 turns, fresh base probes never trained against;
   detection over all monitored turns):
