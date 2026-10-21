@@ -155,6 +155,7 @@ rl:
     cap_gen_kl_all: true
     cap_gen_episodes: 4
     cap_gen_samples: 4   # v4b: ~2x correct GSM8K samples for +5-8% step time (10-20s)
+    cap_gen_shard: true   # TamIA 10-21: each rank generates + backpropagates its share of the forks (10-20e; the H100 smoke spent ~95 of ~207 s/step in cap_gen + cap_train on rank 0 alone)
     cap_gen_max_new: 400
     cap_gen_temperature: 1.0
     cap_gen_hide: true

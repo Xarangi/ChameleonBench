@@ -29,12 +29,24 @@ SRC=$RUNS/final_v4b_4b/anchor_cache.json
 for slot in "$@"; do
   cfg=${slot%%@*}; dst=$RUNS/$cfg/anchor_cache.json
   [ -f "$dst" ] && continue
-  for (( w = 0; w < 60 && ! -f "$SRC"; w++ )); do sleep 60; done
+  w=0; while [ ! -f "$SRC" ] && (( w < 60 )); do sleep 60; w=$(( w + 1 )); done
   if [ -f "$SRC" ]; then
     mkdir -p "$RUNS/$cfg"; cp "$SRC" "$dst.tmp.$$" && mv -n "$dst.tmp.$$" "$dst"; rm -f "$dst.tmp.$$"
     echo "anchor cache for $cfg seeded from $SRC"
   fi
 done
+# TICA_MPS=1: CUDA MPS daemon for this job, so processes sharing a GPU run kernels CONCURRENTLY instead of
+# time-slicing (interleaved layouts; each process is host-bound at ~40% GPU utilisation).
+if [ "${TICA_MPS:-0}" = 1 ]; then
+  if command -v nvidia-cuda-mps-control > /dev/null; then
+    export CUDA_MPS_PIPE_DIRECTORY=$NODE_TMP/mps_pipe CUDA_MPS_LOG_DIRECTORY=$NODE_TMP/mps_log
+    mkdir -p "$CUDA_MPS_PIPE_DIRECTORY" "$CUDA_MPS_LOG_DIRECTORY"
+    nvidia-cuda-mps-control -d && echo "MPS daemon started"
+    trap 'echo quit | nvidia-cuda-mps-control' EXIT
+  else
+    echo "TICA_MPS=1 but nvidia-cuda-mps-control is not on this node: running without MPS"
+  fi
+fi
 PIDS=()
 i=0
 for slot in "$@"; do
