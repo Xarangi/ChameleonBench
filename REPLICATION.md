@@ -14,7 +14,7 @@ TICA on a new machine: start at docs/tica/README.md (results digest, run ledger,
 - panel2 base (6681400): all 30 probes detect the base model at 1.00 (0 fit failures) -> valid panel. Arms pending.
 - Held-out-judge races (tica_switch_eval, math, --kind K = every refit is a fresh K probe, 32 ep x 16 turns, no switches),
   -> diag/heldout_races_2026-10-21/: logclip abs 260 (step_140) 6684752-56 and stay abs 660 (final = step_60)
-  6684757-61, for K = bailey_ens_tok / nc_ens8_tok / gdm_rollattn / mck_attnlite / linear@20; base linear@20 6684762.
+  6684757-61 (pending -> repacked 2 per GPU: hrpack 6684985-87, scripts/slurm/tica_switch_eval_pack.sh), for K = bailey_ens_tok / nc_ens8_tok / gdm_rollattn / mck_attnlite / linear@20; base linear@20 6684762 (-> 6684986).
 
 ## 2026-10-21av Clean GSM8K: logclip abs 260 0.70, panel0 s150 0.66 (base 0.825) -- the s400 drop was ~all truncation; 768-tok rerun
 - tica_capability (GSM8K 200, greedy 2-shot, 256 new tokens): logclip abs 260 clean 0.70 / brief math 0.67 / brief HTML
