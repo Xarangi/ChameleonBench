@@ -5,6 +5,18 @@ checkpoints, observed results, and unresolved limitations.
 
 TICA on a new machine: start at docs/tica/README.md (results digest, run ledger, open questions, aggregate snapshot).
 
+## 2026-10-20x Extension s420-429; held-out probes start missing at turn 0 exactly when math broke; GSM8K-term correction
+- 6588314 by 5 abs steps 415-429: GSM8K-while-hiding 0.64 / 0.62 / 0.53 (finished 0.67-0.79), grad norm 1.6-4.2,
+  fallback 0.4-0.8 / step; cap_gen_log since 420: n 54, correct 0.59, 0 repeated-line loops. Refit passes 27 / 588,
+  29 / 606 (~5%); median margin 2.0 -> 4.0 -> 6.8 (rising; the layer-bandit fix now steers refits).
+- NEW: held-out probes (L20 / L24 base, never in the reward) at turn 0 (any fires): 1.00 / 1.00 / 0.98 at abs 360-389,
+  0.75 at 390-399, 0.48 / 0.43 / 0.60 at 400-429. The first real evasion of unseen probes arrived WITH the math
+  collapse (abs 389): the shift that reaches deep held-out layers is the one that damaged math.
+- CORRECTION (chat 10-20v: "the GSM8K term weakened when accuracy fell"): the RFT NLL is a MEAN over flagged items
+  (cap_gen_weight * sum(nll) / n_flag), and an all-wrong fork falls back to the base solution, so the term's
+  magnitude does not shrink with accuracy. What changes is the content: off-policy base text (teacher-forced) instead
+  of the model's own successful samples, which says nothing directly about its degenerate free-generation loops.
+
 ## 2026-10-20v Extension recovering: KEEP running (decision rule); why the collapse (hypothesis)
 - 6588314 (from the collapsed abs-400 checkpoint), by 5 abs steps 400-419: GSM8K-while-hiding 0.35 / 0.25 / 0.47 / 0.55,
   finished 0.72 / 0.48 / 0.57 / 0.74, grad-norm median 4.2 / 3.4 / 3.7 / 2.0. cap_gen_log 410-418 (n 58): correct 0.50,

@@ -219,3 +219,99 @@ def test_batched_token_pool_fits_match_sequential_gate():
         assert qa["kept"] == qb["kept"], kind
         la, lb = ma.logits(P + N), mb.logits(P + N)
         assert torch.allclose(la, lb, atol=2e-3, rtol=2e-3), (kind, (la - lb).abs().max())
+
+
+def test_fit_speed_flags_off_by_default():
+    a = AdaptiveConfig()
+    assert not (a.refit_rlobf_prepad or a.refit_batched_rlobf or a.refit_batched_logistic)
+
+
+def test_fit_logistic_many_matches_lbfgs():
+    """refit_batched_logistic (10-20): batched Newton reaches fit_logistic's optimum (weakly
+    regularised C = 1.0 as in the runs, and C = 0.01; problems of different sizes)."""
+    from next_chameleons.tica.monitors import fit_logistic, fit_logistic_many
+
+    g = torch.Generator().manual_seed(0)
+    d = 32
+    u = torch.randn(d, generator=g)
+    u /= u.norm()
+    for C in (1.0, 0.01):
+        xs, ys = [], []
+        for f in range(3):
+            n = 80 - 9 * f
+            y = (torch.rand(n, generator=g) < 0.4).float()
+            xs.append(torch.randn(n, d, generator=g) + (2 * y[:, None] - 1) * 1.5 * u + 0.5)
+            ys.append(y)
+        for x, y, (wb, bb, mb, sb) in zip(xs, ys, fit_logistic_many(xs, ys, C), strict=True):
+            wa, ba, ma, sa = fit_logistic(x, y, C)
+            la, lb = ((x - ma) / sa) @ wa + ba, ((x - mb) / sb) @ wb + bb
+            assert torch.allclose(la, lb, atol=1e-4, rtol=1e-4), (C, (la - lb).abs().max())
+
+
+def _tok_seqs(g, d, n, s, u):
+    return [torch.randn(int(torch.randint(6, 14, (1,), generator=g)), d, generator=g)
+            + s * 0.8 * u + 1.5 for _ in range(n)]
+
+
+def test_batched_logistic_gates_match_sequential():
+    """refit_batched_logistic: ens *_linear gates and the attnpool / maxpool inits (batched fits)
+    give the same probes, AUROC and verdicts as the LBFGS path."""
+    import dataclasses
+
+    from next_chameleons.tica import probe_zoo as z
+
+    g = torch.Generator().manual_seed(3)
+    d = 24
+    u = torch.randn(d, generator=g)
+    mk = lambda n, s: torch.randn(n, d, generator=g) + s * 0.7 * u + 2.0  # noqa: E731
+    seq = AdaptiveConfig(refit_cv_folds=5, refit_min_auroc=0.0, refit_min_tpr_np=0.0,
+                         refit_C=1.0, refit_batched_fits=True)
+    bat = dataclasses.replace(seq, refit_batched_logistic=True)
+    for kind in ("ens4_linear", "ensdeep4_linear"):
+        Ls = z.kind_layers(kind, 12)
+        P, N, NP = ({L: mk(n, s) for L in Ls} for n, s in ((40, 1), (60, -1), (8, 1)))
+        ma, qa = z.gate_fit(kind, P, N, NP, seq, name="e", layer=12, concept="c")
+        mb, qb = z.gate_fit(kind, P, N, NP, bat, name="e", layer=12, concept="c")
+        assert abs(qa["auroc"] - qb["auroc"]) < 1e-4 and qa["kept"] == qb["kept"], (qa, qb)
+        assert qa["tpr_np"] == qb["tpr_np"], kind
+        xs = {L: torch.cat([P[L], N[L]]) for L in Ls}
+        assert torch.allclose(ma.logits(xs), mb.logits(xs), atol=1e-4), kind
+        assert abs(ma.thr - mb.thr) < 1e-4, kind
+    u2 = torch.randn(12, generator=g)
+    P, N, NP = (_tok_seqs(g, 12, n, s, u2) for n, s in ((30, 1), (40, -1), (6, 1)))
+    for kind in ("attnpool", "maxpool"):
+        ma, qa = z.gate_fit(kind, P, N, NP, seq, name="t", layer=12, concept="c")
+        mb, qb = z.gate_fit(kind, P, N, NP, bat, name="t", layer=12, concept="c")
+        assert abs(qa["auroc"] - qb["auroc"]) < 2e-3 and qa["kept"] == qb["kept"], kind
+        la, lb = ma.logits(P + N), mb.logits(P + N)
+        assert torch.allclose(la, lb, atol=2e-3, rtol=2e-3), (kind, (la - lb).abs().max())
+
+
+def test_rlobf_prepad_bit_identical_and_batched_matches():
+    """refit_rlobf_prepad gives bit-identical rlobf probes; refit_batched_rlobf (folds + final in one
+    stacked run) matches the per-fit path up to float reassociation."""
+    import dataclasses
+
+    from next_chameleons.tica import probe_zoo as z
+
+    g = torch.Generator().manual_seed(7)
+    d = 16
+    u = torch.randn(d, generator=g)
+    P, N, NP = (_tok_seqs(g, d, n, s, u) for n, s in ((40, 1), (50, -1), (6, 1)))
+    base = AdaptiveConfig(refit_cv_folds=5, refit_min_auroc=0.0, refit_min_tpr_np=0.0)
+    pre = dataclasses.replace(base, refit_rlobf_prepad=True)
+    bat = dataclasses.replace(base, refit_batched_rlobf=True)
+    for kind in ("rlobf_attn", "rlobf_max"):
+        ma, qa = z.gate_fit(kind, P, N, NP, base, name="r", layer=12, concept="c")
+        mp, qp = z.gate_fit(kind, P, N, NP, pre, name="r", layer=12, concept="c")
+        assert qa == qp, kind
+        for (_, a), (_, b) in zip(ma.net.named_parameters(), mp.net.named_parameters(),
+                                  strict=True):
+            assert torch.equal(a, b), kind
+        st = torch.get_rng_state()
+        mb, qb = z.gate_fit(kind, P, N, NP, bat, name="r", layer=12, concept="c")
+        assert abs(qa["auroc"] - qb["auroc"]) < 2e-3 and qa["kept"] == qb["kept"], (qa, qb)
+        la, lb = ma.logits(P + N + NP), mb.logits(P + N + NP)
+        assert torch.allclose(la, lb, atol=1e-3, rtol=1e-3), (kind, (la - lb).abs().max())
+        assert abs(ma.thr - mb.thr) < 1e-3, kind
+        torch.set_rng_state(st)

@@ -34,7 +34,12 @@ import zlib
 
 import torch
 
-from next_chameleons.tica.monitors import auroc, fit_logistic, quantile_threshold
+from next_chameleons.tica.monitors import (
+    auroc,
+    fit_logistic,
+    fit_logistic_many,
+    quantile_threshold,
+)
 
 TOKEN_KINDS = ("maxpool", "rollmax", "attnpool")
 LIT_TOKEN_KINDS = ("rlobf_attn", "rlobf_attn_max", "rlobf_max", "gdm_rollattn",  # see bottom
@@ -247,7 +252,7 @@ def _fit_mlp(z, y, g, hidden=64):
     return W1.detach(), b1.detach(), w2.detach(), b2.detach()
 
 
-def fit_kind(kind, P, N, *, name, layer, concept, C, g, device="cpu"):
+def fit_kind(kind, P, N, *, name, layer, concept, C, g, device="cpu", rlobf_prepad=False):
     """Fit one probe of `kind` on positives P and negatives N (no threshold yet)."""
 
     bce = torch.nn.functional.binary_cross_entropy_with_logits
@@ -270,7 +275,8 @@ def fit_kind(kind, P, N, *, name, layer, concept, C, g, device="cpu"):
         return EnsembleMonitor(name, layer, concept, parts,
                                agg="median" if kind.startswith("spread5") else "mean")
     if kind in LIT_KINDS:
-        return fit_lit(kind, P, N, name=name, layer=layer, concept=concept, g=g, device=device)
+        return fit_lit(kind, P, N, name=name, layer=layer, concept=concept, g=g, device=device,
+                       prepad=rlobf_prepad)
     if kind in MCK_KINDS:
         return McKMonitor(kind, name, layer, concept, _fit_mck(kind, P, N, g, device).eval())
     if kind in TOKENS_ENS_KINDS:
@@ -364,7 +370,40 @@ def _fit_ens_many(kind, P, N, keeps, *, name, layer, concept, C, g, device):
     return [EnsembleMonitor(name, layer, concept, p, agg=agg) for p in parts]
 
 
-def _fit_tok_many(kind, P, N, keeps, *, name, layer, concept, C, g, device):
+def _lr_in_z_many(zs, ys, C):
+    """_lr_in_z for several problems via fit_logistic_many (refit_batched_logistic, 10-20)."""
+
+    return [((w0 / sd0).float(), float(b0 - ((mu0 / sd0) @ w0)))
+            for w0, b0, mu0, sd0 in fit_logistic_many(zs, ys, C)]
+
+
+def _fit_ens_lin_many(kind, P, N, keeps, *, name, layer, concept, C, device):
+    """fit_kind(ENS *_linear kind) for several positive subsets at once (refit_batched_logistic,
+    10-20): the same per-(fit, layer) standardisation as fit_kind, then every logistic problem of
+    the CV folds + final fit in ONE batched Newton solve (fit_logistic_many). Returns one
+    EnsembleMonitor per mask."""
+
+    Ls = kind_layers(kind, layer)
+    zs, ys, meta = [], [], []
+    for f, kp in enumerate(keeps):  # fit_kind's order: fit-major, then layer
+        idx = kp.bool().nonzero().flatten()
+        Pf = _take(P, idx)
+        for L in Ls:
+            x = torch.cat([Pf[L], N[L]]).float().to(device)
+            y = torch.cat([torch.ones(len(Pf[L])), torch.zeros(len(N[L]))]).to(device)
+            mu, sd = x.mean(0), x.std(0, unbiased=False) + 1e-6
+            zs.append((x - mu) / sd)
+            ys.append(y.cpu())
+            meta.append((f, L, mu, sd))
+    parts = [[] for _ in keeps]
+    for (f, L, mu, sd), (w, b) in zip(meta, _lr_in_z_many(zs, ys, C), strict=True):
+        parts[f].append((L, "linear", mu, sd, w.to(device), torch.tensor(b, device=device),
+                         None, None))
+    agg = "median" if kind.startswith("spread5") else "mean"
+    return [EnsembleMonitor(name, layer, concept, p, agg=agg) for p in parts]
+
+
+def _fit_tok_many(kind, P, N, keeps, *, name, layer, concept, C, g, device, batched_lr=False):
     """fit_kind(attnpool / maxpool / rollmax) for several positive subsets at once (the CV folds +
     final fit of gate_fit; refit_batched_fits, 10-16n). Per fit the SAME initialisation as fit_kind
     (its own token standardisation mu / sd, logistic init, g draws in the sequential order), then
@@ -388,9 +427,8 @@ def _fit_tok_many(kind, P, N, keeps, *, name, layer, concept, C, g, device):
         pw = float((yf == 0).sum()) / max(1, int((yf == 1).sum()))
         if kind == "attnpool":
             zbar = (xbar[sel.to(device)] - mu) / sd
-            w0, b0 = _lr_in_z(zbar, yf.cpu(), C)
+            lr_in = (zbar, yf.cpu())
             Q = torch.randn(ATTN_HEADS, X.shape[2], generator=g) * 1e-2
-            init = (Q.to(device), w0.to(device)[None].repeat(ATTN_HEADS, 1) / ATTN_HEADS, b0)
         else:  # maxpool / rollmax: token-level LR init on <= 16 random tokens per sequence
             rows, ys = [], []
             for i in sel.nonzero().flatten().tolist():
@@ -398,9 +436,15 @@ def _fit_tok_many(kind, P, N, keeps, *, name, layer, concept, C, g, device):
                 idx = idx[torch.randperm(len(idx), generator=g)[:16]]
                 rows.append((X[i, idx.to(X.device)] - mu) / sd)
                 ys += [float(y[i])] * len(idx)
-            w0, b0 = _lr_in_z(torch.cat(rows), torch.tensor(ys), C)
-            init = (w0.to(device), b0)
-        fits.append((sel.to(device), mu, sd, pw, init))
+            lr_in, Q = (torch.cat(rows), torch.tensor(ys)), None
+        fits.append([sel.to(device), mu, sd, pw, lr_in, Q])
+    # the logistic inits: one at a time (as fit_kind) or one batched Newton solve (g draws above
+    # are unaffected: the solves draw nothing)
+    sols = (_lr_in_z_many([f[4][0] for f in fits], [f[4][1] for f in fits], C) if batched_lr
+            else [_lr_in_z(f[4][0], f[4][1], C) for f in fits])
+    for f, (w0, b0) in zip(fits, sols, strict=True):
+        f[4] = ((f[5].to(device), w0.to(device)[None].repeat(ATTN_HEADS, 1) / ATTN_HEADS, b0)
+                if kind == "attnpool" else (w0.to(device), b0))
     F = len(fits)
     Wm = torch.stack([f[0].float() for f in fits])  # [F, nI] item weights
     MU = torch.stack([f[1] for f in fits])
@@ -505,18 +549,30 @@ def gate_fit(kind, P, N, NP, cfg, *, name, layer, concept, device="cpu"):
                 pairs += len(out) * nh
             k = 0  # folds done
         tok_batch = kind in TOKEN_KINDS and getattr(cfg, "refit_batched_fits", False)
-        if tok_batch or (kind in ENS_KINDS and kind.endswith("_mlp")
-                         and getattr(cfg, "refit_batched_fits", False)):
+        blr = getattr(cfg, "refit_batched_logistic", False)
+        lin_batch = kind in ENS_KINDS and kind.endswith("_linear") and blr
+        rlobf_batch = kind in RLOBF_KINDS and getattr(cfg, "refit_batched_rlobf", False)
+        if tok_batch or lin_batch or rlobf_batch or (
+                kind in ENS_KINDS and kind.endswith("_mlp")
+                and getattr(cfg, "refit_batched_fits", False)):
             outs = [perm[j::k] for j in range(k)]
             keeps = []
             for out in outs:
                 keep = torch.ones(_n(P), dtype=torch.bool)
                 keep[out] = False
                 keeps.append(keep)
-            many = _fit_tok_many if tok_batch else _fit_ens_many
-            mons = many(kind, P, Nf, [*keeps, torch.ones(_n(P), dtype=torch.bool)],
-                        name=name, layer=layer, concept=concept, C=cfg.refit_C, g=g,
-                        device=device)
+            keeps.append(torch.ones(_n(P), dtype=torch.bool))
+            kw = dict(name=name, layer=layer, concept=concept, C=cfg.refit_C, device=device)
+            if rlobf_batch:
+                dev = torch.device(device) if not isinstance(device, torch.device) else device
+                mons = [LitTokenMonitor(kind, name, layer, concept, n_)
+                        for n_ in _fit_rlobf_many(kind, P, Nf, keeps, g, dev)]
+            elif lin_batch:
+                mons = _fit_ens_lin_many(kind, P, Nf, keeps, **kw)
+            elif tok_batch:
+                mons = _fit_tok_many(kind, P, Nf, keeps, g=g, batched_lr=blr, **kw)
+            else:
+                mons = _fit_ens_many(kind, P, Nf, keeps, g=g, **kw)
             for out, mj in zip(outs, mons[:-1], strict=True):
                 a_j = auroc(mj.logits(_take(P, out)).detach().cpu(),
                             mj.logits(Nh).detach().cpu())
@@ -528,16 +584,18 @@ def gate_fit(kind, P, N, NP, cfg, *, name, layer, concept, device="cpu"):
             keep = torch.ones(_n(P), dtype=torch.bool)
             keep[out] = False
             mj = fit_kind(kind, _take(P, keep.nonzero().flatten()), Nf, name=name, layer=layer,
-                          concept=concept, C=cfg.refit_C, g=g, device=device)
+                          concept=concept, C=cfg.refit_C, g=g, device=device,
+                          rlobf_prepad=getattr(cfg, "refit_rlobf_prepad", False))
             a_j = auroc(mj.logits(_take(P, out)).detach().cpu(), mj.logits(Nh).detach().cpu())
             wins += a_j * len(out) * nh
             pairs += len(out) * nh
         au = wins / pairs
-        done = kind == "gdm_rollattn" or (getattr(cfg, "refit_batched_fits", False) and (
-            kind in TOKEN_KINDS or (kind in ENS_KINDS and kind.endswith("_mlp"))))
+        done = kind == "gdm_rollattn" or lin_batch or rlobf_batch or (
+            getattr(cfg, "refit_batched_fits", False) and (
+                kind in TOKEN_KINDS or (kind in ENS_KINDS and kind.endswith("_mlp"))))
         mon = mons[-1] if done else fit_kind(
             kind, P, Nf, name=name, layer=layer, concept=concept, C=cfg.refit_C, g=g,
-            device=device)
+            device=device, rlobf_prepad=getattr(cfg, "refit_rlobf_prepad", False))
     except RuntimeError as e:  # e.g. a logistic fit that does not converge
         info["error"] = str(e)[:200]
         return None, info
@@ -575,6 +633,7 @@ def gate_fit(kind, P, N, NP, cfg, *, name, layer, concept, device="cpu"):
 #   race), trained on 85% (the 15% validation split is kept so seeds > 1 stays a one-line change).
 # ---------------------------------------------------------------------------------------------
 LIT_KINDS = ("rlobf_attn", "rlobf_attn_max", "rlobf_max", "gdm_rollattn")
+RLOBF_KINDS = ("rlobf_attn", "rlobf_attn_max", "rlobf_max")
 
 
 class _RLObfAttn(torch.nn.Module):
@@ -656,7 +715,32 @@ class LitTokenMonitor(_Mon):
                                self.net.to(device), self.thr))
 
 
-def _fit_rlobf(kind, P, N, g, device):
+class _Prepadded:
+    """Sequences padded ONCE (refit_rlobf_prepad, 10-20); batch(idx) returns exactly what
+    _pad([items[j] for j in idx], 0, 1, device) would (same values, same width = the batch's
+    longest sequence), without re-copying every token state at every minibatch."""
+
+    def __init__(self, items, device):
+        one = torch.ones(1, device=device)
+        self.X, self.M = _pad(items, 0 * one, one, device)
+        self.n = self.M.sum(1)
+
+    def batch(self, idx):
+        idx = torch.as_tensor(idx, device=self.X.device)
+        T = int(self.n[idx].max())
+        return self.X[idx, :T].contiguous(), self.M[idx, :T].contiguous()
+
+
+def _rlobf_draws(P_n, N_n, kind, g):
+    """_fit_rlobf's draws from g in its order: the init seed, then one permutation per epoch."""
+
+    seed = int(torch.randint(1 << 30, (1,), generator=g))
+    epochs = 80 if kind == "rlobf_max" else 40
+    n = min(P_n, N_n)
+    return seed, [torch.randperm(n, generator=g) for _ in range(epochs)]
+
+
+def _fit_rlobf(kind, P, N, g, device, prepad=False):
     d = P[0].shape[1]
     torch.manual_seed(int(torch.randint(1 << 30, (1,), generator=g)))  # init seed from the name
     net = (_TokLinear(d) if kind == "rlobf_max" else _RLObfAttn(d)).to(device)
@@ -665,9 +749,10 @@ def _fit_rlobf(kind, P, N, g, device):
     n, bs = min(len(P), len(N)), 16
     bce = torch.nn.functional.binary_cross_entropy_with_logits
     one = torch.ones(1, device=device)
+    pads = {1.0: _Prepadded(P, device), 0.0: _Prepadded(N, device)} if prepad else None
 
-    def loss_on(items, label):
-        X, M = _pad(items, 0 * one, one, device)
+    def loss_on(items, label, idx=None):
+        X, M = pads[label].batch(idx) if pads is not None else _pad(items, 0 * one, one, device)
         out = net(X, M)
         if kind == "rlobf_max":  # BCE on the max logit vs the sequence label
             return bce(out.masked_fill(~M, float("-inf")).amax(1),
@@ -681,12 +766,109 @@ def _fit_rlobf(kind, P, N, g, device):
                 idx = perm[i : i + bs]
                 with torch.autocast(device_type=device.type, dtype=torch.bfloat16,
                                     enabled=device.type == "cuda"):  # as their train_layer
-                    loss = loss_on([P[j] for j in idx], 1.0) + loss_on([N[j] for j in idx], 0.0)
+                    loss = (loss_on([P[j] for j in idx], 1.0, idx)
+                            + loss_on([N[j] for j in idx], 0.0, idx))
                 loss.backward()
                 torch.nn.utils.clip_grad_norm_(net.parameters(), 1.0)
                 opt.step()
                 opt.zero_grad()
     return net
+
+
+def _fit_rlobf_many(kind, P, N, keeps, g, device):
+    """_fit_rlobf for several positive subsets at once (refit_batched_rlobf, 10-20): the CV folds +
+    final fit of gate_fit train as ONE stacked run. Per fit the same g draws in the sequential order
+    (init seed, then one permutation per epoch), the same init (torch.manual_seed(seed) + the
+    module constructor), the same minibatches, per-fit grad-norm clipping at 1.0 and per-fit AdamW
+    (torch's update rule, lr 1e-3, wd 0.01; a fit with fewer minibatches per epoch simply skips the
+    steps it does not have). Each fit follows its own sequential updates up to float reassociation
+    (bf16 autocast on CUDA, as the per-fit path). Returns one trained module per mask (eval)."""
+
+    d, bs = P[0].shape[1], 16
+    lr, b1, b2, eps, wd = 1e-3, 0.9, 0.999, 1e-8, 1e-2
+    nets, pidx, perms = [], [], []
+    for kp in keeps:  # sequential order: draws, then the module init, fit by fit
+        idx = kp.bool().nonzero().flatten()
+        seed, pe = _rlobf_draws(len(idx), len(N), kind, g)
+        torch.manual_seed(seed)
+        nets.append((_TokLinear(d) if kind == "rlobf_max" else _RLObfAttn(d)).to(device))
+        pidx.append(idx.to(device))
+        perms.append(pe)
+    F, names = len(nets), [k for k, _ in nets[0].named_parameters()]
+    S = {k: torch.stack([dict(n_.named_parameters())[k].detach() for n_ in nets]).clone()
+         .requires_grad_() for k in names}
+    m1 = {k: torch.zeros_like(v) for k, v in S.items()}
+    m2 = {k: torch.zeros_like(v) for k, v in S.items()}
+    steps = [0] * F
+    nb = [min(len(pidx[f]), len(N)) // bs for f in range(F)]
+    PP, NN = _Prepadded(P, device), _Prepadded(N, device)
+    bce = torch.nn.functional.binary_cross_entropy_with_logits
+    amp = device.type == "cuda"
+
+    def lin(X, W, b):  # per-fit linear: X [A, R, d_in], W [A, d_out, d_in], b [A, d_out]
+        return torch.baddbmm(b[:, None], X, W.transpose(1, 2))
+
+    def fwd(X, M, act):  # X [A, B, T, d] -> token logits [A, B, T]
+        A, B, T, _ = X.shape
+        Xr = X.reshape(A, B * T, d)
+        if kind == "rlobf_max":
+            return lin(Xr, S["lin.weight"][act], S["lin.bias"][act]).view(A, B, T)
+        q, k, v = (lin(Xr, S[f"{h}.weight"][act], S[f"{h}.bias"][act])
+                   .view(A * B, 1, T, -1) for h in ("q", "k", "v"))
+        causal = torch.ones(T, T, dtype=torch.bool, device=X.device).tril()
+        o = torch.nn.functional.scaled_dot_product_attention(q, k, v, attn_mask=causal)
+        return lin(o.view(A, B * T, -1), S["out.weight"][act], S["out.bias"][act]).view(A, B, T)
+
+    def loss_on(pad, gidx, act, label):  # per-fit loss as _fit_rlobf's loss_on, summed over fits
+        Xs, Ms = zip(*(pad.batch(gi) for gi in gidx), strict=True)
+        T = max(x.shape[1] for x in Xs)
+        X = torch.stack([torch.nn.functional.pad(x, (0, 0, 0, T - x.shape[1])) for x in Xs])
+        M = torch.stack([torch.nn.functional.pad(m_, (0, T - m_.shape[1])) for m_ in Ms])
+        out = fwd(X, M, act).float()
+        if kind == "rlobf_max":
+            mx = out.masked_fill(~M, float("-inf")).amax(2)
+            return bce(mx, torch.full_like(mx, label), reduction="none").mean(1).sum()
+        per = bce(out, torch.full_like(out, label), reduction="none") * M
+        return (per.sum((1, 2)) / M.sum((1, 2))).sum()
+
+    with torch.enable_grad():
+        for e in range(len(perms[0])):
+            for i in range(max(nb)):
+                act_l = [f for f in range(F) if i < nb[f]]
+                if not act_l:
+                    continue
+                act = torch.tensor(act_l, device=device)
+                bat = [perms[f][e][i * bs : (i + 1) * bs] for f in act_l]
+                with torch.autocast(device_type=device.type, dtype=torch.bfloat16, enabled=amp):
+                    loss = (loss_on(PP, [pidx[f][b_.to(device)] for f, b_ in
+                                         zip(act_l, bat, strict=True)], act, 1.0)
+                            + loss_on(NN, bat, act, 0.0))
+                loss.backward()
+                with torch.no_grad():
+                    G = {k: S[k].grad[act] for k in names}
+                    norm = torch.stack([G[k].flatten(1).norm(dim=1) for k in names], 1).norm(dim=1)
+                    coef = (1.0 / (norm + 1e-6)).clamp(max=1.0)
+                    for f in act_l:
+                        steps[f] += 1
+                    bc1 = torch.tensor([1 - b1 ** steps[f] for f in act_l], device=device)
+                    bc2 = torch.tensor([(1 - b2 ** steps[f]) ** 0.5 for f in act_l],
+                                       device=device)
+                    for k in names:
+                        sh = (-1,) + (1,) * (S[k].dim() - 1)
+                        gk = G[k] * coef.view(sh)
+                        pk = S[k].data[act] * (1 - lr * wd)
+                        a1 = m1[k][act].lerp(gk, 1 - b1)
+                        a2 = m2[k][act] * b2 + (1 - b2) * gk * gk
+                        den = a2.sqrt() / bc2.view(sh) + eps
+                        S[k].data[act] = pk - (lr / bc1).view(sh) * a1 / den
+                        m1[k][act], m2[k][act] = a1, a2
+                    for k in names:
+                        S[k].grad = None
+    for f, n_ in enumerate(nets):
+        with torch.no_grad():
+            for k, prm in n_.named_parameters():
+                prm.copy_(S[k][f])
+    return [n_.eval() for n_ in nets]
 
 
 def _fit_gdm(P, N, g, device, seeds=1, steps=1000):
@@ -773,9 +955,10 @@ def _gdm_steps(fwd, params, bufs, Xt, Mt, yt, W, opt, steps):
             opt.step()
 
 
-def fit_lit(kind, P, N, *, name, layer, concept, g, device):
+def fit_lit(kind, P, N, *, name, layer, concept, g, device, prepad=False):
     dev = torch.device(device) if not isinstance(device, torch.device) else device
-    net = _fit_gdm(P, N, g, dev) if kind == "gdm_rollattn" else _fit_rlobf(kind, P, N, g, dev)
+    net = (_fit_gdm(P, N, g, dev) if kind == "gdm_rollattn"
+           else _fit_rlobf(kind, P, N, g, dev, prepad=prepad))
     return LitTokenMonitor(kind, name, layer, concept, net.eval())
 
 

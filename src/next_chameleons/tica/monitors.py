@@ -291,6 +291,77 @@ def fit_logistic(
     return w.detach().float(), float(b.detach()), mu.float(), sd.float()
 
 
+def fit_logistic_many(
+    xs: list[torch.Tensor], ys: list[torch.Tensor], C: float, *, max_iter: int = 100,
+    tol: float = 1e-9,
+) -> list[tuple[torch.Tensor, float, torch.Tensor, torch.Tensor]]:
+    """fit_logistic for several independent problems at once (refit_batched_logistic, 10-20):
+    the SAME objective per problem (own standardisation, class-balanced weights, C, L2 on w only),
+    minimised by batched damped Newton (fp64 Cholesky, backtracking) instead of LBFGS. The
+    objective is strictly convex in w, so both reach the same optimum; Newton converges to
+    max |grad| ~ tol where LBFGS stops at 1e-7 (or max_iter 500, which weakly regularised refits
+    -- refit_C 1.0 -- hit). Problems may differ in n (padded rows carry zero weight). Raises if
+    any problem fails fit_logistic's convergence check."""
+
+    dev, F = xs[0].device, len(xs)
+    d, nmax = xs[0].shape[1], max(len(x) for x in xs)
+    Z = torch.zeros(F, nmax, d + 1, dtype=torch.float64, device=dev)
+    Y = torch.zeros(F, nmax, dtype=torch.float64, device=dev)
+    SW = torch.zeros(F, nmax, dtype=torch.float64, device=dev)
+    stats = []
+    for f, (x, y) in enumerate(zip(xs, ys, strict=True)):
+        x = x.double()
+        y = y.double().to(x.device)
+        mu = x.mean(0)
+        sd = x.std(0, unbiased=False) + 1e-6
+        n, n_pos = len(y), y.sum()
+        Z[f, :n, :d] = (x - mu) / sd
+        Z[f, :n, d] = 1.0
+        Y[f, :n] = y
+        SW[f, :n] = torch.where(y > 0, n / (2 * n_pos), n / (2 * (n - n_pos)))
+        stats.append((mu, sd, n))
+    reg = torch.ones(d + 1, dtype=torch.float64, device=dev)
+    reg[d] = 0.0  # no penalty on the bias
+    th = torch.zeros(F, d + 1, dtype=torch.float64, device=dev)
+    bce = torch.nn.functional.binary_cross_entropy_with_logits
+
+    def obj(t):
+        lo = (Z @ t[..., None])[..., 0]
+        return C * (SW * bce(lo, Y, reduction="none")).sum(1) + 0.5 * (reg * t * t).sum(1)
+
+    def grad(t):
+        p = torch.sigmoid((Z @ t[..., None])[..., 0])
+        return C * (Z.transpose(1, 2) @ (SW * (p - Y))[..., None])[..., 0] + reg * t, p
+
+    for _ in range(max_iter):
+        g, p = grad(th)
+        if float(g.abs().amax()) < tol:
+            break
+        s = C * SW * p * (1 - p)
+        H = (Z * s[..., None]).transpose(1, 2) @ Z + torch.diag_embed(reg).expand(F, -1, -1)
+        L, info = torch.linalg.cholesky_ex(H)
+        if bool((info != 0).any()):  # numerically singular (bias column): tiny jitter
+            L = torch.linalg.cholesky(H + 1e-10 * torch.eye(d + 1, dtype=H.dtype, device=dev))
+        step = torch.cholesky_solve(g[..., None], L)[..., 0]
+        f0, slope = obj(th), (g * step).sum(1)
+        t = torch.ones(F, dtype=torch.float64, device=dev)
+        for _ in range(40):  # backtracking (Armijo), per problem
+            cand = th - t[:, None] * step
+            bad = obj(cand) > f0 - 1e-4 * t * slope
+            if not bool(bad.any()):
+                break
+            t = torch.where(bad, t / 2, t)
+        th = th - t[:, None] * step
+    g, _ = grad(th)
+    out = []
+    for f, (mu, sd, n) in enumerate(stats):
+        gnorm = float(g[f].abs().max())
+        if not np.isfinite(gnorm) or gnorm > 1e-3 * max(1.0, C * n):
+            raise RuntimeError(f"logistic fit did not converge (max |grad| {gnorm:.2e})")
+        out.append((th[f, :d].float(), float(th[f, d]), mu.float(), sd.float()))
+    return out
+
+
 def normal_quantile(q: float) -> float:
     return float(torch.distributions.Normal(0.0, 1.0).icdf(torch.tensor(q, dtype=torch.float64)))
 

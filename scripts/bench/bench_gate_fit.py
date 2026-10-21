@@ -8,6 +8,7 @@ logistic-init share measured separately. Synthetic data only.
 from __future__ import annotations
 
 import argparse
+import dataclasses
 import json
 import time
 
@@ -28,6 +29,11 @@ def main():
     ap.add_argument("--d", type=int, default=2560)
     ap.add_argument("--tok", type=int, default=150)
     ap.add_argument("--batched", action="store_true", help="refit_batched_fits (10-16c)")
+    ap.add_argument("--C", type=float, default=None, help="refit_C (runs: 1.0; default 0.01)")
+    ap.add_argument("--variants", default="",
+                    help="10-20: comma list of extra AdaptiveConfig bool flags, each run as its "
+                         "own variant after the base (e.g. refit_batched_logistic); reports "
+                         "seconds and the max |logit| / AUROC / thr gap to the base")
     a = ap.parse_args()
     dev = torch.device("cuda")
     g = torch.Generator().manual_seed(0)
@@ -40,6 +46,9 @@ def main():
 
     P, N, NP = seqs(a.pos, 1), seqs(a.neg, -1), seqs(a.np, 1)
     cfg = AdaptiveConfig(refit_cv_folds=5, refit_batched_fits=a.batched)
+    if a.C is not None:
+        cfg.refit_C = a.C
+    variants = [v for v in a.variants.split(",") if v]
     out = {}
     for kind in a.kinds.split(","):
         torch.cuda.synchronize()
@@ -79,8 +88,28 @@ def main():
                                        layer=12, concept="c", device=dev)
         torch.cuda.synchronize()
         out[kind] = {"sec_gate_fit_6_fits": round(time.time() - t0, 2),
-                     "auroc": round(info.get("auroc", float("nan")), 3), "kept": info.get("kept")}
+                     "auroc": round(info.get("auroc", float("nan")), 4), "kept": info.get("kept")}
         print(kind, out[kind], flush=True)
+        if variants and _mon is not None:
+            with torch.no_grad():
+                ref = _mon.logits(probe_zoo._to(mk(P + N), dev)).float().cpu()
+        for v in variants:
+            cv = dataclasses.replace(cfg, **{v: True})
+            torch.cuda.synchronize()
+            t0 = time.time()
+            mv, iv = probe_zoo.gate_fit(kind, mk(P), mk(N), mk(NP), cv, name=f"b_{kind}",
+                                        layer=12, concept="c", device=dev)
+            torch.cuda.synchronize()
+            r = {"sec_gate_fit_6_fits": round(time.time() - t0, 2),
+                 "auroc": round(iv.get("auroc", float("nan")), 4), "kept": iv.get("kept")}
+            if mv is not None and _mon is not None:
+                with torch.no_grad():
+                    lv = mv.logits(probe_zoo._to(mk(P + N), dev)).float().cpu()
+                r["max_abs_logit_diff"] = float((lv - ref).abs().max())
+                r["ref_logit_scale"] = float(ref.abs().max())
+                r["thr_diff"] = abs(mv.thr - _mon.thr)
+            out[f"{kind}+{v}"] = r
+            print(f"{kind}+{v}", r, flush=True)
     print(json.dumps(out, indent=1))
 
 

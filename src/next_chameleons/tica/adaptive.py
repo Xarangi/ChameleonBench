@@ -267,6 +267,19 @@ class AdaptiveConfig:
     # updates; same random draws). bench 5820449: ens4_mlp gate 10.5 s -> 2.7 s. (Batched
     # logistic fits were tried and dropped: LBFGS is already as fast, 1.8 vs 1.7 s.)
     refit_batched_fits: bool = False
+    # 10-20 fit speed-ups (py-spy 6589171: rlobf_attn fits, LBFGS logistic fits and per-minibatch
+    # padding were ~20 s of the per-step refit time on rank 0), each default off:
+    # - refit_rlobf_prepad: rlobf_* fits pad the token states once instead of every minibatch
+    #   (bit-identical minibatches);
+    # - refit_batched_rlobf: the rlobf_* CV folds + final fit train as one stacked run (per-fit
+    #   draws, init, clipping and AdamW; equal up to float reassociation); implies prepadding;
+    # - refit_batched_logistic: the logistic problems of a gate (ens *_linear per fit x layer, the
+    #   attnpool / maxpool inits) in ONE batched Newton solve (monitors.fit_logistic_many: the same
+    #   convex objective, solved to a tighter gradient tolerance than LBFGS). Reverses the 10-16c
+    #   "ruled out", which was benchmarked at refit_C 0.01; the runs use refit_C 1.0.
+    refit_rlobf_prepad: bool = False
+    refit_batched_rlobf: bool = False
+    refit_batched_logistic: bool = False
     # episode_rng (10-19; default off = the original draws): per-episode RNG streams (seeded in
     # episode order from the trainer RNG) for every in-rollout draw (defender, refit texts, refit
     # kind), deterministic refit names (fit seeds) and one stream per shared turn-0 probe. An
