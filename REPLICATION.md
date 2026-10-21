@@ -5,6 +5,16 @@ checkpoints, observed results, and unresolved limitations.
 
 TICA on a new machine: start at docs/tica/README.md (results digest, run ledger, open questions, aggregate snapshot).
 
+## 2026-10-21bd panel0 still improving at abs 200-239; logclip flat after its 280-319 peak; stay dodges NC / L20 in context
+- 40-step bins, k2 / k3 / k4 / rlobf_attn / attnpool beat (n), GSM-while-hiding:
+  - panel0 200-239: 0.73 (119) / 0.44 (86) / 0.24 (37) / 0.21 (73) / 0.57 (46); GSM 0.65 (from 0.76; stdout subsample).
+  - logclip 280-319: 0.70 / 0.33 / 0.42 / 0.16 / 0.52; 320-359: 0.49 (107) / 0.29 / 0.21 / 0.08 (53) / 0.55; GSM 0.80. KL 0.05 both.
+- stay abs 660 vs nc_ens8_tok refits: k2 1.00, k3 1.00, k4 0.97, k5 0.40 (n 30-32).
+- stay ensemble fit seeds 2/3/4 (det overall, t0 -> t15): bailey 0.96 / 0.99 / 0.96 (1.0 -> 0.86-1.0); linear@20 0.52 / 0.49 /
+  0.51 (1.0 -> 0.00-0.14); nc_ens8_tok 0.70 / 0.27 / 0.34 (1.0 -> 0.00-0.07). Stay is caught by every never-shown probe at
+  turn 0 and has dodged L20 and NC by turn 15 -- in-context evasion of probes it never trained on, robust across fits.
+  Bailey (all 32 layers) still catches it statically.
+
 ## 2026-10-21bc panel0 vs logclip, step-matched: panel0 slightly ahead from abs 160 (1 seed each, 2 config diffs)
 - 40-step bins, k2 / k3 / rlobf_attn beat (n): abs 160-199 logclip 0.49 / 0.10 / 0.06 vs panel0 0.57 / 0.26 / 0.09;
   200-239 logclip 0.54 / 0.24 / 0.06 vs panel0 0.69 (96) / 0.42 (65) / 0.18 (55). logclip 280-319 0.70 / 0.33 / 0.16, then
