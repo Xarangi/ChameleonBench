@@ -23,6 +23,7 @@ out_dir/step_{k} and out_dir/final.
 from __future__ import annotations
 
 import json
+import math
 import os
 import random
 import time
@@ -38,6 +39,7 @@ from next_chameleons.tica.episodes import EpisodeSampler, Trajectory, rollout
 from next_chameleons.tica.monitors import MonitorPool
 from next_chameleons.tica.objectives import (
     ObjectiveConfig,
+    hide_per_target,
     loss_terms,
     plan_targets,
     probe_prob,
@@ -68,6 +70,9 @@ class SupervisedConfig:
     # states go to <checkpoint>/trainer_state.pt (newest checkpoint only, to bound disk), and a
     # chunk resumed from such a checkpoint restores them and skips the LR re-warmup.
     save_state: bool = False
+    # 10-21 (default off): keep trainer_state.pt in EVERY checkpoint instead of the newest only, so
+    # a run can be resumed with its optimizer state from any checkpoint (~0.5 GB each at r32).
+    save_state_all: bool = False
     # updates_per_rollout (10-18j, default 1 = unchanged): optimizer updates per rollout. The
     # rollout (episodes, verdicts, refits, targets) is collected once and reused K times; each
     # update re-runs the forward with grad on the current weights. The LR schedule still advances
@@ -486,6 +491,7 @@ class AdaptiveSupervisedTrainer:
         self.hard_neg = hard_neg or {}
         self.falsify = False  # eval-only control (tica_switch_eval --falsify)
         self.deploy_log: list[dict] = []  # turns-to-beat records (rollout; beat_summary)
+        self._cap_mult, self._cap_acc_ema = 1.0, None  # adaptive capability weight (off: 1.0)
         self.seg_log: list[dict] = []  # per (episode, concept): turns until its first pass
         self._neg_cache: dict = {}  # concept -> label-cleaned negatives (neg_labels)
         # adaptive curriculum (tica/curriculum.py; default off)
@@ -565,6 +571,18 @@ class AdaptiveSupervisedTrainer:
         if self._resume is not None:
             self._load_state(self._resume)
 
+    def _cap_adapt(self, acc: float) -> dict:
+        """Adaptive capability weight (adaptive.cap_adapt_*): update the multiplier from this
+        step's GSM8K-while-hiding accuracy; it applies from the next step's losses on."""
+
+        ac = self.cfg.adaptive
+        e = self._cap_acc_ema
+        e = acc if e is None else ac.cap_adapt_ema * e + (1 - ac.cap_adapt_ema) * acc
+        self._cap_acc_ema = e
+        m = self._cap_mult * math.exp(ac.cap_adapt_rate * (ac.cap_adapt_target - e))
+        self._cap_mult = min(ac.cap_adapt_max, max(ac.cap_adapt_min, m))
+        return {"cap_adapt/mult": round(self._cap_mult, 4), "cap_adapt/acc_ema": round(e, 4)}
+
     def _state_dict(self) -> dict:
         return {"opt": self.opt.state_dict(), "kind_bandit": self.kind_bandit,
                 "concept_bandit": self.concept_bandit, "rng": self.rng.getstate(),
@@ -573,14 +591,15 @@ class AdaptiveSupervisedTrainer:
                 "torch_rng": torch.get_rng_state(),
                 "cuda_rng": (torch.cuda.get_rng_state_all() if torch.cuda.is_available()
                              else None),
-                "global_step": self.step_k + self._step_offset()}
+                "global_step": self.step_k + self._step_offset(),
+                "cap_adapt": (self._cap_mult, self._cap_acc_ema)}
 
     def _save_state(self, ckpt: Path) -> None:
         """trainer_state.pt next to the adapter; older checkpoints' copies are removed."""
 
         if not self.cfg.save_state or self.rank != 0:  # data-parallel: rank 0 (states agree)
             return
-        for old in self.out.glob("*/trainer_state.pt"):
+        for old in ([] if self.cfg.save_state_all else self.out.glob("*/trainer_state.pt")):
             old.unlink(missing_ok=True)
         tmp = ckpt / "trainer_state.pt.tmp"
         torch.save(self._state_dict(), tmp)
@@ -594,6 +613,8 @@ class AdaptiveSupervisedTrainer:
         if st.get("concept_bandit") is not None and self.concept_bandit is not None:
             self.concept_bandit = st["concept_bandit"]
         self.rng.setstate(st["rng"])
+        if st.get("cap_adapt") is not None and self.cfg.adaptive.cap_adapt_target > 0:
+            self._cap_mult, self._cap_acc_ema = st["cap_adapt"]
         if st.get("sampler_rng") is not None and hasattr(self.sampler, "rng"):
             self.sampler.rng.setstate(st["sampler_rng"])
         torch.set_rng_state(st["torch_rng"])
@@ -1680,10 +1701,10 @@ class AdaptiveSupervisedTrainer:
                     extra = {"kl_ref": rr}
                 pooled, nll = pol.forward(views, layers, grad=True, with_nll=True, extra=extra)
                 w = torch.tensor([float(f) for _, _, f in chunk], device=nll.device)
-                loss = acfg.cap_gen_weight * (w * nll).sum() / n_nll
+                loss = acfg.cap_gen_weight * self._cap_mult * (w * nll).sum() / n_nll
                 s_nll += float((w * nll).detach().sum())
                 if extra is not None:
-                    loss = loss + kl_w * extra["kl"].sum() / n_items
+                    loss = loss + kl_w * self._cap_mult * extra["kl"].sum() / n_items
                     s_kl += float(extra["kl"].detach().sum())
                 if n_hide:
                     tg, rows = [], []
@@ -1693,8 +1714,13 @@ class AdaptiveSupervisedTrainer:
                                 tg.append(Target(r, 0, "cap", x, m["concept"], "hide"))
                                 rows.append(r)
                     if tg:
-                        p = probe_prob(self.pool, pooled, rows, tg)
-                        loss = loss + ow * (p**2).sum() / n_hide
+                        form = self.cfg.objective.hide_loss
+                        if form == "mse":
+                            p = probe_prob(self.pool, pooled, rows, tg)
+                            loss = loss + ow * (p**2).sum() / n_hide
+                        else:
+                            p, z = probe_prob(self.pool, pooled, rows, tg, return_z=True)
+                            loss = loss + ow * hide_per_target(p, z, form).sum() / n_hide
                         s_hide += float((p**2).detach().sum())
                         s_caught += int((p > 0.5).sum())
                 loss.backward()
@@ -2345,7 +2371,10 @@ class AdaptiveSupervisedTrainer:
                 pos = {kk: j for j, kk in enumerate(ckeys)}
                 ks = [k for k, kk in enumerate(tkey) if kk in pos]
                 local = [pos[tkey[k]] for k in ks]
-                p = probe_prob(pool, pooled, local, [targets[k] for k in ks])
+                if cfg.objective.hide_loss == "mse":
+                    p, z = probe_prob(pool, pooled, local, [targets[k] for k in ks]), None
+                else:
+                    p, z = probe_prob(pool, pooled, local, [targets[k] for k in ks], return_z=True)
                 prev = torch.tensor(
                     [targets[k].prev_p if targets[k].prev_p is not None else float("nan")
                      for k in ks],
@@ -2356,11 +2385,12 @@ class AdaptiveSupervisedTrainer:
                 )
                 loss, st = loss_terms(
                     p, ref[ks], [targets[k].role for k in ks], nll, cfg.objective, totals,
-                    prev_p=prev, hide_w=hw_chunk,
+                    prev_p=prev, hide_w=hw_chunk, z=z,
                 )
                 if kl_ref is not None:  # capability anchor: every trained turn, hiding ones too
                     kls = self._kl_sel
-                    loss = loss + acfg.kl_weight * kls.sum() / max(1, totals["views"])
+                    loss = loss + acfg.kl_weight * self._cap_mult * kls.sum() / max(
+                        1, totals["views"])
                     acc["kl_sum"] += float(kls.detach().sum())
                     acc["kl_n"] += len(kls)
                 # Pursuit: push each hide turn off its recent-turn regions (orbit the cloud).
@@ -2412,6 +2442,8 @@ class AdaptiveSupervisedTrainer:
                     acc[k2] += v
             cap_info = (self._cap_gen_step(self._g_trajs)
                         if acfg.cap_gen_weight > 0 or acfg.cap_gen_kl_weight > 0 else {})
+            if u == 0 and acfg.cap_adapt_target > 0 and "cap_gen/acc" in cap_info:
+                cap_info |= self._cap_adapt(cap_info["cap_gen/acc"])
             if acfg.anchor_weight > 0:  # optional retain-set KL anchor (off by default)
                 cap_info |= self._anchor_step()
             if self.world > 1:  # data-parallel: the step's gradient = the sum over ranks

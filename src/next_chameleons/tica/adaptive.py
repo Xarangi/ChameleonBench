@@ -234,6 +234,17 @@ class AdaptiveConfig:
     # instead of only reinforcing correct samples.
     cap_gen_kl_weight: float = 0.0
     cap_gen_kl_all: bool = False
+    # ADAPTIVE capability weight (REPLICATION 2026-10-21; default cap_adapt_target 0 = off): treat
+    # GSM8K-while-hiding accuracy as a constraint. One multiplier m scales kl_weight,
+    # cap_gen_weight and cap_gen_kl_weight; after every step m *= exp(cap_adapt_rate * (target -
+    # ema(cap_gen/acc))), clipped to [cap_adapt_min, cap_adapt_max] (dual ascent on a Lagrange
+    # multiplier / PPO adaptive-KL style). Default min 1.0 = never weaker than the configured
+    # weights. cap_gen/acc is summed over data-parallel ranks, so m is identical on every rank.
+    cap_adapt_target: float = 0.0
+    cap_adapt_rate: float = 0.5
+    cap_adapt_ema: float = 0.8
+    cap_adapt_min: float = 1.0
+    cap_adapt_max: float = 10.0
     # Retain-set anchor (tica/anchor.py; TICA-FINAL-DODGER-DESIGN "Capability", designed but not
     # wired until 10-15b): anchor_weight * KL(base || policy) on the base model's own GREEDY answers
     # to general unmonitored prompts (Dolly-15k instructions + GSM8K-train questions), anchor_n per

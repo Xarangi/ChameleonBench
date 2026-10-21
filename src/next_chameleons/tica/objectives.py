@@ -62,6 +62,25 @@ class ObjectiveConfig:
     # The active probe and the refits stay the main targets; the panel pushes the dodge to spread
     # over depth (math arms 10-19: dodged layer-12 refits only, other depths stayed readable).
     panel_weight: float = 0.0
+    # Hide-loss FORM (REPLICATION 2026-10-21; default "mse" = p^2, unchanged). "log" = -log(1 - p) =
+    # softplus(z): its gradient in z is p, ~1 while the probe confidently catches and fading once
+    # beaten, where p^2's gradient 2 p^2 (1 - p) is ~0 when deeply caught and peaks (~0.3) near the
+    # threshold (the surge before the 10-20u math collapse). Applies to every hide target (episode
+    # hide, cap_gen hide); with "log", hide_weight 0.3 makes its max push equal p^2's peak.
+    hide_loss: str = "mse"
+
+
+def hide_per_target(p: torch.Tensor, z: torch.Tensor | None, form: str) -> torch.Tensor:
+    """Per-target hide loss: p^2 ("mse") or -log(1 - p) ("log", from z when given: exact for
+    saturated probes where p rounds to 1)."""
+
+    if form == "mse":
+        return p**2
+    if form == "log":
+        if z is not None:
+            return torch.nn.functional.softplus(z)
+        return -torch.log1p(-p.clamp(max=1 - 1e-7))
+    raise ValueError(f"unknown hide_loss {form!r}")
 
 
 @dataclass(frozen=True)
@@ -110,9 +129,10 @@ def plan_targets(trajs: list[Trajectory], cfg: ObjectiveConfig) -> list[Target]:
 
 def probe_prob(
     pool, pooled: dict[int, torch.Tensor], rows: list[int], targets: list[Target],
-    tokens: dict | None = None,
-) -> torch.Tensor:
+    tokens: dict | None = None, return_z: bool = False,
+) -> torch.Tensor | tuple[torch.Tensor, torch.Tensor]:
     """p = sigmoid((raw - thr) / scale) for each target; rows[k] indexes pooled for targets[k].
+    return_z: also the pre-sigmoid z (hide_loss "log").
     Token-level monitors (probe_zoo: needs_tokens) read tokens[layer][row] (per-span [n, d] states);
     multi-layer monitors (layers_used) read pooled at each of their layers."""
 
@@ -138,12 +158,13 @@ def probe_prob(
             x = pooled[mon.layer][idx]
         raw = mon.logits(x, cs)
         z = (raw - mon.thresholds(cs).to(raw.device)) / mon.scale(cs).to(raw.device)
-        parts[name] = (ks, torch.sigmoid(z))
+        parts[name] = (ks, z)
     vals = [None] * len(targets)
-    for ks, p in parts.values():
+    for ks, z in parts.values():
         for j, k in enumerate(ks):
-            vals[k] = p[j]
-    return torch.stack(vals)
+            vals[k] = z[j]
+    z = torch.stack(vals)
+    return (torch.sigmoid(z), z) if return_z else torch.sigmoid(z)
 
 
 def loss_terms(
@@ -155,6 +176,7 @@ def loss_terms(
     totals: dict[str, int] | None = None,
     prev_p: torch.Tensor | None = None,
     hide_w: torch.Tensor | None = None,
+    z: torch.Tensor | None = None,
 ) -> tuple[torch.Tensor, dict[str, float]]:
     """p: policy probe probs [k] (with grad); p_ref: reference probs [k]; nll: [n_views] or None.
 
@@ -179,11 +201,16 @@ def loss_terms(
     # Turn-weighted hide (optional): weight each hide target's p^2 so early misses cost little and
     # late turns cost a lot ("fail early, dodge late" iteration, not the static dodge-from-turn-1 a
     # flat loss optimises for). Normalised by the step-total hide weight for exact grad accum.
+    # hide_loss (default "mse": per-target p^2, the original expressions)
+    if n_h and cfg.hide_loss != "mse":
+        per = hide_per_target(p[hide], z[hide] if z is not None else None, cfg.hide_loss)
+    else:
+        per = p[hide] ** 2 if n_h else None
     if hide_w is not None and n_h:
-        s_hide = (hide_w[hide] * p[hide] ** 2).sum()
+        s_hide = (hide_w[hide] * per).sum()
         hide_denom = t.get("hide_w_sum", float(hide_w[hide].sum()))
     else:
-        s_hide = (p[hide] ** 2).sum() if n_h else zero
+        s_hide = per.sum() if n_h else zero
         hide_denom = t["hide"]
     s_match = ((p[match] - p_ref[match]) ** 2).sum() if n_m else zero
     s_off = ((p[off] - p_ref[off]) ** 2).sum() if n_o else zero
@@ -205,7 +232,10 @@ def loss_terms(
         + cfg.panel_weight * s_panel / max(1, t.get("panel", n_p))
     )
     stats = {
-        "hide_sq": float(s_hide.detach()),
+        "hide_sq": float(s_hide.detach()) if cfg.hide_loss == "mse" else (
+            float(((hide_w[hide] if hide_w is not None else 1.0) * p[hide] ** 2).sum().detach())
+            if n_h else 0.0),  # the (weighted) p^2 sum whatever the form: comparable across forms
+        "hide_loss": float(s_hide.detach()),
         "hide_p": float(p[hide].sum().detach()) if n_h else 0.0,
         "match_sq": float(s_match.detach()),
         "off_sq": float(s_off.detach()),
