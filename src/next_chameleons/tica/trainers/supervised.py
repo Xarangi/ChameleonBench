@@ -419,26 +419,29 @@ def _refit_fit(job: dict):
     rl, ft, npl, nt = job["rl"], job["ft"], job["npl"], job["nt"]
     acfg, name, concept = job["acfg"], job["name"], job["concept"]
     full_kind, sec_read = job["full_kind"], job["sec_read"]
+    # adaptive.refit_np_in_fit (10-21k): False -> no-prompt texts are not fit positives (in-context
+    # forks only); their gate half (1::2) is still scored as tpr_np
+    np_fit = slice(0, None, 2) if acfg.refit_np_in_fit else slice(0, 0)
     if kind != "linear":  # literature probe bank (probe_zoo), same gate
         if kind in ZOO_TOKENS_ENS:
             pos_q = [q for q, (k_, _) in enumerate(picks) if k_ == "pos"]
             neg_q = [q for q, (k_, _) in enumerate(picks) if k_ == "neg"]
-            P = {Lk: [ft[Lk][q] for q in pos_q] + nt[Lk][0::2] for Lk in Ls}
+            P = {Lk: [ft[Lk][q] for q in pos_q] + nt[Lk][np_fit] for Lk in Ls}
             N = {Lk: [ft[Lk][q] for q in neg_q] for Lk in Ls}
             G = {Lk: nt[Lk][1::2] for Lk in Ls}
         elif kind in ZOO_ENS:
             P = {Lk: torch.cat([rl[Lk][q : q + 1] for q, (k_, _) in enumerate(picks)
-                                if k_ == "pos"] + [npl[Lk][0::2]]) for Lk in Ls}
+                                if k_ == "pos"] + [npl[Lk][np_fit]]) for Lk in Ls}
             N = {Lk: torch.stack([rl[Lk][q] for q, (k_, _) in enumerate(picks) if k_ == "neg"])
                  for Lk in Ls}
             G = {Lk: npl[Lk][1::2] for Lk in Ls}
         elif ft is None:  # pooled single-layer zoo kinds (meandiff): rows, not tokens
             P = torch.cat([rl[L0][q : q + 1] for q, (k_, _) in enumerate(picks)
-                           if k_ == "pos"] + [npl[L0][0::2]])
+                           if k_ == "pos"] + [npl[L0][np_fit]])
             N = torch.stack([rl[L0][q] for q, (k_, _) in enumerate(picks) if k_ == "neg"])
             G = npl[L0][1::2]
         else:
-            P = [ft[L][q] for q, (k_, _) in enumerate(picks) if k_ == "pos"] + nt[L][0::2]
+            P = [ft[L][q] for q, (k_, _) in enumerate(picks) if k_ == "pos"] + nt[L][np_fit]
             N = [ft[L][q] for q, (k_, _) in enumerate(picks) if k_ == "neg"]
             G = nt[L][1::2]
         mon, info = gate_fit(kind, P, N, G, acfg, name=name, layer=L, concept=concept,
@@ -448,7 +451,10 @@ def _refit_fit(job: dict):
     for (k, _), v in zip(picks, job["r"], strict=True):
         (rd.pos if k == "pos" else rd.neg)[L].append(v[None])
     for j, v in enumerate(job["npr"]):
-        (rd.pos if j % 2 == 0 else rd.np_pos)[L].append(v[None])
+        if j % 2 == 1:
+            rd.np_pos[L].append(v[None])
+        elif acfg.refit_np_in_fit:
+            rd.pos[L].append(v[None])
     bank, info = fit_refit_bank(rd, concept, name, acfg, exclude_layers=job["excl"])
     return bank, {**info, "kind": full_kind, "sec_read": sec_read}
 

@@ -300,6 +300,8 @@ class AdaptiveConfig:
     # state. Needs episode streams (episode_rng / DP); otherwise, and with episode_kind_sampling
     # "prioritized" + refit_switch_max, refits stay serial.
     refit_overlap: bool = False
+    # 10-21k: no-prompt (no-brief) texts as refit fit positives (False: in-context forks only)
+    refit_np_in_fit: bool = True
     # episode_rng (10-19; default off = the original draws): per-episode RNG streams (seeded in
     # episode order from the trainer RNG) for every in-rollout draw (defender, refit texts, refit
     # kind), deterministic refit names (fit seeds) and one stream per shared turn-0 probe. An

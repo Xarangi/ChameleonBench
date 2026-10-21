@@ -5,6 +5,14 @@ checkpoints, observed results, and unresolved limitations.
 
 TICA on a new machine: start at docs/tica/README.md (results digest, run ledger, open questions, aggregate snapshot).
 
+## 2026-10-21k adaptive.refit_np_in_fit (default true = unchanged): in-context-only refit positives
+- User 10-21: no-brief plain-math texts as refit positives confound the fit (they are the only no-brief rows, so
+  "no brief" predicts the label) and are far from in-context math. refit_np_in_fit false -> fit positives = in-context
+  forks only; the no-prompt gate half is still scored and logged as tpr_np. Set in final_v5_modelwritten_4b with
+  refit_min_tpr_np 0. tests/test_tica_refit_np_in_fit.py; with overlap + hide-loss + framework tests on compute
+  node 6608603: all pass.
+- Refit overlap (10-21e) is exact but saves ~1 s/step: left off.
+
 ## 2026-10-21j Log-loss arm restarted FROM SCRATCH (user: log loss should matter most early); r380 log arm cancelled
 - Cancelled r380_log 6595578 at abs ~455 (≈ control; see 10-21i). New run 6607864 (2 GPUs, DP2), out
   final_v4_math_v3b_4b/scratch_log, 400 steps: config final_v4_math_v3b_r380_4b with hide_loss log, hide_weight 0.3,
