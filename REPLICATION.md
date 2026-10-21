@@ -5,6 +5,24 @@ checkpoints, observed results, and unresolved limitations.
 
 TICA on a new machine: start at docs/tica/README.md (results digest, run ledger, open questions, aggregate snapshot).
 
+## 2026-10-21a Refits by PROBE INDEX (the standard metric I should have led with): k2 0.08 -> ~0.5; hide-loss history
+- Per concept segment (beatk_frac_k = fraction of episodes that eventually beat the k-th probe; n = segments), by 20 abs
+  steps: 300-319 k2 0.08 (93) k3 0/6; 320-339 0.06; 340-359 0.12; 360-379 0.11; 380-399 k2 0.27 (95) k3 0.04 (25);
+  400-419 k2 0.45 (91) k3 0.33 (40) k4 0.08 (13); 420-439 k2 0.49 (92) k3 0.16 (45) k4 0.50 (6); 440-459 k2 0.52 (25).
+  k1 (turn-0 panel) 1.00 throughout.
+- CORRECTION (chat 10-20 g-z): I reported refits as "~0.5-2% beaten / near zero" from PER-TURN pass rates. Per turn
+  understates it: an unbeaten probe keeps judging every remaining turn (up to 15), a beaten one is replaced after one
+  pass. By the per-segment metric k2 was already 0.06-0.12 at 300-379 and is ~0.5 now (memory rule:
+  report-pass-rate-by-probe-index).
+- Extension per-turn passes by type (abs 400-449): ens4_linear 34 / 240, ensdeep4_linear 29 / 193, ens4_mlp 26 / 261,
+  maxpool 17 / 165, attnpool 16 / 594, linear 3 / 41, rlobf_attn 2 / 1133 (now the wall; the bandit gives it the most
+  turns). Single-layer by layer: L8 2 / 344, L12 9 / 610, L16 11 / 454, L22 5 / 297, L26 11 / 228.
+- Math 440-444: 0.65 (finished 0.72); held-out turn-0 detection 0.84 / 0.84 (430-449).
+- Hide-loss history: supervised TICA uses p^2 (MSE to 0) with p = sigmoid((raw - thr) / scale) since 10-03, carried
+  over from our NC replication, where MSE beat a MARGIN loss (08-07c; margin never moved html in 31 epochs). The log
+  form -log(1 - p) (= softplus(z)) was used only in the mathrl RL trainer (10-14: p^2 had zero gradient on a saturated
+  probe), never A/B-tested against p^2 in the supervised trainer, and not available there as an option.
+
 ## 2026-10-20z Decision rule met at 430-439 (keep); held-out evasion fades as math recovers
 - 6588314 abs 430-434 / 435-439: GSM8K-while-hiding 0.74 / 0.67 (cap_gen_log since 430: n 38, correct 0.74, 0 loops),
   grad norm 2.6 / 1.3, episode KL 0.064 / 0.055 (back to pre-collapse ~0.055). Rule (>= 0.7 over 430-440): met
