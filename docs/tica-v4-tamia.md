@@ -66,7 +66,7 @@ Data-parallel: check `dp/sec_rollout_max` vs `dp/sec_rollout_min` (load balance)
 Check `max_mem_gb` and `sec` in `final_v4_smoke/adaptive/train_log.jsonl` (Narval A100, 16 turns:
 28.8 GB, 150-330 s/step), and that `trainer_state.pt` lands next to the step-20 adapter.
 
-## 7. Launch (whole node: training on GPU 0, held-out races on GPUs 1-2, GPU 3 free)
+## 7. Launch (generic; for the 10-21 recipe use the commands in THE TamIA RECIPE below)
 
 ```bash
 J=$(sbatch --parsable --account=aip-<pi> -J v4 scripts/slurm/tica_node.sh final_v4_4b val val -)
@@ -81,28 +81,41 @@ done
   stopping, no checkpoint selection: the final checkpoint is the model.
 - Report: `python scripts/tica_run_report.py --run <out>` (pass rate by probe index first).
 
-## USE `final_v4b_4b` (10-21): final_v4_4b + every carry-over below + LOGCLIP + STAY (user 10-21)
+## THE TamIA RECIPE (user 10-21): two arms, `final_v4b_4b` (binary verdict) and `final_v4b_score_4b` (score feedback)
 
-`configs/tica/final_v4b_4b.yaml` (header lists the changes; each line marked `v4b:`). Defaults = the primary run.
-Arm flags:
-- score feedback: `--set episodes.feedback=score`;
-- MSE baseline: `--set train.objective.hide_loss=mse --set train.objective.hide_weight=1.0 --set train.hide_grad_clip=0`;
-- no stay: `--set rl.adaptive.stay_standalone=false`.
-Untested on multi-concept data: the turn-0 base panel (fits one base probe per (concept, kind) on first use, ~20
-concepts x ~30 kinds: expect slower early steps), KL 0.3, the in-context refit gate, logclip, stay (and stay together
-with logclip). Smoke first (section 6), and check `max_mem_gb` at 24 turns.
+Both = `final_v4_4b` + every carry-over below + LOGCLIP + STAY + turn-0 panel from the start (lines marked `v4b:`;
+REPLICATION 10-21aa .. 10-21ak). Explicit configs, so `tica_node.sh` / `tica_resume.sh` need no `--set`:
 
-## Recommended first TamIA set (10-21; REPLICATION 10-21ac)
+| setting | value | evidence |
+|---|---|---|
+| hide loss | log, weight 0.3, hide gradient clipped separately at 0.5 (`train.hide_grad_clip`) | 10-21r .. 10-21ai |
+| stay | `stay_standalone: true` (weight 1.0, kind_layers, no pursuit) | 10-21x, 10-21ah |
+| feedback | `verdict` (final_v4b_4b) / `score` (final_v4b_score_4b) | 10-21u, 10-21ah |
+| turn 0 | `first_probe_panel_from_start: true` (one base probe from the in-training panel, every episode) | 10-21ad, ai, aj |
+| capability | episode KL 0.3, cap_gen KL 0.3, cap_gen_samples 4, anchor 0.5 | 10-20c, 10-20s |
+| refit gate | AUROC >= 0.95 + in-context TPR >= 0.8 (`refit_min_tpr_ic`), in-context positives, no plain-math gate | 10-21g, o |
+| fixes / speed | dp_sync_init, kind_bandit_refits_only, batched logistic / rlobf fits, save_state_all | 10-21v, 10-20o, y |
+| unchanged v4 | split v5 + elicit requests, 24 turns + turn budget, LoRA r32, retry ladder, LR 3e-4 -> 1e-4 + cooldown, 1200 steps, pursuit off | 10-18 .. 10-19 |
 
-1. Smoke: 20 steps of `final_v4b_4b`, `TICA_DP=2` (24-turn memory, panel fit cost,
-   `dp_param_drift` absent at saves, `det_neg_text_*` / `detho_neg_text_*` now real FPRs).
-2. Then four DP2 runs, same seed, `--steps 800` (fixed; final checkpoint = the model):
-   - **A** (primary): the config as is (logclip + stay);
-   - **B**: no stay (isolates stay);
-   - **C**: MSE baseline flags, no stay (the proven recipe);
-   - **D**: `episodes.feedback=score` (graded-feedback attacker, reported as its own arm).
-3. Read every 50 steps: k1..k4 by probe index, GSM8K-while-hiding + loops, KL, grad_norm_hide / rest, held-out race,
-   and the falsified-verdict race on A vs C (does stay make the verdict matter?).
+Launch (one node per arm: GPUs 0-1 data-parallel training, GPUs 2-3 local held-out races):
+
+```bash
+sbatch --account=aip-<pi> -J v4b       scripts/slurm/tica_node.sh final_v4b_4b + val val
+sbatch --account=aip-<pi> -J v4bscore  scripts/slurm/tica_node.sh final_v4b_score_4b + val val
+# 24 h chunks: each resumes the newest checkpoint with its optimizer state
+for i in 1 2 3 4; do
+  J=$(sbatch --parsable --account=aip-<pi> --dependency=singleton -J v4b \
+      scripts/slurm/tica_node.sh resume:final_v4b_4b + val val)
+done   # same for final_v4b_score_4b with -J v4bscore
+```
+
+Smoke first (20 steps, `--steps 20` via tica_l3covert.sh, `TICA_DP=2`). Narval smokes of both configs (4 steps, 2 x A100,
+REPLICATION 10-21ak) check that the configs build and train end to end; 24-turn memory on H100 still needs the TamIA
+smoke. Watch: k1..k4 by probe index, GSM8K-while-hiding + loops, KL, `grad_norm_hide` / `grad_norm_rest`,
+`train/stay_term` vs `train/hide_term`, held-out races, `det(ho)_neg_text_*` (in-context FPR).
+Optional third arm (if a node is free): the MSE baseline, `--set train.objective.hide_loss=mse --set
+train.objective.hide_weight=1.0 --set train.hide_grad_clip=0 --set rl.adaptive.stay_standalone=false` via
+tica_l3covert.sh (resume chunks would need the same flags).
 
 ## Carry-over from the Narval math runs (10-19 .. 10-21) -- apply to the TamIA config before launch
 

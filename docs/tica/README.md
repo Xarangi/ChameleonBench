@@ -38,7 +38,7 @@ lives in `REPLICATION.md` (newest first; it also holds the RULED-OUT ledger).
 | Aggregate-only numbers (no texts) | `results/tica/snapshot_2026-10-19.json` (`scripts/tica_results_snapshot.py`) |
 | v4 recipe and decisions | `docs/tica-v4-recipe.md` (+ "Since 10-19" below, which supersedes it where they differ) |
 | Model-written concept data (opt-in v4 data) | `docs/tica/V4_MODEL_WRITTEN_DATA.md` |
-| TamIA quickstart (clone, envs, data sync, smoke, launch) | `docs/tica-v4-tamia.md` |
+| TamIA quickstart (clone, envs, data sync, smoke, launch) | `docs/tica-v4-tamia.md` (THE TamIA RECIPE section: final_v4b_4b + final_v4b_score_4b) |
 | Other-cluster runbook, whole-node launcher, speed options | `docs/tica-other-hpc.md` |
 | Design / paper plan | `DESIGN-TICA.md`, `TICA-FINAL-DODGER-DESIGN.md`, `PAPER-PLAN-TICA.md`, `PREREGISTRATION-TICA.md`, `IDEAS-BANK.md` |
 | Configs | `configs/tica/final_*.yaml`; builtin mirrors in `src/next_chameleons/builtin_configs/tica/` (keep in sync) |
@@ -99,7 +99,7 @@ Every item is a config field defaulting to the old behaviour unless noted. REPLI
 
 | Setting | Status | Evidence |
 |---|---|---|
-| Turn 0 must keep a FIXED base rung (`first_probe_fork_from_step: 0`), then a base PANEL (`first_probe_panel_from_step`) | adopted in math runs; **final_v4_4b still has fork-from-150, revisit** | fresh fork-fit turn 0 from scratch = 0 passes (10-19p, 10-20a); panel learned by ~170 (10-20h) |
+| Turn 0 = fixed base probes, never a fresh fork-fit probe from scratch | final_v4b: base panel from step 0 (first_probe_fork_from_step 0) | fork-fit turn 0 from scratch = 0 passes (10-19p, 10-20a); panel learned (10-21ai) |
 | Episode KL / cap_gen KL 0.3 (was 1.0) | used in math runs | no-KL beats refits but breaks math under the brief (10-20a, 10-20n); 0.3 ~10 steps faster than 1.0 (10-20e) |
 | `pursuit: false` | decided (user 10-19) | 10-19m |
 | `kind_bandit_refits_only: true` (bug fix: turn-0 panel records fed the layer bandit) | use in new runs | 10-20o |
@@ -109,11 +109,14 @@ Every item is a config field defaulting to the old behaviour unless noted. REPLI
 | `micro_batch: 2` | no gain, +13 GB: off | 10-20s |
 | `train.save_state_all: true` | use (optimizer state in every checkpoint, so any step can be branched exactly) | 10-21b |
 | `refit_min_tpr_np: 0` + `refit_np_in_fit: false` + `refit_min_tpr_ic: 0.8` (fit on in-context forks; gate = AUROC + catch >= 0.8 of held-out in-context positives at 1% FPR) | decided 10-21 for new runs (set in final_v5_modelwritten_4b) | AUROC alone would admit probes that catch ~0 of in-context math at their threshold (10-21g, 10-21o) |
-| `objective.hide_loss: log` | NOT as built: ~ control from abs 380; from scratch it dodges 4x sooner but diverges by step 10 (unbounded hide gradient); a bounded variant is untested | 10-21i, 10-21l |
-| `adaptive.cap_adapt_target` (adaptive capability multiplier) | OPEN: best k2 + math, but held-out probes catch it 1.00 (narrow dodge); multiplier oscillates | 10-21i |
+| `objective.hide_loss: log` + `train.hide_grad_clip: 0.5` (LOGCLIP) | ADOPTED for TamIA (final_v4b_4b / _score_4b) | beats the fixed rung / panel / refits ~6 / ~100 / ~200 steps sooner than MSE with capability intact; plain log diverges (10-21l..ai) |
+| `adaptive.cap_adapt_target` (adaptive capability multiplier) | not adopted: oscillates; evades fresh probes like the others except at L20 | 10-21i, 10-21w |
 | Model-written train texts (`final_v5_modelwritten_4b`) | build in progress | 10-21f, docs/tica/V4_MODEL_WRITTEN_DATA.md |
 | `train.dp_sync_init: true` (bug fix: from-scratch DP ranks otherwise train different LoRA inits) | set in final_v4_4b / final_v5_modelwritten_4b | 10-21v |
-| `objective.hide_loss: gce` + `hide_gce_q`; `train.hide_grad_clip` (separate clip of the hide gradient) | OPEN: from-scratch runs A (log + clip 0.5) / B (GCE 0.3) running; A keeps capability at original level | 10-21r, 10-21v |
+| `objective.hide_loss: gce` (q 0.3) | not adopted: math fell to 0.25 (cancelled) | 10-21y |
+| `adaptive.stay_standalone: true` (stay-after-pass without pursuit) | ADOPTED for TamIA | the only term that makes the verdict worth reading; sustained retry success 0.14-0.18 at j3-5 vs 1-bit decay (10-21t, x, ah); verdict races pending |
+| `episodes.feedback: score` | ADOPTED as the second TamIA arm (final_v4b_score_4b) | ~2x retry success vs 1-bit (10-21u, ae, ah) |
+| `adaptive.first_probe_panel_from_start: true` (turn-0 base panel from step 0) | ADOPTED for TamIA | panel learned from scratch by ~30 steps (10-21ad, ai, aj) |
 | Math collapse risk (degenerate loops, grad norm clipped >3, GSM8K-while-hiding < 0.3) | watch in every run | 10-20u |
 
 ## Hard rules (carried over)

@@ -5,6 +5,17 @@ checkpoints, observed results, and unresolved limitations.
 
 TICA on a new machine: start at docs/tica/README.md (results digest, run ledger, open questions, aggregate snapshot).
 
+## 2026-10-21ak THE TamIA recipe (user 10-21): final_v4b_4b (binary) + final_v4b_score_4b (score); Narval smokes
+- Both: logclip (log, weight 0.3, hide grad clip 0.5) + standalone stay + turn-0 base panel from step 0 + KL 0.3 (both)
+  + cap_gen_samples 4 + in-context refit gate + dp_sync_init + bandit fix + batched fits + save_state_all, on final_v4_4b
+  (split v5, 24 turns + turn budget, r32, retry ladder, LR schedule + cooldown, 1200 steps). final_v4b_score_4b differs
+  only in episodes.feedback score and the out paths. Explicit configs, so tica_node.sh / tica_resume.sh chains need no
+  --set. Launch commands: docs/tica-v4-tamia.md "THE TamIA RECIPE"; decisions table: docs/tica/README.md.
+- Narval end-to-end smokes (4 steps, DP2, clean worktree /home/sneheel/chameleons-wt-v4bsmoke): 6642468 final_v4b_4b,
+  6642470 final_v4b_score_4b -> runs/smoke_2026-10-21/.
+- Updates: panel0 k1 0.81 / 0.98 / 1.00 at 20 / 30 / 40 (panel learned from scratch by ~30 steps); A extension k2 0.25 (44)
+  at 120-129, 0.03 (40) at 130-139 (watch); GSM 0.75-0.80.
+
 ## 2026-10-21aj adaptive.first_probe_panel_from_start (default off): the turn-0 panel from global step 0
 - first_probe_panel_from_step 0 means OFF, so its earliest start was step 1, leaving the first training step's 8
   episodes on the fixed base L12 probe at turn 0 (user 10-21: the panel should judge turn 0 from the start). New flag
