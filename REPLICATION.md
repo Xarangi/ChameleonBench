@@ -5,6 +5,18 @@ checkpoints, observed results, and unresolved limitations.
 
 TICA on a new machine: start at docs/tica/README.md (results digest, run ledger, open questions, aggregate snapshot).
 
+## 2026-10-21ab Code state clean; logclip beats the turn-0 PANEL ~100 steps sooner than the original
+- Code: tica-v3 at dcb2b3e, working tree clean; full TICA suite (pytest -k tica, 252 tests) on compute node 6628640
+  passes; ruff clean repo-wide (one test-docstring line fixed). All options default off; final_v4b_4b sets the
+  decided ones. Leftover worktrees (-wt-hclip, -wt-logscratch, -wt-score, -wt-stay) only serve running / finished jobs.
+- Stage B (turn 0 = base panel from step 60), k1 by 10 steps:
+  - original MSE (resume_60): 0.16 / 0.17 / 0.19 / 0.31 / 0.16 / 0.19 at 60-119 (1.00 only by ~170);
+  - A logclip: 0.69 / 0.98 / 0.90 / 1.00 at 60-99.
+  - k2 0.00 in both so far (orig k2 stayed ~0 until ~300). GSM8K-while-hiding 0.76-0.83, KL 0.07-0.09, held-out
+    0.98-1.00.
+- fb600_stay first bin (abs 600-609, n pass ~8 / step): k2 0.57 (21), GSM 0.92, KL 0.058. Move after pass 1.22 (L12) /
+  1.36 (L22) vs after catch 1.34 / 1.41: small separation so far.
+
 ## 2026-10-21aa TamIA config final_v4b_4b (final_v4_4b + math-run carry-overs) and arm flags
 - Changes vs final_v4_4b: episode / cap_gen KL 0.3; first_probe_fork_from_step 0 and first_probe_panel_from_step 60
   (fixed base rung, then base panel; switched concepts still fork); refit_min_tpr_np 0, refit_np_in_fit false,
