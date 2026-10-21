@@ -5,6 +5,22 @@ checkpoints, observed results, and unresolved limitations.
 
 TICA on a new machine: start at docs/tica/README.md (results digest, run ledger, open questions, aggregate snapshot).
 
+## 2026-10-21l Log loss FROM SCRATCH diverged by step 10 (cancelled at 13); the early-phase hypothesis half-confirmed
+- 6607864 (10-21j) vs the original MSE run, same config otherwise:
+  - pre-clip grad norm, steps 1-4: 14-15 (orig 0.4-0.6);
+  - k1 (turn-0 L12 probe beaten): 0.25 at step 5 and 1.00 at 6-9 (orig 0 until ~20, 0.52-0.64 at 20-40);
+  - from step 6 (LR 2.1e-4 in warm-up): GSM8K-while-hiding 0.38 -> 0.17 -> 0.00 (steps 6-13);
+  - episode KL 0.26 -> 1.0 (step 10) -> 2.75 (step 13); passage NLL 0.52 -> 3.06; grad norm 1001 at step 10, then
+    100-340; held-out turn-0 detection 1.00 -> 0.14.
+  - Cancelled at step 13 (KL still rising).
+- Reading: the user's hypothesis holds for the hide signal (log loss gives a full-strength gradient on deeply caught
+  turns, so the first dodge came ~4x sooner). Its unbounded scale breaks the balance. d softplus(z)/dz = p <= 1, but
+  dz/d(activations) = w/scale per probe, so the hide gradient is ~10-1000x the capability terms'. Clipping at 1.0 then
+  makes every update almost pure hiding. MSE's p^2(1-p) saturation was acting as an implicit balance; at hide_weight
+  0.3 the r380 log arm survived only because it started from an already-dodging model (smaller z).
+- Not yet tried (next, if pursued): bound the per-target hide gradient (clamp z, or normalise each probe's z by its
+  logit scale on the base model), or warm the hide weight up; keep the r380 lesson (log ~ MSE once dodging).
+
 ## 2026-10-21k adaptive.refit_np_in_fit (default true = unchanged): in-context-only refit positives
 - User 10-21: no-brief plain-math texts as refit positives confound the fit (they are the only no-brief rows, so
   "no brief" predicts the label) and are far from in-context math. refit_np_in_fit false -> fit positives = in-context
