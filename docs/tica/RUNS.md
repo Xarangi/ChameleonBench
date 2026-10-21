@@ -1,4 +1,4 @@
-# TICA final-run ledger (runs, branches, evals) as of 2026-10-18
+# TICA final-run ledger (runs, branches, evals) as of 2026-10-21 (v3b section as of 10-19)
 
 ## Conventions
 
@@ -48,6 +48,30 @@ Chunk dirs for the v3b baseline:
 
 Each 12 h chunk now covers ~110-120 steps at ~6 min/step. The 4 chunks after 6198908 end near step 980, so a 6th
 chunk (6315437) is queued to reach 1000.
+
+## v4 math-only runs (Narval, 10-19 .. 10-21)
+
+One concept (mathematical reasoning; split `final_split_v5_math.json`), 16 turns, v4 capability terms. Root
+`$A/final_v4_math_v3b_4b/` unless noted. k = pass rate by probe index (k1 turn-0 probe, k2 first refit, ...).
+
+| Run (config) | What it is / changed | Start | Steps | Jobs | Status / result | Logged |
+|---|---|---|---|---|---|---|
+| final_v4_math_4b / final_v4_math_min_4b | v4 recipe, full / minimal capability set; turn 0 fork-fit from 150 | base | 200 | 6402427-28 / 6404994-95 | done: k1 1.00 on the fixed L12 rung, then 0 after the switch to fork-fit turn 0; refits L12 only | 10-19g, 10-19j, 10-20a |
+| final_v4_math_nokl_4b | no episode KL | base | ~150 | 6410942 | stopped: beats refits at every layer (k2 0.93 at 125-150) but math broken under the brief (5/21) | 10-20a, 10-20n |
+| final_v4_math_nopur_4b / zoo0_4b | pursuit off / + fork-fit zoo turn 0 from 0 | base | - | 6426690 / 6426831 | stopped (subsumed by univ) | 10-19m, 10-19o |
+| final_v4_math_univ_4b / univ_nopanel_4b | fork-fit zoo turn 0, depth panel, LR 3e-4 const; DP2 / 1 GPU | base | 150 | 6428983 / 6428984 | **NULL**: 0 passes (no refit ever deployed) | 10-19o, 10-19p |
+| final_v4_math_v3b_4b (stage A) | fixed base L12 turn 0, KL 0.3 + cap_gen KL 0.3, pursuit off, LR 3e-4 -> 1e-4 by 200, DP2 | base | 0-60 | 6552658 | done: k1 0.52-0.64 by 20-40 | 10-20c, 10-20e |
+| stage B: `resume_60` (same config + `first_probe_panel_from_step 60`) | turn 0 = one base probe drawn from the in-training panel | s60 | 60-400 | 6556906 | done: k1 1.00 by ~170; k2 0.08 (300-319) -> 0.27 (380-399); **math collapse at abs 389**; capability at abs 400 GSM8K 0.63 vs base 0.825 | 10-20f .. 10-20u |
+| extension: `resume_400` (final_v4_math_v3b_ext_4b: + kind_bandit_refits_only) | layer-bandit fix | abs 400 (step_340) | 400-600 | 6588314 | running: math recovered 0.6-0.79; k2 0.35-0.64, k3 0.3-0.6; held-out last turn 0.3-0.5 | 10-20r .. 10-21i |
+| r380_ctl (final_v4_math_v3b_r380_4b) | + batched fits, cap_gen_samples 4, save_state_all; fresh AdamW | abs 380 (resume_60 step_320), offset 380 | 60 | 6595577 | done: no collapse; k2 0.38-0.65; held-out tN 0.65 -> 0.15-0.25 | 10-21b .. 10-21i |
+| r380_log | + hide_loss log, hide_weight 0.3 | abs 380 | 150 (stopped ~75) | 6595578 | cancelled at abs ~455: ~= control, slightly lower math | 10-21i, 10-21j |
+| r380_adapt | + cap_adapt_target 0.75 | abs 380 | 150 | 6595579 | running: k2 up to 0.76 + GSM 0.77-0.94, but held-out tN 0.96-1.00 (narrow dodge); multiplier 7 -> 3 (oscillating) | 10-21i |
+| scratch_log (r380 config + log loss, cap_gen_samples 2, bandit fix off = original run's settings) | log hide loss from scratch; baseline = stage A + B above | base | 400 | 6607864 (clean worktree at 62f04f3) | running | 10-21j |
+| overlap_test/{off1,off2,on1,on2} | refit_overlap exactness | abs 380 | 2 | 6604590-91 + 2 | done: bit-identical, ~1 s/step gain | 10-21e |
+| diag_gate | why refits fail the plain-math gate | ext / base | - | 6603899, 6603906 | running | 10-21g |
+| mw-build | model-written v4 data (generation, 27B judge, labels) | - | - | 6603644 + follow-ups | running | 10-21f |
+
+Turn-0 text evals, capability evals and profiling jobs of this lineage: REPLICATION 10-20j, 10-20p, 10-20s, 10-20t.
 
 ## Evaluation jobs (v3b unless noted)
 

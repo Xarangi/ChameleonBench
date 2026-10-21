@@ -81,6 +81,17 @@ done
   stopping, no checkpoint selection: the final checkpoint is the model.
 - Report: `python scripts/tica_run_report.py --run <out>` (pass rate by probe index first).
 
+## Carry-over from the Narval math runs (10-19 .. 10-21) -- apply to the TamIA config before launch
+
+See `docs/tica/README.md` "Since 10-19" for evidence. Exact speed-ups and fixes (no science change):
+`rl.adaptive.refit_batched_logistic: true`, `refit_batched_rlobf: true`, `kind_bandit_refits_only: true`,
+`train.save_state_all: true`, `cap_gen_samples: 4`. Decided science changes: `refit_min_tpr_np: 0`,
+`refit_np_in_fit: false` (both already in `final_v5_modelwritten_4b`). Open (decide first): turn-0 schedule
+(final_v4_4b's fork-from-150 failed on math), KL 1.0 vs 0.3, `objective.hide_loss`, `cap_adapt_target`, and
+whether to train on the model-written data (`final_v5_modelwritten_4b`; its data files `final_v5_mw.json`,
+`final_v5_mw_elicit_inputs.json`, `concept_labels_v5mw_27b.json` must be synced from Narval once built).
+Any config field can also be set at launch: `scripts/tica.py ... --set rl.adaptive.KEY=VALUE`.
+
 ## Still open before launch (docs/tica-v4-recipe.md)
 
 - Split v5 data + 27B labels: present on Narval (`final_v5_clean.json`, `final_v5_inputs.json`,

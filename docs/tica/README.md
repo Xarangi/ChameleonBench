@@ -1,7 +1,7 @@
 # TICA: start here (context for a new machine, e.g. TamIA)
 
 TICA = **T**rained **I**n-**C**ontext **A**daptation: one checkpoint that learns, *in context*, to dodge any
-concept probe. Snapshot of what we know as of **2026-10-18**. This folder is the entry point. Day-by-day detail
+concept probe. Snapshot of what we know as of **2026-10-21** (v3b numbers as of 10-18; v4 math runs 10-19..10-21). This folder is the entry point. Day-by-day detail
 lives in `REPLICATION.md` (newest first; it also holds the RULED-OUT ledger).
 
 ## Protocol (what every number refers to)
@@ -36,7 +36,8 @@ lives in `REPLICATION.md` (newest first; it also holds the RULED-OUT ledger).
 | Every run / branch / eval job | [RUNS.md](RUNS.md) |
 | Pending decisions, ideas, TamIA optimisations | [OPEN-QUESTIONS.md](OPEN-QUESTIONS.md) |
 | Aggregate-only numbers (no texts) | `results/tica/snapshot_2026-10-19.json` (`scripts/tica_results_snapshot.py`) |
-| v4 recipe and decisions | `docs/tica-v4-recipe.md` |
+| v4 recipe and decisions | `docs/tica-v4-recipe.md` (+ "Since 10-19" below, which supersedes it where they differ) |
+| Model-written concept data (opt-in v4 data) | `docs/tica/V4_MODEL_WRITTEN_DATA.md` |
 | TamIA quickstart (clone, envs, data sync, smoke, launch) | `docs/tica-v4-tamia.md` |
 | Other-cluster runbook, whole-node launcher, speed options | `docs/tica-other-hpc.md` |
 | Design / paper plan | `DESIGN-TICA.md`, `TICA-FINAL-DODGER-DESIGN.md`, `PAPER-PLAN-TICA.md`, `PREREGISTRATION-TICA.md`, `IDEAS-BANK.md` |
@@ -62,6 +63,13 @@ lives in `REPLICATION.md` (newest first; it also holds the RULED-OUT ledger).
 | 10-18f | split v5 (the v4 run's data) + 27B labels |
 | 10-18g .. 10-18i | branch held-out races, emotion, anomaly, free-gen, probe panel, evasion detector, v4 draft final |
 | 10-18j | held-out plateau (s340 = s500); updates_per_rollout + reuse branches; 6th baseline chunk |
+| 10-19a .. 10-19f | reuse no gain; turn budget; free-answer races; concept-eliciting requests (v5 elicit file) |
+| 10-19g .. 10-19p | math-only v4 runs (full / minimal / no-KL / no-pursuit / zoo turn 0 / universal): k1 learned, refits not; universal hider NULL; pursuit off; depth panel |
+| 10-20a .. 10-20e | why: math arms lost the FIXED turn-0 rung; no-KL beats refits; v3b-strategy math run (KL 0.3, DP2); turn-0 base panel |
+| 10-20f .. 10-20k | stage B (panel turn 0 from step 60): k1 1.00 by ~170, refits ~0 |
+| 10-20l .. 10-20s | capability-term dose-response; no-KL math broken under the brief; layer-bandit bug; speed + memory audits |
+| 10-20t .. 10-20z | capability drop at abs 400; MATH COLLAPSE at abs 389; extension from 400 recovers; batched fits |
+| 10-21a .. 10-21k | k-by-index correction (k2 ~0.5); r380 arms (control / log loss / adaptive capability weight); refit overlap (exact, ~no gain); plain-math refit gate dropped for new runs; in-context-only refit positives; log loss from scratch |
 
 ## Run lineage
 
@@ -75,7 +83,36 @@ final_v2 (200 steps; fixed base turn-0 probe, pinned)      learned; caught by th
        branches from s500 (rollout reuse, running): reuse1 (control) / reuse2 / reuse3 (K updates per rollout)
   -> final_v4 (DRAFT, not launched): split v5, rank 32, 24 turns, 1200 steps, ladder, LR 1e-4 + cooldown,
        flat per-concept curriculum (share 0.7 after 50 steps), turn-0 fork from step 150, close negatives 0.5
+       -> final_v5_modelwritten_4b (opt-in): same, on model-written train texts + no plain-math refit gate
+  -> v4 MATH-ONLY runs (Narval, 10-19..): one concept, v4 capability terms
+       final_v4_math_{,min,nokl,nopur,zoo0}_4b, final_v4_math_univ{,_nopanel}_4b   k1 only / NULL (fresh turn-0 probe)
+       final_v4_math_v3b_4b: fixed L12 turn 0, KL 0.3, DP2 (stage A, 0-60)
+         -> resume_60 (stage B: base PANEL turn 0 from 60) to abs 400   math COLLAPSE at abs 389
+              -> resume_400 = extension (layer-bandit fix) 400 -> 600       recovered; k2 ~0.5, held-out tN 0.3-0.5
+              -> r380_{ctl,log,adapt} from abs 380 (step_320)               see RUNS.md
+         -> scratch_log: log hide loss FROM SCRATCH (6607864)
 ```
+
+## Since 10-19: what changed (read before configuring the TamIA run)
+
+Every item is a config field defaulting to the old behaviour unless noted. REPLICATION entry in brackets.
+
+| Setting | Status | Evidence |
+|---|---|---|
+| Turn 0 must keep a FIXED base rung (`first_probe_fork_from_step: 0`), then a base PANEL (`first_probe_panel_from_step`) | adopted in math runs; **final_v4_4b still has fork-from-150, revisit** | fresh fork-fit turn 0 from scratch = 0 passes (10-19p, 10-20a); panel learned by ~170 (10-20h) |
+| Episode KL / cap_gen KL 0.3 (was 1.0) | used in math runs | no-KL beats refits but breaks math under the brief (10-20a, 10-20n); 0.3 ~10 steps faster than 1.0 (10-20e) |
+| `pursuit: false` | decided (user 10-19) | 10-19m |
+| `kind_bandit_refits_only: true` (bug fix: turn-0 panel records fed the layer bandit) | use in new runs | 10-20o |
+| `refit_batched_logistic`, `refit_batched_rlobf` | exact speed-ups, use | 10-20y |
+| `refit_overlap` | exact, ~1 s/step gain: leave off | 10-21e |
+| `cap_gen_samples: 4` | adopted in r380 arms (+5-8% step time, ~2x correct samples) | 10-20s |
+| `micro_batch: 2` | no gain, +13 GB: off | 10-20s |
+| `train.save_state_all: true` | use (optimizer state in every checkpoint, so any step can be branched exactly) | 10-21b |
+| `refit_min_tpr_np: 0` + `refit_np_in_fit: false` (refits gated on in-context AUROC only, fit on in-context forks only) | decided 10-21 for new runs (set in final_v5_modelwritten_4b) | 27% of refits rejected on the trained model; the gate demanded transfer to no-brief math (10-21h, 10-21k) |
+| `objective.hide_loss: log` | OPEN: r380 arm ~ control; from-scratch test running | 10-21i, 10-21j |
+| `adaptive.cap_adapt_target` (adaptive capability multiplier) | OPEN: best k2 + math, but held-out probes catch it 1.00 (narrow dodge); multiplier oscillates | 10-21i |
+| Model-written train texts (`final_v5_modelwritten_4b`) | build in progress | 10-21f, docs/tica/V4_MODEL_WRITTEN_DATA.md |
+| Math collapse risk (degenerate loops, grad norm clipped >3, GSM8K-while-hiding < 0.3) | watch in every run | 10-20u |
 
 ## Hard rules (carried over)
 

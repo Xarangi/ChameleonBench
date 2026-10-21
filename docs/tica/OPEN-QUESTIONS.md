@@ -1,9 +1,16 @@
-# TICA open questions and pending decisions (2026-10-19)
+# TICA open questions and pending decisions (2026-10-19; updated 2026-10-21)
 
 The user decides the TamIA optimisations. Everything here is optional, and anything built for it is a config field
 that defaults OFF.
 
 ## 1. Speed (to decide on TamIA)
+
+**Update 10-21 (math runs, DP2 on Narval A100):** data-parallel episodes are in use (`TICA_DP=2`); batched fits are
+exact and on (10-20y); `refit_overlap` is exact but saves ~1 s/step (fits are GPU work on the same stream; most
+GPU-turns have one refit), so off (10-21e); `micro_batch: 2` gave nothing (10-20s); `cap_gen_samples: 4` costs
++5-8% for ~2x correct GSM8K samples (adopted). Per step (~130-160 s) refits are ~70-80% of the episode phase; the
+16 sequential turns, not idle GPUs, set the pace. Untried: a separate CUDA stream for refit fits, cross-turn
+pipelining, DP4.
 
 Step time on Narval A100: 106 s at the start, 370 s at step ~550. About 85% of that is refits: every pass triggers
 a fork-and-fit, which costs ~450 forked reads plus a probe fit. Doubling the read batch from 8 to 16 gave nothing
@@ -52,6 +59,19 @@ Verify any speed-up the usual way: same draws, probe outputs agree within roundi
 - **Narval maintenance** 2026-10-27 05:00 → 11-03 (reservation POWEROUT20261027): any Narval run must end before then.
   TamIA is unaffected.
 - **v3b baseline chain.** A 6th chunk (6315437) is queued so the chain reaches step 1000.
+
+## 2b. Decisions from the math runs (10-19 .. 10-21; table in README "Since 10-19")
+
+- **Turn-0 schedule (blocking for final_v4_4b).** final_v4_4b switches turn 0 to a fresh fork-fit probe at step 150;
+  on math that zeroed k1 and nothing was learned from a fresh probe from scratch (10-19p, 10-20a). Keep the fixed rung
+  and use the base panel (`first_probe_panel_from_step`) instead, or verify the switch on multi-concept data first.
+- **KL.** final_v4_4b has kl_weight 1.0 / cap_gen_kl_weight 1.0; math runs use 0.3. Decide.
+- **Hide loss (mse vs log)** and **adaptive capability weight**: open, see 10-21i/j. The adaptive arm shows the
+  trade-off between refit dodging + math (narrow, base probes still catch) and broad held-out evasion.
+- **Refit gate:** plain-math gate dropped and in-context-only positives for new runs (10-21h, 10-21k); the gate
+  diagnostic (10-21g) says whether the old rejections were context shift, threshold noise or bad negatives.
+- **Collapse guard:** the abs-389 collapse (10-20u) did not recur in the r380 control. Watch loops / grad norm /
+  GSM8K-while-hiding; branch from saved optimizer state (`save_state_all`) if it happens.
 
 ## 3. Science questions not yet run
 
