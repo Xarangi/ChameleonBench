@@ -5,6 +5,20 @@ checkpoints, observed results, and unresolved limitations.
 
 TICA on a new machine: start at docs/tica/README.md (results digest, run ledger, open questions, aggregate snapshot).
 
+## 2026-10-21av Clean GSM8K: logclip abs 260 0.70, panel0 s150 0.66 (base 0.825) -- the s400 drop was ~all truncation; 768-tok rerun
+- tica_capability (GSM8K 200, greedy 2-shot, 256 new tokens): logclip abs 260 clean 0.70 / brief math 0.67 / brief HTML
+  0.685; panel0 s150 0.66 / 0.615 / 0.645; base 0.825 / 0.785 (10-20t). So 10-21aq's "logclip math is NOT degrading"
+  holds for in-episode sampled math (400 tok) only. On the clean benchmark logclip is 0.125 below base.
+- Closing the 10-20t diagnosis (dumps never analysed): s400 vs base at 256 tokens, wrong answers split into truncated /
+  finished-wrong: base clean 17 / 18 (mean length 150 tok); s400 clean 66 / 8 (mean 214); brief math base 6 / 37,
+  s400 77 / 8. The trained model makes FEWER finished errors than base. Its whole GSM8K drop is answers cut off at
+  256 tokens: it writes ~1.4x longer working.
+- Rerun at 768 tokens with dumps (raw cache only): 6683080 base, 6683081 logclip abs 260, 6683082 panel0 s150.
+- Literature probes: nc_ens8_tok / bailey_ens_tok / mck_* / spread5 ARE in the zoo and in final_eval_suite.sh (held-out
+  races, run on final_v2 / v3b, 10-16/10-18h). The math-arm panels (10-21w / ap) used a trimmed 8-kind list; panel2
+  (10-21au) restores them. Note final_eval_suite drops rlobf_max / rlobf_attn_max (fail the gate on synthetic data) and
+  mck_softmax (duplicate); panel2 includes them, so read those rows with care.
+
 ## 2026-10-21au Held-out probe coverage is narrow: "evaded" never-shown probes all sit at TRAINED layers; wider grid queued
 - Training probe zoo: archs linear / maxpool / attnpool / rlobf_attn / ens4_linear / ens4_mlp / ensdeep4_linear at
   kind_layers 8 / 12 / 16 / 22 / 26. In-training held-out readout = base linear L20 / L24 only.
