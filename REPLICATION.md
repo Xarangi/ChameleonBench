@@ -5,6 +5,19 @@ checkpoints, observed results, and unresolved limitations.
 
 TICA on a new machine: start at docs/tica/README.md (results digest, run ledger, open questions, aggregate snapshot).
 
+## 2026-10-21u Score vs 1-bit feedback branches from the extension final (abs 600)
+- Question (10-21t): is the missing iteration (one retry jump, then decay) an INFORMATION limit? Score feedback shows
+  the judging probe's 0-100 score vs threshold each turn (the strongest catcher's under cumulative judging), so the
+  model can hill-climb. Never properly compared: the 10-11 1-bit / score pair (5231818/19) was cancelled at step 40 for
+  a pursuit bug.
+- Both arms: final_v4_math_v3b_r380_4b from resume_400/adaptive/final (abs 600, its trainer_state), offset 600, DP2,
+  60 steps, same seed; from a clean worktree at a16b12e (/home/sneheel/chameleons-wt-score):
+  fb600_bit 6622721 (episodes.feedback verdict = control), fb600_score 6622723 (episodes.feedback score).
+- Read: pass hazard by turns under the same refit (10-21t table; rising or flat over j = search), k2 / k3, math,
+  held-out. Score feedback is a stronger attacker than the 1-bit protocol: report it as its own arm or use it as
+  scaffolding annealed back to 1 bit.
+- Extension 6588314 finished (abs 600).
+
 ## 2026-10-21t In-context iteration on refits: one retry jump, then no search (user: the probe-specific iteration skill is the goal)
 - Pass hazard by turns under the SAME refit (turns.jsonl, real_score, refit turns; j = j-th turn judged by that probe,
   j=1 = first turn after its deployment; 8 = 8+):
