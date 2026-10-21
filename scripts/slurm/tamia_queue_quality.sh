@@ -15,9 +15,9 @@ set -uo pipefail
 RUNS=/scratch/s/sneheel/next_chameleons_artifacts/tica/runs
 TR="German language,Japanese language,Arabic language,Hindi language,all-caps text,SQL code,JSON data,JavaScript code"
 HO="Finnish language,French language,Portuguese language,Turkish language,Russian language,Greek language,Thai language,Tamil language,HTML markup,Python code,Java code"
-RACE="--answers free --ask-concept --episodes 32 --turns 24 --switch-prob 1.0 --turn-budget 5,8,8 --cond real_score"
+RACE="--batch 16 --answers free --ask-concept --episodes 32 --turns 24 --switch-prob 1.0 --turn-budget 5,8,8 --cond real_score"
 PANEL_EVERY=${PANEL_EVERY:-300}
-PANEL="--episodes 24 --turns 24 --mix real_score:0.6,mismatch:0.2,nobrief:0.2"
+PANEL="--batch 12 --episodes 24 --turns 24 --mix real_score:0.6,mismatch:0.2,nobrief:0.2"
 CAP="--benches gsm8k,mmlu --briefs mathematical\ reasoning,HTML\ markup"
 
 newest() {  # newest checkpoint over the first chunk and resume chunks: "<global step> <dir>"

@@ -17,6 +17,10 @@ cd /scratch/s/sneheel/ChameleonBench
 NODE_TMP=${SLURM_TMPDIR:-/tmp/tica_drain_$$}
 mkdir -p "$NODE_TMP" logs
 NG=$(nvidia-smi -L 2>/dev/null | wc -l); (( NG > 0 )) || NG=1
+# PER_GPU (default 2; TamIA 10-21): eval processes are host-bound (~40% GPU each) and use well under half of an
+# H100's memory, so two share each GPU; slot s runs on GPU s % NG
+PER_GPU=${PER_GPU:-2}
+NS=$(( NG * PER_GPU ))
 TASKS=()
 for q in "$@"; do
   [ -f "$q" ] || continue
@@ -40,20 +44,20 @@ if [ -n "${TICA_DRAIN_QUALITY:-}" ]; then
     [ -n "$line" ] && TASKS+=("$line")
   done < <(bash scripts/slurm/tamia_queue_quality.sh $TICA_DRAIN_QUALITY)
 fi
-echo "${#TASKS[@]} tasks on $NG GPUs"
+echo "${#TASKS[@]} tasks on $NG GPUs x $PER_GPU"
 declare -A BUSY
 i=0
 for t in "${TASKS[@]}"; do
   while true; do
-    for (( g = 0; g < NG; g++ )); do
+    for (( g = 0; g < NS; g++ )); do
       p=${BUSY[$g]:-}
       if [ -z "$p" ] || ! kill -0 "$p" 2>/dev/null; then break 2; fi
     done
     sleep 15
   done
   mkdir -p "$NODE_TMP/t$i"
-  echo "gpu $g: $t"
-  CUDA_VISIBLE_DEVICES=$g SLURM_TMPDIR=$NODE_TMP/t$i bash -c "$t" \
+  echo "slot $g (gpu $(( g % NG ))): $t"
+  CUDA_VISIBLE_DEVICES=$(( g % NG )) SLURM_TMPDIR=$NODE_TMP/t$i bash -c "$t" \
     > "logs/${SLURM_JOB_NAME:-drain}-${SLURM_JOB_ID:-local}-t$i.out" 2>&1 &
   BUSY[$g]=$!
   i=$(( i + 1 ))
