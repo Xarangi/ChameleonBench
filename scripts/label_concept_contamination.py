@@ -117,6 +117,9 @@ def main():
                     help="v4 = central properties only (10-17n)")
     ap.add_argument("--tp", type=int, default=1, help="tensor-parallel GPUs (27B: 2 x A100)")
     ap.add_argument("--max-num-seqs", type=int, default=512)
+    ap.add_argument("--skip-labelled", default="",
+                    help="an earlier label file: skip every text of the data files it labelled "
+                         "(meta.data); build_final_v5_mw.py merge-labels joins the two (10-21f)")
     a = ap.parse_args()
     from transformers import AutoTokenizer
     from vllm import LLM, SamplingParams
@@ -135,6 +138,15 @@ def main():
         for ts in d["negatives"].values():
             for t in ts:
                 texts.setdefault(t["id"], t["text"])
+    if a.skip_labelled:
+        done = set()
+        meta = json.loads(Path(a.skip_labelled).read_text())["meta"]
+        for f in {f for m in (meta if isinstance(meta, list) else [meta]) for f in m["data"]}:
+            d = json.loads(Path(f).read_text())
+            done |= {t["id"] for c in d["concepts"] for p in ("fit", "calib", "episode")
+                     for t in c[p]}
+            done |= {t["id"] for ts in d["negatives"].values() for t in ts}
+        texts = {i: x for i, x in texts.items() if i not in done}
     si, sn = (int(x) for x in a.shard.split("/"))
     ids = sorted(texts)[: a.limit or None][si::sn]
     tok = AutoTokenizer.from_pretrained(a.model)
@@ -188,6 +200,7 @@ def main():
                     "concepts": concepts, "n_flagged_texts": len(flagged),
                     "n_pairs_verified": len(pairs), "load_sec": load, "pass1_sec": t1,
                     "total_sec": round(time.time() - t0), "maxc": MAXC, "prompt": a.prompt,
+                    "skip_labelled": a.skip_labelled,
                     "desc": DESC_V4 if a.prompt == "v4" else DESC}}
     Path(a.out).write_text(json.dumps(rep))
     print(json.dumps(rep["meta"], indent=1), flush=True)
