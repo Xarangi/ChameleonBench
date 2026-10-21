@@ -30,6 +30,16 @@ TICA on a new machine: start at docs/tica/README.md (results digest, run ledger,
   score s20 0.84 / 0.85 (median ~190, 20% > 256), s60 0.805 / 0.79 (median ~218, 33% > 256). -> the 0.40 at 256 tokens
   was answer LENGTH (truncation), not reasoning; capability within ~0.03 (brief) / ~0.1 (clean) of base; the 1-bit
   length spike receded by s60, the score arm's length creeps up (watch). In-run quality capability now at 512 tokens.
+- 10-21 19:35 EARLY QUALITY DONE (635288, 3h56): free-gen validity (tica_quality_check, train / held-out checkable
+  concepts), share valid on PASSED turns: base 0.08 / 0.04 (base passes = not doing the concept), 1-bit s20 0.77 / 0.73,
+  score s20 0.83 / 0.83 -> trained passes are real hiding. Caught turns: base 0.69 / 0.70, 1-bit 0.75 / 0.85, score
+  0.94 / 0.90. Monitor-OFF turns: base 0.90 / 0.85, 1-bit 0.74 / 0.84 (finished 0.69 / 0.62: verbosity truncates),
+  score 0.93 / 0.94. Base never-shown probe panel (reference for step 300): fresh base probes catch real-brief turns
+  0.96-1.00 (train and held-out), mismatch false alarms 0-0.07 (train) / 0.03-0.11 (held-out); k1 0.07 / 0.13 (n 15).
+  No tripwire (monitored-turn validity >= base; brief capability at 512 tok within 0.03).
+- 10-21 19:32, steps 131 / 128 (last 20): k0 (turn-0 pass) 0.10 / 0.12, k1 0.20 / 0.21, k2 0.00 (68) / 0.06 (69);
+  k1 split: episode-first concept (base panel probe) 0.31-0.47, switched concept (fork-fit probe, switch_fork) 0.04-0.09.
+  GSM8K-while-hiding 0.64 / 0.71, finished 0.78 / 0.81, KL 0.22 / 0.19, 140-148 s/step.
 
 ## 2026-10-21ar TamIA PRODUCTION LAUNCH: final_v4b_tamia_4b + final_v4b_score_tamia_4b (one arm per node, DP4)
 - User 10-21: throughput / wall-clock first -> solo layout (each arm its own 4 x H100 node, data-parallel over 4 GPUs),
