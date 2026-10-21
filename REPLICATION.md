@@ -5,6 +5,32 @@ checkpoints, observed results, and unresolved limitations.
 
 TICA on a new machine: start at docs/tica/README.md (results digest, run ledger, open questions, aggregate snapshot).
 
+## 2026-10-21w Never-shown probe panel + falsified verdicts: layer-wide evasion except L20 (and L4 / 28 / 30); no verdict use; logclip k2 early
+- Never-shown panel (tica_probe_panel.py, math, 24 ep x 16 turns, fresh base probes never trained against;
+  detection over all monitored turns):
+  - base model: every probe 1.00.
+  - adapt s480 / ctl s440 / ext s580:
+    - 0.00 for fresh linear @8 / 12 / 16 / 22 / 24 / 26, maxpool @12 / 24, rlobf_attn@12, ensdeep4_linear;
+    - gdm_rollattn 0.25 / 0.00 / 0.11;
+    - linear@20 0.98 / 0.12 / 0.25 (turn 0: 1.00 / 0.67 / 0.92);
+    - still caught (~1.00): linear@4, @28, @30, ens8_linear, attnpool@20, rlobf_attn@20.
+- CORRECTION to 10-21s: adapt is NOT memorising its ~30 panel probes. It evades FRESH base probes of every kind across
+  layers 8-26, including the held-out L24, except at layer 20. The training "held-out" readout is any(L20, L24), so
+  it was L20 alone. The arms differ only at L20, where adapt stays fully readable. Every arm stays readable at layers
+  outside the trained range (4, 28, 30) and to probes reading layer 20.
+- Readability (fresh linear probe fit on the trained model's own forks each turn, CV AUROC): 0.90-0.94 at L8,
+  0.95-0.98 at L12-16, >= 0.99 at L20-28 (base 1.00). Math is moved off the base directions, not erased.
+- Falsified verdicts (tica_switch_eval, math, 48 ep x 16 turns, no switches):
+  - adapt real vs falsify: pass after turn 0 0.069 vs 0.076; k2 0.56 vs 0.73; caught by turn 2 0.77 vs 0.71;
+  - ext real: 0.075, k2 0.60, turn 2 0.62 (falsify pending).
+  The turn-2 dip appears with the opposite verdicts too: the "retry jump" of 10-21t is a verdict-blind
+  turn-position move for adapt, not use of the feedback.
+- From-scratch A / B vs the original MSE run, by 10 steps (k2 n in brackets):
+  - orig: k1 0.45 / 0.63 / 1.00 at 20 / 30 / 40; k2 0.00 (up to step 300: 0.08 at 300-319); GSM 0.59-0.94.
+  - A logclip: k1 0.98 at 20-29; **k2 0.04 (46) at 30-39, 0.17 (23) at 40-49**; GSM 0.72-0.91; KL 0.045-0.077;
+    held-out 0.99.
+  - B gce: k1 1.00 from 20; k2 0.00; GSM 0.75 -> 0.31 (declining); KL 0.11-0.13; held-out last turn 0.67-0.85.
+
 ## 2026-10-21v DP bug: from-scratch DP runs trained ranks with DIFFERENT weights; train.dp_sync_init (default off)
 - Found by the 10-21r agent: dp_param_drift checksums differ between ranks at every save of from-scratch DP2 runs
   (original stage A 6552658: constant offset 12.65 at steps 20 / 40 / 60; scratch_logclip / scratch_gce too). Runs that
