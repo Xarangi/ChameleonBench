@@ -5,6 +5,18 @@ checkpoints, observed results, and unresolved limitations.
 
 TICA on a new machine: start at docs/tica/README.md (results digest, run ledger, open questions, aggregate snapshot).
 
+## 2026-10-21ax panel2 (panel0 s150): NEW ARCHITECTURES at trained layers are evaded; UNTRAINED LAYERS are not
+- 30 fresh base probes (base 1.00 on all), detection over all monitored turns (t0 -> t15):
+  - 0.00: mck_attnlite / mck_softmax / mck_rollmean40 @12 and @22, rlobf_attn_max @12 / 22, spread5_linear, linear@12,
+    linear@24, attnpool@24; gdm 0.04.
+  - partial: rlobf_attn@24 0.44 (0.62 -> 0.19), rlobf_attn@28 0.62 (0.79 -> 0.38), nc_ens8_tok 0.62 (0.75 -> 0.48),
+    rlobf_max @22 / 12 0.86 / 0.89.
+  - caught ~1.00: everything at layers 4 / 20 / 28 (linear, maxpool, attnpool; rlobf_attn@4), bailey_ens_tok (all 32 layers),
+    ens8_linear, ens8_mlp.
+- So the evasion transfers across probe ARCHITECTURE (every held-out arch at layers 12 / 22) but not across LAYER: any probe
+  that reads an untrained layer, or pools over all layers (Bailey, ens8), still catches. The partial rows drop over turns
+  (in-context). Race: k2 0.625 (4.9 turns), k3 0.20 (7.7). logclip260 / stay660 panels still running.
+
 ## 2026-10-21aw GSM8K at 768 tokens: logclip = base (0.90 vs 0.895); the 256-tok drop was truncation; held-out races launched
 - tica_capability GSM8K 200 greedy 2-shot, 768 new tokens (6683080-82), clean / brief math:
   base 0.895 / 0.805; logclip abs 260 0.900 / 0.875; panel0 s150 0.860 / 0.840.
