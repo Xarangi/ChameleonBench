@@ -5,6 +5,26 @@ checkpoints, observed results, and unresolved limitations.
 
 TICA on a new machine: start at docs/tica/README.md (results digest, run ledger, open questions, aggregate snapshot).
 
+## 2026-10-21am Smokes pass; logclip k2 recovered to 0.61; panel0 refits ahead of A; stay k2 1.00 / k3 0.9 (2-turn rhythm); bit verdict-blind
+- Narval smokes 6642468 (final_v4b_4b) / 6642470 (final_v4b_score_4b), 4 steps, DP2, 24 turns, multi-concept v5: no errors,
+  no dp_param_drift; step 1 265-271 s (turn-0 panel probe fits), then 107-160 s; max_mem 33.2 GB allocated / 40.7 GB
+  reserved on A100 (fits H100 80 GB with room); budget tail 0.19-0.26; GSM8K-while-hiding 0.75-1.0; in-context FPR
+  (neg_text, later turns) base 0-0.04, held-out 0-0.02. stay_term 0 (no passes in 4 steps; k1 0), so the stay x logclip
+  balance is still unmeasured.
+- A logclip extension: k2 0.02 / 0.07 / 0.19 / 0.38 / 0.51 / 0.47 / 0.57 / 0.61 at 130 ... 200; k3 0.10-0.22; GSM 0.69-0.84;
+  KL ~0.05; held-out 0.97-0.99. The 127-145 dip (10-21al) was a wobble. Original MSE reached k2 ~0.5 at ~abs 420.
+- panel0 (panel from start): k1 0.98-1.00 from step 40; k2 0.02 / 0.04 / 0.14 / 0.13 / 0.15 / 0.13 / 0.31 / 0.21 at 40 ... 110
+  (A at 90 / 100: 0.09 / 0.16); GSM 0.65-0.85. The panel from the start costs no refit speed.
+- fb600_stay to 660: k2 1.00 (47) / 1.00 (47), k3 0.85 / 0.91 at 640 / 650; per-turn pass 0.147 -> 0.218; refits per episode
+  10.5 -> 16.4, all accepted (gate rejections 21 -> 6 of ~300, median tpr_ic 0.99-1.0); old-probe catches 1.89 -> 0.35;
+  GSM 0.92 -> 0.51-0.67; KL 0.06 -> 0.08; held-out tN 0.87 -> 0.60. Reading: a 2-turn rhythm. After a pass it stays,
+  is caught by the refit fit on exactly that state, then moves to a NEW region (few old catches) and passes. Each
+  refit is beaten after one catch. This is verdict-conditional by construction. Not an exploit of failed refits:
+  refits are valid and accepted. But it uses the protocol's timing (the refit sees only the post-pass state). Math
+  is falling: watch.
+- Verdict races: bit real vs falsify: pass after turn 0 0.125 vs 0.114, k2 0.88 vs 0.81, caught at turn 2 0.40 vs 0.50
+  (verdict-blind, as ext / adapt). stay races running (6626071/72).
+
 ## 2026-10-21al Why logclip's k2 dipped at 127+ (analysis, no new runs)
 - Per step (k2 n 4-5 per step): 0.25 / 0.2 / 0 / 0.2 / 0.4 / 0.75 / 0.6 at 120-126, then 0 at 127-139 except 0.2 at 135 and 0.25
   at 140. Bin totals 11/44 vs 1/40, beyond binomial noise, but n is small and the original MSE run also swung bin to

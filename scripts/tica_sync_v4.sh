@@ -1,7 +1,7 @@
 #!/bin/bash
 # Pull everything the FINAL v4 run (configs/tica/final_v4_4b.yaml) needs from Narval onto another
 # Alliance cluster (docs/tica-v4-tamia.md). Run on the NEW cluster's login / data-transfer node:
-#   bash scripts/tica_sync_v4.sh [--with-v3b] [narval-host]
+#   bash scripts/tica_sync_v4.sh [--with-v3b] [--with-model] [narval-host]
 # --with-v3b (default off): also pull the v3b baseline / branch adapters (final, s400, s500) and the
 # aggregate eval JSONs + run reports for analysis on the new cluster (docs/tica/RUNS.md). Adapters and
 # eval outputs are never committed; per-race *_work dirs, activation features and texts are skipped.
@@ -9,16 +9,26 @@
 # $USER != sneheel, run the path rewrite in docs/tica-other-hpc.md section 4 afterwards).
 # Data files are NEVER committed to git (raw text; AGENTS.md guardrails), hence this script.
 set -euo pipefail
-V3B=0
-if [ "${1:-}" = "--with-v3b" ]; then V3B=1; shift; fi
+V3B=0; MODEL=0
+while [ "${1:-}" = "--with-v3b" ] || [ "${1:-}" = "--with-model" ]; do
+  [ "$1" = "--with-v3b" ] && V3B=1
+  [ "$1" = "--with-model" ] && MODEL=1
+  shift
+done
 N=${1:-narval.alliancecan.ca}
 SR=/scratch/sneheel/next_chameleons_raw_cache        # Narval paths
 SA=/scratch/sneheel/next_chameleons_artifacts
 R=/scratch/$USER/next_chameleons_raw_cache            # local mirrors
 A=/scratch/$USER/next_chameleons_artifacts
 mkdir -p $R/tica $R/capability $A/tica/runs/mathrl_4b $A/tica/l1_base/qwen35_4b /scratch/$USER/hf/hub
-# model (HF cache layout; the config points at the snapshot dir), ~7 GB
-rsync -aL --info=progress2 $N:/scratch/sneheel/hf/hub/models--Qwen--Qwen3.5-4B /scratch/$USER/hf/hub/
+# model: NOT copied by default (user 10-21). Download it on the new cluster's login node instead, pinned to
+# the snapshot the configs point at:
+#   HF_HUB_CACHE=/scratch/$USER/hf/hub huggingface-cli download Qwen/Qwen3.5-4B \
+#     --revision 851bf6e806efd8d0a36b00ddf55e13ccb7b8cd0a
+# --with-model copies Narval's cached snapshot (~7 GB) instead, e.g. if the login node has no internet.
+if [ "$MODEL" = 1 ]; then
+  rsync -aL --info=progress2 $N:/scratch/sneheel/hf/hub/models--Qwen--Qwen3.5-4B /scratch/$USER/hf/hub/
+fi
 # train + held-out data (one file: final_v5_clean has both splits), inputs, 27B negative labels
 rsync -a $N:$SR/tica/{final_v5_clean.json,final_v5_inputs.json,final_v5_elicit_inputs.json,final_v5_elicit_inputs_meta.json,concept_labels_v5data_27b.json} $R/tica/
 # KL anchor (Dolly) + GSM8K (anchor + capability), GSM8K base generations (cap_gen_pool)

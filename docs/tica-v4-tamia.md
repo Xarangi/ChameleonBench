@@ -31,7 +31,11 @@ Never install transformers 5.x into the main `.venv`.
 ## 3. Model and data
 
 ```bash
+# data only (~0.25 GB; data files are never in git)
 bash scripts/tica_sync_v4.sh narval.alliancecan.ca
+# model: download on TamIA, pinned to the snapshot the configs use (no 7 GB copy from Narval)
+HF_HUB_CACHE=/scratch/$USER/hf/hub huggingface-cli download Qwen/Qwen3.5-4B \
+  --revision 851bf6e806efd8d0a36b00ddf55e13ccb7b8cd0a
 ```
 
 ## 4. Paths
