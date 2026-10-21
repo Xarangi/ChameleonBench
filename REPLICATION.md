@@ -5,6 +5,23 @@ checkpoints, observed results, and unresolved limitations.
 
 TICA on a new machine: start at docs/tica/README.md (results digest, run ledger, open questions, aggregate snapshot).
 
+## 2026-10-21b Arms from abs 380 (pre-collapse): control / log hide loss / adaptive capability weight
+- New options (all default off / unchanged; tests/test_tica_hide_loss_capadapt.py + regression tests on compute node
+  6595463 pass): objective.hide_loss "mse" | "log" (-log(1 - p) = softplus(z), z from probe_prob(return_z)), applied to
+  episode hide and cap_gen hide; adaptive.cap_adapt_{target, rate 0.5, ema 0.8, min 1.0, max 10.0}: one multiplier on
+  kl_weight / cap_gen_weight / cap_gen_kl_weight, m *= exp(rate * (target - ema(cap_gen/acc))) after each step,
+  logged cap_adapt/mult, saved in trainer_state; train.save_state_all (optimizer state in every checkpoint).
+- Shared config final_v4_math_v3b_r380_4b = ext config + refit_batched_logistic / refit_batched_rlobf + cap_gen_samples
+  4 + save_state_all; from resume_60/adaptive/step_320 (abs 380; no trainer_state -> fresh AdamW / bandits),
+  TICA_STEP_OFFSET 380. Arms differ only by --set:
+  - ctl (60 steps, enough to see whether the abs-389 collapse recurs under the shared changes): 6595577
+  - log (hide_loss log, hide_weight 0.3 = its max push equals p^2's peak), 150 steps: 6595578
+  - adapt (cap_adapt_target 0.75), 150 steps: 6595579
+- The extension 6588314 (from the collapsed abs-400 model) keeps running (user 10-21): not a valid baseline for the
+  arms (different start, carried optimizer state, cap_gen_samples 2), but the furthest-along model (k2 ~0.5).
+- Read: per arm, k1..k4 by probe index (beatk_*), GSM8K-while-hiding + loops in cap_gen_log, held-out turn-0
+  detection, grad norm, cap_adapt/mult.
+
 ## 2026-10-21a Refits by PROBE INDEX (the standard metric I should have led with): k2 0.08 -> ~0.5; hide-loss history
 - Per concept segment (beatk_frac_k = fraction of episodes that eventually beat the k-th probe; n = segments), by 20 abs
   steps: 300-319 k2 0.08 (93) k3 0/6; 320-339 0.06; 340-359 0.12; 360-379 0.11; 380-399 k2 0.27 (95) k3 0.04 (25);
