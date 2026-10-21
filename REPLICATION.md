@@ -5,6 +5,16 @@ checkpoints, observed results, and unresolved limitations.
 
 TICA on a new machine: start at docs/tica/README.md (results digest, run ledger, open questions, aggregate snapshot).
 
+## 2026-10-21bk Pilots of the TamIA config (final_v4b_4b): logclip vs MSE, both with stay, 150 steps (user 10-21)
+- First training of the multi-concept, 24-turn, panel-from-step-0 config beyond 4-step smokes. Narval, DP2, wt-v4bsmoke
+  (code = tica-v3 src/configs). --steps 150 --set train.lr_cooldown_steps=0 (the 150-step end cooldown would otherwise
+  span the whole pilot; warmup -> 3e-4, cosine toward 1e-4 at 200 as in the full run).
+  - 6709318 pilot_v4b_logclip: config as is (log hide w 0.3, hide clip 0.5, stay standalone).
+  - 6709319 pilot_v4b_mse: + hide_loss mse, hide_weight 1.0, hide_grad_clip 0.
+  -> runs/pilot_v4b_2026-10-21/{logclip,mse}.
+- Watch: k1 vs the turn-0 panel (does either start passing), k2+, per-concept beat rates, GSM-while-hiding, KL, hide grad
+  norms / clip coef, step time and memory at 24 turns.
+
 ## 2026-10-21bj CORRECTION to 10-21bi recap: the failed FULL topics run was final_v3_4b (10-16q), not a v4
 - final_v3_4b (5878496, multi-concept topics, 16 turns, turn-0 "fork" probe fit on the current policy): never trained;
   hide_p 0.976 -> 0.984, detection 1.0 at all turns, early-stopped at step 140. Cause: a fork probe fit on the policy every
