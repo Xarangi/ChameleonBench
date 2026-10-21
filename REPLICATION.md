@@ -5,6 +5,38 @@ checkpoints, observed results, and unresolved limitations.
 
 TICA on a new machine: start at docs/tica/README.md (results digest, run ledger, open questions, aggregate snapshot).
 
+## 2026-10-21x Standalone stay term (adaptive.stay_standalone, default off); fb600_stay branch
+- Why (10-21y): the stay term sat inside the pursuit block, so it has been off since pursuit went off (10-19), and the
+  falsified-verdict races show both trained arms ignore the verdict. Goal (user 10-21): stay after a pass, without the
+  pursuit "move" term, so the 1-bit verdict is worth reading (stay while undetected, move when caught).
+- Built (commit 4e8914e; all default off):
+  - adaptive.stay_standalone, adaptive.stay_standalone_weight (own weight; stay_weight stays with the pursuit-block
+    term), adaptive.stay_layers ([] = kind_layers = 8/12/16/22/26 in the math config; held-out depths refused in
+    TICAConfig and again at run time, since --set skips the config check). Refuses pursuit + motion conditional
+    (double stay).
+  - Term: for each hide / excused turn t >= 1 whose turn t-1 judged the same concept and PASSED (one per episode-turn):
+    weight * mean over stay layers of (||d_L|| / scale_L)^2, averaged over the step's stay turns (DP: global count).
+    d = change in the offset from the base read (stay_offset true in this config), a_{t-1} = the stored rollout read
+    (detached), gradient through turn t only. scale_L = EMA RMS distance to the centroid of the step's judged reads,
+    per (concept, layer), from the rank-merged reads (same on every rank).
+  - Logs (new path only): train/stay (unweighted mean), train/stay_term, train/hide_term, train/n_stay;
+    train/stay_move_pass / _catch (offset-form move, grad forward); rollout/move_after_pass_L{L} /
+    move_after_catch_L{L} (raw rollout move / scale, by the verdict of t-1).
+- Exactness / tests (CPU node 6625735): flag off = byte-identical to HEAD b9d1cff on the DP-worker tiny run (3 steps,
+  pursuit on: 365 logged values + 18 LoRA tensors equal; pursuit off: 344); on with weight 0 = off bit for bit
+  (offset and raw); penalty only after passes (all-pass: n_stay > 0, no catch turns; all-caught: n_stay 0); zero
+  gradient to turn t-1's read; held-out refusal; DP 2 ranks = 1 process
+  (test_two_ranks_match_one_process_with_stay_standalone). TICA DP / adaptive / framework / KL / hide-loss / panel /
+  budget suites pass.
+- Caveat for reading the result: episode_refit_prob is 1.0, so every pass fits a new probe on the passing state at
+  turn t+1. Staying walks into that probe; the post-pass turn is excused (no hide loss), so the term costs nothing
+  there, but staying is not the hide-optimal move under this protocol.
+- Launched fb600_stay 6626064: identical to the control fb600_bit 6622721 (same start resume_400/adaptive/final,
+  offset 600, DP2, 60 steps, seed) + stay_standalone=true, stay_standalone_weight=1.0, from worktree
+  /home/sneheel/chameleons-wt-stay at 4e8914e. Races queued on each final (48 ep x 16 turns, math, no switches),
+  real vs --falsify: bit 6626069 / 6626070 (after 6622721), stay 6626071 / 6626072 (after 6626064) ->
+  diag/falsify_2026-10-21/{bit,stay}_{real,falsify}.json.
+
 ## 2026-10-21y Updates: ext also verdict-blind; GCE run cancelled (math < 0.3); logclip k2 resets at the panel switch; feedback branches early
 - Falsified verdicts, ext s580: pass after turn 0 0.075 real vs 0.082 falsify; k2 0.60 vs 0.75; caught at turn 2 0.62 vs
   0.46. Both trained arms are verdict-blind. Cause (chat 10-21): the stay term is coded inside the pursuit block, so it
