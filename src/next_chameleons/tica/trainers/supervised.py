@@ -1384,7 +1384,12 @@ class AdaptiveSupervisedTrainer:
                                 ep_stats["sec"] += time.time() - t_ep
                                 finish_refit(i, c, t, dfd, deployed_i, res, bank, info, tried)
                 else:
-                    base = pool.concept_monitor(s.monitored) if s.text_concept else None
+                    # neg_text (concept-free text under the brief): the monitored concept's base
+                    # and held-out probes are read too, i.e. their IN-CONTEXT false-positive rate
+                    # (10-21q; was hard-coded False / None). Logged only; shown + losses unchanged.
+                    fp = s.cond == "neg_text" and s.text_concept is None
+                    base = (pool.concept_monitor(s.monitored)
+                            if (s.text_concept or fp) else None)
                     if base is not None:
                         lg = base.logits(prow[base.layer], [s.monitored])[0]
                         det = bool(lg > base.thresholds([s.monitored])[0])
@@ -1399,7 +1404,7 @@ class AdaptiveSupervisedTrainer:
                             > m.thresholds([s.monitored])[0]
                         )
                         for m in heldout
-                    ) if (heldout and s.text_concept) else None
+                    ) if (heldout and (s.text_concept or fp)) else None
                     res = {
                         "monitored": {"detected": det, "score": 0.0, "thr": 0.0},
                         "turn": t,
