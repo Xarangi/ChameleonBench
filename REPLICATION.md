@@ -5,6 +5,23 @@ checkpoints, observed results, and unresolved limitations.
 
 TICA on a new machine: start at docs/tica/README.md (results digest, run ledger, open questions, aggregate snapshot).
 
+## 2026-10-21al Why logclip's k2 dipped at 127+ (analysis, no new runs)
+- Per step (k2 n 4-5 per step): 0.25 / 0.2 / 0 / 0.2 / 0.4 / 0.75 / 0.6 at 120-126, then 0 at 127-139 except 0.2 at 135 and 0.25
+  at 140. Bin totals 11/44 vs 1/40, beyond binomial noise, but n is small and the original MSE run also swung bin to
+  bin (k2 0.08 / 0.06 / 0.12 / 0.11 by 20 steps before rising).
+- Not the resume: trainer_state restored (Adam, bandits, RNG), LR continuous (1.7e-4 -> 1.4e-4 on the cosine to 1e-4
+  at 200), the drop starts 7 steps after it, and the refit kind mix is unchanged (each arch 0.08-0.26 of judged turns;
+  Thompson probs ~0.15 each). One real change at the resume: the DP init bug (10-21v). Ranks held different weights
+  until step 120 (drift ~80 in checksum), and both now load rank 0's. Before 120, rank 0's episodes passed refits as
+  often as rank 1's (1.1% vs 0.8% per turn), so the stronger model was not lost.
+- Coincides with a shrinking hide gradient: pre-clip grad_norm_hide 5-60 (spikes to 300) up to 126, then 0-6 at 127-141,
+  clip coef 0.1-0.5 and 1.0 at 139 / 141 (hide gradient below the 0.5 cap, so a weaker push). Refit per-turn passes
+  are 0-3% for every kind. Reading (hypothesis): fewer deeply-caught, sharply-pushing targets after the model moved; the
+  clip normalises the push, so once the raw hide gradient falls below 0.5 hiding gets less of each update.
+  GSM8K-while-hiding 0.25-1.0 per step (0.75-0.80 per 10), KL ~0.055: not a collapse.
+- Watch 140-170. If k2 stays ~0 while grad_norm_hide stays < 0.5, the clip budget is not the binding constraint, and
+  the hide weight (0.3) is the lever.
+
 ## 2026-10-21ak THE TamIA recipe (user 10-21): final_v4b_4b (binary) + final_v4b_score_4b (score); Narval smokes
 - Both: logclip (log, weight 0.3, hide grad clip 0.5) + standalone stay + turn-0 base panel from step 0 + KL 0.3 (both)
   + cap_gen_samples 4 + in-context refit gate + dp_sync_init + bandit fix + batched fits + save_state_all, on final_v4_4b
