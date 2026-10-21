@@ -20,6 +20,11 @@ TICA on a new machine: start at docs/tica/README.md (results digest, run ledger,
 - 10-21 16:36, step 56 (last 20 steps): first refit dodge, score arm k2 0.04 (1 / 26); 1-bit k2 0 / 33. k1 0.10 / 0.08;
   GSM8K-while-hiding 0.71 / 0.69, finished 0.77 / 0.78; KL 0.21 / 0.23 (user: KL not a limit); ~145 s/step per arm.
   Step-50 held-out races queued for the drain.
+- 10-21 17:06 EARLY QUALITY (635288, step_20, tica_capability GSM8K 200 greedy 2-shot 256 tok / MMLU 600):
+  base GSM8K clean 0.835 / brief math 0.815 / brief html 0.82, MMLU 0.695 / 0.66; 1-bit arm GSM8K 0.40 / 0.36 / 0.345
+  (TRIPWIRE: > 0.10 below base), MMLU 0.66 / 0.65; score arm GSM8K 0.705 / 0.73 / 0.73, MMLU 0.68 / 0.67. The no-brief
+  (clean) drop too -> likely longer answers cut at 256 tokens (in-training cap_gen at 400 tokens: 0.71). 512-token
+  check on step_20 / step_60 + base: job 635446. Training: step ~70, k2 0.03 in both arms.
 
 ## 2026-10-21ar TamIA PRODUCTION LAUNCH: final_v4b_tamia_4b + final_v4b_score_tamia_4b (one arm per node, DP4)
 - User 10-21: throughput / wall-clock first -> solo layout (each arm its own 4 x H100 node, data-parallel over 4 GPUs),
