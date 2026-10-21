@@ -5,6 +5,17 @@ checkpoints, observed results, and unresolved limitations.
 
 TICA on a new machine: start at docs/tica/README.md (results digest, run ledger, open questions, aggregate snapshot).
 
+## 2026-10-21ar TamIA PRODUCTION LAUNCH: final_v4b_tamia_4b + final_v4b_score_tamia_4b (one arm per node, DP4)
+- User 10-21: throughput / wall-clock first -> solo layout (each arm its own 4 x H100 node, data-parallel over 4 GPUs),
+  launched before the panel-cache precompute finished (635045; runs and precompute fill the same cache).
+- Chunks (24 h, afterany; resume restores Adam / curriculum / RNG): arm 1-bit 635081 -> 635084 -> 635087 -> 635090;
+  arm score 635082 -> 635085 -> 635088 -> 635091; drains (queued held-out races + in-run quality checks: free-gen
+  format / language, GSM8K / MMLU clean + brief; probe panel every 300 steps; base once) 635083 / 635086 / 635089 /
+  635092. More resume chunks if 1200 steps need them.
+- Settings: v4b recipe (logclip, standalone stay, turn-0 panel from step 0, KL 0.3) + r128 / alpha 256, 16 ep / step,
+  dp_drift_fatal, cap_gen_shard, cap_gen_merged, first_probe_panel_cache; lm_chunk off (L6 / L7 smokes 635070 / 635071
+  measure it for a later two-arms-per-node switch).
+
 ## 2026-10-21aq TamIA: TamIA configs (r128, 16 ep/step), H100 layout smokes, speed levers, panel-probe cache
 - Configs final_v4b_tamia_4b / final_v4b_score_tamia_4b (+ builtin) = final_v4b{,_score}_4b + LoRA r128 / alpha 256
   (alpha = 2 x rank, LR unchanged; user 10-21) + episodes_per_step 16 (4 per rank at DP4) + train.dp_drift_fatal

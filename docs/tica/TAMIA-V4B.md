@@ -1,5 +1,8 @@
 # TamIA v4b runs (2026-10-21): state, layout, how to launch and monitor
 
+**LAUNCHED 10-21 ~14:05 (REPLICATION 10-21ar):** 1-bit arm 635081 -> 635084 -> 635087 -> 635090, score arm 635082 ->
+635085 -> 635088 -> 635091, drains 635083 / 635086 / 635089 / 635092. Monitor: `bash scripts/tamia_v4b.sh status`.
+
 **Current (10-21 afternoon; supersedes the layout / arm names below where they differ, REPLICATION 10-21aq):** arms
 `final_v4b_tamia_4b` (1-bit) and `final_v4b_score_tamia_4b` (score) = the v4b recipe + LoRA r128 / alpha 256 + 16
 episodes per step + dp_drift_fatal + cap_gen_shard + cap_gen_merged + first_probe_panel_cache. Layout: ONE ARM PER
