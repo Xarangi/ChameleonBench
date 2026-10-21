@@ -5,6 +5,19 @@ checkpoints, observed results, and unresolved limitations.
 
 TICA on a new machine: start at docs/tica/README.md (results digest, run ledger, open questions, aggregate snapshot).
 
+## 2026-10-21ac logclip beats REFITS from ~step 90 (orig ~300); stay branch k2/k3 >= 1-bit; TamIA recommendation
+- A logclip, k2 by 10 steps: 0.00 (43) at 80-89, 0.09 (44) at 90-99, 0.12 (17) at 100+. The original MSE run reached
+  k2 0.08 only at 300-319. k3 n 2-4. GSM8K-while-hiding 0.75-0.81, KL 0.072-0.081, grad norm 0.74-0.85, held-out
+  0.97-0.99.
+- fb600 (abs 620-639): bit k2 0.64 / 0.65, k3 0.40 / 0.27, GSM 0.51 / 0.62; score k2 0.79 / 0.88, k3 0.56 / 0.32, GSM
+  0.60 / 0.66; stay (600-619) k2 0.67 / 0.86, k3 0.69 / 0.50, GSM 0.89 / 0.60, KL 0.054, held-out tN 0.56 / 0.89 (higher
+  than bit's ~0.2). Move after pass vs after catch, L12: 1.17 / 1.24 and 1.09 / 1.13 (small separation). Verdict-use
+  races pending.
+- Recommendation recorded in docs/tica-v4-tamia.md:
+  - smoke first;
+  - four DP2 runs of final_v4b_4b, 800 steps: A logclip + stay, B logclip, C MSE, D logclip + stay + score;
+  - model-written data deferred (needs length-constrained regeneration); first runs use published v5.
+
 ## 2026-10-21ab Code state clean; logclip beats the turn-0 PANEL ~100 steps sooner than the original
 - Code: tica-v3 at dcb2b3e, working tree clean; full TICA suite (pytest -k tica, 252 tests) on compute node 6628640
   passes; ruff clean repo-wide (one test-docstring line fixed). All options default off; final_v4b_4b sets the

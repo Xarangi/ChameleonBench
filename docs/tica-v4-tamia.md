@@ -92,6 +92,18 @@ Untested on multi-concept data: the turn-0 base panel (fits one base probe per (
 concepts x ~30 kinds: expect slower early steps), KL 0.3, the in-context refit gate. Smoke first (section 6), and
 check `max_mem_gb` at 24 turns.
 
+## Recommended first TamIA set (10-21; REPLICATION 10-21ac)
+
+1. Smoke: 20 steps of `final_v4b_4b` with the logclip + stay flags, `TICA_DP=2` (24-turn memory, panel fit cost,
+   `dp_param_drift` absent at saves, `det_neg_text_*` / `detho_neg_text_*` now real FPRs).
+2. Then four DP2 runs, same seed, `--steps 800` (fixed; final checkpoint = the model):
+   - **A** (primary): logclip + stay;
+   - **B**: logclip, no stay (isolates stay);
+   - **C**: main as is (MSE; proven baseline);
+   - **D**: logclip + stay + `episodes.feedback=score` (graded-feedback attacker, reported as its own arm).
+3. Read every 50 steps: k1..k4 by probe index, GSM8K-while-hiding + loops, KL, grad_norm_hide / rest, held-out race,
+   and the falsified-verdict race on A vs C (does stay make the verdict matter?).
+
 ## Carry-over from the Narval math runs (10-19 .. 10-21) -- apply to the TamIA config before launch
 
 See `docs/tica/README.md` "Since 10-19" for evidence. Exact speed-ups and fixes (no science change):
