@@ -5,6 +5,19 @@ checkpoints, observed results, and unresolved limitations.
 
 TICA on a new machine: start at docs/tica/README.md (results digest, run ledger, open questions, aggregate snapshot).
 
+## 2026-10-21an STAY MAKES THE MODEL USE THE VERDICT (falsified-verdict races); logclip k2 ~0.5, k3 ~0.2
+- tica_switch_eval, math, 48 ep x 16 turns, no switches, real vs --falsify, on the fb600 finals (abs 660):
+  - bit: pass after turn 0 0.125 vs 0.114; caught at turn 2 0.40 vs 0.50; k2 0.88 vs 0.81, k3 0.61 vs 0.59, k4 0.62 vs
+    0.64 -> verdict-blind (as ext / adapt, 10-21w/y).
+  - STAY: pass after turn 0 0.200 vs 0.115; caught at turn 2 0.46 vs 0.94; k3 0.96 vs 0.62, k4 0.78 vs 0.14 -> flipped verdicts
+    break it. The stay model reads the feedback: it moves when told "caught" and stays when told "not caught". With the
+    opposite verdicts it stays when caught and moves away from passing states. First trained TICA math model to pass
+    the verdict-use test since v3b. Real-verdict race: k2 1.00, k3 0.96, k4 0.78.
+- A logclip (abs 200-229): k2 0.47 / 0.47 / 0.64 (n 14-47), k3 0.18 / 0.19 / 0.33, k4 0.25 (n 4); GSM 0.76-0.83; KL ~0.049;
+  held-out tN 0.94-0.97.
+- panel0 (100-149): k2 0.31 / 0.21 / 0.27 / 0.27 / 0.50 (n 8), k3 0 (n 10-14); GSM 0.50-0.70; KL 0.052-0.065.
+- Supports the TamIA recipe (logclip + stay + panel from step 0; binary + score arms).
+
 ## 2026-10-21am Smokes pass; logclip k2 recovered to 0.61; panel0 refits ahead of A; stay k2 1.00 / k3 0.9 (2-turn rhythm); bit verdict-blind
 - Narval smokes 6642468 (final_v4b_4b) / 6642470 (final_v4b_score_4b), 4 steps, DP2, 24 turns, multi-concept v5: no errors,
   no dp_param_drift; step 1 265-271 s (turn-0 panel probe fits), then 107-160 s; max_mem 33.2 GB allocated / 40.7 GB
