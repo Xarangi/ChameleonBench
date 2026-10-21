@@ -5,6 +5,17 @@ checkpoints, observed results, and unresolved limitations.
 
 TICA on a new machine: start at docs/tica/README.md (results digest, run ledger, open questions, aggregate snapshot).
 
+## 2026-10-21j Log-loss arm restarted FROM SCRATCH (user: log loss should matter most early); r380 log arm cancelled
+- Cancelled r380_log 6595578 at abs ~455 (≈ control; see 10-21i). New run 6607864 (2 GPUs, DP2), out
+  final_v4_math_v3b_4b/scratch_log, 400 steps: config final_v4_math_v3b_r380_4b with hide_loss log, hide_weight 0.3,
+  cap_gen_samples 2 and kind_bandit_refits_only false. Apart from exact speed-ups (batched fits) and save_state_all,
+  this matches the original MSE run (stage A config final_v4_math_v3b_4b to step 60, then the panel from step 60,
+  same as resume_60), so the original run is its baseline. The plain-math gate stays 0.8 (as in the original).
+- Launched from a clean worktree at 62f04f3 (/home/sneheel/chameleons-wt-logscratch/run_wt.sh): the main tree has the
+  uncommitted refit-overlap work in supervised.py.
+- Compare by step with the original: first-pass step, k1 rise (original: 1.00 by ~170), k2 onset (original 0.08 at 300),
+  GSM8K-while-hiding, loops, held-out detection.
+
 ## 2026-10-21i r380 arms at abs 440-453: adapt beats the most refits but stops evading held-out probes
 - By 10 abs steps, k2 (n ~46/bin) / GSM8K-while-hiding / held-out LAST-turn detection:
   - ctl (finished, abs 440): k2 0.38 / 0.43 / 0.65 at 410 / 420 / 430; GSM 0.53-0.62; held-out tN 0.65 -> 0.50 ->
