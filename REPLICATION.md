@@ -5,6 +5,17 @@ checkpoints, observed results, and unresolved limitations.
 
 TICA on a new machine: start at docs/tica/README.md (results digest, run ledger, open questions, aggregate snapshot).
 
+## 2026-10-21aw GSM8K at 768 tokens: logclip = base (0.90 vs 0.895); the 256-tok drop was truncation; held-out races launched
+- tica_capability GSM8K 200 greedy 2-shot, 768 new tokens (6683080-82), clean / brief math:
+  base 0.895 / 0.805; logclip abs 260 0.900 / 0.875; panel0 s150 0.860 / 0.840.
+  Wrong answers truncated / finished-wrong (clean): base 2 / 19, logclip 1 / 19, panel0 2 / 26. Length mean (p90):
+  base 162 (256), logclip 227 (352), panel0 224 (360). So logclip keeps base math and does better than base under the
+  monitor brief (0.875 vs 0.805), but writes ~1.4x longer. The 256-token numbers (10-21av, 10-20t) measured length.
+- panel2 base (6681400): all 30 probes detect the base model at 1.00 (0 fit failures) -> valid panel. Arms pending.
+- Held-out-judge races (tica_switch_eval, math, --kind K = every refit is a fresh K probe, 32 ep x 16 turns, no switches),
+  -> diag/heldout_races_2026-10-21/: logclip abs 260 (step_140) 6684752-56 and stay abs 660 (final = step_60)
+  6684757-61, for K = bailey_ens_tok / nc_ens8_tok / gdm_rollattn / mck_attnlite / linear@20; base linear@20 6684762.
+
 ## 2026-10-21av Clean GSM8K: logclip abs 260 0.70, panel0 s150 0.66 (base 0.825) -- the s400 drop was ~all truncation; 768-tok rerun
 - tica_capability (GSM8K 200, greedy 2-shot, 256 new tokens): logclip abs 260 clean 0.70 / brief math 0.67 / brief HTML
   0.685; panel0 s150 0.66 / 0.615 / 0.645; base 0.825 / 0.785 (10-20t). So 10-21aq's "logclip math is NOT degrading"
