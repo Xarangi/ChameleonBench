@@ -10,7 +10,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 
-from build_final_v5_mw import build, merge_labels, request_splits, text_id
+from build_final_v5_mw import build, length_cap, merge_labels, request_splits, text_id
 from tica_mw_generate import render_user, sources
 
 SPLITS = ("fit", "calib", "episode")
@@ -76,7 +76,7 @@ def test_build_splits_ids_and_untouched():
     inp = _inputs(d)
     rows, gens, scores = _gens(d, inp)
     assert {r["concept"] for r in rows} == {"A"}  # math excluded, held-out not selected
-    new, new_inp, rep = build(d, inp, gens, scores, fill=False)
+    new, new_inp, rep = build(d, inp, gens, scores, fill=False, len_cap_q=None)
     a = new["concepts"][0]
     # the shared request (2 fit + 1 calib) goes to fit: its calib source is moved, so calib is
     # empty without fill; every answer lands in exactly one split
@@ -110,7 +110,7 @@ def test_build_fill_and_filters():
             g["finished"] = False
         if g["src_id"] == text_id("a4 ep"):
             scores[g["gid"]]["p_concept"] = 0.1
-    new, _, rep = build(d, inp, gens, scores, fill=True)
+    new, _, rep = build(d, inp, gens, scores, fill=True, len_cap_q=None)
     a = new["concepts"][0]
     assert len(a["episode"]) == 0  # nothing kept for the only episode request
     unfinished = f"answer to {text_id('a2 fit')} #0"
@@ -127,7 +127,7 @@ def test_build_drops_duplicates():
     _, gens, scores = _gens(d, inp)
     for g in gens:  # every answer identical -> one text survives
         g["answer"] = "same"
-    new, _, rep = build(d, inp, gens, scores)
+    new, _, rep = build(d, inp, gens, scores, len_cap_q=None)
     a = new["concepts"][0]
     assert sum(len(a[sp]) for sp in SPLITS) == 1 and rep["A"]["dup_dropped"] == len(gens) - 1
 
@@ -142,3 +142,24 @@ def test_merge_labels():
     out = merge_labels(d, old, [new])
     assert out["labels"] == {keep_id: {"A": 0.9}, new_id: {"H": 0.7}}
     assert out["meta"]["merged_from"]["old"] == ["old.json"]
+
+
+def test_length_cap():
+    assert length_cap([10, 20, 30, 40, 50, 60, 70, 80, 90, 100], 0.9) == 90
+    assert length_cap([5], 0.9) == 5 and length_cap([1, 2], None) is None
+    d = _data()
+    inp = _inputs(d)
+    _, gens, scores = _gens(d, inp)
+    # published A lengths 6-8 chars, p90 = 8: only answers <= 8 chars are eligible
+    for g in gens:
+        g["answer"] = ("short" + g["gid"][-3:]) if g["sample"] == 1 else g["answer"]
+    new, _, rep = build(d, inp, gens, scores, len_cap_q=0.9)
+    a = new["concepts"][0]
+    texts = [t["text"] for sp in SPLITS for t in a[sp]]
+    assert texts and all(len(x) <= rep["A"]["len_cap_chars"] == 8 for x in texts)
+    assert rep["A"]["src_no_eligible"] == 0
+    for g in gens:  # nothing under the cap -> concept emptied and flagged, cap not loosened
+        g["answer"] = g["answer"] + "x" * 20
+    new, _, rep = build(d, inp, gens, scores, len_cap_q=0.9)
+    assert rep["A"]["new_total"] == 0 and rep["A"]["below_80pct"]
+    assert rep["A"]["src_no_eligible"] == 5

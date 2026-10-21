@@ -37,7 +37,8 @@ Log: REPLICATION.md 2026-10-21f (build) and 10-21h (refit gate).
     in split v5, so untouched by construction. Deception needs ground truth (free answers to the
     scenarios are honest, 10-19i), so it must stay on the published pairs anyway.
   - every held-out concept, the concept-free negative pool and all hard negatives.
-- Held-out concepts can be regenerated with the same scripts (`--concepts heldout`); not done here.
+- Held-out concepts could be regenerated with the same scripts (`--concepts heldout`); deferred
+  (user 10-21).
 
 ## Pipeline (exact commands)
 
@@ -113,7 +114,13 @@ never commit generated text or data.
   request whose source texts span several splits (JSON 66, Hindi 28, Arabic 21, ...) goes to the
   split holding most of them (ties: fit, calib, episode). So no request is shared between the fit
   and calib / episode texts, and held-out concepts stay held-out.
-- Per source text: the kept answer closest in length to the source text (keeps the current
+- LENGTH CAP (user decision 10-21; default `--len-cap-q 0.9`): a kept answer is eligible only if
+  its length in characters is at most the 90th percentile of that concept's published texts
+  (nearest rank, over fit + calib + episode). The cap is never loosened silently: the report lists,
+  per concept, `len_cap_chars`, `src_no_eligible` (source texts with no eligible answer),
+  `src_judged_but_over_cap`, median length new vs published, and `below_80pct` (new count < 80% of
+  the old count); the build prints the below-80% list. No regeneration or re-judging is involved.
+- Per source text: the eligible answer closest in length to the source text (keeps the current
   length distribution, so episode memory / read time stay as with v5). `--fill` (default on) tops
   each split back up to its old count with other kept answers to requests of that split.
 - New ids = `text_id(answer)` (episodes look the request up by text id). The new request file is
@@ -147,6 +154,15 @@ concept, full for sports / all-caps / jokes; judge at 2,000 characters):
 | literature | 0.60 | 0.93 | 0.69 | 0.38 |
 | finance | 0.53 | 0.95 | 0.76 | 0.36 |
 
+Smoke preview of the length cap (same answers, no regeneration): share of source texts with at
+least one eligible answer (K=2) after the cap: SQL 0.95, politics 0.83, war 0.83, all-caps 0.76,
+sports 0.72, Arabic 0.65, JSON 0.60, Japanese 0.53, JavaScript 0.50, German 0.48, Hindi 0.35,
+casual 0.23, formal 0.23, astronomy 0.20, jokes 0.11, comforting 0.08, chemistry 0.08,
+literature 0.00, finance 0.00. The base model writes much longer jokes, tone replies, literature
+and finance answers than the published texts, so these concepts are expected to fall below 80% of
+their old counts in the full build unless the requests ask for a length (needs regeneration;
+deferred).
+
 Full-build counts (old -> new texts per concept, kept / dropped) are in
 `$T/final_v5_mw_report.json` and in `source.model_written.report` in the data file; they are added
 to REPLICATION once the build lands.
@@ -166,9 +182,10 @@ to REPLICATION once the build lands.
 
 ## Limitations
 
-- Model answers are longer than the published texts (smoke medians after length-matched selection:
-  sports 401 -> 1,199 characters, jokes 147 -> 952, all-caps 123 -> 223). Per-turn read cost and
-  24-turn episode memory go up; not yet measured.
+- Model answers are longer than the published texts (smoke medians before the cap: sports 401 ->
+  1,199 characters, jokes 147 -> 952). The p90 length cap bounds them (capped smoke medians:
+  sports 1,139 vs 401 published, all-caps 182 vs 123, Japanese 327 vs 312) at the cost of counts.
+- Held-out concepts: model-written held-out data is deferred (user 10-21); not built.
 
 - Train concepts become model-written while held-out concepts stay published: a train / held-out
   distribution gap (held-out races test transfer across that gap too).

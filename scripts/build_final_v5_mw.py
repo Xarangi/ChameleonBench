@@ -34,6 +34,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import math
 import random
 import statistics
 from collections import Counter, defaultdict
@@ -71,6 +72,7 @@ def keep(g: dict, s: dict, thr_concept: float, thr_answers: float) -> bool:
 
 def build(data: dict, inputs: dict, gens: list[dict], scores: dict[str, dict], *,
           thr_concept: float = 0.5, thr_answers: float = 0.5, fill: bool = True,
+          len_cap_q: float | None = 0.9,
           seed: int = 0, only: set[str] | None = None) -> tuple[dict, dict, dict]:
     """Returns (new data, new request entries {id: request}, report). Pure (tested on CPU)."""
 
@@ -94,12 +96,15 @@ def build(data: dict, inputs: dict, gens: list[dict], scores: dict[str, dict], *
             continue
         old_n = {sp: len(c[sp]) for sp in SPLITS}
         old_len = {t["id"]: len(t["text"]) for sp in SPLITS for t in c[sp]}
+        cap = length_cap(list(old_len.values()), len_cap_q)
         # one row per source text (its request + split) -> request -> split
         src = {g["src_id"]: g for g in rows}
         rsplit = request_splits(list(src.values()))
         moved = sum(rsplit[g["user"]] != g["src_split"] for g in src.values())
-        ok = [g for g in rows if g["gid"] in scores and keep(g, scores[g["gid"]], thr_concept,
-                                                              thr_answers)]
+        judged = [g for g in rows if g["gid"] in scores and keep(g, scores[g["gid"]], thr_concept,
+                                                                  thr_answers)]
+        # LENGTH CAP (user 10-21): eligible only if <= the concept's published p90 length (chars)
+        ok = [g for g in judged if cap is None or len(g["answer"]) <= cap]
         per_src: dict[str, list[dict]] = defaultdict(list)
         for g in ok:
             per_src[g["src_id"]].append(g)
@@ -145,7 +150,12 @@ def build(data: dict, inputs: dict, gens: list[dict], scores: dict[str, dict], *
             "requests_moved_split": moved, "old": old_n, "new": n_new,
             "new_total": sum(n_new.values()), "old_total": sum(old_n.values()),
             "median_chars_old": statistics.median(old_len.values()) if old_len else None,
-            "median_chars_new": statistics.median(lens) if lens else None}
+            "median_chars_new": statistics.median(lens) if lens else None,
+            "len_cap_chars": cap, "kept_judged": len(judged),
+            "src_no_eligible": len(src) - len(per_src),
+            "src_judged_but_over_cap": len({g["src_id"] for g in judged} - set(per_src)),
+            "new_frac_of_old": round(sum(n_new.values()) / max(1, sum(old_n.values())), 3),
+            "below_80pct": sum(n_new.values()) < 0.8 * sum(old_n.values())}
     src_meta = new.setdefault("source", {})
     src_meta["model_written"] = {
         "provenance": "requests: published (v5 elicit request file); responses: self-generated "
@@ -153,10 +163,21 @@ def build(data: dict, inputs: dict, gens: list[dict], scores: dict[str, dict], *
                       "the Qwen3.5-27B-FP8 judge (tica_free_judge.py --answers-prompt loose)",
         "concepts": sorted(rep), "thr_concept": thr_concept, "thr_answers": thr_answers,
         "require_finished": True, "fill": fill, "seed": seed,
+        "len_cap": None if len_cap_q is None else f"p{round(100 * len_cap_q)} of the concept's "
+                   "published text lengths (chars)",
         "builder": "scripts/build_final_v5_mw.py",
         "report": {k: {kk: v[kk] for kk in ("old_total", "new_total", "keep_rate")}
                    for k, v in rep.items()}}
     return new, new_inputs, rep
+
+
+def length_cap(lengths: list[int], q: float | None) -> int | None:
+    """Nearest-rank q-quantile of the published lengths (None = no cap)."""
+
+    if q is None or not lengths:
+        return None
+    v = sorted(lengths)
+    return v[max(0, math.ceil(q * len(v)) - 1)]
 
 
 def _rate(v, thr):
@@ -199,6 +220,9 @@ def main():
     b.add_argument("--thr-concept", type=float, default=0.5)
     b.add_argument("--thr-answers", type=float, default=0.5)
     b.add_argument("--no-fill", action="store_true")
+    b.add_argument("--len-cap-q", type=float, default=0.9,
+                   help="answers longer than this quantile of the concept's published lengths "
+                        "are not eligible (user 10-21: length-constrained); <= 0 = no cap")
     b.add_argument("--seed", type=int, default=0)
     b.add_argument("--out", required=True)
     b.add_argument("--inputs-out", required=True)
@@ -223,6 +247,7 @@ def main():
     new, new_inputs, rep = build(data, inputs, read_jsonl(a.gens), scores,
                                  thr_concept=a.thr_concept, thr_answers=a.thr_answers,
                                  fill=not a.no_fill, seed=a.seed,
+                                 len_cap_q=a.len_cap_q if a.len_cap_q > 0 else None,
                                  only=set(a.only) if a.only else None)
     new["source"]["model_written"].update(data=a.data, inputs=a.inputs, gens=a.gens,
                                           scores=a.scores)
@@ -236,7 +261,11 @@ def main():
         print(f"{k[:26]:26s} gen {v['n_gen']:5d} fin {v['finished']:.2f} concept "
               f"{v['concept_rate']} answers {v['answers_rate']} keep {v['keep_rate']:.2f} "
               f"texts {v['old_total']} -> {v['new_total']} (moved req {v['requests_moved_split']}, "
-              f"chars {v['median_chars_old']} -> {v['median_chars_new']})")
+              f"chars {v['median_chars_old']} -> {v['median_chars_new']}, "
+              f"cap {v['len_cap_chars']}, "
+              f"no eligible {v['src_no_eligible']})" + ("  BELOW 80%" if v["below_80pct"] else ""))
+    low = [k for k, v in rep.items() if v["below_80pct"]]
+    print("below 80% of the old count:", low or "none")
 
 
 if __name__ == "__main__":

@@ -51,7 +51,16 @@ TICA on a new machine: start at docs/tica/README.md (results digest, run ledger,
 - Full build: 4 x 2-A100 shards (all 19 regenerated concepts = 20 train minus math, K=3: 6612571-74) + extra samples for chemistry /
   finance / literature / Hindi / German / formal (6612576); chain 6612577 rebuilds the file, then queues the 27B
   labels of the new texts (2 shards), the merge and the base-probe check on 8 concepts.
-- Open / decision points: (1) longer texts raise per-turn read cost and 24-turn memory vs v5 (unverified);
+- LENGTH CAP (user decision 10-21: model-written texts MUST be length-constrained; probes + capability matter, not
+  answer length): build_final_v5_mw.py --len-cap-q 0.9 (default): an answer is eligible only if <= the concept's
+  published p90 length (chars); closest-length pick under the cap; report per concept src_no_eligible, median new vs
+  published, below_80pct (listed, cap never loosened). In place before finish job 6612577 runs. Smoke preview (same
+  answers, K=2), share of source texts with an eligible answer: SQL 0.95, politics / war 0.83, all-caps 0.76, sports
+  0.72, Arabic 0.65, JSON 0.60, Japanese 0.53, JavaScript 0.50, German 0.48, Hindi 0.35, casual / formal 0.23,
+  astronomy 0.20, jokes 0.11, comforting / chemistry 0.08, literature / finance 0.00 -> many concepts will land below
+  80% of their old counts in the full build (jokes, tones, literature, finance, chemistry, astronomy likely); fixing
+  that needs length-asking requests = regeneration (deferred). Model-written held-out data: deferred (user).
+- Open / decision points: (1) longer texts raise per-turn read cost and 24-turn memory vs v5 (now bounded by the cap);
   (2) train model-written vs held-out published = a distribution gap for held-out races; (3) whether published
   free-pool negatives become a "human-written" shortcut (read in the full probe check).
 
