@@ -5,6 +5,21 @@ checkpoints, observed results, and unresolved limitations.
 
 TICA on a new machine: start at docs/tica/README.md (results digest, run ledger, open questions, aggregate snapshot).
 
+## 2026-10-21at Turns-to-dodge per DEPLOYED refit, by the kind the bandit chose (turns.jsonl, survival view)
+- Each deployed probe (episode x active id): turns from deployment to the first judged pass, with never-beaten probes
+  counted as such (10-21ar averaged turns over beaten probes only). Columns: n / beaten / within 2 / within 5 / median turns
+  if beaten / never beaten given >=5 turns.
+  - logclip r120 (abs 200-279): rlobf_attn 186 / 0.08 / 0.02 / 0.03 / 6 / 0.91; attnpool 102 / 0.37 / 0.15 / 0.26 / 3 / 0.62;
+    ens4_mlp 98 / 0.42 / 0.17 / 0.35 / 3; ensdeep4 76 / 0.74 / 0.22 / 0.55 / 3; ens4_linear 74 / 0.64 / 0.23 / 0.50 / 3;
+    maxpool 64 / 0.62 / 0.16 / 0.47 / 3; linear 19 / 0.68 / 0.37 / 0.63 / 2. Turn-0 panel probe 1.00 within 1 turn (0.98).
+  - panel0 (100-199): rlobf 0.10 (never 0.90); ensdeep4 0.34; attnpool 0.28; maxpool 0.46; ens4_linear 0.55; ens4_mlp 0.49.
+  - stay (abs 620-679): rlobf 144 / 0.50 / 0.07 / 0.35 / 4 / 0.45; attnpool 0.71; ens4_mlp 0.70; ensdeep4 0.78;
+    ens4_linear 0.65; maxpool 0.95 (0.85 within 5); linear 0.81.
+  - bit (same): rlobf 0.12 (never 0.88); attnpool 0.50; ensdeep4 0.73; ens4_mlp 0.78; ens4_linear 0.81.
+- Almost nothing is beaten on the first turn it is deployed (within-1 <=0.13); passes come 2-4 turns later.
+- The bandit picks rlobf_attn most (27-50% of refits) because it catches most, so the k2/k3 index rates are mostly
+  rlobf_attn survival. Only stay beats it at a useful rate.
+
 ## 2026-10-21as CORRECTION: the held-out probe IS dodged over turns in stay/bit (turns.jsonl, real_score episodes)
 - In chat I said turns-to-dodge "doesn't apply" to held-out probes and that held-out detection is "~0.88 flat over turns".
   Both wrong. The flat 0.875 came from the stdout detho_turn_* field (subsampled logged steps). The held-out probe (any of
