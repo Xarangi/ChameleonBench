@@ -5,6 +5,16 @@ checkpoints, observed results, and unresolved limitations.
 
 TICA on a new machine: start at docs/tica/README.md (results digest, run ledger, open questions, aggregate snapshot).
 
+## 2026-10-21ae Check-in: logclip k2 climbing; score feedback ~2x retry success with bigger n
+- A logclip, k2 by 10 steps: 0.09 (44) / 0.16 (45) / 0.21 (19) at 90 / 100 / 110; k3 0 (n 3-7); GSM 0.72-0.80; KL ~0.075;
+  held-out last turn 0.98 -> 0.87.
+- Pass hazard under the same refit, fb600 steps >= 20 (n in brackets), j = 1-6+:
+  - bit: 0.070 (356) / 0.183 (278) / 0.047 (191) / 0.033 (150) / 0.019 (105) / 0.023 (343);
+  - score: 0.075 (358) / 0.223 (282) / 0.113 (177) / 0.067 (134) / 0.051 (99) / 0.033 (245).
+  Score feedback roughly doubles success on the 2nd-4th retry. GSM 0.67-0.70 vs bit 0.62-0.66.
+- fb600_stay (610-619): k2 0.86 (37), k3 0.47, GSM 0.61, held-out tN 0.82.
+- panel0 (10-21ad) at step ~2.
+
 ## 2026-10-21ad logclip with the turn-0 base PANEL from the start (user: no mid-run switch)
 - 6632819, out scratch_logclip_panel0, 200 steps, DP2, clean worktree at 742805e (/home/sneheel/chameleons-wt-panel0):
   final_v4_math_v3b_r380_4b + hide_loss log, hide_weight 0.3, hide_grad_clip 0.5, cap_gen_samples 2,
