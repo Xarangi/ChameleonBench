@@ -15,7 +15,7 @@ train.objective.hide_weight=1.0 --set train.hide_grad_clip=0 --set rl.adaptive.s
 
 | item | state |
 |---|---|
-| code | `tica-v3` pulled to 1497c36; TamIA work on the LOCAL branch `tamia` (bottom commit = path rewrite, never push; the commits above it are cluster-neutral and can be cherry-picked to `tica-v3`) |
+| code | `tica-v3` pulled to 1497c36; TamIA work on the LOCAL branch `tamia` (bottom commit = path rewrite, never push; the commits above it use the TamIA paths too, so cherry-picking them to `tica-v3` needs the reverse path rewrite) |
 | earlier uncommitted episode-parallel implementation (other agent) | superseded by upstream `tica/dp.py`; saved on branch `backup/local-tamia-parallel` (+ `git stash list`) |
 | model | Qwen3.5-4B @851bf6e present (`/scratch/s/sneheel/hf` -> `hf-cache`); Qwen3.5-27B (unsloth bf16, FP8) present |
 | venv | `/scratch/s/sneheel/venvs/q35t29{,.tar}`: torch 2.9.1, triton 3.5.0, transformers 5.14.1, peft 0.19.1, fla 0.4.1, built OFFLINE on a compute node (`scripts/env/q35t29_build_offline.sh`; no pyarrow / datasets / trl: the wheelhouse pyarrow is a dummy for the arrow module, training never imports them) |
