@@ -5,6 +5,16 @@ checkpoints, observed results, and unresolved limitations.
 
 TICA on a new machine: start at docs/tica/README.md (results digest, run ledger, open questions, aggregate snapshot).
 
+## 2026-10-21ad logclip with the turn-0 base PANEL from the start (user: no mid-run switch)
+- 6632819, out scratch_logclip_panel0, 200 steps, DP2, clean worktree at 742805e (/home/sneheel/chameleons-wt-panel0):
+  final_v4_math_v3b_r380_4b + hide_loss log, hide_weight 0.3, hide_grad_clip 0.5, cap_gen_samples 2,
+  first_probe_panel_from_step 1, dp_sync_init.
+- first_probe_panel_from_step 0 means OFF, so 1 is the earliest. Step 0's rollout (step_k 0) still uses the fixed L12
+  rung, a single step.
+- Differences vs run A (scratch_logclip): panel from step 1 (A: 60), kind_bandit_refits_only true (A: false; with
+  the panel from the start the old bug would feed the layer bandit from step 1), dp_sync_init (A: the DP init bug).
+- Read vs A: k1 vs the panel by step (A: 0.98 at 70-79, after the switch), k2 onset (A ~90), math, KL.
+
 ## 2026-10-21ac logclip beats REFITS from ~step 90 (orig ~300); stay branch k2/k3 >= 1-bit; TamIA recommendation
 - A logclip, k2 by 10 steps: 0.00 (43) at 80-89, 0.09 (44) at 90-99, 0.12 (17) at 100+. The original MSE run reached
   k2 0.08 only at 300-319. k3 n 2-4. GSM8K-while-hiding 0.75-0.81, KL 0.072-0.081, grad norm 0.74-0.85, held-out
