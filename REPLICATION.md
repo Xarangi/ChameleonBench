@@ -5,6 +5,20 @@ checkpoints, observed results, and unresolved limitations.
 
 TICA on a new machine: start at docs/tica/README.md (results digest, run ledger, open questions, aggregate snapshot).
 
+## 2026-10-21as CORRECTION: the held-out probe IS dodged over turns in stay/bit (turns.jsonl, real_score episodes)
+- In chat I said turns-to-dodge "doesn't apply" to held-out probes and that held-out detection is "~0.88 flat over turns".
+  Both wrong. The flat 0.875 came from the stdout detho_turn_* field (subsampled logged steps). The held-out probe (any of
+  base L20 / L24) is read every turn, so first-miss turn and per-turn detection are measurable. From every real episode:
+  - logclip r120 (abs 200-279, 371 ep): det t0 0.99 -> t15 0.87; ever missed in 0.62 of eps, first miss turn 8.1;
+    longest miss streak 0.75, >=3 turns in 1% of eps; det 0.91 on turns where the judges were passed.
+  - panel0 (100-199, 454 ep): det 1.00 every turn; ever missed in 0.02 of eps.
+  - stay (abs 620-679, 185 ep): det t0 1.00 -> t5 0.89 -> t10 0.52 -> t15 0.36; ever missed in 0.83, first miss turn 7.9;
+    streak >=3 in 0.59 of eps; det 0.78 on judge-passed turns.
+  - bit (same window): det t0 0.74 -> t2 0.39 -> t15 0.16; ever missed in 1.00, first miss turn 1.6; streak >=3 in 0.95.
+- So the stay model starts each episode caught by the never-shown probe and loses it over the episode (in-context
+  generalization). bit partly evades it statically (t0 0.74) and in context. Both come from the MSE lineage (abs 600 start),
+  whose L20 evasion came with drift (10-21ao). logclip barely moves it; panel0 does not move it at all.
+
 ## 2026-10-21ar Pass rate + turns-to-pass by probe ARCHITECTURE (train_log, every step; analysis only)
 - Turn-0 base panel (panel0 100-197, logclip r120 abs 200-277): every arch passed 1.00 in 1.0-1.1 turns (n 8-104 each).
 - Refits, pass / mean judged turns to pass (logclip r120 abs 200-277 | panel0 100-197 | fb600_stay abs 620-660 | fb600_bit
