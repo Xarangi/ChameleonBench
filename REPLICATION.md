@@ -5,6 +5,19 @@ checkpoints, observed results, and unresolved limitations.
 
 TICA on a new machine: start at docs/tica/README.md (results digest, run ledger, open questions, aggregate snapshot).
 
+## 2026-10-21i r380 arms at abs 440-453: adapt beats the most refits but stops evading held-out probes
+- By 10 abs steps, k2 (n ~46/bin) / GSM8K-while-hiding / held-out LAST-turn detection:
+  - ctl (finished, abs 440): k2 0.38 / 0.43 / 0.65 at 410 / 420 / 430; GSM 0.53-0.62; held-out tN 0.65 -> 0.50 ->
+    0.25 (0.15 at 440, n small). No collapse in 60 steps.
+  - log (abs 453): k2 0.35-0.50; GSM 0.47-0.68, loops 0-4/bin; held-out tN 0.77 -> 0.28-0.38; old catches 0.7-1.5.
+  - adapt (abs 444): k2 0.51 / 0.76 / 0.75 at 410 / 420 / 430; GSM 0.62 / 0.79 / 0.77 (0.94 at 440, n 32); mult
+    plateau ~7 (GSM ema reached target); KL 0.045-0.049 (lowest); held-out tN 0.94 -> 0.99-1.00 (rising).
+- Reading: the strong capability pull gives the best refit dodging and math, but the dodge is narrow: refit-specific
+  moves that the held-out base L20/L24 probes still catch. ctl / log drift further and evade held-out probes.
+  One seed; the held-out contrast is large (1.00 vs ~0.3) and consistent over 30 steps.
+- ext (abs 539): k2 0.33-0.52 (flat since 400), GSM 0.61-0.79, held-out tN 0.32-0.49.
+- Plain-math refit gate: new configs set refit_min_tpr_np 0 (fit still includes no-prompt math positives).
+
 ## 2026-10-21h Refit plain-math gate (refit_min_tpr_np 0.8): history and reassessment (user question)
 - History: introduced 10-10n after the round-1 refit scored 0.00 on unprompted math ("invalid monitor"); built into
   fit_refit_bank 10-11b; 0.8 in every config since (v2, v3, v3b, v4 math, r380 arms).
