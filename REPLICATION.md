@@ -5,6 +5,16 @@ checkpoints, observed results, and unresolved limitations.
 
 TICA on a new machine: start at docs/tica/README.md (results digest, run ledger, open questions, aggregate snapshot).
 
+## 2026-10-21aq CORRECTION: logclip math is NOT degrading -- the stdout cap_gen/acc is a tiny subsample
+- 10-21ap quoted "GSM 0.67-0.71" for logclip_r120 from the stdout cap_gen/acc field: rank 0, logged steps only, 4-8
+  problems each (13-20 points per run). Using every sample in cap_gen_rank{0,1}.jsonl (~170-250 per 40-step bin):
+  - logclip 0-120: 0.82 / 0.75 / 0.77; r120 (abs 120-279): 0.76 / 0.77 / 0.80 / 0.81 -> flat-to-rising, no degradation.
+  - panel0: 0.80 / 0.79 / 0.70 / 0.69 / 0.74 (0-199) -> a real ~0.1 dip at 80-159, partly recovering.
+  - fb600_stay (abs 600-679): 0.71 -> 0.54 -> real degradation in the long stay run.
+  - About 2/3 of wrong answers are truncated at the token cap (unfinished), not finished-but-wrong (same pattern as 10-20f).
+- Clean GSM8K (tica_capability, 200 greedy 2-shot, clean + briefs): 6679184 logclip abs 260 (resume_120 step_140),
+  6679185 panel0 step_150 -> eval_cap_2026-10-21/. Base on the same script = 0.825 (10-20t).
+
 ## 2026-10-21ap Never-shown panel: logclip / panel0 evade every fresh probe at L8-26 except L20 (as adapt); stay partly evades L20 too
 - tica_probe_panel (fresh base probes, never trained against), math, detection rate:
   - L8/12/16/22/24/26 linear, maxpool@12/24, rlobf_attn@12, ensdeep4: 0.00 for logclip220, panel0_140, stay660 (same as every arm).
