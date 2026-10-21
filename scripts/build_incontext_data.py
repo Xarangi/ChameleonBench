@@ -7,7 +7,7 @@ Selection is deterministic.
 
 Run on the login node (needs network):
     uv run python scripts/build_incontext_data.py \
-        --kowalski-repo /scratch/sneheel/external/activation-control \
+        --kowalski-repo /scratch/s/sneheel/external/activation-control \
         --output $SCRATCH/next_chameleons_raw_cache/incontext/l0_battery.json
 """
 

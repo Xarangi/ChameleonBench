@@ -20,7 +20,7 @@ import pyarrow.parquet as pq
 
 from next_chameleons.tica.answer_format import text_id
 
-RAW = Path("/scratch/sneheel/next_chameleons_raw_cache/tica")
+RAW = Path("/scratch/s/sneheel/next_chameleons_raw_cache/tica")
 SRC = RAW / "axbench_concept16k" / "9b" / "l20" / "train" / "data.parquet"
 CONCEPT = "mathematical notation and symbols"
 STRICT = re.compile(r"^(mathematical (symbols?|notations?)( and (notations?|symbols?))?"

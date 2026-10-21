@@ -18,7 +18,7 @@ from next_chameleons.tica.episodes import ConceptTexts
 
 # every concept split an eval may name; a data file without one of them is unaffected
 CONCEPT_SPLITS = ("train", "dev", "heldout", "ood")
-DEFAULT = Path("/scratch/sneheel/next_chameleons_raw_cache/tica/level1_data.json")
+DEFAULT = Path("/scratch/s/sneheel/next_chameleons_raw_cache/tica/level1_data.json")
 
 
 class Level1Data:

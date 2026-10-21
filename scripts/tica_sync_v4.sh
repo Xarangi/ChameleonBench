@@ -18,16 +18,16 @@ done
 N=${1:-narval.alliancecan.ca}
 SR=/scratch/sneheel/next_chameleons_raw_cache        # Narval paths
 SA=/scratch/sneheel/next_chameleons_artifacts
-R=/scratch/$USER/next_chameleons_raw_cache            # local mirrors
-A=/scratch/$USER/next_chameleons_artifacts
-mkdir -p $R/tica $R/capability $A/tica/runs/mathrl_4b $A/tica/l1_base/qwen35_4b /scratch/$USER/hf/hub
+R=/scratch/s/$USER/next_chameleons_raw_cache            # local mirrors
+A=/scratch/s/$USER/next_chameleons_artifacts
+mkdir -p $R/tica $R/capability $A/tica/runs/mathrl_4b $A/tica/l1_base/qwen35_4b /scratch/s/$USER/hf/hub
 # model: NOT copied by default (user 10-21). Download it on the new cluster's login node instead, pinned to
 # the snapshot the configs point at:
 #   HF_HUB_CACHE=/scratch/$USER/hf/hub huggingface-cli download Qwen/Qwen3.5-4B \
 #     --revision 851bf6e806efd8d0a36b00ddf55e13ccb7b8cd0a
 # --with-model copies Narval's cached snapshot (~7 GB) instead, e.g. if the login node has no internet.
 if [ "$MODEL" = 1 ]; then
-  rsync -aL --info=progress2 $N:/scratch/sneheel/hf/hub/models--Qwen--Qwen3.5-4B /scratch/$USER/hf/hub/
+  rsync -aL --info=progress2 $N:/scratch/sneheel/hf/hub/models--Qwen--Qwen3.5-4B /scratch/s/$USER/hf/hub/
 fi
 # train + held-out data (one file: final_v5_clean has both splits), inputs, 27B negative labels
 rsync -a $N:$SR/tica/{final_v5_clean.json,final_v5_inputs.json,final_v5_elicit_inputs.json,final_v5_elicit_inputs_meta.json,concept_labels_v5data_27b.json} $R/tica/

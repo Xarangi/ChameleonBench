@@ -25,7 +25,7 @@ import random
 import re
 from pathlib import Path
 
-RAW = Path("/scratch/sneheel/next_chameleons_raw_cache/tica")
+RAW = Path("/scratch/s/sneheel/next_chameleons_raw_cache/tica")
 KOWALSKI = [
     "Denim",
     "Lightning",

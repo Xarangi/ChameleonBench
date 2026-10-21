@@ -5,7 +5,7 @@
 # turn of the episode (window 12 = all), so it can never return to an old region.
 name: l4scramble_math_4b
 model:
-  path: /scratch/sneheel/hf/hub/models--Qwen--Qwen3.5-4B/snapshots/851bf6e806efd8d0a36b00ddf55e13ccb7b8cd0a
+  path: /scratch/s/sneheel/hf/hub/models--Qwen--Qwen3.5-4B/snapshots/851bf6e806efd8d0a36b00ddf55e13ccb7b8cd0a
   dtype: bfloat16
   enable_thinking: false
   keep_think_history: true
@@ -13,11 +13,11 @@ model:
   grad_ckpt: true
   fla_grad: true           # fla backward verified: LoRA grad cos 0.99992, 2.6x (5442758)
 probes:
-  dir: /scratch/sneheel/next_chameleons_artifacts/tica/l1_base/qwen35_4b/probes
+  dir: /scratch/s/sneheel/next_chameleons_artifacts/tica/l1_base/qwen35_4b/probes
   pool_layers: primary
   held_out_layers: [20, 24]
 episode_concepts: ["mathematical notation and symbols"]
-out: /scratch/sneheel/next_chameleons_artifacts/tica/runs/l4scramble_math_4b
+out: /scratch/s/sneheel/next_chameleons_artifacts/tica/runs/l4scramble_math_4b
 episodes: {feedback: verdict, hidden: false, format: answer}
 lora: {rank: 16, alpha: 32, dropout: 0.0, target_modules: all-linear}
 train_mix: {real_score: 0.5, nobrief: 0.3, neg_text: 0.2}
@@ -63,4 +63,4 @@ rl:
     pursuit_temp: 0.3
     pursuit_leash: 0.5
     pursuit_radius: 1.2
-    eval_on_save: bash /home/sneheel/chameleons/scripts/slurm/tica_ckpt_eval.sh l4scramble_math_4b {adapter} {step}
+    eval_on_save: bash /scratch/s/sneheel/ChameleonBench/scripts/slurm/tica_ckpt_eval.sh l4scramble_math_4b {adapter} {step}

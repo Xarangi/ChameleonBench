@@ -269,8 +269,8 @@ class AdaptiveConfig:
     anchor_pool: int = 256
     anchor_max_new: int = 256
     anchor_sources: tuple[str, ...] = (
-        "/scratch/sneheel/next_chameleons_raw_cache/tica/dolly15k/databricks-dolly-15k.jsonl",
-        "/scratch/sneheel/next_chameleons_raw_cache/capability/gsm8k_train.json",
+        "/scratch/s/sneheel/next_chameleons_raw_cache/tica/dolly15k/databricks-dolly-15k.jsonl",
+        "/scratch/s/sneheel/next_chameleons_raw_cache/capability/gsm8k_train.json",
     )
     anchor_cache: str = ""
     # Refit read speed-ups (REPLICATION 2026-10-15d; off / 0 = the original code path):

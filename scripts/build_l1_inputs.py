@@ -14,7 +14,7 @@ from pathlib import Path
 
 import pandas as pd
 
-RAW = Path("/scratch/sneheel/next_chameleons_raw_cache/tica")
+RAW = Path("/scratch/s/sneheel/next_chameleons_raw_cache/tica")
 SRC = RAW / "axbench_concept500" / "9b" / "l20"
 
 

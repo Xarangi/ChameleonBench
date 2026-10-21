@@ -25,7 +25,7 @@ import sys
 import torch
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
-sys.path.insert(0, "/home/sneheel/chameleons/src")
+sys.path.insert(0, "/scratch/s/sneheel/ChameleonBench/src")
 from next_chameleons.tica.data import Level1Data
 from next_chameleons.tica.level1 import TASK
 from next_chameleons.tica.policy import Policy
@@ -37,7 +37,7 @@ ap.add_argument("model")
 ap.add_argument("--concept", default="mathematical notation and symbols")
 ap.add_argument("--max-new", type=int, default=4096)
 ap.add_argument("--n", type=int, default=16)
-DATA = "/scratch/sneheel/next_chameleons_raw_cache/tica/level1_data.json"
+DATA = "/scratch/s/sneheel/next_chameleons_raw_cache/tica/level1_data.json"
 ap.add_argument("--data", default=DATA)
 args = ap.parse_args()
 

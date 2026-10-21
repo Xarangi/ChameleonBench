@@ -9,18 +9,18 @@
 # Starting bank = the l3loop pool (base L12 concept probe + branch refits r1-r3).
 name: l3rlA_math_4b_smoke
 model:
-  path: /scratch/sneheel/hf/hub/models--Qwen--Qwen3.5-4B/snapshots/851bf6e806efd8d0a36b00ddf55e13ccb7b8cd0a
+  path: /scratch/s/sneheel/hf/hub/models--Qwen--Qwen3.5-4B/snapshots/851bf6e806efd8d0a36b00ddf55e13ccb7b8cd0a
   dtype: bfloat16
   enable_thinking: true     # Arm B: the model reasons; the answer is still forced
   batch_size: 16
   grad_ckpt: true
 probes:
-  dir: /scratch/sneheel/next_chameleons_artifacts/tica/l1_base/qwen35_4b/probes
+  dir: /scratch/s/sneheel/next_chameleons_artifacts/tica/l1_base/qwen35_4b/probes
   pool_layers: primary
   held_out_layers: [20]     # L20 base probe is eval-only (never in the training bank)
-start_pool: /scratch/sneheel/next_chameleons_artifacts/tica/runs/l3loop_math_4b/seed0/round_2/pool_next
+start_pool: /scratch/s/sneheel/next_chameleons_artifacts/tica/runs/l3loop_math_4b/seed0/round_2/pool_next
 episode_concepts: ["mathematical notation and symbols"]
-out: /scratch/sneheel/next_chameleons_artifacts/tica/runs/l3rlA_math_4b_smoke
+out: /scratch/s/sneheel/next_chameleons_artifacts/tica/runs/l3rlA_math_4b_smoke
 episodes: {feedback: verdict, hidden: false}
 lora: {rank: 16, alpha: 32, dropout: 0.0, target_modules: all-linear}
 # train_mix feeds the adaptive sampler: real_score = dodge episodes; nobrief = selectivity + the

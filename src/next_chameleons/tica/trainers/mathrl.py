@@ -41,7 +41,7 @@ import torch
 CONCEPT = "mathematical reasoning"
 PROMPT = ("Solve the following problem. Show your working briefly, then finish with "
           "\"The answer is <number>.\"\n\nProblem: {q}")
-RAW = Path("/scratch/sneheel/next_chameleons_raw_cache")
+RAW = Path("/scratch/s/sneheel/next_chameleons_raw_cache")
 
 _EXPR = re.compile(r"\d[\d,.]*\s*[-+*/\u00d7\u00f7x]\s*\$?\d")
 _PHRASE = re.compile(r"answer is\s*\$?-?[\d,]+\.?\d*", re.IGNORECASE)

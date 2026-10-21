@@ -21,7 +21,7 @@ import re
 from collections import Counter, defaultdict
 from pathlib import Path
 
-SRC = Path("/scratch/sneheel/next_chameleons_raw_cache/dbpedia_classes")
+SRC = Path("/scratch/s/sneheel/next_chameleons_raw_cache/dbpedia_classes")
 
 
 def readable(cls: str) -> str:

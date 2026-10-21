@@ -102,7 +102,7 @@ class EpisodeStyle:
     # "repeat" = copy the text (Level 1); "answer" = brief + the AxBench instruction, the fixed text
     # is the ANSWER (NC format; tica/answer_format.py). inputs = {text_id: instruction} sidecar.
     format: str = "repeat"
-    inputs: str = "/scratch/sneheel/next_chameleons_raw_cache/tica/level1_inputs.json"
+    inputs: str = "/scratch/s/sneheel/next_chameleons_raw_cache/tica/level1_inputs.json"
     # "legacy" = brief in the first user turn + free-text notices; "tagged" = monitor description
     # as the system prompt + a status line (ON + concept / OFF) every turn (answer_format, 10-17a)
     layout: str = "legacy"
@@ -143,8 +143,8 @@ class FinalConfig:
     anchor_prompts: int = 8  # prompts per step
     anchor_max_new_tokens: int = 256
     anchor_data: list = field(default_factory=lambda: [
-        "/scratch/sneheel/next_chameleons_raw_cache/tica/dolly15k/databricks-dolly-15k.jsonl",
-        "/scratch/sneheel/next_chameleons_raw_cache/capability/gsm8k_train.json"])
+        "/scratch/s/sneheel/next_chameleons_raw_cache/tica/dolly15k/databricks-dolly-15k.jsonl",
+        "/scratch/s/sneheel/next_chameleons_raw_cache/capability/gsm8k_train.json"])
     # Capability gate on checkpoints (tica_capability.py, GSM8K 200 + MMLU 600, clean prompt):
     # a checkpoint fails if it keeps less than this fraction of the BASE accuracy.
     cap_gate_every: int = 25
@@ -180,7 +180,7 @@ class RunConfig:
     probes: ProbeConfig
     out: str
     episodes: EpisodeStyle = field(default_factory=EpisodeStyle)
-    data: str = "/scratch/sneheel/next_chameleons_raw_cache/tica/level1_data.json"
+    data: str = "/scratch/s/sneheel/next_chameleons_raw_cache/tica/level1_data.json"
     lora: LoraConfig = field(default_factory=LoraConfig)
     train: SupervisedConfig = field(default_factory=SupervisedConfig)
     train_mix: dict = field(
@@ -344,7 +344,7 @@ class WindowRunConfig:
     probes: str  # an l1_fit.py output directory (bank_L{layer}.npz)
     out: str
     env: WindowEnv
-    data: str = "/scratch/sneheel/next_chameleons_raw_cache/tica/level1_data.json"
+    data: str = "/scratch/s/sneheel/next_chameleons_raw_cache/tica/level1_data.json"
     lora: LoraConfig = field(default_factory=LoraConfig)
     train: WindowTrain = field(default_factory=WindowTrain)
     eval: WindowEval = field(default_factory=WindowEval)

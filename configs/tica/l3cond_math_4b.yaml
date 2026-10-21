@@ -10,20 +10,20 @@
 # Prediction if it works: falsified verdicts HURT (stays when caught / moves when passing).
 name: l3cond_math_4b
 model:
-  path: /scratch/sneheel/hf/hub/models--Qwen--Qwen3.5-4B/snapshots/851bf6e806efd8d0a36b00ddf55e13ccb7b8cd0a
+  path: /scratch/s/sneheel/hf/hub/models--Qwen--Qwen3.5-4B/snapshots/851bf6e806efd8d0a36b00ddf55e13ccb7b8cd0a
   dtype: bfloat16
   enable_thinking: false
   keep_think_history: true   # single-pass: every turn keeps the empty think block
   batch_size: 8          # rollout/pooled chunk (no_grad)
   grad_ckpt: true
 probes:
-  dir: /scratch/sneheel/next_chameleons_artifacts/tica/l1_base/qwen35_4b/probes
+  dir: /scratch/s/sneheel/next_chameleons_artifacts/tica/l1_base/qwen35_4b/probes
   pool_layers: primary
   held_out_layers: [20, 24]
-start_pool: /scratch/sneheel/next_chameleons_artifacts/tica/runs/l3loop_math_4b/seed0/round_2/pool_next
+start_pool: /scratch/s/sneheel/next_chameleons_artifacts/tica/runs/l3loop_math_4b/seed0/round_2/pool_next
 start_pool_exclude: [concept_refit_r2]   # dead probe: det 0.00 even on nobrief (5378731)
 episode_concepts: ["mathematical notation and symbols"]
-out: /scratch/sneheel/next_chameleons_artifacts/tica/runs/l3cond_math_4b
+out: /scratch/s/sneheel/next_chameleons_artifacts/tica/runs/l3cond_math_4b
 episodes: {feedback: verdict, hidden: false}
 lora: {rank: 16, alpha: 32, dropout: 0.0, target_modules: all-linear}
 train_mix: {real_score: 0.5, nobrief: 0.3, neg_text: 0.2}  # faster refit negative accrual

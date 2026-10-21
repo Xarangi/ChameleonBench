@@ -12,7 +12,7 @@
 # extra_pos_dir, anchor, union FPR); tica.py adaptive refuses >1 answer-format concept today.
 name: final_r2_4b
 model:
-  path: /scratch/sneheel/hf/hub/models--Qwen--Qwen3.5-4B/snapshots/851bf6e806efd8d0a36b00ddf55e13ccb7b8cd0a
+  path: /scratch/s/sneheel/hf/hub/models--Qwen--Qwen3.5-4B/snapshots/851bf6e806efd8d0a36b00ddf55e13ccb7b8cd0a
   dtype: bfloat16
   enable_thinking: false
   keep_think_history: true
@@ -20,12 +20,12 @@ model:
   grad_ckpt: true
   fla_grad: true           # fla backward verified: LoRA grad cos 0.99992, 2.6x (5442758)
 probes:
-  dir: /scratch/sneheel/next_chameleons_artifacts/tica/l1_base/qwen35_4b/probes
+  dir: /scratch/s/sneheel/next_chameleons_artifacts/tica/l1_base/qwen35_4b/probes
   pool_layers: primary
   held_out_layers: [20, 24]
-out: /scratch/sneheel/next_chameleons_artifacts/tica/runs/final_r2_4b
+out: /scratch/s/sneheel/next_chameleons_artifacts/tica/runs/final_r2_4b
 episodes: {feedback: verdict, hidden: false, format: answer,
-           inputs: /scratch/sneheel/next_chameleons_raw_cache/tica/level1_inputs_plus.json}
+           inputs: /scratch/s/sneheel/next_chameleons_raw_cache/tica/level1_inputs_plus.json}
 lora: {rank: 16, alpha: 32, dropout: 0.0, target_modules: all-linear}
 # mismatch = brief names concept A, text is about B: act like the base model (specificity, cf. Keenan's
 # other-monitor term); needs the multi-concept answer pool (a covering monitor per concept)
@@ -76,11 +76,11 @@ rl:
     pursuit_radius: 1.2
     episode_refit_kind: mixed
     episode_refit_kinds: [linear, rlobf_attn, rlobf_attn_max, rlobf_max, maxpool, attnpool, ens4_linear, ens4_mlp]
-    eval_on_save: bash /home/sneheel/chameleons/scripts/slurm/tica_ckpt_eval.sh final_r2_4b {adapter} {step}
+    eval_on_save: bash /scratch/s/sneheel/ChameleonBench/scripts/slurm/tica_ckpt_eval.sh final_r2_4b {adapter} {step}
 final:
   split: final_concept_split_v1.json
   n_train_concepts: 12
-  extra_pos_dir: /scratch/sneheel/next_chameleons_raw_cache/tica/expansion_multi
+  extra_pos_dir: /scratch/s/sneheel/next_chameleons_raw_cache/tica/expansion_multi
   train_refit_kinds: [linear, rlobf_attn, rlobf_attn_max, rlobf_max, maxpool, attnpool, ens4_linear, ens4_mlp]
   heldout_refit_kinds: [nc_ens8_tok, bailey_ens_tok, ens8_linear, ens8_mlp, gdm_rollattn, rollmax, mck_rollmean40, mck_attnlite, mck_softmax, meandiff]
   anchor_weight: 0.1        # Keenan lam 0.1 KL-to-base; raise if the capability gate fails

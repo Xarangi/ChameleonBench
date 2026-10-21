@@ -62,7 +62,7 @@ from next_chameleons.tica.answer_format import (
 )
 from next_chameleons.tica.config import load_run_config
 
-DATA = Path("/scratch/sneheel/next_chameleons_raw_cache/capability")
+DATA = Path("/scratch/s/sneheel/next_chameleons_raw_cache/capability")
 OTHER = "HTML tags and formatting elements in the text"
 MATH = "mathematical notation and symbols"  # the math concept name the math configs train on
 DEFAULT_BENCHES = ("mmlu", "gsm8k")

@@ -12,9 +12,9 @@
 # Primary endpoint: G = det_T(yoked) - det_T(real) on never-trained texts (episode + calib splits).
 # Run: PYTHONPATH=src <qwen35 venv>/bin/python scripts/tica.py windows --config l3s2w_qwen35_4b --seed N
 name: l3s2w_qwen35_4b
-model: {path: /scratch/sneheel/hf/hub/models--Qwen--Qwen3.5-4B/snapshots/851bf6e806efd8d0a36b00ddf55e13ccb7b8cd0a, dtype: bfloat16, enable_thinking: false, batch_size: 8, grad_ckpt: true}
-probes: /scratch/sneheel/next_chameleons_artifacts/tica/l1_base/qwen35_4b/probes
-out: /scratch/sneheel/next_chameleons_artifacts/tica/runs/l3s2w_qwen35_4b
+model: {path: /scratch/s/sneheel/hf/hub/models--Qwen--Qwen3.5-4B/snapshots/851bf6e806efd8d0a36b00ddf55e13ccb7b8cd0a, dtype: bfloat16, enable_thinking: false, batch_size: 8, grad_ckpt: true}
+probes: /scratch/s/sneheel/next_chameleons_artifacts/tica/l1_base/qwen35_4b/probes
+out: /scratch/s/sneheel/next_chameleons_artifacts/tica/runs/l3s2w_qwen35_4b
 lora: {rank: 16, alpha: 32, dropout: 0.0, target_modules: all-linear}
 env:
   concept: "mathematical notation and symbols"  # continuity with the 08-24 single-concept races (math: 30+ rounds); PREREG A3c addendum 2

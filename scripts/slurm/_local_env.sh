@@ -3,8 +3,8 @@
 #    (torch 2.9.1 + fla fwd/bwd + causal-conv1d; REPLICATION 10-13c);
 # 2. if PY's venv has a sibling <venv>.tar, unpack it to node-local $SLURM_TMPDIR and run from there:
 #    importing torch from Lustre /scratch stalled jobs 15-25+ min when the filesystem was busy.
-FAST_VENV=/scratch/sneheel/venvs/q35t29
-HOME_PY=/home/sneheel/chameleons-qwen35/.venv/bin/python
+FAST_VENV=/scratch/s/sneheel/venvs/q35t29
+HOME_PY=/scratch/s/sneheel/venvs/q35t29/bin/python
 if { [ -z "${PY:-}" ] || [ "$PY" = "$HOME_PY" ]; } && [ -f "$FAST_VENV.tar" ]; then
   PY=$FAST_VENV/bin/python
 fi
@@ -20,9 +20,9 @@ if [ -n "${SLURM_TMPDIR:-}" ]; then
 fi
 # Colocated vLLM generation (REPLICATION 2026-10-14s; tica/vllm_gen.py): TICA_VLLM=1 unpacks the
 # vllm-serving venv node-local and exports its python for the server subprocess.
-if [ "${TICA_VLLM:-0}" = "1" ] && [ -n "${SLURM_TMPDIR:-}" ] && [ -f /scratch/sneheel/venvs/vllm-serving.tar ]; then
+if [ "${TICA_VLLM:-0}" = "1" ] && [ -n "${SLURM_TMPDIR:-}" ] && [ -f /scratch/s/sneheel/venvs/vllm-serving.tar ]; then
   t0=$(date +%s)
-  tar -xf /scratch/sneheel/venvs/vllm-serving.tar -C "$SLURM_TMPDIR"
+  tar -xf /scratch/s/sneheel/venvs/vllm-serving.tar -C "$SLURM_TMPDIR"
   export TICA_VLLM_PY="$SLURM_TMPDIR/vllm-serving/bin/python"
   echo "vllm venv: $TICA_VLLM_PY ($(( $(date +%s) - t0 ))s)"
 fi
@@ -34,7 +34,7 @@ fi
 # + atomic rename, only if the local cache grew). TICA_TRITON_LOCAL=1 = the old empty per-job cache.
 export TRITON_CACHE_AUTOTUNING=1
 if [ "${TICA_TRITON_LOCAL:-0}" != "1" ] && [ -n "${SLURM_TMPDIR:-}" ]; then
-  _TT=/scratch/sneheel/triton_cache_$(basename "$(dirname "$(dirname "$PY")")").tar
+  _TT=/scratch/s/sneheel/triton_cache_$(basename "$(dirname "$(dirname "$PY")")").tar
   export TRITON_CACHE_DIR=$SLURM_TMPDIR/triton
   mkdir -p "$TRITON_CACHE_DIR"
   [ -f "$_TT" ] && tar -xf "$_TT" -C "$TRITON_CACHE_DIR" 2>/dev/null

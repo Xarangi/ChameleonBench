@@ -2,9 +2,9 @@
 # from the S2 windows, f quantiles per turn. Question: how far does f reach (W_4 needs >= 0.85)? Run once per
 # candidate concept with --concept and --adapter <l1 adapter>. Eval only; nothing here is trained.
 name: l3pre_qwen35_4b
-model: {path: /scratch/sneheel/hf/hub/models--Qwen--Qwen3.5-4B/snapshots/851bf6e806efd8d0a36b00ddf55e13ccb7b8cd0a, dtype: bfloat16, enable_thinking: false, batch_size: 8}
-probes: /scratch/sneheel/next_chameleons_artifacts/tica/l1_base/qwen35_4b/probes
-out: /scratch/sneheel/next_chameleons_artifacts/tica/runs/l3pre_qwen35_4b
+model: {path: /scratch/s/sneheel/hf/hub/models--Qwen--Qwen3.5-4B/snapshots/851bf6e806efd8d0a36b00ddf55e13ccb7b8cd0a, dtype: bfloat16, enable_thinking: false, batch_size: 8}
+probes: /scratch/s/sneheel/next_chameleons_artifacts/tica/l1_base/qwen35_4b/probes
+out: /scratch/s/sneheel/next_chameleons_artifacts/tica/runs/l3pre_qwen35_4b
 env:
   concept: "mathematical notation and symbols"  # continuity with the 08-24 single-concept races (math: 30+ rounds); PREREG A3c addendum 2
   layer: 12

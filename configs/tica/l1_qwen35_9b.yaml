@@ -3,13 +3,13 @@
 # Run in the transformers-v5 env: PYTHONPATH=src ~/chameleons-qwen35/.venv/bin/python scripts/tica.py ...
 name: l1_qwen35_9b
 model:
-  path: /scratch/sneheel/hf/hub/models--Qwen--Qwen3.5-9B/snapshots/c202236235762e1c871ad0ccb60c8ee5ba337b9a
+  path: /scratch/s/sneheel/hf/hub/models--Qwen--Qwen3.5-9B/snapshots/c202236235762e1c871ad0ccb60c8ee5ba337b9a
   dtype: bfloat16
   enable_thinking: false
   batch_size: 8
 probes:
-  dir: /scratch/sneheel/next_chameleons_artifacts/tica/l1_base/qwen35_9b/probes
-out: /scratch/sneheel/next_chameleons_artifacts/tica/runs/l1_qwen35_9b
+  dir: /scratch/s/sneheel/next_chameleons_artifacts/tica/l1_base/qwen35_9b/probes
+out: /scratch/s/sneheel/next_chameleons_artifacts/tica/runs/l1_qwen35_9b
 lora: {rank: 16, alpha: 32, dropout: 0.0, target_modules: all-linear}
 train:
   steps: 300

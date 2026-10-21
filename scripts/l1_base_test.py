@@ -38,7 +38,7 @@ from next_chameleons.tica.level1 import (
     turn_texts,
 )
 
-RAW = Path("/scratch/sneheel/next_chameleons_raw_cache/tica")
+RAW = Path("/scratch/s/sneheel/next_chameleons_raw_cache/tica")
 
 
 def load_monitors(path: Path) -> tuple[dict[str, Monitor], dict[str, bool], int]:

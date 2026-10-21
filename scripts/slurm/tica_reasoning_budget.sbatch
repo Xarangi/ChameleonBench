@@ -7,11 +7,11 @@
 #SBATCH --cpus-per-task=6
 #SBATCH --mem=64G
 #SBATCH --time=02:00:00
-#SBATCH --output=/home/sneheel/chameleons/logs/%x-%j.out
+#SBATCH --output=/scratch/s/sneheel/ChameleonBench/logs/%x-%j.out
 export TRITON_CACHE_DIR=${SLURM_TMPDIR:-/tmp}/triton
 MODEL=$1; shift
-SNAP=$(ls -d /scratch/sneheel/hf/hub/models--Qwen--$MODEL/snapshots/*/ | head -1)
+SNAP=$(ls -d /scratch/s/sneheel/hf/hub/models--Qwen--$MODEL/snapshots/*/ | head -1)
 LOCAL=${SLURM_TMPDIR:-/tmp}/$MODEL; mkdir -p $LOCAL; cp -rL $SNAP/. $LOCAL/
-cd /home/sneheel/chameleons
-env PYTHONPATH=src /home/sneheel/chameleons-qwen35/.venv/bin/python \
+cd /scratch/s/sneheel/ChameleonBench
+env PYTHONPATH=src /scratch/s/sneheel/venvs/q35t29/bin/python \
   scripts/tica_reasoning_budget.py $LOCAL "$@"

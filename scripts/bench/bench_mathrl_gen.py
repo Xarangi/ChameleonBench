@@ -36,7 +36,7 @@ def main():
     train, _ = load_questions()
     short = [[{"role": "user", "content": PROMPT.format(q=it["question"])}] for it in train[:80]]
     # ~multi-turn context: 6 previous Q/A pairs (gold solutions as answers) + a new question
-    rows = json.loads(Path("/scratch/sneheel/next_chameleons_artifacts/tica/runs/mathrl_4b/"
+    rows = json.loads(Path("/scratch/s/sneheel/next_chameleons_artifacts/tica/runs/mathrl_4b/"
                            "base_gens.json").read_text())["fork"]
     long = []
     for k in range(80):  # 6 previous Q / base-solution pairs + a new question (~turn 6)

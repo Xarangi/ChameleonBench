@@ -23,7 +23,7 @@ import json
 import random
 from pathlib import Path
 
-RAW = Path("/scratch/sneheel/next_chameleons_raw_cache/tica")
+RAW = Path("/scratch/s/sneheel/next_chameleons_raw_cache/tica")
 REQUEST = "Write a short encyclopedia entry."  # same request as the overlap check
 
 

@@ -35,8 +35,8 @@ from pathlib import Path
 
 import numpy as np
 
-L1 = "/scratch/sneheel/next_chameleons_raw_cache/tica/level1_data.json"
-BANK = "/scratch/sneheel/next_chameleons_artifacts/tica/l1_base/qwen35_4b/probes/bank_L12.npz"
+L1 = "/scratch/s/sneheel/next_chameleons_raw_cache/tica/level1_data.json"
+BANK = "/scratch/s/sneheel/next_chameleons_artifacts/tica/l1_base/qwen35_4b/probes/bank_L12.npz"
 MATH = "mathematical notation and symbols"
 # measured near-math concepts (10-13i: cos 0.289 / 0.215) -- held out so transfer stays comparable
 NEAR_MATH = ("syntactical structures and formatting in mathematical expressions",

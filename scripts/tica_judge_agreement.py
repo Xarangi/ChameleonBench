@@ -30,7 +30,7 @@ BARS = {"agreement": 0.90, "train_stuffed_fa": 0.10, "ref_stuffed_fa": 0.10}
 def sample_items(basegen: Path, per_type: int) -> list[dict]:
     recs = [json.loads(line) for f in sorted(basegen.glob("shard*of*.jsonl")) for line in f.open()]
     pool = json.loads(
-        Path("/scratch/sneheel/next_chameleons_raw_cache/tica/round1_data.json").read_text()
+        Path("/scratch/s/sneheel/next_chameleons_raw_cache/tica/round1_data.json").read_text()
     )
     phrase = {c["concept"]: c["phrase"] for c in pool["concepts"]}
     names = sorted(phrase)

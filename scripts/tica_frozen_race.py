@@ -230,7 +230,7 @@ def main():
         )
         from next_chameleons.tica.answer_format import BRIEF_ANSWER, load_inputs, text_id
 
-        gsm = _load_items(Path("/scratch/sneheel/next_chameleons_raw_cache/capability"))[1]
+        gsm = _load_items(Path("/scratch/s/sneheel/next_chameleons_raw_cache/capability"))[1]
         gsm = gsm[: a.cap_n]
         inputs = load_inputs(cfg.episodes.inputs)
     active = [[base] for _ in range(E)]  # the active probe set (multilayer refit = several)

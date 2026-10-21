@@ -30,7 +30,7 @@ from next_chameleons.incontext.stats import auroc
 from next_chameleons.real.gen_eval import JUDGE_CRITERIA
 from next_chameleons.tica.judge import load_judge
 
-RAW = Path("/scratch/sneheel/next_chameleons_raw_cache")
+RAW = Path("/scratch/s/sneheel/next_chameleons_raw_cache")
 BARS = {"median_auroc": 0.90, "min_auroc": 0.80, "stuffing_false_accept": 0.10, "median_mass": 0.90}
 
 

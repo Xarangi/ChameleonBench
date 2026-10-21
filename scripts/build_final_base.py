@@ -33,7 +33,7 @@ import random
 from collections import defaultdict
 from pathlib import Path
 
-RAW = Path("/scratch/sneheel/next_chameleons_raw_cache")
+RAW = Path("/scratch/s/sneheel/next_chameleons_raw_cache")
 RATED = RAW / "paper_benign_rated"
 BENIGN = RATED / "mega_dataset_evaluated_20250729_144844_harm_batch_train.json"
 STYLE = RATED / "mega_dataset_evaluated_20250731_163529_harm_batch_test_TRAIN.json"

@@ -32,9 +32,9 @@
 #   OUT_DIR          override the output dir (default <config out>/eval_$TAG).
 set -euo pipefail
 CFG=$1; AD=$2; TAG=$3; ONLY=${4:-}
-cd /home/sneheel/chameleons
-PYQ=/home/sneheel/chameleons-qwen35/.venv/bin/python
-RAW=/scratch/sneheel/next_chameleons_raw_cache/tica
+cd /scratch/s/sneheel/ChameleonBench
+PYQ=/scratch/s/sneheel/venvs/q35t29/bin/python
+RAW=/scratch/s/sneheel/next_chameleons_raw_cache/tica
 OUT=${OUT_DIR:-$(PYTHONPATH=src $PYQ -c "
 from next_chameleons.tica.config import load_run_config as l; print(l('$CFG').out)")/eval_$TAG}
 HELD=$(PYTHONPATH=src $PYQ -c "

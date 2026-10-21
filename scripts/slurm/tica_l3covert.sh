@@ -9,22 +9,22 @@
 #SBATCH --mem=64G
 #SBATCH --time=08:00:00
 #SBATCH --job-name=tica-l3covert
-#SBATCH --output=/home/sneheel/chameleons/logs/%x-%j.out
+#SBATCH --output=/scratch/s/sneheel/ChameleonBench/logs/%x-%j.out
 set -euo pipefail
 CFG=${1:?config name}; shift || true
-PY=${PY:-/home/sneheel/chameleons-qwen35/.venv/bin/python}
+PY=${PY:-/scratch/s/sneheel/venvs/q35t29/bin/python}
 export TRITON_CACHE_DIR=${SLURM_TMPDIR:-/tmp}/triton  # home is at quota (10-10)
-source /home/sneheel/chameleons/scripts/slurm/_local_env.sh
+source /scratch/s/sneheel/ChameleonBench/scripts/slurm/_local_env.sh
 export PYTORCH_CUDA_ALLOC_CONF=${PYTORCH_CUDA_ALLOC_CONF:-expandable_segments:True}
 # Derive the snapshot from the config, never hardcode it (a 9B config with a 4B copy would score
 # 9B probes against 4B activations; caught before it ran, 10-10).
-SNAP=$(cd /home/sneheel/chameleons && PYTHONPATH=src $PY -c "
+SNAP=$(cd /scratch/s/sneheel/ChameleonBench && PYTHONPATH=src $PY -c "
 from next_chameleons.tica.config import load_run_config as l; print(l('$CFG').model.path)")
 test -d "$SNAP" || { echo "no snapshot for $CFG: $SNAP"; exit 1; }
 LOCAL=${SLURM_TMPDIR:-/tmp}/$(basename $(dirname $(dirname $SNAP)))
 t0=$(date +%s); mkdir -p $LOCAL; cp -rL $SNAP/. $LOCAL/; echo "model copy: $(( $(date +%s) - t0 ))s"
 nvidia-smi --query-gpu=name,memory.total --format=csv
-cd /home/sneheel/chameleons
+cd /scratch/s/sneheel/ChameleonBench
 echo "Running: adaptive --config $CFG $* (snapshot $LOCAL)"
 # TICA_DP=N (default 1 = one process): data-parallel episodes (src/next_chameleons/tica/dp.py), one
 # process per GPU on this node; rank r sees only the r-th GPU of the allocation. A failed rank stops
@@ -45,7 +45,7 @@ PIDS=()
 for (( r = 0; r < N; r++ )); do
   WRAP=()
   if [[ -n "${TICA_PYSPY:-}" && $r == 0 ]]; then
-    WRAP=(/home/sneheel/.local/bin/py-spy record --idle --rate 20 --format raw -o "$TICA_PYSPY" --)
+    WRAP=(/home/s/sneheel/.local/bin/py-spy record --idle --rate 20 --format raw -o "$TICA_PYSPY" --)
   fi
   CUDA_VISIBLE_DEVICES=${GPUS[$r]} RANK=$r LOCAL_RANK=$r env PYTHONPATH=src "${WRAP[@]}" $PY scripts/tica.py \
     adaptive --config "$CFG" --model-path "$LOCAL" "$@" &

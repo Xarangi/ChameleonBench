@@ -22,7 +22,7 @@ import random
 from collections import defaultdict
 from pathlib import Path
 
-RAW = Path("/scratch/sneheel/next_chameleons_raw_cache")
+RAW = Path("/scratch/s/sneheel/next_chameleons_raw_cache")
 NAMES = {"german": ("German language", "language", "far"),
          "finnish": ("Finnish language", "language", "far"),
          "html": ("HTML markup", "format", "far"), "all-caps": ("all-caps text", "format", "far"),

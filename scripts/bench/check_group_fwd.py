@@ -28,7 +28,7 @@ def main():
     from next_chameleons.tica.policy import Policy
     from next_chameleons.tica.trainers.mathrl import PROMPT, MathRL, MathRLConfig, Turn
 
-    out = Path("/scratch/sneheel/next_chameleons_artifacts/tica/runs/mathrl_4b")
+    out = Path("/scratch/s/sneheel/next_chameleons_artifacts/tica/runs/mathrl_4b")
     gens = json.loads((out / "base_gens.json").read_text())
     pol = Policy.from_pretrained(a.model, dtype="bfloat16",
                                  lora={"rank": 16, "alpha": 32, "dropout": 0.0,

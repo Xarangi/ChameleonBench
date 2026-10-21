@@ -36,7 +36,7 @@ import numpy as np
 
 from next_chameleons.tica.probes import GATE, ProbeBank, fit_one, score, threshold_at
 
-RAW = Path("/scratch/sneheel/next_chameleons_raw_cache/tica")
+RAW = Path("/scratch/s/sneheel/next_chameleons_raw_cache/tica")
 SELECT_LAYERS = (12, 20)
 C_GRID = (1e-3, 1e-2, 1e-1, 1.0, 10.0, 100.0)
 

@@ -5,7 +5,7 @@
 #   eval_on_save: "bash scripts/slurm/tica_val_local.sh CONFIG {adapter} {step} VALDIR SPLIT"
 # Falls back to sbatch scripts/slurm/tica_val.sh when the job has no "val" slot.
 set -uo pipefail
-cd /home/sneheel/chameleons
+cd /scratch/s/sneheel/ChameleonBench
 if [ -z "${TICA_VAL_GPUS:-}" ]; then
   exec sbatch --parsable scripts/slurm/tica_val.sh "$@"
 fi

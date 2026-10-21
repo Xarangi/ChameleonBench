@@ -18,14 +18,14 @@ for a in "$@"; do
     *) echo "unknown arg $a" >&2; exit 2 ;;
   esac
 done
-ART=/scratch/sneheel/next_chameleons_artifacts/incontext
-KREPO=/scratch/sneheel/external/activation-control
+ART=/scratch/s/sneheel/next_chameleons_artifacts/incontext
+KREPO=/scratch/s/sneheel/external/activation-control
 mkdir -p "${ART}"
 [[ "$(git -C "${KREPO}" rev-parse --short HEAD)" == 4189f93* ]] || { echo "Kowalski repo not at 4189f93" >&2; exit 1; }
-[[ -f /scratch/sneheel/next_chameleons_raw_cache/incontext/l0_battery.json ]] || {
+[[ -f /scratch/s/sneheel/next_chameleons_raw_cache/incontext/l0_battery.json ]] || {
   echo "battery missing: run scripts/build_incontext_data.py on the login node" >&2; exit 1; }
 KDEPS='--with pandas --with pyarrow --with sympy --with matplotlib --with "plotly<6.9" --with "kaleido<1" --with python-dotenv --with tqdm'
-PY="uv run --project /home/sneheel/chameleons-qwen35 --extra train ${KDEPS} python"
+PY="uv run --project /scratch/s/sneheel/venvs/q35t29 --extra train ${KDEPS} python"
 CLI="uv run --extra train next-chameleons"
 
 if [[ ${RUN_V1} -eq 1 ]]; then

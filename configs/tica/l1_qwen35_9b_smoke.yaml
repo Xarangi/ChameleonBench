@@ -4,14 +4,14 @@
 # end-of-turn token in the LM target, yoked sham in eval. Not a result; the real run uses l1_qwen35_9b.yaml after the full base test.
 name: l1_qwen35_9b_smoke
 model:
-  path: /scratch/sneheel/hf/hub/models--Qwen--Qwen3.5-9B/snapshots/c202236235762e1c871ad0ccb60c8ee5ba337b9a
+  path: /scratch/s/sneheel/hf/hub/models--Qwen--Qwen3.5-9B/snapshots/c202236235762e1c871ad0ccb60c8ee5ba337b9a
   dtype: bfloat16
   enable_thinking: false
   batch_size: 8
 probes:
-  dir: /scratch/sneheel/next_chameleons_artifacts/tica/l1_smoke_v2/qwen35_9b/probes_1se
+  dir: /scratch/s/sneheel/next_chameleons_artifacts/tica/l1_smoke_v2/qwen35_9b/probes_1se
   pool_layers: all
-out: /scratch/sneheel/next_chameleons_artifacts/tica/runs/l1_qwen35_9b_smoke
+out: /scratch/s/sneheel/next_chameleons_artifacts/tica/runs/l1_qwen35_9b_smoke
 lora: {rank: 16, alpha: 32, dropout: 0.0, target_modules: all-linear}
 train:
   steps: 60

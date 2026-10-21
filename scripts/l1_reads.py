@@ -31,7 +31,7 @@ import numpy as np
 
 from next_chameleons.tica.level1 import TASK, opening
 
-RAW = Path("/scratch/sneheel/next_chameleons_raw_cache/tica")
+RAW = Path("/scratch/s/sneheel/next_chameleons_raw_cache/tica")
 FRACTIONS = (0.25, 0.375, 0.5, 0.625, 0.75)
 CHUNK = 2048
 

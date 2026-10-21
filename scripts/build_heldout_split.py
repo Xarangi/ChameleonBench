@@ -76,7 +76,7 @@ def build(raw_cache: Path) -> list[dict[str, str]]:
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
-        "--raw-cache", type=Path, default=Path("/scratch/sneheel/next_chameleons_raw_cache")
+        "--raw-cache", type=Path, default=Path("/scratch/s/sneheel/next_chameleons_raw_cache")
     )
     parser.add_argument("--out", type=Path, default=None)
     args = parser.parse_args()

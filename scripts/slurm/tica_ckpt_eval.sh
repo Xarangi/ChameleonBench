@@ -8,7 +8,7 @@ CFG=$1; ADAPTER=$2; STEP=$3
 OUT=$(dirname "$ADAPTER")/race
 mkdir -p "$OUT"
 COMMON="--adapter $ADAPTER --cumulative --episodes 16 --turns 24 --fork-pos ${FORK_POS:-96} --fork-other ${FORK_OTHER:-96} --fork-free ${FORK_FREE:-48} --fork-np 24 --incremental"
-cd /home/sneheel/chameleons
-export PY=${PY:-/scratch/sneheel/venvs/q35t29/bin/python}  # fast env (10-13c), inherited by sbatch
+cd /scratch/s/sneheel/ChameleonBench
+export PY=${PY:-/scratch/s/sneheel/venvs/q35t29/bin/python}  # fast env (10-13c), inherited by sbatch
 sbatch --parsable --job-name=race-${CFG}-s${STEP} scripts/slurm/tica_frozen_race.sh "$CFG" "$OUT/step_${STEP}.json" $COMMON
 sbatch --parsable --job-name=racef-${CFG}-s${STEP} scripts/slurm/tica_frozen_race.sh "$CFG" "$OUT/step_${STEP}_falsify.json" $COMMON --falsify

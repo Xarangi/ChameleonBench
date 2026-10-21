@@ -14,7 +14,7 @@
 # Capability is measured by GENERATION (tica_frozen_race --cap-turns: GSM8K accuracy after k hiding turns).
 name: mathsup_4b
 model:
-  path: /scratch/sneheel/hf/hub/models--Qwen--Qwen3.5-4B/snapshots/851bf6e806efd8d0a36b00ddf55e13ccb7b8cd0a
+  path: /scratch/s/sneheel/hf/hub/models--Qwen--Qwen3.5-4B/snapshots/851bf6e806efd8d0a36b00ddf55e13ccb7b8cd0a
   dtype: bfloat16
   enable_thinking: false
   keep_think_history: true
@@ -22,14 +22,14 @@ model:
   grad_ckpt: true
   fla_grad: true           # fla backward verified: LoRA grad cos 0.99992, 2.6x (5442758)
 probes:
-  dir: /scratch/sneheel/next_chameleons_artifacts/tica/l1_base/qwen35_4b/probes
+  dir: /scratch/s/sneheel/next_chameleons_artifacts/tica/l1_base/qwen35_4b/probes
   pool_layers: primary
   held_out_layers: [20, 24]
 episode_concepts: ["mathematical reasoning"]
-out: /scratch/sneheel/next_chameleons_artifacts/tica/runs/mathsup_4b
+out: /scratch/s/sneheel/next_chameleons_artifacts/tica/runs/mathsup_4b
 episodes: {feedback: verdict, hidden: false, format: answer,
-           inputs: /scratch/sneheel/next_chameleons_raw_cache/tica/math_base_v1_inputs.json}
-data: /scratch/sneheel/next_chameleons_raw_cache/tica/math_base_v1.json
+           inputs: /scratch/s/sneheel/next_chameleons_raw_cache/tica/math_base_v1_inputs.json}
+data: /scratch/s/sneheel/next_chameleons_raw_cache/tica/math_base_v1.json
 lora: {rank: 16, alpha: 32, dropout: 0.0, target_modules: all-linear}
 train_mix: {real_score: 0.5, nobrief: 0.3, neg_text: 0.2}
 train:
@@ -82,4 +82,4 @@ rl:
     cap_gen_max_new: 400
     cap_gen_temperature: 1.0
     cap_gen_hide: true
-    cap_gen_pool: /scratch/sneheel/next_chameleons_artifacts/tica/runs/mathrl_4b/base_gens.json  # all samples wrong -> train on the base solution (STaR rationalization)
+    cap_gen_pool: /scratch/s/sneheel/next_chameleons_artifacts/tica/runs/mathrl_4b/base_gens.json  # all samples wrong -> train on the base solution (STaR rationalization)

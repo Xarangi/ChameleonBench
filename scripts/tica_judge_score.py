@@ -32,7 +32,7 @@ def main() -> None:
         json.loads(line) for f in sorted(args.basegen.glob("shard*.jsonl")) for line in f.open()
     ]
     pool = json.loads(
-        Path("/scratch/sneheel/next_chameleons_raw_cache/tica/round1_data.json").read_text()
+        Path("/scratch/s/sneheel/next_chameleons_raw_cache/tica/round1_data.json").read_text()
     )
     phrase = {c["concept"]: c["phrase"] for c in pool["concepts"]}
     items, keys = [], []

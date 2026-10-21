@@ -28,8 +28,8 @@ import re
 import subprocess
 from pathlib import Path
 
-RUNS = Path("/scratch/sneheel/next_chameleons_artifacts/tica/runs")
-LOGS = Path("/home/sneheel/chameleons/logs")
+RUNS = Path("/scratch/s/sneheel/next_chameleons_artifacts/tica/runs")
+LOGS = Path("/scratch/s/sneheel/ChameleonBench/logs")
 def blind_ceiling(seed_dir: Path, turns: int) -> float:
     """1 / (number of windows): the best a verdict-blind policy can do per turn. Read from the
     run's own config.json -- deriving it from the turn count was wrong for any arm whose window

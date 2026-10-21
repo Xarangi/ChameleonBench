@@ -10,13 +10,13 @@
 #SBATCH --cpus-per-task=6
 #SBATCH --mem=64G
 #SBATCH --time=06:00:00
-#SBATCH --output=/home/sneheel/chameleons/logs/%x-%j.out
+#SBATCH --output=/scratch/s/sneheel/ChameleonBench/logs/%x-%j.out
 set -uo pipefail
-PY=${PY:-/home/sneheel/chameleons-qwen35/.venv/bin/python}
+PY=${PY:-/scratch/s/sneheel/venvs/q35t29/bin/python}
 export TRITON_CACHE_DIR=${SLURM_TMPDIR:-/tmp}/triton
 CFG=$1; shift
 SEEDS=${*:-0 1 2}
-cd /home/sneheel/chameleons
+cd /scratch/s/sneheel/ChameleonBench
 SNAP=$(PYTHONPATH=src $PY -c "
 from next_chameleons.tica.config import load_window_config as l; print(l('$CFG').model.path)")
 OUT=$(PYTHONPATH=src $PY -c "

@@ -6,7 +6,7 @@
 # 30-40 was 0.64).
 name: final_v4_math_v3b_panel_4b
 model:
-  path: /scratch/sneheel/hf/hub/models--Qwen--Qwen3.5-4B/snapshots/851bf6e806efd8d0a36b00ddf55e13ccb7b8cd0a
+  path: /scratch/s/sneheel/hf/hub/models--Qwen--Qwen3.5-4B/snapshots/851bf6e806efd8d0a36b00ddf55e13ccb7b8cd0a
   dtype: bfloat16
   enable_thinking: false
   keep_think_history: true
@@ -14,13 +14,13 @@ model:
   grad_ckpt: true
   fla_grad: true
 probes:
-  dir: /scratch/sneheel/next_chameleons_artifacts/tica/l1_base/qwen35_4b/probes
+  dir: /scratch/s/sneheel/next_chameleons_artifacts/tica/l1_base/qwen35_4b/probes
   pool_layers: primary
   held_out_layers: [20, 24]
-out: /scratch/sneheel/next_chameleons_artifacts/tica/runs/final_v4_math_v3b_4b
+out: /scratch/s/sneheel/next_chameleons_artifacts/tica/runs/final_v4_math_v3b_4b
 episodes: {feedback: verdict, hidden: false, format: answer, layout: tagged,
-           inputs: /scratch/sneheel/next_chameleons_raw_cache/tica/final_v5_elicit_r1_inputs.json}  # frozen copy (10-19f rules) for this run
-data: /scratch/sneheel/next_chameleons_raw_cache/tica/final_v5_clean.json   # split v5 (build_final_v5.py; finance positives 27B-filtered)
+           inputs: /scratch/s/sneheel/next_chameleons_raw_cache/tica/final_v5_elicit_r1_inputs.json}  # frozen copy (10-19f rules) for this run
+data: /scratch/s/sneheel/next_chameleons_raw_cache/tica/final_v5_clean.json   # split v5 (build_final_v5.py; finance positives 27B-filtered)
 lora: {rank: 32, alpha: 64, dropout: 0.0, target_modules: all-linear}
 train_mix: {real_score: 0.6, nobrief: 0.25, neg_text: 0.15}   # no mismatch: one concept
 train:
@@ -91,7 +91,7 @@ rl:
     first_probe_panel_kinds: []   # = in-training zoo (single-layer kinds x kind_layers 8-26 + ens4 / ensdeep4)
     off_turn_prob: 0.15        # 10-17i: "Monitor: OFF." turns, trained to match the base model
     refit_switch_max: 3       # 10-15g: a refit failing its gate -> another probe TYPE, never the old probe
-    neg_labels: /scratch/sneheel/next_chameleons_raw_cache/tica/concept_labels_v5data_27b.json   # 27B central-only labels over final_v5 (43,760 texts)
+    neg_labels: /scratch/s/sneheel/next_chameleons_raw_cache/tica/concept_labels_v5data_27b.json   # 27B central-only labels over final_v5 (43,760 texts)
     neg_label_thr: 0.5
     family_neg_frac: 0.5   # 10-18: half of the other-concept negatives from the SAME family (close negatives), base probes + refits
     tts_gamma: 0.95
@@ -118,7 +118,7 @@ rl:
     anchor_n: 8
     anchor_pool: 256
     anchor_max_new: 256
-    anchor_cache: /scratch/sneheel/next_chameleons_artifacts/tica/runs/final_v4_math_v3b_4b/anchor_cache.json  # shared by resume chunks
+    anchor_cache: /scratch/s/sneheel/next_chameleons_artifacts/tica/runs/final_v4_math_v3b_4b/anchor_cache.json  # shared by resume chunks
     cap_gen_weight: 0.5
     cap_gen_kl_weight: 0.3   # this run (user 10-20)
     cap_gen_kl_all: true
@@ -129,7 +129,7 @@ rl:
     cap_gen_hide: true
     cap_gen_shard: true   # 10-20: split the GSM8K generation across the ranks
     cap_gen_log: true   # 10-20: dump the GSM8K samples for hand checks (scratch run dir only)
-    cap_gen_pool: /scratch/sneheel/next_chameleons_artifacts/tica/runs/mathrl_4b/base_gens.json
+    cap_gen_pool: /scratch/s/sneheel/next_chameleons_artifacts/tica/runs/mathrl_4b/base_gens.json
     # speed (REPLICATION 2026-10-15d)
     merged_reads: true
     refit_np_cache: true

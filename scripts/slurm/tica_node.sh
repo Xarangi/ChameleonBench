@@ -5,7 +5,7 @@
 #SBATCH --mem=0
 #SBATCH --time=24:00:00
 #SBATCH --job-name=tica-node
-#SBATCH --output=/home/sneheel/chameleons/logs/%x-%j.out
+#SBATCH --output=/scratch/s/sneheel/ChameleonBench/logs/%x-%j.out
 # WHOLE-NODE launcher (REPLICATION 2026-10-17f; docs/tica-other-hpc.md). Clusters that allocate whole
 # 4-GPU nodes (TamIA) waste 3 GPUs on a single-GPU job, so one job runs up to 4 SLOTS, one per GPU:
 #   CFG          train CFG from scratch     (scripts/slurm/tica_l3covert.sh)
@@ -17,7 +17,7 @@
 #   sbatch --account=<acct> -J name scripts/slurm/tica_node.sh final_v4_4b + val val   # 2-GPU run
 # Every slot gets its own node-local tmp dir (model copy, venv, Triton cache) and its own log.
 set -uo pipefail
-cd /home/sneheel/chameleons
+cd /scratch/s/sneheel/ChameleonBench
 (( $# >= 1 && $# <= 4 )) || { echo "usage: tica_node.sh SLOT [SLOT SLOT SLOT]"; exit 2; }
 NODE_TMP=${SLURM_TMPDIR:-/tmp/tica_node_$$}
 mkdir -p "$NODE_TMP"

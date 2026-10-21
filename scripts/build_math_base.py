@@ -19,8 +19,8 @@ import json
 import random
 from pathlib import Path
 
-RAW = Path("/scratch/sneheel/next_chameleons_raw_cache/tica")
-GENS = Path("/scratch/sneheel/next_chameleons_artifacts/tica/runs/mathrl_4b/base_gens.json")
+RAW = Path("/scratch/s/sneheel/next_chameleons_raw_cache/tica")
+GENS = Path("/scratch/s/sneheel/next_chameleons_artifacts/tica/runs/mathrl_4b/base_gens.json")
 PROMPT = ("Solve the following problem. Show your working briefly, then finish with "
           "\"The answer is <number>.\"\n\nProblem: {q}")  # == tica.trainers.mathrl.PROMPT
 CONCEPT = "mathematical reasoning"

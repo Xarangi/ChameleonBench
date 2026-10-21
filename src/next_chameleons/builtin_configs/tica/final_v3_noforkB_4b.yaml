@@ -31,7 +31,7 @@
 #   fits, persistent Triton tarball cache (_local_env.sh).
 name: final_v3_noforkB_4b
 model:
-  path: /scratch/sneheel/hf/hub/models--Qwen--Qwen3.5-4B/snapshots/851bf6e806efd8d0a36b00ddf55e13ccb7b8cd0a
+  path: /scratch/s/sneheel/hf/hub/models--Qwen--Qwen3.5-4B/snapshots/851bf6e806efd8d0a36b00ddf55e13ccb7b8cd0a
   dtype: bfloat16
   enable_thinking: false
   keep_think_history: true
@@ -39,13 +39,13 @@ model:
   grad_ckpt: true
   fla_grad: true
 probes:
-  dir: /scratch/sneheel/next_chameleons_artifacts/tica/l1_base/qwen35_4b/probes
+  dir: /scratch/s/sneheel/next_chameleons_artifacts/tica/l1_base/qwen35_4b/probes
   pool_layers: primary
   held_out_layers: [20, 24]
-out: /scratch/sneheel/next_chameleons_artifacts/tica/runs/final_v3_noforkB_4b
+out: /scratch/s/sneheel/next_chameleons_artifacts/tica/runs/final_v3_noforkB_4b
 episodes: {feedback: verdict, hidden: false, format: answer,
-           inputs: /scratch/sneheel/next_chameleons_raw_cache/tica/final_v3_inputs.json}
-data: /scratch/sneheel/next_chameleons_raw_cache/tica/final_v3_clean.json   # 10-16p: v3 + judge-confirmed positives (filter_positives_by_labels.py; 27B cross-check kappa 0.71)
+           inputs: /scratch/s/sneheel/next_chameleons_raw_cache/tica/final_v3_inputs.json}
+data: /scratch/s/sneheel/next_chameleons_raw_cache/tica/final_v3_clean.json   # 10-16p: v3 + judge-confirmed positives (filter_positives_by_labels.py; 27B cross-check kappa 0.71)
 lora: {rank: 16, alpha: 32, dropout: 0.0, target_modules: all-linear}
 train_mix: {real_score: 0.5, mismatch: 0.15, nobrief: 0.2, neg_text: 0.15}
 train:
@@ -102,7 +102,7 @@ rl:
     concept_sampling: thompson
     first_probe: base         # 10-17b half B
     refit_switch_max: 3       # 10-15g: a refit failing its gate -> another probe TYPE, never the old probe
-    neg_labels: /scratch/sneheel/next_chameleons_raw_cache/tica/concept_labels_v3e.json   # 10-16n: audit over final_v3_eval (superset)
+    neg_labels: /scratch/s/sneheel/next_chameleons_raw_cache/tica/concept_labels_v3e.json   # 10-16n: audit over final_v3_eval (superset)
     neg_label_thr: 0.5
     tts_gamma: 0.95
     tts_floor: 0.2
@@ -126,7 +126,7 @@ rl:
     anchor_n: 8
     anchor_pool: 256
     anchor_max_new: 256
-    anchor_cache: /scratch/sneheel/next_chameleons_artifacts/tica/runs/final_v3_noforkB_4b/anchor_cache.json  # shared by resume chunks
+    anchor_cache: /scratch/s/sneheel/next_chameleons_artifacts/tica/runs/final_v3_noforkB_4b/anchor_cache.json  # shared by resume chunks
     cap_gen_weight: 0.5
     cap_gen_kl_weight: 1.0
     cap_gen_kl_all: true
@@ -135,7 +135,7 @@ rl:
     cap_gen_max_new: 400
     cap_gen_temperature: 1.0
     cap_gen_hide: true
-    cap_gen_pool: /scratch/sneheel/next_chameleons_artifacts/tica/runs/mathrl_4b/base_gens.json
+    cap_gen_pool: /scratch/s/sneheel/next_chameleons_artifacts/tica/runs/mathrl_4b/base_gens.json
     # speed (REPLICATION 2026-10-15d)
     merged_reads: true
     refit_np_cache: true

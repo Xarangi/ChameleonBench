@@ -5,7 +5,7 @@
 #SBATCH --mem=96G
 #SBATCH --time=04:00:00
 #SBATCH --job-name=mw-build
-#SBATCH --output=/home/sneheel/chameleons/logs/%x-%j.out
+#SBATCH --output=/scratch/s/sneheel/ChameleonBench/logs/%x-%j.out
 # Model-written concept data (REPLICATION 2026-10-21f; docs/tica/V4_MODEL_WRITTEN_DATA.md), one shard:
 #   1. Qwen3.5-4B answers the v5 elicit requests: two tica_mw_generate.py processes, one per GPU
 #      (args "GEN0" / "GEN1", e.g. "--shard 0/8" / "--shard 1/8"); the 27B copy runs meanwhile;
@@ -15,20 +15,20 @@
 # Outputs (scratch only, never commit): OUTDIR/gen_TAG_{0,1}.jsonl, scores_TAG.jsonl, judge_TAG.json
 set -euo pipefail
 OUT=$1; TAG=$2; G0=$3; G1=$4
-T=/scratch/sneheel/next_chameleons_raw_cache/tica
+T=/scratch/s/sneheel/next_chameleons_raw_cache/tica
 DATA=${MW_DATA:-$T/final_v5_clean.json}
 INPUTS=${MW_INPUTS:-$T/final_v5_elicit_inputs.json}
-S4=/scratch/sneheel/hf/hub/models--Qwen--Qwen3.5-4B/snapshots/851bf6e806efd8d0a36b00ddf55e13ccb7b8cd0a
-S27=/scratch/sneheel/hf/hub/models--Qwen--Qwen3.5-27B-FP8/snapshots/97f5941bf617e31c5e237364a8602ce3f03a551a
+S4=/scratch/s/sneheel/hf/hub/models--Qwen--Qwen3.5-4B/snapshots/851bf6e806efd8d0a36b00ddf55e13ccb7b8cd0a
+S27=/scratch/s/sneheel/hf/hub/models--Qwen--Qwen3.5-27B-FP8/snapshots/97f5941bf617e31c5e237364a8602ce3f03a551a
 L4=$SLURM_TMPDIR/models--Qwen--Qwen3.5-4B; L27=$SLURM_TMPDIR/models--Qwen--Qwen3.5-27B-FP8
 mkdir -p $OUT $L4 $L27
 cp -rL $S4/. $L4/
 (cp -rL $S27/. $L27/ && touch $L27/.copied) &
 CP=$!
-cd /home/sneheel/chameleons
+cd /scratch/s/sneheel/ChameleonBench
 module --force purge
 module load StdEnv/2023 gcc/12.3 cuda/12.9 python/3.12 opencv/4.13.0 scipy-stack/2026a
-tar -xf /scratch/sneheel/venvs/vllm-serving.tar -C $SLURM_TMPDIR
+tar -xf /scratch/s/sneheel/venvs/vllm-serving.tar -C $SLURM_TMPDIR
 VPY=$SLURM_TMPDIR/vllm-serving/bin/python
 export HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1 VLLM_CACHE_ROOT=$SLURM_TMPDIR/vllm_cache
 t0=$(date +%s)

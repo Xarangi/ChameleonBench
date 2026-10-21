@@ -11,8 +11,8 @@ It compares two things:
 
 Usage (CPU):
     uv run python scripts/incontext_v2_compare.py --ours $ART/incontext/l0_gemma2_9b \
-        --theirs-run /scratch/sneheel/external/activation-control/results/raw/<run> \
-        --vector-cache /scratch/sneheel/external/activation-control/results/vector_cache \
+        --theirs-run /scratch/s/sneheel/external/activation-control/results/raw/<run> \
+        --vector-cache /scratch/s/sneheel/external/activation-control/results/vector_cache \
         --battery $RAW/incontext/l0_battery.json --output $ART/incontext/v2_report.json
 """
 

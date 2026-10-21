@@ -21,7 +21,7 @@ from pathlib import Path
 
 import numpy as np
 
-RAW = Path("/scratch/sneheel/next_chameleons_raw_cache/tica")
+RAW = Path("/scratch/s/sneheel/next_chameleons_raw_cache/tica")
 LAYERS = [
     6,
     9,

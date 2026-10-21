@@ -7,8 +7,8 @@ id: qwen_3_4b_instruct
 # Local absolute snapshot path (NOT a hub id): compute nodes run HF_HUB_OFFLINE=1
 # and this model is not in the wrapper HF_HOME cache. from_pretrained loads a path
 # directly. Full snapshot verified (config + tokenizer + 3 safetensors shards).
-hf_id: /scratch/sneheel/models/Qwen3-4B-Instruct-2507
-base_hf_id: /scratch/sneheel/models/Qwen3-4B-Instruct-2507
+hf_id: /scratch/s/sneheel/models/Qwen3-4B-Instruct-2507
+base_hf_id: /scratch/s/sneheel/models/Qwen3-4B-Instruct-2507
 family: qwen
 parameter_scale: 4b
 # Standard instruct release (NOT abliterated). The arms race is in-distribution

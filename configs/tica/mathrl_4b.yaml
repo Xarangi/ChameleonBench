@@ -7,7 +7,7 @@
 # From the BASE model (clean lineage). 4B, seed 0.
 name: mathrl_4b
 model:
-  path: /scratch/sneheel/hf/hub/models--Qwen--Qwen3.5-4B/snapshots/851bf6e806efd8d0a36b00ddf55e13ccb7b8cd0a
+  path: /scratch/s/sneheel/hf/hub/models--Qwen--Qwen3.5-4B/snapshots/851bf6e806efd8d0a36b00ddf55e13ccb7b8cd0a
   dtype: bfloat16
   enable_thinking: false
   keep_think_history: true
@@ -15,7 +15,7 @@ model:
   grad_ckpt: true
   fla_grad: true
 lora: {rank: 16, alpha: 32, dropout: 0.0, target_modules: all-linear}
-out: /scratch/sneheel/next_chameleons_artifacts/tica/runs/mathrl_4b
+out: /scratch/s/sneheel/next_chameleons_artifacts/tica/runs/mathrl_4b
 mathrl:
   steps: 60
   episodes: 4
