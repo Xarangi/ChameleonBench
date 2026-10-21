@@ -20,6 +20,12 @@ TICA on a new machine: start at docs/tica/README.md (results digest, run ledger,
   positives); refit AUROC on fit data 0.998-0.999; held-out last-turn detection 0.49-0.83.
 - ext (470-509): held-out last-turn detection 0.24-0.30, cap_gen caught_frac 0.12-0.32, ep_old_catch 1.6-2.8,
   ep_refit_all_failed 0.1-0.2.
+- CORRECTION (chat 10-21): I called ep_old_catch "cycling between regions" / an unfair escape. It counts turns where
+  the newest probe was dodged but an older probe of the episode caught the turn; those are scored as CAUGHT
+  (episode_cumulative: true, and every deployed probe is a hide target), so it is a failed attempt, already penalized.
+- ep_refit_all_failed = after a pass, the refit and every switched kind failed the fit gate (ext refits since abs 460:
+  372 kept, 100 failed tpr_np, 36 failed auroc); the next turn is then judged only by probes already beaten.
+- Per-concept model-generated answers for v4 (10-20 plan) NOT started.
 
 ## 2026-10-21c Interim: r380 arms at abs ~402-414; no arm repeats the abs-389 collapse so far
 - GSM8K-while-hiding (cap_gen acc, by 10 abs steps). Original run: 380-389 0.69, 390-399 0.18 (4 loops).
