@@ -5,6 +5,14 @@ checkpoints, observed results, and unresolved limitations.
 
 TICA on a new machine: start at docs/tica/README.md (results digest, run ledger, open questions, aggregate snapshot).
 
+## 2026-10-21p Linear reads of the trained math hider: refits vs held-out base probes (no new runs)
+- Extension turns.jsonl (abs 500-569): held-out base probes (L20 / L24) detect real_score turn 0 0.78 (n 328) and
+  later turns 0.36 (n 4920); no-brief 1.00. Single-layer linear REFITS (L8-26, excl. 20/24) clear the gate in only
+  ~6% of refit x layer cells (10-21g), but 4-layer linear ensembles mostly pass (ens4_linear 14/112, ensdeep4_linear
+  37/125 rejected). So linear reads are weakened, not gone.
+- Gap: heldout_det is not recorded on neg_text turns, so the held-out probes' false-positive rate IN CONTEXT is
+  unmeasured (their thresholds come from base-model negatives); the refit gate uses in-context negatives at 1% FPR.
+
 ## 2026-10-21o Gate diagnostic (10-21g) overturns 10-21h's reading; new in-context TPR gate (refit_min_tpr_ic, default off)
 - 10-21g: on the trained model a mean-pooled linear refit ranks in-context math above negatives (AUROC 0.92-0.97)
   but at its own 1% FPR threshold it catches ~0-25% of HELD-OUT IN-CONTEXT math (in-context math sits +1.8 SD above
