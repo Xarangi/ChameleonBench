@@ -5,6 +5,50 @@ checkpoints, observed results, and unresolved limitations.
 
 TICA on a new machine: start at docs/tica/README.md (results digest, run ledger, open questions, aggregate snapshot).
 
+## 2026-10-21n Model-written data build PAUSED (deferred by user); length cap makes the current samples unusable
+- User 10-21: model-written texts must be length-limited (interest = probes + capability, not length); held-out
+  model-written texts later; the whole data path is for later.
+- Agent added --len-cap-q 0.9 (eligible only if <= the concept's published p90 length, chars). Smoke preview of share
+  of source texts with an eligible answer: SQL 0.95, politics / war 0.83 ... jokes 0.11, comforting / chemistry 0.08,
+  literature / finance 0.00. The base model's unconstrained answers are far longer than the published texts.
+- Cancelled the full build (6612571-74, 6612576, finish 6612577): its samples would fail the cap for ~8-10 concepts.
+  When resumed: put the length in the generation request (or per-concept max tokens) and regenerate.
+
+## 2026-10-21g Why refits fail the gate: the in-context math signal is weak; the plain-math gate tracks in-context TPR
+- Setup (scripts/diag_refit_gate.py, run from a HEAD snapshot; jobs 6603899 ext step_100 = abs 500, 6603906
+  resume_60 step_320 = abs 380): trainer built as tica.py adaptive, rollouts with _episode_refit wrapped to record
+  real post-pass prefixes (36 / 24), then per prefix 256 in-context math forks, 96 no-prompt math, 2 x 288 in-context
+  negatives (config draw + an independent second draw), 96 no-prompt negatives; mean reads at L8/12/16/22/26 with the
+  trained weights and under reference() (base weights, SAME prefixes). Linear refit replicated exactly
+  (fit_refit_bank cv path, C 1.0, 1% FPR on 30% held-out negatives). Outputs (no text):
+  /scratch/.../tica/diag/gate_2026-10-21/{main,abs380}/summary.json. Maxpool not measured.
+- Replica vs log: abs 500 linear passes 6% (11/180 refit x layer; fails 33% tpr_np, 61% AUROC); the trainer's own
+  linear attempts on these prefixes 0/8. abs 380: 27% pass. BASE weights on the same prefixes: 100% pass, AUROC 1.00.
+- (A) shift, YES but not the direct cause. Trained, in-context: cos(math direction in context, no-prompt math
+  direction) 0.53 (base 0.97); a probe fit on no-prompt math vs no-prompt negatives scores in-context math vs
+  in-context negatives at AUROC 0.31 (inverted; base 1.00); in-context math sits 1.3 x the class separation away from
+  plain math (base 0.27). The in-context probe still ranks plain math: AUROC vs no-prompt negatives 0.91 (L12 0.98).
+- The cause: the residual in-context separation is small. In held-out-negative sd units, in-context math scores
+  +1.8 and no-prompt math +1.6 above the negatives (base: +15 / +16); the 1%-FPR threshold sits at +2.6 (top
+  held-out negative +3.2, same as base 3.3). So the probe misses held-out IN-CONTEXT math at its own threshold too:
+  tpr_ic_held median 0.00 overall, 0.25 among tpr_np failures; tpr_np >= 0.8 and tpr_ic_held >= 0.8 agree on 171/180.
+  tpr_np is a faithful proxy for "does the deployed probe catch in-context math".
+- (B) threshold noise: not the cause. Threshold from 374 never-fit negatives (86 + 288): tpr_np 0.00 (stricter, not
+  looser). Re-splitting negatives (10 seeds): gate outcome mixed for 18% of cells (L12 44%), passing 6%. At 5% FPR
+  27% would pass (abs 380: 59%).
+- (C) bad negatives: no. Top held-out negatives are chemistry (40%) and concept-free code/JSON (34%); 3% of top-3
+  carry any 27B math label; their z (+3.2) matches base. Base, same negatives, passes 100%.
+- (D) sample size / C: no. C 0.01-10 flat (tpr_np 0.00-0.09 at L12/16). More in-context positives HURT plain math:
+  n 32 / 64 / 128 / 224 -> tpr_np 0.38 / 0.03 / 0.00 / 0.00 (all layers; L12 0.88 / 0.55 / 0.09 / 0.02), in-context
+  AUROC 0.91 -> 0.95. More no-prompt positives (48 instead of 16) helps only L12/16 (0.57 / 0.46).
+- Answer: the gate rejects weak probes, not good ones. The trained model has largely hidden math from mean-pooled
+  linear reads inside the episode (signal ~8x smaller than base, on fixed teacher-forced texts); a linear refit ranks
+  math above negatives (AUROC 0.92-0.97) but at 1% FPR catches neither held-out in-context math nor plain math. Under
+  10-21h's plan (refit_min_tpr_np 0) such probes would be deployed with ~0-25% in-context TPR at their threshold. If
+  the tpr_np gate is dropped, gate on held-out IN-CONTEXT TPR at the deployed threshold instead (needs held-out
+  in-context positives; the cv path fits all of them). Caveat: fixed human math texts, not the model's own answers;
+  one checkpoint per run; maxpool / zoo kinds not measured (rlobf_attn / ens4_mlp pass the trainer's gate here).
+
 ## 2026-10-21m Log loss from scratch at LR 1e-4 ALSO diverges -> LR is not the cause; trigger = first refits
 - 6611720 (= 10-21l run with lr_peak 0, i.e. warm-up to 1e-4 then constant), cancelled at step 12:
   - steps 1-7: pre-clip grad norm 13-15.5, KL <= 0.08, GSM8K-while-hiding 0.83-1.0;
