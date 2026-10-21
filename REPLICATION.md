@@ -5,6 +5,20 @@ checkpoints, observed results, and unresolved limitations.
 
 TICA on a new machine: start at docs/tica/README.md (results digest, run ledger, open questions, aggregate snapshot).
 
+## 2026-10-21ah STAY gives sustained success over repeated catches (search-like); score in between; panel from start is learnable
+- Pass hazard under the same refit, MATCHED window (each branch's steps 10-25 = abs 610-625), j = 1-6+:
+  - bit: 0.069 (261) / 0.228 (206) / 0.084 (131) / 0.043 (92) / 0.056 (72) / 0.042 (212);
+  - score: 0.059 (269) / 0.220 (214) / 0.141 (135) / 0.098 (102) / 0.039 (76) / 0.032 (188);
+  - stay: 0.102 (266) / 0.140 (200) / 0.183 (142) / 0.163 (98) / 0.139 (72) / 0.053 (133).
+- Stay: the success rate stays at 0.14-0.18 through the 2nd-4th retry, against bit's single turn-2 jump then decay. Its
+  turn-2 jump is smaller (0.14 vs 0.23), consistent with no fixed turn-position move. Score: about 1.7-2.3x bit at j3-j4.
+- Training k (abs 620+): bit k2 0.61 (149) k3 0.36 (91) k4 0.23 (31), GSM 0.60; score k2 0.78 (139) k3 0.43 (105) k4 0.27 (41),
+  GSM 0.65; stay (610-625) k2 0.86-1.00, k3 0.47-0.67, GSM 0.61-0.89, held-out tN 0.49-0.82 (higher than bit).
+- Verdict-use races (bit / stay, real vs falsify) still pending: they say whether stay's retries come from the verdict.
+- panel0 (panel from step 1), k1 per step: 0 at 1-10 (except 0.5 at step 6), then 0.4 / 0 / 0.4 / 0.6 / 0.75 / 0.8 / 1.0 / 0 /
+  0.5 / 0.75 at 11-20 (n 4-5 each). GSM 0.12-1.0 per step (noisy, n small). The panel from the start is learnable, a few
+  steps behind the single L12 rung.
+
 ## 2026-10-21ag logclip A finished 120 steps; extended to 320 (6635500); panel0 early
 - A logclip at 110-119: k2 0.19 (48), k3 0.00 (8), GSM 0.79, KL 0.078, held-out tN 0.93. Extension 6635500:
   resume from scratch_logclip/adaptive/final (trainer_state), offset 120, 200 steps, same overrides, same worktree
