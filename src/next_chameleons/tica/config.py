@@ -65,6 +65,10 @@ class ModelConfig:
     grad_ckpt: bool = True  # training only; False = faster, more activation memory
     fla_grad: bool = False  # Qwen3.5: fla kernel in grad passes too (needs triton >= 3.3)
     keep_think_history: bool = False  # every assistant turn keeps the empty think block
+    # TamIA 10-21 (0 = off, unchanged): LM terms (NLL, KL anchor, top-k targets) from the LM head's
+    # input in chunks of this many tokens with activation checkpointing (policy._lm_terms), never
+    # the full [B, n, V] logits -- the peak-memory spike at 24 turns. Same values up to float order.
+    lm_chunk: int = 0
 
 
 @dataclass

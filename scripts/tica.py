@@ -44,7 +44,7 @@ def build(cfg):
 
     def factory(adapter: str | None, trainable: bool):
         lora = dataclasses.asdict(cfg.lora) if (trainable and adapter is None) else None
-        return Policy.from_pretrained(
+        pol = Policy.from_pretrained(
             cfg.model.path,
             dtype=cfg.model.dtype,
             lora=lora,
@@ -56,6 +56,8 @@ def build(cfg):
             fla_grad=cfg.model.fla_grad,
             keep_think_history=cfg.model.keep_think_history,
         )
+        pol.lm_chunk = cfg.model.lm_chunk  # 0 = the full-logits path
+        return pol
 
     return Level1Data(cfg.data), pool, factory
 

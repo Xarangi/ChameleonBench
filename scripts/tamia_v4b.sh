@@ -74,7 +74,7 @@ case "${1:-}" in
     for (( i = 1; i <= N; i++ )); do
       echo "chunk $i ($LAYOUT): $J"
       DEP="--dependency=afterany:${J// /:}"
-      D=$(TICA_DRAIN_QUALITY="${ARMS[*]}" sbatch --parsable --account="$ACCT" --time=8:00:00 $DEP -J v4b-drain \
+      D=$(TICA_DRAIN_QUALITY="${ARMS[*]}" sbatch --parsable --account="$ACCT" --time=16:00:00 $DEP -J v4b-drain \
           scripts/slurm/tica_val_drain.sh "$QUEUE")
       echo "  drain + quality checks: $D"
       (( i < N )) && J=$(submit_chunk "resume:" "$DEP")
