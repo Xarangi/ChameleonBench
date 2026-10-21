@@ -5,6 +5,30 @@ checkpoints, observed results, and unresolved limitations.
 
 TICA on a new machine: start at docs/tica/README.md (results digest, run ledger, open questions, aggregate snapshot).
 
+## 2026-10-20y Refit fit speed-ups: batched logistic (Newton), prepadded + fold-batched rlobf (flags, default off)
+- From the py-spy profile (6589171, rank 0, per-step refits over 6 steps): rlobf fits 50.7 s (of it per-minibatch
+  re-padding ~16 s), LBFGS logistic fits 49.5 s (ens *_linear gates + attnpool / maxpool inits), _fit_tok_many 26.5 s.
+- New AdaptiveConfig flags (all default False; code landed in acfc036 as unverified WIP, verified here):
+  - refit_rlobf_prepad: rlobf_* fits pad token states once (_Prepadded) instead of every minibatch. Bit-identical
+    minibatches (CPU test: identical parameters + gate info).
+  - refit_batched_rlobf: the 5 CV folds + final rlobf fit train as ONE stacked run (_fit_rlobf_many: same g draws /
+    init / minibatches, per-fit clip 1.0 + per-fit AdamW, fits with fewer minibatches skip steps). Equal up to
+    float reassociation.
+  - refit_batched_logistic: monitors.fit_logistic_many = the same convex objective solved by batched damped Newton
+    (fp64 Cholesky), used for ens *_linear gates (_fit_ens_lin_many) and the attnpool / maxpool LR inits in
+    _fit_tok_many. Reverses the 10-16c "ruled out", which was benchmarked at refit_C 0.01 (runs use 1.0).
+- Exactness (CPU tests, compute node 6593240: 14 pass incl. the old batched-fit tests): Newton vs LBFGS logits within
+  1e-4 at C 1.0 and 0.01; ens linear gates same AUROC / tpr_np / verdict, logits 1e-4; attnpool / maxpool 2e-3;
+  rlobf batched vs per-fit logits 1e-3, same verdict.
+- GPU bench 6592581 (bench_gate_fit.py --variants; pos 128 / neg 288 / np 32 / 200 tok / d 2560 / C 1.0 /
+  refit_batched_fits on; seconds per gate = 5 CV fits + final):
+  ens4_linear 3.06 -> 2.14 (logit diff 5e-9), ensdeep4_linear 3.07 -> 1.88 (2e-9), attnpool 2.04 -> 1.61 (0.02 of
+  scale 21), maxpool 5.18 -> 1.82 (0.04 of 23; thr diff 0.014), rlobf_attn 10.35 -> 7.21 (prepad) -> 5.52
+  (batched; logit diff 1.3e-4 = the GPU run-to-run noise of the unchanged path, 1.5e-4). Synthetic data is easy
+  (AUROC ~1), so real refits (LBFGS needing more iterations) should gain more on the logistic side.
+- Not enabled in any config. Suggested for new runs: refit_batched_logistic + refit_batched_rlobf (expected ~10 s /
+  step less on rank 0 at the current kind mix).
+
 ## 2026-10-20x Extension s420-429; held-out probes start missing at turn 0 exactly when math broke; GSM8K-term correction
 - 6588314 by 5 abs steps 415-429: GSM8K-while-hiding 0.64 / 0.62 / 0.53 (finished 0.67-0.79), grad norm 1.6-4.2,
   fallback 0.4-0.8 / step; cap_gen_log since 420: n 54, correct 0.59, 0 repeated-line loops. Refit passes 27 / 588,
