@@ -5,6 +5,20 @@ checkpoints, observed results, and unresolved limitations.
 
 TICA on a new machine: start at docs/tica/README.md (results digest, run ledger, open questions, aggregate snapshot).
 
+## 2026-10-21au Held-out probe coverage is narrow: "evaded" never-shown probes all sit at TRAINED layers; wider grid queued
+- Training probe zoo: archs linear / maxpool / attnpool / rlobf_attn / ens4_linear / ens4_mlp / ensdeep4_linear at
+  kind_layers 8 / 12 / 16 / 22 / 26. In-training held-out readout = base linear L20 / L24 only.
+- 10-21w / ap panel (18 probes, base 1.00 on all): the 0.00 rows (linear @8 / 12 / 16 / 22 / 24 / 26, maxpool @12 / 24,
+  rlobf_attn@12, ensdeep4) are training archs at trained or bracketed layers -- fresh fits of in-distribution probe types.
+  Every probe outside that (layers 4 / 20 / 28 / 30, ens8_linear, attnpool@20, rlobf_attn@20) still catches ~1.0
+  (stay: L20 0.52, rlobf@20 0.77); the one new arch, gdm_rollattn, 0.09-0.48. So the panel cannot separate layer,
+  architecture and data generalization, and the literature probes in the zoo (mck_*, nc_ens8_tok, bailey_ens_tok,
+  spread5_linear, rlobf_max, rlobf_attn_max, ens8_mlp) were never run.
+- panel2 (25 kinds + linear at 4 / 12 / 20 / 24 / 28): training archs at held-out layers (maxpool / attnpool / rlobf_attn
+  @4 / 20-24 / 28), held-out archs at trained layers (mck_attnlite / mck_softmax / mck_rollmean40 / rlobf_max /
+  rlobf_attn_max @12 / 22, gdm), literature multi-layer (nc_ens8_tok, bailey_ens_tok, spread5_linear, ens8_mlp / linear).
+  Jobs 6681400 base, 6681401 logclip abs 260, 6681402 panel0 s150, 6681403 stay abs 660 -> diag/panel2_2026-10-21/.
+
 ## 2026-10-21at Turns-to-dodge per DEPLOYED refit, by the kind the bandit chose (turns.jsonl, survival view)
 - Each deployed probe (episode x active id): turns from deployment to the first judged pass, with never-beaten probes
   counted as such (10-21ar averaged turns over beaten probes only). Columns: n / beaten / within 2 / within 5 / median turns
