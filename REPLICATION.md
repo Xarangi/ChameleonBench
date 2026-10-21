@@ -5,6 +5,19 @@ checkpoints, observed results, and unresolved limitations.
 
 TICA on a new machine: start at docs/tica/README.md (results digest, run ledger, open questions, aggregate snapshot).
 
+## 2026-10-21z Check-in: score feedback keeps passing on repeated catches (small n); 1-bit branch math falling
+- fb600 by 10 abs steps (k2 n 22-47):
+  - bit: k2 0.51 / 0.79 / 0.73; GSM8K-while-hiding 0.57 -> 0.45 -> 0.32; KL 0.068 -> 0.093.
+  - score: k2 0.56 / 0.74 / 0.77; GSM 0.63 / 0.60 / 0.60; KL ~0.068; held-out tN 0.19 -> 0.34.
+- Pass hazard under the same refit (steps >= 20 of each branch; n in brackets), j = 1-6+:
+  - bit: 0.095 (74) / 0.211 (57) / 0.051 (39) / 0.000 (29) / 0.043 (23) / 0.017 (59);
+  - score: 0.066 (61) / 0.200 (50) / 0.182 (33) / 0.087 (23) / 0.056 (18) / 0.027 (37).
+  Score feedback holds the pass rate through the 2nd catch (j3 0.18 vs 0.05), consistent with using graded feedback.
+  Small n; re-read at 60 steps.
+- A logclip (abs 50-79): the panel turn-0 probe from step 60 drops k1 to 0.69, back to 0.98 by 70-79; k2 0.00 (as the
+  original in stage B); GSM 0.64-0.78.
+- fb600_stay 6626064 started (10-21x); races 6626069-72 queued on the bit / stay finals.
+
 ## 2026-10-21x Standalone stay term (adaptive.stay_standalone, default off); fb600_stay branch
 - Why (10-21y): the stay term sat inside the pursuit block, so it has been off since pursuit went off (10-19), and the
   falsified-verdict races show both trained arms ignore the verdict. Goal (user 10-21): stay after a pass, without the
