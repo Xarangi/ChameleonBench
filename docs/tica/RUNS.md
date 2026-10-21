@@ -66,7 +66,7 @@ One concept (mathematical reasoning; split `final_split_v5_math.json`), 16 turns
 | r380_ctl (final_v4_math_v3b_r380_4b) | + batched fits, cap_gen_samples 4, save_state_all; fresh AdamW | abs 380 (resume_60 step_320), offset 380 | 60 | 6595577 | done: no collapse; k2 0.38-0.65; held-out tN 0.65 -> 0.15-0.25 | 10-21b .. 10-21i |
 | r380_log | + hide_loss log, hide_weight 0.3 | abs 380 | 150 (stopped ~75) | 6595578 | cancelled at abs ~455: ~= control, slightly lower math | 10-21i, 10-21j |
 | r380_adapt | + cap_adapt_target 0.75 | abs 380 | 150 | 6595579 | running: k2 up to 0.76 + GSM 0.77-0.94, but held-out tN 0.96-1.00 (narrow dodge); multiplier 7 -> 3 (oscillating) | 10-21i |
-| scratch_log (r380 config + log loss, cap_gen_samples 2, bandit fix off = original run's settings) | log hide loss from scratch; baseline = stage A + B above | base | 400 | 6607864 (clean worktree at 62f04f3) | running | 10-21j |
+| scratch_log (r380 config + log loss, cap_gen_samples 2, bandit fix off = original run's settings) | log hide loss from scratch; baseline = stage A + B above | base | 400 (cancelled at 13) | 6607864 (clean worktree at 62f04f3) | **diverged**: k1 1.00 by step 6 (orig ~20-40) but math 0, KL 2.75, grad norm up to 1001 by step 10-13 | 10-21j, 10-21l |
 | overlap_test/{off1,off2,on1,on2} | refit_overlap exactness | abs 380 | 2 | 6604590-91 + 2 | done: bit-identical, ~1 s/step gain | 10-21e |
 | diag_gate | why refits fail the plain-math gate | ext / base | - | 6603899, 6603906 | running | 10-21g |
 | mw-build | model-written v4 data (generation, 27B judge, labels) | - | - | 6603644 + follow-ups | running | 10-21f |

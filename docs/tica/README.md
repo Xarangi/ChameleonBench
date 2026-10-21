@@ -109,7 +109,7 @@ Every item is a config field defaulting to the old behaviour unless noted. REPLI
 | `micro_batch: 2` | no gain, +13 GB: off | 10-20s |
 | `train.save_state_all: true` | use (optimizer state in every checkpoint, so any step can be branched exactly) | 10-21b |
 | `refit_min_tpr_np: 0` + `refit_np_in_fit: false` (refits gated on in-context AUROC only, fit on in-context forks only) | decided 10-21 for new runs (set in final_v5_modelwritten_4b) | 27% of refits rejected on the trained model; the gate demanded transfer to no-brief math (10-21h, 10-21k) |
-| `objective.hide_loss: log` | OPEN: r380 arm ~ control; from-scratch test running | 10-21i, 10-21j |
+| `objective.hide_loss: log` | NOT as built: ~ control from abs 380; from scratch it dodges 4x sooner but diverges by step 10 (unbounded hide gradient); a bounded variant is untested | 10-21i, 10-21l |
 | `adaptive.cap_adapt_target` (adaptive capability multiplier) | OPEN: best k2 + math, but held-out probes catch it 1.00 (narrow dodge); multiplier oscillates | 10-21i |
 | Model-written train texts (`final_v5_modelwritten_4b`) | build in progress | 10-21f, docs/tica/V4_MODEL_WRITTEN_DATA.md |
 | Math collapse risk (degenerate loops, grad norm clipped >3, GSM8K-while-hiding < 0.3) | watch in every run | 10-20u |
