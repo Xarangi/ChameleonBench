@@ -6,6 +6,15 @@
 # Falls back to sbatch scripts/slurm/tica_val.sh when the job has no "val" slot.
 set -uo pipefail
 cd /scratch/s/sneheel/ChameleonBench
+# TICA_VAL_QUEUE=FILE (TamIA 10-21, default unset = unchanged): append the race to FILE and return; a later
+# whole-node job (scripts/slurm/tica_val_drain.sh) runs the queued races 4 at a time. Training nodes then keep
+# all 4 GPUs on training (races are logged only, so running them later changes nothing).
+if [ -n "${TICA_VAL_QUEUE:-}" ]; then
+  mkdir -p "$(dirname "$TICA_VAL_QUEUE")"
+  ( flock 9; printf '%q ' "$@" >> "$TICA_VAL_QUEUE"; echo >> "$TICA_VAL_QUEUE" ) 9>"$TICA_VAL_QUEUE.lock"
+  echo "validation race for step $3 queued in $TICA_VAL_QUEUE"
+  exit 0
+fi
 if [ -z "${TICA_VAL_GPUS:-}" ]; then
   exec sbatch --parsable scripts/slurm/tica_val.sh "$@"
 fi

@@ -5,6 +5,21 @@ checkpoints, observed results, and unresolved limitations.
 
 TICA on a new machine: start at docs/tica/README.md (results digest, run ledger, open questions, aggregate snapshot).
 
+## 2026-10-21ap TamIA setup for THE TamIA RECIPE (final_v4b_4b + final_v4b_score_4b); BLOCKED on data
+- State and commands: docs/tica/TAMIA-V4B.md. Branch `tamia` (local: bottom commit rewrites /scratch/sneheel ->
+  /scratch/s/sneheel, repo -> /scratch/s/sneheel/ChameleonBench; never push it).
+- venv q35t29 rebuilt OFFLINE on a TamIA compute node (scripts/env/q35t29_build_offline.sh: CVMFS wheelhouse + uv
+  cache; torch 2.9.1 / triton 3.5.0 / transformers 5.14.1 / peft 0.19.1 / fla 0.4.1; pyarrow, datasets, trl dropped).
+- BLOCKER: no split-v5 data on TamIA (final_v5_clean, elicit inputs, 27B labels, Dolly, gsm8k_train, base_gens,
+  l1_base probes); no TamIA->Narval SSH key; compute nodes offline. Unblock = docs/tica/TAMIA-V4B.md "Data" A (sync).
+- Layout decision: ONE node per chunk runs both arms, DP2 each (`tica_node.sh final_v4b_4b + final_v4b_score_4b +`);
+  held-out races queued (TICA_VAL_QUEUE, tica_val_local.sh) and drained 4 per node (scripts/slurm/tica_val_drain.sh)
+  after each chunk: every GPU trains, half the node-hours of the upstream one-node-per-arm layout.
+- Tests (TamIA CPU node, q35t29 venv): `pytest tests -k tica` all pass except 2 env-only (pyarrow / sklearn not in the
+  training venv); every tests/test_tica_dp.py equivalence test passes. ruff clean on the new files.
+- Quality checks for the checkable families (format: all-caps / JSON / SQL / Python / HTML / JS / Java; language: 13
+  languages): scripts/tica_quality_check.py (+ tests), queued by `scripts/tamia_v4b.sh quality`.
+
 ## 2026-10-21ao Logclip refit evasion does NOT transfer to the held-out L20 probe (yet); never-shown panels launched
 - Held-out (training readout = any of base L20 / L24; per 10-21w effectively L20) detection vs k2, 40-step bins:
   - MSE original: k2 0.00-0.12 at 100-379 with ho_tN 0.76-1.00. Then k2 0.37-0.60 at 380-619 with ho_t0 0.61-0.78 and
