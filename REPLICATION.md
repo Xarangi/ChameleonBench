@@ -5,6 +5,16 @@ checkpoints, observed results, and unresolved limitations.
 
 TICA on a new machine: start at docs/tica/README.md (results digest, run ledger, open questions, aggregate snapshot).
 
+## 2026-10-21bi Branch progress at abs 400+; v4 history recap (the full multi-concept v4 / v4b config has never trained)
+- k2 / k3 / k4 / rlobf_attn (n), GSM-while-hiding: unchanged r320 400-439 0.73 (84) / 0.66 (61) / 0.40 (40) / 0.29 (77),
+  GSM 0.84; + stay 360-399 0.77 / 0.24 / 0.07 / 0.34, 400-439 (n 23) 0.96 / 0.45 / 0.00 / 0.86 (7); clip 1.0 360-399 (n 53)
+  0.70 / 0.44 / 0.27 / 0.23, GSM 0.80; panel0 280-319 0.61 / 0.49 / 0.29 / 0.17. KL 0.05 everywhere.
+- Recap (user asked): the "v4 that failed" = the math-only v4 runs of 10-19 (v4math / univ, final_v4_math*_4b): turn 0 was a
+  fresh probe fit on the policy's own states (first_probe fork) -> 0 passes, no refit chain (10-19p); then stage A/B (MSE,
+  fixed L12 / panel turn 0) learned but collapsed math at abs 389 (10-20u). final_v4_4b (multi-concept, 24 turns) was never
+  launched, and final_v4b_4b / final_v4b_score_4b have only run 4-step smokes (10-21am). So neither loss has been trained
+  on the TamIA configuration; every loss comparison so far is single-concept math, 16 turns.
+
 ## 2026-10-21bh STAY (not the MSE lineage) gives in-context dodging of held-out judges; branch progress
 - Held-out-judge races, k2/k3/k4/k5 (32 ep x 16 turns), abs 660 MSE lineage with vs without stay, and logclip abs 260:
   - bailey: stay 1.00 / 0.78 / 0.12 / 0.33; bit 0.03 / 0.00; logclip 0.00.
