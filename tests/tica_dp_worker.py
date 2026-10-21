@@ -122,9 +122,13 @@ def build(out: Path, steps: int = 2, budget: bool = False, hclip: float = 0.0,
         cap_gen_hide=True, anchor_weight=0.5, anchor_n=2, anchor_cache=str(anchor),
         episode_rng=True)
     ad.update(over)
+    sync = {"save_every": 0, "dp_sync_init": desync}
+    if os.environ.get("TICA_TEST_DRIFT_FATAL") == "1":  # tests/test_tica_dp.py: desynced ranks
+        # WITHOUT the init sync, a checkpoint every step and train.dp_drift_fatal -> must stop
+        sync = {"save_every": 1, "dp_sync_init": False, "dp_drift_fatal": True}
     cfg = AdaptiveSupervisedConfig(
         steps=steps, episodes_per_step=4, turns=5, micro_batch=2, lr=1e-2, warmup_steps=1,
-        save_every=0, hide_grad_clip=hclip, dp_sync_init=desync,
+        hide_grad_clip=hclip, **sync,
         objective=ObjectiveConfig(pin_first_turn=False, pin_segment_first=False,
                                   hide_from_turn=0, retry_hide_ladder=[2.0, 3.0]),
         adaptive=AdaptiveConfig(**ad))
@@ -177,6 +181,9 @@ def run(rank: int, world: int, out: str, port: int, steps: int = 2,
     if stay:  # standalone stay without pursuit (10-21x)
         over.update(pursuit=False, stay_standalone=True, stay_layers=[1, 2])
     tr, pol = build(d / "run", steps=steps, budget=budget, hclip=hclip, desync=desync, **over)
+    if os.environ.get("TICA_TEST_DRIFT_FATAL") == "1":  # the drift check runs at train()'s saves
+        tr.train()
+        return
     recs = [tr.step() for _ in range(steps)]
     torch.save(state(tr, pol, recs), d / f"rank{rank}.pt")
     if world > 1:

@@ -34,6 +34,12 @@ for q in "$@"; do
     mv -f "$q.extra" "$q.extra.started.${SLURM_JOB_ID:-$$}"
   fi
 done
+# in-run quality checks (TICA_DRAIN_QUALITY="CFG ...": newest checkpoint of each config + the base reference once)
+if [ -n "${TICA_DRAIN_QUALITY:-}" ]; then
+  while IFS= read -r line; do
+    [ -n "$line" ] && TASKS+=("$line")
+  done < <(bash scripts/slurm/tamia_queue_quality.sh $TICA_DRAIN_QUALITY)
+fi
 echo "${#TASKS[@]} tasks on $NG GPUs"
 declare -A BUSY
 i=0
@@ -53,4 +59,14 @@ for t in "${TASKS[@]}"; do
   i=$(( i + 1 ))
 done
 wait
+# quality aggregates (CPU): every quality dir with free-generation answers
+if [ -n "${TICA_DRAIN_QUALITY:-}" ]; then
+  R=/scratch/s/sneheel/next_chameleons_artifacts/tica/runs
+  for q in "$R"/v4b_quality_base "$R"/*/quality/step_*; do
+    ls "$q"/gens/*.jsonl > /dev/null 2>&1 || continue
+    A=(); for f in "$q"/gens/*.jsonl; do A+=("$(basename "$f" .jsonl)=$f"); done
+    /scratch/s/sneheel/venvs/q35t29/bin/python scripts/tica_quality_check.py --gens "${A[@]}" --out "$q/quality.json" \
+      || echo "quality summary failed: $q"
+  done
+fi
 echo "drained"

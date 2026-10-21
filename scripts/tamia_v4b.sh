@@ -5,7 +5,7 @@
 #
 #   bash scripts/tamia_v4b.sh check            # every input file + venv present?
 #   bash scripts/tamia_v4b.sh smoke            # 20 steps of BOTH arms on one node (DP2 each), ~1-2 h
-#   bash scripts/tamia_v4b.sh launch [CHUNKS]  # production chain (default 4 x 24 h) + race drains
+#   [LAYOUT=interleaved|solo] bash scripts/tamia_v4b.sh launch [CHUNKS]  # 4 x 24 h chain + drains (races + quality)
 #   bash scripts/tamia_v4b.sh quality ADAPTER_A ADAPTER_B   # queue quality-check races, then drain
 #   bash scripts/tamia_v4b.sh status           # jobs, latest step per arm, last metrics
 #
@@ -20,7 +20,12 @@ R=/scratch/s/sneheel/next_chameleons_raw_cache
 A=/scratch/s/sneheel/next_chameleons_artifacts
 RUNS=$A/tica/runs
 QUEUE=$RUNS/v4b_val_queue.txt
-ARMS=(final_v4b_4b final_v4b_score_4b)
+# TamIA arms (user 10-21): final_v4b + LoRA r128 + 16 episodes / step + dp_drift_fatal; override with ARMS="a b"
+read -ra ARMS <<< "${ARMS:-final_v4b_tamia_4b final_v4b_score_tamia_4b}"
+# LAYOUT (chosen by the layout smokes, docs/tica/TAMIA-V4B.md): interleaved = ONE node, both arms data-parallel over
+# all 4 GPUs (2 processes per GPU); solo = one node per arm, 4 GPUs each
+LAYOUT=${LAYOUT:-interleaved}
+G=0,1,2,3
 mkdir -p logs
 
 need() {
@@ -32,7 +37,7 @@ need() {
 }
 
 check() {
-  echo "inputs of final_v4b_4b / final_v4b_score_4b:"
+  echo "inputs of ${ARMS[*]}:"
   need /scratch/s/sneheel/venvs/q35t29.tar \
     /scratch/s/sneheel/hf/hub/models--Qwen--Qwen3.5-4B/snapshots/851bf6e806efd8d0a36b00ddf55e13ccb7b8cd0a/config.json \
     $R/tica/final_v5_clean.json $R/tica/final_v5_elicit_inputs.json $R/tica/concept_labels_v5data_27b.json \
@@ -53,16 +58,26 @@ case "${1:-}" in
     check || { echo "inputs missing: see docs/tica/TAMIA-V4B.md section 'Data'"; exit 1; }
     N=${2:-4}
     export TICA_VAL_QUEUE=$QUEUE
-    J=$(sbatch --parsable --account="$ACCT" -J v4b scripts/slurm/tica_node.sh "${ARMS[0]}" + "${ARMS[1]}" +)
-    echo "chunk 1: $J"
-    D=$(sbatch --parsable --account="$ACCT" --dependency=afterany:$J -J v4b-drain scripts/slurm/tica_val_drain.sh "$QUEUE")
-    echo "  drain: $D"
-    for (( i = 2; i <= N; i++ )); do
-      J=$(sbatch --parsable --account="$ACCT" --dependency=afterany:$J -J v4b \
-          scripts/slurm/tica_node.sh "resume:${ARMS[0]}" + "resume:${ARMS[1]}" +)
-      echo "chunk $i: $J"
-      D=$(sbatch --parsable --account="$ACCT" --dependency=afterany:$J -J v4b-drain scripts/slurm/tica_val_drain.sh "$QUEUE")
-      echo "  drain: $D"
+    submit_chunk() {  # PREFIX (""|resume:) DEPENDENCY -> job ids
+      local pre=$1 dep=$2 ids=() j
+      if [ "$LAYOUT" = interleaved ]; then
+        j=$(sbatch --parsable --account="$ACCT" $dep -J v4b scripts/slurm/tamia_node.sh \
+            "${pre}${ARMS[0]}@$G" "${pre}${ARMS[1]}@$G"); ids+=("$j")
+      else
+        for a in "${ARMS[@]}"; do
+          j=$(sbatch --parsable --account="$ACCT" $dep -J "v4b-${a}" scripts/slurm/tamia_node.sh "${pre}${a}@$G"); ids+=("$j")
+        done
+      fi
+      echo "${ids[*]}"
+    }
+    J=$(submit_chunk "" "")
+    for (( i = 1; i <= N; i++ )); do
+      echo "chunk $i ($LAYOUT): $J"
+      DEP="--dependency=afterany:${J// /:}"
+      D=$(TICA_DRAIN_QUALITY="${ARMS[*]}" sbatch --parsable --account="$ACCT" --time=8:00:00 $DEP -J v4b-drain \
+          scripts/slurm/tica_val_drain.sh "$QUEUE")
+      echo "  drain + quality checks: $D"
+      (( i < N )) && J=$(submit_chunk "resume:" "$DEP")
     done ;;
   quality)
     AD_A=${2:?adapter of final_v4b_4b}; AD_B=${3:?adapter of final_v4b_score_4b}

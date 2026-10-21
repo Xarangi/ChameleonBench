@@ -78,6 +78,9 @@ class SupervisedConfig:
     # weights to every rank before training. A fresh LoRA is initialised unseeded per rank, so
     # from-scratch DP runs otherwise train ranks holding DIFFERENT weights (dp_param_drift).
     dp_sync_init: bool = False
+    # TamIA 10-21: stop the run (RuntimeError) if the ranks' LoRA weights differ at a checkpoint
+    # (default False = log dp_param_drift only, the old behaviour; 10-21v ran 120 steps drifted)
+    dp_drift_fatal: bool = False
     # updates_per_rollout (10-18j, default 1 = unchanged): optimizer updates per rollout. The
     # rollout (episodes, verdicts, refits, targets) is collected once and reused K times; each
     # update re-runs the forward with grad on the current weights. The LR schedule still advances
@@ -3210,6 +3213,8 @@ class AdaptiveSupervisedTrainer:
                 sums = dp.params_checksum(self.params)
                 if main and max(sums) != min(sums):
                     print(json.dumps({"dp_param_drift": sums}), flush=True)
+                if cfg.dp_drift_fatal and max(sums) != min(sums):  # every rank sees the same sums
+                    raise RuntimeError(f"data-parallel ranks drifted at step {self.step_k}: {sums}")
             ev = cfg.adaptive.eval_every
             if main and ((saved and not ev)
                          or (ev and (self.step_k + self._step_offset()) % ev == 0)):
