@@ -17,7 +17,7 @@ TICA on a new machine: start at docs/tica/README.md (results digest, run ledger,
     ens4_linear 0.65; maxpool 0.95 (0.85 within 5); linear 0.81.
   - bit (same): rlobf 0.12 (never 0.88); attnpool 0.50; ensdeep4 0.73; ens4_mlp 0.78; ens4_linear 0.81.
 - Almost nothing is beaten on the first turn it is deployed (within-1 <=0.13); passes come 2-4 turns later.
-- The bandit picks rlobf_attn most (27-50% of refits) because it catches most, so the k2/k3 index rates are mostly
+- The bandit picks rlobf_attn most (24-37% of refits) because it catches most, so the k2/k3 index rates are mostly
   rlobf_attn survival. Only stay beats it at a useful rate.
 
 ## 2026-10-21as CORRECTION: the held-out probe IS dodged over turns in stay/bit (turns.jsonl, real_score episodes)
