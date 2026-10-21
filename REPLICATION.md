@@ -18,6 +18,14 @@ TICA on a new machine: start at docs/tica/README.md (results digest, run ledger,
 - Measurement, no learning (lr 1e-12, lr_peak 0), train_mix real 0.5 / neg_text 0.5, 3 steps, offset 580, 1 GPU:
   6618834 ext step_180 (abs 580), 6618835 adapt step_100 (abs 480), 6618836 base. Out
   diag/fpr_2026-10-21/{ext,adapt,base}.
+- RESULT (3 steps each; ~4 neg_text episodes / step, so t0 n ~4 per step and tN n ~60): in-context false-positive
+  rate on concept-free text under the brief, later turns, per step:
+  - base model: base L12 probe 0.033 / 0.033 / 0.033, held-out 0.05 / 0.033 / 0.033;
+  - ext s580: base probe 0.033-0.067, held-out 0.033-0.067;
+  - adapt s480: base probe 0.033-0.083, held-out 0.033-0.067.
+  Turn 0: 0 or 0.25 (1 of 4). So held-out detection numbers are not inflated by in-context false positives (~3-8%,
+  same as base). Same runs, real_score held-out detection: ext t0 0.75-1.0 / tN 0.28-0.40; adapt 1.0 / 0.95-0.97;
+  base 1.0 / 1.0.
 
 ## 2026-10-21p Linear reads of the trained math hider: refits vs held-out base probes (no new runs)
 - Extension turns.jsonl (abs 500-569): held-out base probes (L20 / L24) detect real_score turn 0 0.78 (n 328) and
