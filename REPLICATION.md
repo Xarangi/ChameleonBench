@@ -5,6 +5,23 @@ checkpoints, observed results, and unresolved limitations.
 
 TICA on a new machine: start at docs/tica/README.md (results digest, run ledger, open questions, aggregate snapshot).
 
+## 2026-10-20v Extension recovering: KEEP running (decision rule); why the collapse (hypothesis)
+- 6588314 (from the collapsed abs-400 checkpoint), by 5 abs steps 400-419: GSM8K-while-hiding 0.35 / 0.25 / 0.47 / 0.55,
+  finished 0.72 / 0.48 / 0.57 / 0.74, grad-norm median 4.2 / 3.4 / 3.7 / 2.0. cap_gen_log 410-418 (n 58): correct 0.50,
+  NO repeated-line loops (0 / 118 samples with a line repeated >= 4x since 400), failures = over-hesitation ("wait,
+  let's re-read") + truncation, the stage-A pattern. Refits: 28 / 567 and 27 / 528 beaten (~5%), margin 2.0 / 2.3.
+  Decision: keep; stop + restart from step_320 (abs 380) if GSM8K-while-hiding is not >= 0.7 over 430-440 or loops return.
+- Hypothesis for the collapse (consistent with the grad-norm climb, not proven): hide = p^2 with p = sigmoid((raw -
+  thr) / scale). While refits sat 13-18 logits above threshold p was saturated (d p^2 / dz ~ 0.01 at z ~ 5); as the
+  margin fell to ~4 / ~2, z entered the sigmoid's steep region (d p^2 / dz peaks ~0.3 near z ~ 0.7), so the hide
+  gradient grew ~10-30x while the capability terms did not. Also, the GSM8K term is rejection-sampled (trains only on
+  correct samples): as accuracy fell it had fewer samples (fallback to base solutions 0.0-0.4 -> 1.4-2.0 per step),
+  so it weakened exactly when needed.
+- Candidate fix (proposed, not built): constraint-style capability weight -- raise the KL / GSM8K weight while
+  GSM8K-while-hiding is below a target, lower it above (Lagrange multiplier / PPO adaptive-KL style), instead of
+  fixed weights; plus cap_gen_samples 4 (profiled +5-8% step, ~2x samples).
+- Batching of the CPU-heavy fit paths (rlobf_attn, LBFGS logistic, _pad) delegated; results in a later entry.
+
 ## 2026-10-20u MATH COLLAPSE at abs 389 (real, degenerate text) as refits start falling; profiling results
 - train_log cap_gen (GSM8K while hiding, T 1.0, 400 tok) by 5 abs steps: 0.56-0.93 through 385-389, then 0.12 / 0.19
   (390-399), 0.30 / 0.33 / 0.44 in the extension (400-414). cap_gen_log steps 389-399 (n 60): correct 0.20, finished
