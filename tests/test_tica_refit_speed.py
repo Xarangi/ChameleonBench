@@ -288,8 +288,8 @@ def test_batched_logistic_gates_match_sequential():
 
 
 def test_rlobf_prepad_bit_identical_and_batched_matches():
-    """refit_rlobf_prepad gives bit-identical rlobf probes; refit_batched_rlobf (folds + final in one
-    stacked run) matches the per-fit path up to float reassociation."""
+    """refit_rlobf_prepad gives bit-identical rlobf probes; refit_batched_rlobf (folds + final in
+    one stacked run) matches the per-fit path up to float reassociation."""
     import dataclasses
 
     from next_chameleons.tica import probe_zoo as z
