@@ -80,6 +80,12 @@ class SupervisedConfig:
     # once per step.
     updates_per_rollout: int = 1
     grad_clip: float = 1.0
+    # Per-term hide clip (REPLICATION 2026-10-21r; 0 = off, the original single backward). > 0:
+    # the gradient of the HIDE terms (episode hide targets + cap_gen hide) is accumulated in its own
+    # buffer over the step's micro-batches (and summed over data-parallel ranks), clipped to this
+    # L2 norm, then added to the other terms' gradient; grad_clip (total norm) still applies after.
+    # Adaptive trainer only. Logs grad_norm_hide / grad_norm_rest (pre-clip, global).
+    hide_grad_clip: float = 0.0
     save_every: int = 100
     eval_every: int = 0  # 0 = never (run evaluation as a separate job)
     # Train-until-evasion: stop early once the mean on-policy last-turn detection of the hide
@@ -133,6 +139,8 @@ class SupervisedTrainer:
         self.sched = torch.optim.lr_scheduler.LambdaLR(self.opt, lambda k: min(1.0, (k + 1) / warm))
         self.params = params
         self.step_k = 0
+        if cfg.hide_grad_clip:
+            raise NotImplementedError("train.hide_grad_clip is implemented in the adaptive trainer")
         torch.manual_seed(cfg.seed)
         (self.out / "config.json").write_text(json.dumps(asdict(cfg), indent=1))
 
@@ -1990,10 +1998,15 @@ class AdaptiveSupervisedTrainer:
                         form = self.cfg.objective.hide_loss
                         if form == "mse":
                             p = probe_prob(self.pool, pooled, rows, tg)
-                            loss = loss + ow * (p**2).sum() / n_hide
+                            h_term = ow * (p**2).sum() / n_hide
                         else:
                             p, z = probe_prob(self.pool, pooled, rows, tg, return_z=True)
-                            loss = loss + ow * hide_per_target(p, z, form).sum() / n_hide
+                            h_term = ow * hide_per_target(
+                                p, z, form, self.cfg.objective.hide_gce_q).sum() / n_hide
+                        if self.cfg.hide_grad_clip:  # separate hide buffer (10-21r)
+                            self._hide_grad_acc(h_term)
+                        else:
+                            loss = loss + h_term
                         s_hide += float((p**2).detach().sum())
                         s_caught += int((p > 0.5).sum())
                 loss.backward()
@@ -2635,9 +2648,11 @@ class AdaptiveSupervisedTrainer:
             n_views, n_targets = totals["views"], round(tot[-1])
         n_upd = max(1, int(cfg.updates_per_rollout))
         upd_losses, upd_gnorms = [], []
+        hclip = cfg.hide_grad_clip
         for u in range(n_upd):
             pol.model.train()
             self.opt.zero_grad(set_to_none=True)
+            self._hide_buf = None
             acc = defaultdict(float)
             loss_sum = 0.0
             if u == 0:  # reference targets do not depend on the trained weights
@@ -2660,10 +2675,17 @@ class AdaptiveSupervisedTrainer:
                 hw_chunk = (
                     torch.tensor([hw[k] for k in ks], device=pol.device) if hw is not None else None
                 )
-                loss, st = loss_terms(
-                    p, ref[ks], [targets[k].role for k in ks], nll, cfg.objective, totals,
-                    prev_p=prev, hide_w=hw_chunk, z=z,
-                )
+                if hclip:  # 10-21r: the hide summand is backpropagated into its own buffer
+                    _, st, (h_term, loss) = loss_terms(
+                        p, ref[ks], [targets[k].role for k in ks], nll, cfg.objective, totals,
+                        prev_p=prev, hide_w=hw_chunk, z=z, return_hide=True,
+                    )
+                    self._hide_grad_acc(h_term)
+                else:
+                    loss, st = loss_terms(
+                        p, ref[ks], [targets[k].role for k in ks], nll, cfg.objective, totals,
+                        prev_p=prev, hide_w=hw_chunk, z=z,
+                    )
                 if kl_ref is not None:  # capability anchor: every trained turn, hiding ones too
                     kls = self._kl_sel
                     loss = loss + acfg.kl_weight * self._cap_mult * kls.sum() / max(
@@ -2714,7 +2736,7 @@ class AdaptiveSupervisedTrainer:
                     acc["leash"] += float(s_leash.detach())
                     acc["n_pursuit"] += len(pk)
                 loss.backward()
-                loss_sum += float(loss.detach())
+                loss_sum += float(loss.detach()) + (float(h_term.detach()) if hclip else 0.0)
                 for k2, v in st.items():
                     acc[k2] += v
             cap_info = (self._cap_gen_step(self._g_trajs)
@@ -2725,6 +2747,10 @@ class AdaptiveSupervisedTrainer:
                 cap_info |= self._anchor_step()
             if self.world > 1:  # data-parallel: the step's gradient = the sum over ranks
                 dp.allreduce_grads(self.params)
+            if hclip:
+                hinfo = self._apply_hide_clip(hclip)
+                if u == 0:
+                    clip_info = hinfo
             gnorm = torch.nn.utils.clip_grad_norm_(self.params, cfg.grad_clip)
             self.opt.step()
             pol.weights_version = getattr(pol, "weights_version", 0) + 1  # vLLM re-sync
@@ -2811,6 +2837,7 @@ class AdaptiveSupervisedTrainer:
             **{f"train/{k}": v for k, v in {"loss": loss_sum, **summarize_stats(acc)}.items()},
             **{f"rollout/{k}": v for k, v in {**metrics, **extra}.items()},
             **pursuit_info,
+            **(clip_info if hclip else {}),
             **cap_info,
             **reloc_info,
             **refit_info,
@@ -2821,6 +2848,40 @@ class AdaptiveSupervisedTrainer:
             with (self.out / "train_log.jsonl").open("a") as fh:
                 fh.write(json.dumps(rec) + "\n")
         return rec
+
+    def _hide_grad_acc(self, h_term: torch.Tensor) -> None:
+        """train.hide_grad_clip (10-21r): add d(h_term)/d(params) to the step's hide buffer (the
+        graph is kept for the caller's backward of the other terms)."""
+
+        if not h_term.requires_grad:
+            return
+        gs = torch.autograd.grad(h_term, self.params, retain_graph=True, allow_unused=True)
+        if self._hide_buf is None:
+            self._hide_buf = [torch.zeros_like(p) for p in self.params]
+        for b, g in zip(self._hide_buf, gs, strict=True):
+            if g is not None:
+                b.add_(g)
+
+    def _apply_hide_clip(self, clip: float) -> dict:
+        """Sum the hide buffer over ranks, clip it to `clip` (L2), add it to .grad (the other
+        terms' gradient, already summed over ranks). Returns the pre-clip global norms."""
+
+        buf = self._hide_buf or [torch.zeros_like(p) for p in self.params]
+        if self.world > 1:  # every rank holds the hide buffer in the same state
+            dp.allreduce_tensors(buf)
+        for p in self.params:
+            if p.grad is None:
+                p.grad = torch.zeros_like(p)
+        n_h = float(torch.linalg.vector_norm(
+            torch.stack([torch.linalg.vector_norm(b.float()) for b in buf])))
+        n_r = float(torch.linalg.vector_norm(
+            torch.stack([torch.linalg.vector_norm(p.grad.float()) for p in self.params])))
+        coef = min(1.0, clip / (n_h + 1e-6))  # clip_grad_norm_'s convention
+        for p, b in zip(self.params, buf, strict=True):
+            p.grad.add_(b, alpha=coef)
+        self._hide_buf_last = buf  # pre-clip, global (tests)
+        self._hide_buf = None
+        return {"grad_norm_hide": n_h, "grad_norm_rest": n_r, "hide_clip_coef": coef}
 
     def _relocation_diag(self) -> dict:
         """Relocation vs erasure: fit a FRESH probe per layer on concept-present (np) vs

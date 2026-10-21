@@ -125,6 +125,26 @@ def allreduce_grads(params) -> None:
             off += n
 
 
+def allreduce_tensors(ts) -> None:
+    """In place: sum the tensors over ranks, one flat buffer per dtype / device (the hide-grad
+    buffer of train.hide_grad_clip, 10-21r)."""
+
+    d = _dist()
+    if d is None:
+        return
+    groups: dict = {}
+    for t in ts:
+        groups.setdefault((t.dtype, t.device), []).append(t)
+    for g in groups.values():
+        flat = torch.cat([t.reshape(-1) for t in g])
+        d.all_reduce(flat)
+        off = 0
+        for t in g:
+            n = t.numel()
+            t.copy_(flat[off : off + n].view_as(t))
+            off += n
+
+
 def params_checksum(params) -> list[float]:
     """Per-rank float64 sum of all parameters (drift check: equal on every rank)."""
 

@@ -25,7 +25,7 @@ def _port() -> int:
 
 
 def _spawn(world: int, out: Path, steps: int, budget: bool = False,
-           panel: bool = False, shard: bool = False) -> list[dict]:
+           panel: bool = False, shard: bool = False, hclip: float = 0.0) -> list[dict]:
     import torch.multiprocessing as mp
 
     out.mkdir(parents=True)
@@ -36,8 +36,8 @@ def _spawn(world: int, out: Path, steps: int, budget: bool = False,
     try:
         from tica_dp_worker import run
 
-        mp.spawn(run, args=(world, str(out), _port(), steps, budget, panel, shard), nprocs=world,
-                 join=True)
+        mp.spawn(run, args=(world, str(out), _port(), steps, budget, panel, shard, hclip),
+                 nprocs=world, join=True)
     finally:
         os.environ["PYTHONPATH"] = env
     return [torch.load(out / f"rank{r}.pt", weights_only=False) for r in range(world)]
@@ -162,3 +162,18 @@ def test_cap_gen_shard_splits_forks_and_keeps_ranks_in_sync(tmp_path):
     assert any(r.get("cap_gen/n_train", 0) > 0 for r in r0["recs"])
     logs = sorted((tmp_path / "w2").glob("**/cap_gen_rank*.jsonl"))  # cap_gen_log on in the worker
     assert len(logs) == 2 and all(lg.read_text().strip() for lg in logs)
+
+
+def test_two_ranks_match_one_process_with_hide_grad_clip(tmp_path):
+    """train.hide_grad_clip (10-21r): the hide buffer is summed over ranks BEFORE the clip, so 2
+    ranks clip the same global hide gradient as one process (episode hide + cap_gen hide)."""
+    steps = 2
+    (one,) = _spawn(1, tmp_path / "w1", steps, hclip=0.05)
+    r0, r1 = _spawn(2, tmp_path / "w2", steps, hclip=0.05)
+    for n in r0["lora"]:
+        assert torch.equal(r0["lora"][n], r1["lora"][n]), n
+        assert torch.allclose(one["lora"][n], r0["lora"][n], atol=1e-5, rtol=1e-4), n
+    for a, b in zip(one["recs"], r0["recs"], strict=True):
+        for k in ("grad_norm_hide", "grad_norm_rest", "hide_clip_coef", "grad_norm"):
+            assert _close(a[k], b[k], 1e-4), (k, a[k], b[k])
+    assert any(r["hide_clip_coef"] < 1.0 for r in one["recs"])  # the clip was active

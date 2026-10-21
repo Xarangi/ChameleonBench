@@ -16,7 +16,7 @@ import torch
 sys.path.insert(0, str(Path(__file__).parent))
 
 
-def build(out: Path, steps: int = 2, budget: bool = False, **over):
+def build(out: Path, steps: int = 2, budget: bool = False, hclip: float = 0.0, **over):
     from next_chameleons.tica.adaptive import AdaptiveConfig
     from next_chameleons.tica.answer_format import text_id
     from next_chameleons.tica.episodes import ConceptTexts, EpisodeSpec
@@ -119,7 +119,7 @@ def build(out: Path, steps: int = 2, budget: bool = False, **over):
     ad.update(over)
     cfg = AdaptiveSupervisedConfig(
         steps=steps, episodes_per_step=4, turns=5, micro_batch=2, lr=1e-2, warmup_steps=1,
-        save_every=0,
+        save_every=0, hide_grad_clip=hclip,
         objective=ObjectiveConfig(pin_first_turn=False, pin_segment_first=False,
                                   hide_from_turn=0, retry_hide_ladder=[2.0, 3.0]),
         adaptive=AdaptiveConfig(**ad))
@@ -150,7 +150,8 @@ def state(tr, pol, recs) -> dict:
 
 
 def run(rank: int, world: int, out: str, port: int, steps: int = 2,
-        budget: bool = False, panel: bool = False, shard: bool = False) -> None:
+        budget: bool = False, panel: bool = False, shard: bool = False,
+        hclip: float = 0.0) -> None:
     """mp.spawn entry: rank `rank` of `world` (gloo); saves <out>/rank{rank}.pt."""
 
     os.environ.update(MASTER_ADDR="127.0.0.1", MASTER_PORT=str(port), WORLD_SIZE=str(world),
@@ -167,7 +168,7 @@ def run(rank: int, world: int, out: str, port: int, steps: int = 2,
                     first_probe_panel_kinds=["linear@1", "linear@2"], merged_reads=True)
     if shard:  # data-parallel cap_gen (10-20)
         over.update(cap_gen_shard=True, cap_gen_log=True)
-    tr, pol = build(d / "run", steps=steps, budget=budget, **over)
+    tr, pol = build(d / "run", steps=steps, budget=budget, hclip=hclip, **over)
     recs = [tr.step() for _ in range(steps)]
     torch.save(state(tr, pol, recs), d / f"rank{rank}.pt")
     if world > 1:

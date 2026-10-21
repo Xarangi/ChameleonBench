@@ -68,11 +68,19 @@ class ObjectiveConfig:
     # threshold (the surge before the 10-20u math collapse). Applies to every hide target (episode
     # hide, cap_gen hide); with "log", hide_weight 0.3 makes its max push equal p^2's peak.
     hide_loss: str = "mse"
+    # "gce" (REPLICATION 2026-10-21r): generalized cross-entropy (Zhang & Sabuncu 2018) on the
+    # hide side, (1 - (1 - p)^q) / q. Gradient in z = p (1 - p)^q: q -> 0 is the log loss, q = 1
+    # the bounded MAE-like loss p. Its max push (at p = 1 / (1 + q)) is ~0.50 at q 0.3, so
+    # hide_weight ~0.6 matches p^2's peak 8/27. Read only when hide_loss == "gce".
+    hide_gce_q: float = 0.3
 
 
-def hide_per_target(p: torch.Tensor, z: torch.Tensor | None, form: str) -> torch.Tensor:
-    """Per-target hide loss: p^2 ("mse") or -log(1 - p) ("log", from z when given: exact for
-    saturated probes where p rounds to 1)."""
+def hide_per_target(p: torch.Tensor, z: torch.Tensor | None, form: str,
+                    q: float | None = None) -> torch.Tensor:
+    """Per-target hide loss: p^2 ("mse"), -log(1 - p) ("log", from z when given: exact for
+    saturated probes where p rounds to 1) or (1 - (1 - p)^q) / q ("gce", q = hide_gce_q;
+    computed as -expm1(q * log(1 - p)) / q with log(1 - p) = logsigmoid(-z), stable at q -> 0
+    and for saturated probes)."""
 
     if form == "mse":
         return p**2
@@ -80,6 +88,12 @@ def hide_per_target(p: torch.Tensor, z: torch.Tensor | None, form: str) -> torch
         if z is not None:
             return torch.nn.functional.softplus(z)
         return -torch.log1p(-p.clamp(max=1 - 1e-7))
+    if form == "gce":
+        if q is None or not q > 0:
+            raise ValueError(f"hide_loss gce needs hide_gce_q > 0, got {q!r}")
+        log1mp = (torch.nn.functional.logsigmoid(-z) if z is not None
+                  else torch.log1p(-p.clamp(max=1 - 1e-7)))
+        return -torch.expm1(q * log1mp) / q
     raise ValueError(f"unknown hide_loss {form!r}")
 
 
@@ -177,7 +191,8 @@ def loss_terms(
     prev_p: torch.Tensor | None = None,
     hide_w: torch.Tensor | None = None,
     z: torch.Tensor | None = None,
-) -> tuple[torch.Tensor, dict[str, float]]:
+    return_hide: bool = False,
+):
     """p: policy probe probs [k] (with grad); p_ref: reference probs [k]; nll: [n_views] or None.
 
     The objective is hide_w * mean over ALL hide targets + match_w * mean over ALL match targets +
@@ -186,6 +201,10 @@ def loss_terms(
     gives exactly the full-batch gradient whatever the chunk composition. Without `totals` the
     chunk is the whole batch. Stats are SUMS (hide_sq, hide_p, match_sq, nll) plus counts, so the
     caller can form exact means.
+
+    return_hide (train.hide_grad_clip, 10-21r): also return (hide, rest), the hide summand and the
+    sum of the other summands, so the caller can backpropagate them separately; `total` itself is
+    computed exactly as without the flag.
     """
 
     hide = torch.tensor([r == "hide" for r in roles], device=p.device, dtype=torch.bool)
@@ -203,7 +222,8 @@ def loss_terms(
     # flat loss optimises for). Normalised by the step-total hide weight for exact grad accum.
     # hide_loss (default "mse": per-target p^2, the original expressions)
     if n_h and cfg.hide_loss != "mse":
-        per = hide_per_target(p[hide], z[hide] if z is not None else None, cfg.hide_loss)
+        per = hide_per_target(p[hide], z[hide] if z is not None else None, cfg.hide_loss,
+                              cfg.hide_gce_q)
     else:
         per = p[hide] ** 2 if n_h else None
     if hide_w is not None and n_h:
@@ -249,6 +269,16 @@ def loss_terms(
         "panel_p": float(p[panel].sum().detach()) if n_p else 0.0,
         "n_panel": n_p,
     }
+    if return_hide:
+        hide_part = cfg.hide_weight * s_hide / max(1.0, hide_denom)
+        rest = (
+            cfg.match_weight * s_match / max(1, t["match"])
+            + cfg.off_match_weight * s_off / max(1, t.get("off", n_o))
+            + cfg.improve_weight * s_imp / max(1, t["hide"])
+            + cfg.lm_weight * s_lm / max(1, t["views"])
+            + cfg.panel_weight * s_panel / max(1, t.get("panel", n_p))
+        )
+        return total, stats, (hide_part, rest)
     return total, stats
 
 
