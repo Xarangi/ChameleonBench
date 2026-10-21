@@ -49,6 +49,12 @@ TICA on a new machine: start at docs/tica/README.md (results digest, run ledger,
   effect. CPU test tests/test_tica_refit_overlap.py: 4 episodes x 5 turns, linear / rlobf_attn / meandiff (forced
   gate failure -> switch fallback with rollback + redone reads exercised): refit records, every turn's results,
   probe tensors and the final global torch RNG state equal off vs on.
+- Default-off path unchanged: off1 step 1 vs r380_ctl step 0 (pre-refactor code, same adapter / config / seed /
+  DP2 / offset 380): refits.jsonl 8/8, turns.jsonl 128/128 rows equal, 181/181 non-timing rollout metrics equal.
+- Not covered on GPU: no refit failed its gate in the 4 runs (ep_refit_overlap_redo 0), so the switch-fallback
+  rollback + redone reads are verified on CPU only (exact by construction). The sec_ep_refit_overlap_saved values in
+  overlap_test/on*/train_log.jsonl (87 / 71) use a pre-fix definition that counted serial first-probe fits; the
+  committed metric is pass refits only (sec_ep_refit_work - sec_ep_refit_main).
 - Speed (per step, DP max): step 1 sec_rollout off 102.3 / 101.5, on 100.9 / 101.6 (~1 s); step 2 off 70.3 / 70.4,
   on 62.7 / 68.3 (-2..-8 s, trajectories already diverged). Pass refits main-thread time 58-64 s vs 60-67 s serial
   (both ranks summed): a SMALL gain. Why: (1) most rank-turns have ONE pass refit (r380_ctl: 73/145 rank-turns),
