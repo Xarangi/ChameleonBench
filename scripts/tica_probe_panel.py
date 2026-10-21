@@ -54,6 +54,20 @@ def margin(mon, pooled, row, c):
     return float(raw - thr), bool(raw > thr)
 
 
+def _reread_det(records):
+    """--base-reread: per panel probe, detection on monitored dodging turns when the BASE model
+    reads the policy's transcript, next to the policy's own detection on the same turns."""
+    on = [r for r in records if "panel_base_reread" in r and not r["off"] and r["cond"] in DODGE]
+    out = {}
+    for p in sorted({p for r in on for p in r["panel_base_reread"]}):
+        rs = [r for r in on if p in r["panel"] and p in r["panel_base_reread"]]
+        if rs:
+            pol_det = sum(float(r["panel"][p][1]) for r in rs) / len(rs)
+            base_det = sum(float(r["panel_base_reread"][p][1]) for r in rs) / len(rs)
+            out[p] = {"det_policy": pol_det, "det_base_reads_text": base_det, "n": len(rs)}
+    return out
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--config", required=True)
@@ -79,6 +93,9 @@ def main():
     ap.add_argument("--dump-feats", help="save per-turn pooled features (.pt) for "
                     "scripts/tica_evasion_detector.py")
     ap.add_argument("--feat-layers", default="8,12,16,20,24")
+    ap.add_argument("--base-reread", action="store_true",
+                    help="also score the panel on the BASE model reading the policy's exact "
+                         "transcripts (text-only control: is a catch carried by the tokens?)")
     ap.add_argument("--model-path")
     ap.add_argument("--seed", type=int, default=1)
     ap.add_argument("--out", required=True)
@@ -270,6 +287,7 @@ def main():
                 if getattr(m, "needs_tokens", False):
                     b_tok |= set(lu)
             state: dict = {}
+            state_b: dict = {}  # --base-reread: the base model's own cache over the same convs
             for t in range(a.turns):
                 tok: dict = {}
                 pooled = pol.pooled_incremental([trj.convs[t] for trj in trajs],
@@ -277,6 +295,15 @@ def main():
                                                 token_out=tok if b_tok else None)
                 for L in b_tok:
                     pooled[("tok", L)] = tok[L]
+                pooled_b = None
+                if a.base_reread and not a.base:
+                    tok_b: dict = {}
+                    with pol.reference():
+                        pooled_b = pol.pooled_incremental([trj.convs[t] for trj in trajs],
+                                                          sorted(need | tok_layers), state_b,
+                                                          token_out=tok_b if tok_layers else None)
+                    for L in tok_layers:
+                        pooled_b[("tok", L)] = tok_b[L]
                 for i, trj in enumerate(trajs):
                     r = trj.results[t]
                     cond = trj.spec.cond
@@ -291,6 +318,9 @@ def main():
                            "panel": ({p: margin(m, pooled, i, pc) for p, m in panel[pc].items()}
                                      if pc in panel else {}),
                            "refits": {}, "refit_meta": {}}
+                    if pooled_b is not None and pc in panel:
+                        rec["panel_base_reread"] = {p: margin(m, pooled_b, i, pc)
+                                                    for p, m in panel[pc].items()}
                     if cond == "mismatch" and c in panel:  # A's panel on B's text
                         rec["false_alarm"] = {p: margin(m, pooled, i, c)
                                               for p, m in panel[c].items()}
@@ -308,7 +338,7 @@ def main():
                         feats.append(torch.stack([pooled[L][i].float().cpu()
                                                   for L in feat_layers]).half())
                     records.append(rec)
-                del pooled, tok
+                del pooled, tok, pooled_b
         ep0 += len(trajs)
         tr.pool.entries = [e for e in tr.pool.entries if e.monitor.name not in set(tr._transient)]
         tr._transient = []
@@ -320,6 +350,7 @@ def main():
            "panel_names": sorted({p for v in panel.values() for p in v}),
            "panel_failed": failed, "by_probe_index": probe_index_metrics(all_trajs),
            "aggregate": agg, "selectivity": selectivity(records, a.turns),
+           "base_reread": _reread_det(records) if a.base_reread else None,
            "records": records, "sec": round(time.time() - t0),
            "kind_layers": {k: kind_layers(split_kind(k)[0], split_kind(k)[1] or prim)
                            for k in a.panel_kinds.split(",") if k}}
