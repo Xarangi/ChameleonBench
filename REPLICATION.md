@@ -5,6 +5,19 @@ checkpoints, observed results, and unresolved limitations.
 
 TICA on a new machine: start at docs/tica/README.md (results digest, run ledger, open questions, aggregate snapshot).
 
+## 2026-10-21az Logclip keeps climbing on the HARD refit kinds -> both logclip runs extended 200 steps
+- Refit beat rate by kind, 40-step bins (train_log, n = refits faced):
+  - logclip abs 160 / 200 / 240 / 280: k2 0.49 / 0.54 / 0.49 / 0.71; k3 0.10 / 0.24 / 0.29 / 0.32; k4 0.11 / 0.21 / 0.12 /
+    0.47 (n 30); rlobf_attn 0.06 / 0.06 / 0.10 / 0.17 (n 70-99); attnpool 0.29 / 0.30 / 0.45 / 0.53; ens4_mlp 0.45 / 0.46 /
+    0.38 / 0.66; maxpool 0.38 / 0.62 / 0.63 / 0.67.
+  - panel0 abs 80 / 120 / 160-199: k2 0.21 / 0.32 / 0.57; rlobf_attn 0.11 / 0.07 / 0.09; attnpool 0.17 / 0.17 / 0.38.
+  Not saturated, so the hard-kind gap may close with steps (stay reached rlobf ~0.50 at abs 620-660).
+- Clarification of 10-21ax: L24 (held out from training, between trained 22 and 26) DOES generalize (linear / attnpool 0.00,
+  rlobf_attn 0.06-0.44); L20 (held out, between 16 and 22) does not. Untrained-layer failure = 4 / 20 / 28 / 30, not "every
+  held-out layer".
+- Extensions (same overrides, optimizer state restored): logclip_panel0_r200 6685653 (abs 200-400, wt-panel0);
+  logclip_r320 6685654 (abs 320-520, afterok 6635500, wt-hclip).
+
 ## 2026-10-21ay panel2 all arms: same layer pattern; held-out-judge races: logclip never beats a Bailey or L20 refit; text-only control
 - panel2 detection (base / panel0 s150 / logclip abs 260 / stay abs 660), base 1.00 everywhere:
   - 0.00 for every arm: mck_attnlite / softmax / rollmean40 @12 / 22, rlobf_attn_max @12 / 22, linear @12 / 24, attnpool@24;
