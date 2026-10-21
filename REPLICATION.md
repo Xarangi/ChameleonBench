@@ -5,6 +5,22 @@ checkpoints, observed results, and unresolved limitations.
 
 TICA on a new machine: start at docs/tica/README.md (results digest, run ledger, open questions, aggregate snapshot).
 
+## 2026-10-21d Arm diagnostics (abs 380-419) + timing; corrections
+- Timing: sec_ep_refit_read/fit are summed over both DP ranks. Per rank, refits are ~56 of ~80 s of the episode phase
+  (ctl) and ~85 of ~110 s (ext); generation is the remainder. Fit-while-read overlap is NOT implemented (only the
+  batched fits, 10-20y). CORRECTION (chat): I compared step time to "multi-turn RL"; the recipe is not RL (free
+  generation, then backprop through the probe score + NLL/KL, no reward or policy gradient).
+- log: hide_mse 0.96 -> 0.79 (fastest fall), per-turn pass 0.10 vs ctl 0.08-0.09, refits/episode 7.4-7.9 vs 6-6.8.
+  Costs: ep_old_catch 0 -> 1.2 (escapes land in regions bank probes catch) and cap_gen/finished 0.44 at 410-419
+  (truncation, GSM 0.42).
+- adapt: mult 1.03 -> 1.61 -> 2.71, grad norm 1.9 -> 4.0 -> 5.4 (scaled capability terms dominate the clipped update,
+  shrinking the hide share); GSM not yet responding. If mult approaches ~5 with no gain, 0.75 is above the reachable
+  math-while-hiding level.
+- All arms: no-brief math detected 1.00 and negative text 0.00 at turn 0 (hiding is brief-conditional, no false
+  positives); refit AUROC on fit data 0.998-0.999; held-out last-turn detection 0.49-0.83.
+- ext (470-509): held-out last-turn detection 0.24-0.30, cap_gen caught_frac 0.12-0.32, ep_old_catch 1.6-2.8,
+  ep_refit_all_failed 0.1-0.2.
+
 ## 2026-10-21c Interim: r380 arms at abs ~402-414; no arm repeats the abs-389 collapse so far
 - GSM8K-while-hiding (cap_gen acc, by 10 abs steps). Original run: 380-389 0.69, 390-399 0.18 (4 loops).
   - ctl: 0.62 / 0.49 (1 loop) / 0.42 / 0.58.
