@@ -29,5 +29,5 @@ M=$(sbatch --parsable --dependency=afterok:$L0:$L1 --account=ctb-liyue_cpu --mem
 C=$(sbatch --parsable --dependency=afterok:$M scripts/slurm/tica_mw_probe_check.sh \
   final_v5_modelwritten_4b $W/probe_check.json --old-data $T/final_v5_clean.json \
   --old-inputs $T/final_v5_elicit_inputs.json --old-labels $T/concept_labels_v5data_27b.json \
-  --concepts "sports|jokes and humor|all-caps text|German language|chemistry|JavaScript code|formal tone|finance")
+  --concepts "sports|all-caps text|politics and elections|German language|Arabic language|JavaScript code|SQL code|JSON data")
 echo "labels $L0 $L1 merge $M probe-check $C"
