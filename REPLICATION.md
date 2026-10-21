@@ -5,6 +5,16 @@ checkpoints, observed results, and unresolved limitations.
 
 TICA on a new machine: start at docs/tica/README.md (results digest, run ledger, open questions, aggregate snapshot).
 
+## 2026-10-20z Decision rule met at 430-439 (keep); held-out evasion fades as math recovers
+- 6588314 abs 430-434 / 435-439: GSM8K-while-hiding 0.74 / 0.67 (cap_gen_log since 430: n 38, correct 0.74, 0 loops),
+  grad norm 2.6 / 1.3, episode KL 0.064 / 0.055 (back to pre-collapse ~0.055). Rule (>= 0.7 over 430-440): met
+  (borderline) -> keep running.
+- Refits 430-439: 19 / 322 beaten (5.9%), margin 6.8. Held-out L20 / L24 turn-0 detection 0.48 / 0.43 / 0.60 / 0.77 over
+  400-439: the held-out evasion that arrived with the collapse is receding as math recovers (supports 10-20x link).
+- Batching (10-20y): refit_batched_logistic + refit_batched_rlobf validated (exact to fp tolerance, same gate
+  decisions), GPU gate fits ens linear 3.1 -> 1.9-2.1 s, maxpool 5.2 -> 1.8, rlobf_attn 10.4 -> 5.5; to enable in the
+  next run (not in the running one).
+
 ## 2026-10-20y Refit fit speed-ups: batched logistic (Newton), prepadded + fold-batched rlobf (flags, default off)
 - From the py-spy profile (6589171, rank 0, per-step refits over 6 steps): rlobf fits 50.7 s (of it per-minibatch
   re-padding ~16 s), LBFGS logistic fits 49.5 s (ens *_linear gates + attnpool / maxpool inits), _fit_tok_many 26.5 s.
