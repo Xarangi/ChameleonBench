@@ -5,6 +5,18 @@ checkpoints, observed results, and unresolved limitations.
 
 TICA on a new machine: start at docs/tica/README.md (results digest, run ledger, open questions, aggregate snapshot).
 
+## 2026-10-21c Interim: r380 arms at abs ~402-414; no arm repeats the abs-389 collapse so far
+- GSM8K-while-hiding (cap_gen acc, by 10 abs steps). Original run: 380-389 0.69, 390-399 0.18 (4 loops).
+  - ctl: 0.62 / 0.49 (1 loop) / 0.42 / 0.58.
+  - log: 0.61 / 0.49 (4 loops, grad median 4.0) / 0.49 / 0.42.
+  - adapt: 0.62 / 0.67 / 0.40; cap_adapt/mult 1.14 -> 1.90 -> 2.45 (acc_ema 0.54 < 0.75 target).
+- Refits by probe index, 400-409: k2 ctl 0.28 / log 0.54 / adapt 0.36 (n ~46 for 400-409; adapt n 14); k3 ctl 0.08 / log 0.20.
+  Held-out turn-0 detection ~1.0 in all arms (the start checkpoint precedes the evasion seen after the collapse).
+- Caveat: one seed per arm and about 20-35 steps each. The ctl arm differs from the original run by a fresh AdamW
+  state, cap_gen_samples 4 and the batched fits, so "no collapse in ctl" cannot yet single out a cause.
+- Extension 6588314 at abs 500: k2 by 10 steps 0.35-0.54 (flat, no upward trend); k3 0.14-0.52; GSM 0.59-0.75; 0 loops;
+  held-out turn-0 0.60-0.85.
+
 ## 2026-10-21b Arms from abs 380 (pre-collapse): control / log hide loss / adaptive capability weight
 - New options (all default off / unchanged; tests/test_tica_hide_loss_capadapt.py + regression tests on compute node
   6595463 pass): objective.hide_loss "mse" | "log" (-log(1 - p) = softplus(z), z from probe_prob(return_z)), applied to
