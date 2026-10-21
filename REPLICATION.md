@@ -5,6 +5,17 @@ checkpoints, observed results, and unresolved limitations.
 
 TICA on a new machine: start at docs/tica/README.md (results digest, run ledger, open questions, aggregate snapshot).
 
+## 2026-10-21bf CONFOUND: stay-vs-logclip held-out gap = stay term OR MSE lineage / length; controls launched
+- fb600_stay vs logclip differ in: stay_standalone (on / off), hide loss (MSE w 1.0 / log w 0.3 + hide clip 0.5), lineage
+  (MSE original abs 600, which had evaded L20 with drift, 10-21ao), steps (abs 660 / 260), kind_bandit_refits_only
+  (true / false), cap_gen_samples (4 / 2). So 10-21be's "stay generalizes" is not attributable to stay.
+- Clean stay control = fb600_bit (identical config minus stay_standalone; same lineage, same 60 steps). Already known:
+  bit's held-out L20 det t0 0.74 -> t15 0.16 (10-21as), i.e. the MSE lineage evades L20 without stay.
+- Launched on fb600_bit final (abs 660): held-out-judge races bailey / nc_ens8_tok / gdm / mck_attnlite / linear@20
+  6695620-24; ensemble fit seeds 2-4 (bailey, nc, linear@20) 6695625-27.
+- Other direction: logclip_stay_r320 6695628 = logclip resume_120 final (abs 320) + stay_standalone, otherwise identical
+  to logclip_r320 (6685654), 160 steps, wt-panel0 (has stay + hide clip). Compare with logclip_r320 at matched steps.
+
 ## 2026-10-21be stay beats mck_attnlite refits 4 in a row; panel0 holding, math-while-hiding 0.68; logclip flat
 - stay abs 660 vs mck_attnlite refits: k2 1.00, k3 1.00, k4 1.00, k5 0.62 (n 32).
 - 40-step bins (GSM-while-hiding from every cap_gen sample, n):
