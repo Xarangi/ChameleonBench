@@ -32,7 +32,12 @@ TICA on a new machine: start at docs/tica/README.md (results digest, run ledger,
   +1.8 and no-prompt math +1.6 above the negatives (base: +15 / +16); the 1%-FPR threshold sits at +2.6 (top
   held-out negative +3.2, same as base 3.3). So the probe misses held-out IN-CONTEXT math at its own threshold too:
   tpr_ic_held median 0.00 overall, 0.25 among tpr_np failures; tpr_np >= 0.8 and tpr_ic_held >= 0.8 agree on 171/180.
-  tpr_np is a faithful proxy for "does the deployed probe catch in-context math".
+  tpr_np is a faithful proxy for "does the deployed probe catch in-context math". Of the rejections that cleared
+  AUROC and failed only tpr_np, 7/60 (abs 500) and 9/47 (abs 380) catch >= 0.8 of held-out in-context math: ~12-19%
+  of the tpr_np rejections are probes an in-context bar would keep.
+- Per layer (abs 500, fail tpr_np / auroc / pass of 36): L8 10/26/0, L12 18/13/5, L16 20/10/6, L22 9/27/0, L26 3/33/0.
+  The replica was not bit-checked against fit_refit_bank; the trainer's own linear attempts on these prefixes (0/8)
+  agree with it.
 - (B) threshold noise: not the cause. Threshold from 374 never-fit negatives (86 + 288): tpr_np 0.00 (stricter, not
   looser). Re-splitting negatives (10 seeds): gate outcome mixed for 18% of cells (L12 44%), passing 6%. At 5% FPR
   27% would pass (abs 380: 59%).
@@ -46,7 +51,8 @@ TICA on a new machine: start at docs/tica/README.md (results digest, run ledger,
   math above negatives (AUROC 0.92-0.97) but at 1% FPR catches neither held-out in-context math nor plain math. Under
   10-21h's plan (refit_min_tpr_np 0) such probes would be deployed with ~0-25% in-context TPR at their threshold. If
   the tpr_np gate is dropped, gate on held-out IN-CONTEXT TPR at the deployed threshold instead (needs held-out
-  in-context positives; the cv path fits all of them). Caveat: fixed human math texts, not the model's own answers;
+  in-context positives: the cv path already has out-of-fold positive scores, so out-of-fold TPR at each fold's 1%-FPR
+  threshold costs no new reads). Caveat: fixed human math texts, not the model's own answers;
   one checkpoint per run; maxpool / zoo kinds not measured (rlobf_attn / ens4_mlp pass the trainer's gate here).
 
 ## 2026-10-21m Log loss from scratch at LR 1e-4 ALSO diverges -> LR is not the cause; trigger = first refits

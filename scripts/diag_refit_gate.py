@@ -19,8 +19,14 @@ Diagnostic only (no trainer changes). Two stages:
 Outputs go to --out (scratch only; states and per-refit metadata never committed; no raw text
 is written anywhere, texts are referenced by answer_format.text_id).
 
-Run from a snapshot of the committed source (the trainer files may be mid-edit):
-  PYTHONPATH=<snapshot>/src python scripts/diag_refit_gate.py collect --root <snapshot> ...
+Run from a snapshot of the committed source (the trainer files may be mid-edit), on one A100
+(jobs 6603899 / 6603906; ~1 h each):
+  git archive HEAD src configs scripts/tica.py | tar -x -C <snap>; cp this file <snap>/scripts/
+  export TICA_STEP_OFFSET=500   # 380 for resume_60/adaptive/step_320
+  cd <snap>; PYTHONPATH=src python scripts/diag_refit_gate.py collect --root . --out <out> \
+    --adapter <run>/resume_400/adaptive/step_100 --pool <run>/resume_400/answer_pool \
+    --model-path <local snapshot copy> --rollouts 8 --max-refits 36
+  PYTHONPATH=src python scripts/diag_refit_gate.py analyze --out <out> --seeds 10
 """
 
 from __future__ import annotations
