@@ -5,6 +5,17 @@ checkpoints, observed results, and unresolved limitations.
 
 TICA on a new machine: start at docs/tica/README.md (results digest, run ledger, open questions, aggregate snapshot).
 
+## 2026-10-21bb Ensemble fit seeds: logclip IS caught by Bailey / NC (the 0.15 fit was the outlier); stay gdm race; extensions early
+- logclip abs 260, 3 more fit seeds (16 ep x 16 turns): bailey_ens_tok 1.00 / 1.00 / 1.00, nc_ens8_tok 1.00 / 0.96 / 1.00,
+  linear@20 0.90 / 0.86 / 0.89. With panel2 (0.98 / 0.94) that is 4 of 5 fits >= 0.94 for each ensemble; the reread run's
+  fit (0.15 / 0.55) was the outlier. So 10-21ba's "one fit is not a measurement" holds, but logclip's static detection by
+  the all-layer ensembles is ~1.0. stay seeds running (6687696-98).
+- stay abs 660 vs gdm_rollattn refits: k2 0.47 (32, 5.1 turns), k3 0.36 (14), k4 0.20 (5) (logclip: k2 0.09).
+- Packed job p3 also OOM'd (mck_attnlite next to gdm; ~20 GB per race). stay mck rerun alone 6689407. Pack wrapper note
+  corrected: only single-layer linear-type kinds fit two per A100-40GB.
+- Extensions, first steps: panel0 abs 201-215 k2 0.65 (69), k3 0.43 (44), k4 0.22; rlobf_attn 0.17 (36), attnpool 0.54.
+  logclip abs 321-328 k2 0.47 (38), k3 0.39 (18); rlobf_attn 0.10 (21).
+
 ## 2026-10-21ba Held-out-judge races: STAY beats Bailey / L20 refits in context, logclip cannot; text control; ensemble fits unstable
 - Races (32 ep x 16 turns, every refit = a fresh probe of kind K fit on the model's own states), k: frac (n, turns):
   - logclip abs 260: bailey k2 0.00 (32); linear@20 k2 0.00 (32); gdm k2 0.09 (32, 4.0); nc_ens8_tok k2 0.44 (32, 3.3),
