@@ -518,6 +518,15 @@ def _take(items, idx):
     return items[idx] if torch.is_tensor(items) else [items[int(i)] for i in idx]
 
 
+def _ic_hits(sp, sn, cfg, hit, tot):
+    """tpr_ic accumulator (10-21o): out-of-fold positives above the fold's threshold at refit_fpr
+    on the held-out negatives -- whether the probe catches held-out IN-CONTEXT positives at its
+    operating point (10-21g: AUROC alone admits probes that catch ~0 at 1% FPR)."""
+
+    thr = float(quantile_threshold(sn, cfg.refit_fpr))
+    return hit + int((sp > thr).sum()), tot + len(sp)
+
+
 def gate_fit(kind, P, N, NP, cfg, *, name, layer, concept, device="cpu"):
     """Fit + gate a zoo probe (module docstring). Returns (monitor or None, info)."""
 
@@ -532,6 +541,7 @@ def gate_fit(kind, P, N, NP, cfg, *, name, layer, concept, device="cpu"):
     try:
         perm = torch.randperm(_n(P), generator=g)
         wins, pairs = 0.0, 0
+        hit, tot = 0, 0  # out-of-fold positives above each fold's own threshold (tpr_ic)
         if kind == "gdm_rollattn":  # the k CV folds + the final fit as ONE vectorised training
             outs = [perm[j::k] for j in range(k)]
             keeps = []
@@ -543,10 +553,11 @@ def gate_fit(kind, P, N, NP, cfg, *, name, layer, concept, device="cpu"):
             nets = _fit_gdm_many(P, Nf, g, dev, [*keeps, torch.ones(_n(P), dtype=torch.bool)])
             mons = [LitTokenMonitor(kind, name, layer, concept, n_.eval()) for n_ in nets]
             for out, mj in zip(outs, mons[:-1], strict=True):
-                a_j = auroc(mj.logits(_take(P, out)).detach().cpu(),
-                            mj.logits(Nh).detach().cpu())
+                sp_j, sn_j = mj.logits(_take(P, out)).detach().cpu(), mj.logits(Nh).detach().cpu()
+                a_j = auroc(sp_j, sn_j)
                 wins += a_j * len(out) * nh
                 pairs += len(out) * nh
+                hit, tot = _ic_hits(sp_j, sn_j, cfg, hit, tot)
             k = 0  # folds done
         tok_batch = kind in TOKEN_KINDS and getattr(cfg, "refit_batched_fits", False)
         blr = getattr(cfg, "refit_batched_logistic", False)
@@ -574,10 +585,11 @@ def gate_fit(kind, P, N, NP, cfg, *, name, layer, concept, device="cpu"):
             else:
                 mons = _fit_ens_many(kind, P, Nf, keeps, g=g, **kw)
             for out, mj in zip(outs, mons[:-1], strict=True):
-                a_j = auroc(mj.logits(_take(P, out)).detach().cpu(),
-                            mj.logits(Nh).detach().cpu())
+                sp_j, sn_j = mj.logits(_take(P, out)).detach().cpu(), mj.logits(Nh).detach().cpu()
+                a_j = auroc(sp_j, sn_j)
                 wins += a_j * len(out) * nh
                 pairs += len(out) * nh
+                hit, tot = _ic_hits(sp_j, sn_j, cfg, hit, tot)
             k = 0  # folds done
         for j in range(k):
             out = perm[j::k]
@@ -586,9 +598,11 @@ def gate_fit(kind, P, N, NP, cfg, *, name, layer, concept, device="cpu"):
             mj = fit_kind(kind, _take(P, keep.nonzero().flatten()), Nf, name=name, layer=layer,
                           concept=concept, C=cfg.refit_C, g=g, device=device,
                           rlobf_prepad=getattr(cfg, "refit_rlobf_prepad", False))
-            a_j = auroc(mj.logits(_take(P, out)).detach().cpu(), mj.logits(Nh).detach().cpu())
+            sp_j, sn_j = mj.logits(_take(P, out)).detach().cpu(), mj.logits(Nh).detach().cpu()
+            a_j = auroc(sp_j, sn_j)
             wins += a_j * len(out) * nh
             pairs += len(out) * nh
+            hit, tot = _ic_hits(sp_j, sn_j, cfg, hit, tot)
         au = wins / pairs
         done = kind == "gdm_rollattn" or lin_batch or rlobf_batch or (
             getattr(cfg, "refit_batched_fits", False) and (
@@ -603,8 +617,11 @@ def gate_fit(kind, P, N, NP, cfg, *, name, layer, concept, device="cpu"):
     mon.thr = float(quantile_threshold(sn, cfg.refit_fpr))
     mon.scale_ = max(float(sn.float().std()), 1e-3)
     tpr_np = float((mon.logits(NP).detach().cpu() > mon.thr).float().mean())
-    info.update({"auroc": au, "tpr_np": tpr_np})
+    tpr_ic = hit / tot if tot else float("nan")
+    info.update({"auroc": au, "tpr_np": tpr_np, "tpr_ic": tpr_ic})
     ok = math.isfinite(au) and au >= cfg.refit_min_auroc and tpr_np >= cfg.refit_min_tpr_np
+    if getattr(cfg, "refit_min_tpr_ic", 0.0) > 0:
+        ok = ok and math.isfinite(tpr_ic) and tpr_ic >= cfg.refit_min_tpr_ic
     info["kept"] = ok
     return (mon if ok else None), info
 

@@ -2186,14 +2186,15 @@ class AdaptiveSupervisedTrainer:
     def _log_refit(self, info: dict, ep: int, turn: int, concept: str, attempt: int,
                    sec: float) -> None:
         """One record per refit attempt: kind, gate outcome and WHY it failed (auroc below
-        refit_min_auroc / no-prompt TPR below refit_min_tpr_np / fit error), sizes, time."""
+        refit_min_auroc / no-prompt TPR below refit_min_tpr_np / in-context TPR below
+        refit_min_tpr_ic / fit error), sizes, time."""
 
         acfg = self.cfg.adaptive
         lay = info.get("layers") or {}
-        au, tp = info.get("auroc"), info.get("tpr_np")
+        au, tp, ti = info.get("auroc"), info.get("tpr_np"), info.get("tpr_ic")
         if au is None and lay:  # linear bank: per-layer gate values
             best = max(lay.values(), key=lambda v: v.get("auroc") or -1.0)
-            au, tp = best.get("auroc"), best.get("tpr_np")
+            au, tp, ti = best.get("auroc"), best.get("tpr_np"), best.get("tpr_ic")
         kept = bool(info.get("kept"))
         why = None
         if not kept:
@@ -2203,6 +2204,8 @@ class AdaptiveSupervisedTrainer:
                 why = "auroc"
             elif tp is None or tp < acfg.refit_min_tpr_np:
                 why = "tpr_np"
+            elif acfg.refit_min_tpr_ic > 0 and (ti is None or not ti >= acfg.refit_min_tpr_ic):
+                why = "tpr_ic"
             else:
                 why = "other"
         self._refit_log.append({
@@ -2210,6 +2213,7 @@ class AdaptiveSupervisedTrainer:
             "kind": info.get("kind"), "attempt": attempt, "kept": kept, "why": why,
             "auroc": None if au is None else round(float(au), 4),
             "tpr_np": None if tp is None else round(float(tp), 4),
+            "tpr_ic": None if ti is None or ti != ti else round(float(ti), 4),
             "n_pos": info.get("n_pos"), "n_neg": info.get("n_neg"), "sec": round(sec, 2),
             "sec_read": info.get("sec_read"), "first_probe": bool(info.get("first_probe"))})
 

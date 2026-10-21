@@ -66,8 +66,9 @@ rl:
     refit_when_ready: false
     refit_as_start: false
     refit_min_auroc: 0.95
-    refit_min_tpr_np: 0   # REPLICATION 10-21h: no plain-math (no-prompt) refit gate; refits gated on in-context AUROC only (tpr_np still logged)
+    refit_min_tpr_np: 0   # REPLICATION 10-21h: no plain-math (no-prompt) refit gate; tpr_np still logged; see refit_min_tpr_ic
     refit_np_in_fit: false  # 10-21k: in-context fork positives only
+    refit_min_tpr_ic: 0.8   # 10-21o: catch >= 0.8 of held-out in-context positives at the 1% FPR threshold (replaces tpr_np, 10-21g)
     refit_min_each: 24
     refit_buf_cap: 512
     refit_C: 1.0

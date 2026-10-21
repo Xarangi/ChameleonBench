@@ -5,6 +5,23 @@ checkpoints, observed results, and unresolved limitations.
 
 TICA on a new machine: start at docs/tica/README.md (results digest, run ledger, open questions, aggregate snapshot).
 
+## 2026-10-21o Gate diagnostic (10-21g) overturns 10-21h's reading; new in-context TPR gate (refit_min_tpr_ic, default off)
+- 10-21g: on the trained model a mean-pooled linear refit ranks in-context math above negatives (AUROC 0.92-0.97)
+  but at its own 1% FPR threshold it catches ~0-25% of HELD-OUT IN-CONTEXT math (in-context math sits +1.8 SD above
+  negatives vs +15 on base weights, same prefixes; threshold ~+2.6). tpr_np pass and in-context-TPR pass agree on 171/180
+  cells. Threshold noise, bad negatives, sample size / C: ruled out. So the plain-math gate was mostly rejecting
+  probes that do not catch the hidden math in context either; only 12-19% of its rejections were good in-context probes.
+- CORRECTION to 10-21h: "a refit that clears AUROC already separates math content in context" was wrong at the
+  operating point. Dropping the gate with AUROC alone (as 10-21h/k configured) would deploy probes that catch almost
+  nothing -> easy passes.
+- Built: adaptive.refit_min_tpr_ic (default 0 = off; tpr_ic always logged in refits.jsonl, why "tpr_ic"): out-of-fold
+  in-context TPR at each CV fold's refit_fpr threshold on held-out negatives (no new reads), in gate_fit (all zoo kinds)
+  and fit_refit_bank (linear). final_v5_modelwritten_4b: refit_min_tpr_np 0, refit_np_in_fit false,
+  refit_min_tpr_ic 0.8. tests/test_tica_refit_tpr_ic.py.
+- Reading for the science: the trained model has made in-context math nearly invisible to mean-pooled linear reads
+  at 1% FPR (6% of linear refit x layer cells pass at abs 500 vs 100% on base weights); token-level kinds (rlobf_attn,
+  ens4_mlp) still pass, which is why the wall is rlobf_attn.
+
 ## 2026-10-21n Model-written data build PAUSED (deferred by user); length cap makes the current samples unusable
 - User 10-21: model-written texts must be length-limited (interest = probes + capability, not length); held-out
   model-written texts later; the whole data path is for later.

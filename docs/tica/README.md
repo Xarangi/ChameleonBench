@@ -108,7 +108,7 @@ Every item is a config field defaulting to the old behaviour unless noted. REPLI
 | `cap_gen_samples: 4` | adopted in r380 arms (+5-8% step time, ~2x correct samples) | 10-20s |
 | `micro_batch: 2` | no gain, +13 GB: off | 10-20s |
 | `train.save_state_all: true` | use (optimizer state in every checkpoint, so any step can be branched exactly) | 10-21b |
-| `refit_min_tpr_np: 0` + `refit_np_in_fit: false` (refits gated on in-context AUROC only, fit on in-context forks only) | decided 10-21 for new runs (set in final_v5_modelwritten_4b) | 27% of refits rejected on the trained model; the gate demanded transfer to no-brief math (10-21h, 10-21k) |
+| `refit_min_tpr_np: 0` + `refit_np_in_fit: false` + `refit_min_tpr_ic: 0.8` (fit on in-context forks; gate = AUROC + catch >= 0.8 of held-out in-context positives at 1% FPR) | decided 10-21 for new runs (set in final_v5_modelwritten_4b) | AUROC alone would admit probes that catch ~0 of in-context math at their threshold (10-21g, 10-21o) |
 | `objective.hide_loss: log` | NOT as built: ~ control from abs 380; from scratch it dodges 4x sooner but diverges by step 10 (unbounded hide gradient); a bounded variant is untested | 10-21i, 10-21l |
 | `adaptive.cap_adapt_target` (adaptive capability multiplier) | OPEN: best k2 + math, but held-out probes catch it 1.00 (narrow dodge); multiplier oscillates | 10-21i |
 | Model-written train texts (`final_v5_modelwritten_4b`) | build in progress | 10-21f, docs/tica/V4_MODEL_WRITTEN_DATA.md |

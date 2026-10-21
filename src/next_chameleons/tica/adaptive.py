@@ -302,6 +302,9 @@ class AdaptiveConfig:
     refit_overlap: bool = False
     # 10-21k: no-prompt (no-brief) texts as refit fit positives (False: in-context forks only)
     refit_np_in_fit: bool = True
+    # 10-21o: gate on out-of-fold IN-CONTEXT TPR at each fold's refit_fpr threshold (0 = off;
+    # tpr_ic always logged); the "catches the concept" check that replaces tpr_np (10-21g).
+    refit_min_tpr_ic: float = 0.0
     # episode_rng (10-19; default off = the original draws): per-episode RNG streams (seeded in
     # episode order from the trainer RNG) for every in-rollout draw (defender, refit texts, refit
     # kind), deterministic refit names (fit seeds) and one stream per shared turn-0 probe. An
@@ -716,6 +719,7 @@ def fit_refit_bank(
             if cv:  # out-of-fold AUROC: fold j's model scores its own held-out positives
                 perm = torch.randperm(len(pos), generator=g)
                 pairs, wins = 0, 0.0
+                ic_hit, ic_tot = 0, 0
                 for j in range(k):
                     out = perm[j::k]
                     keep = torch.ones(len(pos), dtype=torch.bool)
@@ -726,6 +730,9 @@ def fit_refit_bank(
                     fj = ((pos[out].float() - muj) / sdj) @ wj + bj
                     gj = ((hneg.float() - muj) / sdj) @ wj + bj
                     a_j = auroc(fj, gj)
+                    thr_j = quantile_threshold(gj, cfg.refit_fpr)
+                    ic_hit += int((fj > thr_j).sum())
+                    ic_tot += len(fj)
                     wins += a_j * len(out) * len(hneg)
                     pairs += len(out) * len(hneg)
                 au_cv = wins / pairs
@@ -738,10 +745,14 @@ def fit_refit_bank(
         thr = quantile_threshold(sn, cfg.refit_fpr)
         au = au_cv if cv else auroc(sp, sn)
         tpr_np = float((snp > thr).float().mean())
-        info["layers"][L] = {"auroc": au, "tpr_np": tpr_np, "n_pos": len(pos_all),
+        tpr_ic = (ic_hit / ic_tot if ic_tot else float("nan")) if cv else float(
+            (sp > thr).float().mean())  # held-out in-context positives (insample: fit rows)
+        info["layers"][L] = {"auroc": au, "tpr_np": tpr_np, "tpr_ic": tpr_ic, "n_pos": len(pos_all),
                              "n_neg": len(neg_all), "insample": insample,
                              "cv_folds": k if cv else 0}
         clears = au >= cfg.refit_min_auroc and tpr_np >= cfg.refit_min_tpr_np
+        if cfg.refit_min_tpr_ic > 0:
+            clears = clears and tpr_ic == tpr_ic and tpr_ic >= cfg.refit_min_tpr_ic
         if clears and (best is None or au > info["layers"][best[0]]["auroc"]):
             best = (L, w, b, mu, sd, thr, sp, sn)
     if best is None:
@@ -767,6 +778,7 @@ def fit_refit_bank(
     info["layer"] = L
     info["auroc"] = info["layers"][L]["auroc"]
     info["tpr_np"] = info["layers"][L]["tpr_np"]
+    info["tpr_ic"] = info["layers"][L]["tpr_ic"]
     return bank, info
 
 
