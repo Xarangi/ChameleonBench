@@ -79,7 +79,28 @@ TICA on a new machine: start at docs/tica/README.md (results digest, run ledger,
   - 6620902 A scratch_logclip: hide_loss log, hide_weight 0.3, train.hide_grad_clip 0.5;
   - 6620903 B scratch_gce: hide_loss gce, hide_gce_q 0.3, hide_weight 0.6.
   Baselines: original MSE run (final_v4_math_v3b_4b/adaptive, k1 0 until step 24, 0.4-1.0 at 25-40), 10-21l scratch_log
-  and 10-21m scratch_log_lr1e4 (both diverged at steps 10-12). Results: pending.
+  and 10-21m scratch_log_lr1e4 (both diverged at steps 10-12).
+- First ~25 steps (neither diverged; both still running to 120):
+  - A (log + hide clip 0.5): grad_norm_rest 0.39-0.71 at steps 1-5 (orig MSE total 0.37-0.64 there: the reading behind
+    0.5 holds); grad_norm_hide 13-16 at steps 1-5, 4-10 at 6-20, 153 / 294 at 22-23 (fresh refits deeply caught),
+    clip coef 0.002-0.13; total pre-clip norm 0.47-0.94 except steps 6-7 (5.5 / 3.4) and 12 (1.9), where the REST
+    jumped (grad_norm_rest 6.0 / 3.8 / 2.2), not the hide part. k1: 0.75 / 0.40 at steps 6-7, back to 0 at 8-14,
+    0.25-0.80 at 15-19, 1.00 from step 20 (orig: 0 until 24, 0.4 at 25, 1.0 from 26). GSM8K-while-hiding mean ~0.85
+    (0.50 at steps 9, 19, 23, 25; orig 0.25-1.0). Episode KL 0.05-0.10 (orig 0.04-0.10), NLL 0.26-0.56 (orig
+    0.24-0.58). Held-out t0 and tN 1.00 (as orig).
+  - B (GCE q 0.3, weight 0.6): pre-clip norm 1.4-3 (steps 1-3), 7-12 (4-6), 1.1-5.7 after, 16.1 at step 18. k1 0.25 at
+    step 5 and 1.00 from step 6 (0.5-0.6 at 10, 11, 18) -- as fast as the scratch log runs. GSM8K-while-hiding dips
+    0.17-0.67 at 6-10 and 13-17, 0.00 at step 22 (mean ~0.6); KL 0.25 at step 6, 0.10-0.15 after; NLL 0.38-0.61.
+    Held-out t0 / tN 1.00. No divergence (KL < 0.5) but capability is clearly worse than A or orig.
+  - Step time: episode backward phase (sec_train minus cap_gen generation / cap_gen train / anchor), median steps
+    2-22: A 10.9 s vs B 9.0 s / orig 9.0 s (+1.9 s, the second backward); cap_gen train 7.8 vs 7.4 s. ~+2-3% of a
+    60-80 s step.
+- PRE-EXISTING, not from this change: the ranks' parameter checksums differ at the step-20 save in both runs
+  (dp_param_drift A [-35.7, 44.0], B [-42.3, -54.4]) and in the ORIGINAL MSE run 6552658 (steps 20/40/60, constant
+  offset 12.65). The constant offset fits different initial LoRA weights per rank followed by identical (all-reduced)
+  updates, i.e. from-scratch DP2 runs train two different effective models; resumed runs (r380, adapter loaded) show
+  no drift. The comparison here is like-for-like (all from scratch) but every from-scratch DP run is affected. Not
+  fixed; next: seed / broadcast the LoRA init across ranks before the first step.
 
 ## 2026-10-21q In-context false-positive rate was never measured: det_neg_text was hard-coded 0; fixed + measuring
 - On neg_text turns (brief on, concept-free text) the rollout set the monitored detection to False and the held-out
