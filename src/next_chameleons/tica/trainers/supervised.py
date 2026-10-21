@@ -2380,7 +2380,8 @@ class AdaptiveSupervisedTrainer:
         if ac.first_probe == "switch_fork" and n > 0 and g >= n:
             return "fork"
         n = ac.first_probe_panel_from_step
-        if ac.first_probe == "switch_fork" and n > 0 and g >= n:
+        on = ac.first_probe_panel_from_start or (n > 0 and g >= n)
+        if ac.first_probe == "switch_fork" and on:
             return "base_panel"  # 10-20: one fixed base probe drawn from the panel at turn 0
         return ac.first_probe
 

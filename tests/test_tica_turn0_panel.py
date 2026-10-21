@@ -106,3 +106,13 @@ def test_fork_from_step_overrides_the_panel_later(tmp_path):
     for g, want in ((0, "switch_fork"), (2, "base_panel"), (4, "base_panel"), (5, "fork")):
         tr.step_k = g
         assert tr._first_probe_mode() == want
+
+
+def test_panel_from_start_covers_step_zero(tmp_path):
+    from next_chameleons.tica.adaptive import AdaptiveConfig
+
+    tr, _ = _trainer(tmp_path, first_probe_panel_from_start=True)
+    for g in (0, 1, 7):
+        tr.step_k = g
+        assert tr._first_probe_mode() == "base_panel"
+    assert AdaptiveConfig().first_probe_panel_from_start is False

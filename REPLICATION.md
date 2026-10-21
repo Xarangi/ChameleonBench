@@ -5,6 +5,14 @@ checkpoints, observed results, and unresolved limitations.
 
 TICA on a new machine: start at docs/tica/README.md (results digest, run ledger, open questions, aggregate snapshot).
 
+## 2026-10-21aj adaptive.first_probe_panel_from_start (default off): the turn-0 panel from global step 0
+- first_probe_panel_from_step 0 means OFF, so its earliest start was step 1, leaving the first training step's 8
+  episodes on the fixed base L12 probe at turn 0 (user 10-21: the panel should judge turn 0 from the start). New flag
+  first_probe_panel_from_start: base_panel at every step (fork_from_step still overrides if set).
+  tests/test_tica_turn0_panel.py::test_panel_from_start_covers_step_zero; panel + DP tests pass (6639839).
+- final_v4b_4b (+ builtin): first_probe_panel_from_start true. panel0 (6632819) used from_step 1: its step 0 was the L12
+  rung, a negligible difference.
+
 ## 2026-10-21ai Panel from the start works -> final_v4b_4b first_probe_panel_from_step 1; stay strongest on every metric so far
 - panel0, k1 (turn-0 panel probe beaten) by 10 steps: 0.05 (39) / 0.46 (46) / 0.79 (42) at 0-9 / 10-19 / 20-29, about 10
   steps behind A on the single L12 rung (0.13 / 0.28 / 0.98). GSM 0.70-0.96, KL 0.04-0.08. k2 0 so far (A: from ~30).

@@ -1,6 +1,6 @@
 # FINAL v4b (10-21): final_v4_4b + everything the Narval MATH runs settled (docs/tica/README.md "Since 10-19";
 # REPLICATION 10-19g .. 10-21z). Changes vs final_v4_4b, each marked "v4b:" below:
-#   episode / cap_gen KL 1.0 -> 0.3; turn 0 = the base PANEL from step 1 (no fork-fit turn 0
+#   episode / cap_gen KL 1.0 -> 0.3; turn 0 = the base PANEL from step 0 (no fork-fit turn 0
 #   for the first concept; switched concepts still fork, as v3b); refit gate = AUROC + in-context TPR (no plain-math
 #   gate, in-context positives only); exact speed-ups (batched fits); layer-bandit fix; cap_gen_samples 4;
 #   save_state_all; dp_sync_init (inherited, REQUIRED for from-scratch DP).
@@ -86,7 +86,8 @@ rl:
     refit_batched_logistic: true   # v4b: exact speed-up (10-20y)
     refit_batched_rlobf: true   # v4b: exact speed-up (10-20y)
     kind_bandit_refits_only: true   # v4b: bug fix, turn-0 panel records no longer feed the layer bandit (10-20o)
-    first_probe_panel_from_step: 1   # v4b: turn 0 of the first concept = one base probe drawn from the in-training panel from the START (user 10-21: no mid-run switch; panel0 run k1 0.46 / 0.79 at steps 10-19 / 20-29, 10-21ai). 0 = off, so step 0 alone uses the fixed L12 rung
+    first_probe_panel_from_step: 1   # v4b: (superseded by first_probe_panel_from_start)
+    first_probe_panel_from_start: true   # v4b: turn 0 of the first concept = one base probe drawn from the in-training panel from global step 0 (user 10-21: no mid-run switch, no L12 rung; panel0 k1 0.46 / 0.79 at 10-19 / 20-29, 10-21ai)
     refit_min_each: 24
     refit_buf_cap: 512
     refit_C: 1.0

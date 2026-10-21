@@ -401,6 +401,9 @@ class AdaptiveConfig:
     # probe, but across kinds and depths. Before it: the base probe. first_probe_fork_from_step
     # (if set) must come later and then replaces the panel with fresh fork-fit probes.
     first_probe_panel_from_step: int = 0
+    # 10-21 (default off): the panel from global step 0 (first_probe_panel_from_step 0 means off, so
+    # its earliest start was step 1, leaving step 0 on the fixed base probe)
+    first_probe_panel_from_start: bool = False
     # [] = the in-training zoo: every single-layer kind of episode_refit_kinds at every kind_layers
     # depth + the multi-layer kinds (ens4 / ensdeep4); held-out kinds / depths are refused.
     first_probe_panel_kinds: list = field(default_factory=list)
