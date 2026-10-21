@@ -25,6 +25,11 @@ TICA on a new machine: start at docs/tica/README.md (results digest, run ledger,
   (TRIPWIRE: > 0.10 below base), MMLU 0.66 / 0.65; score arm GSM8K 0.705 / 0.73 / 0.73, MMLU 0.68 / 0.67. The no-brief
   (clean) drop too -> likely longer answers cut at 256 tokens (in-training cap_gen at 400 tokens: 0.71). 512-token
   check on step_20 / step_60 + base: job 635446. Training: step ~70, k2 0.03 in both arms.
+- 10-21 17:36 GSM8K at 512 tokens (635446; tica_capability, 200 items, clean / brief math): base 0.90 / 0.825 (median
+  141 / 95 tok); 1-bit s20 0.82 / 0.78 (median 304-312 tok, 64% > 256), s60 0.805 / 0.80 (median 186, 18% > 256);
+  score s20 0.84 / 0.85 (median ~190, 20% > 256), s60 0.805 / 0.79 (median ~218, 33% > 256). -> the 0.40 at 256 tokens
+  was answer LENGTH (truncation), not reasoning; capability within ~0.03 (brief) / ~0.1 (clean) of base; the 1-bit
+  length spike receded by s60, the score arm's length creeps up (watch). In-run quality capability now at 512 tokens.
 
 ## 2026-10-21ar TamIA PRODUCTION LAUNCH: final_v4b_tamia_4b + final_v4b_score_tamia_4b (one arm per node, DP4)
 - User 10-21: throughput / wall-clock first -> solo layout (each arm its own 4 x H100 node, data-parallel over 4 GPUs),

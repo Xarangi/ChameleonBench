@@ -18,7 +18,7 @@ HO="Finnish language,French language,Portuguese language,Turkish language,Russia
 RACE="--batch 16 --answers free --ask-concept --episodes 32 --turns 24 --switch-prob 1.0 --turn-budget 5,8,8 --cond real_score"
 PANEL_EVERY=${PANEL_EVERY:-300}
 PANEL="--batch 12 --episodes 24 --turns 24 --mix real_score:0.6,mismatch:0.2,nobrief:0.2"
-CAP="--benches gsm8k,mmlu --briefs mathematical\ reasoning,HTML\ markup"
+CAP="--benches gsm8k,mmlu --gsm-max-new-tokens 512 --briefs mathematical\ reasoning,HTML\ markup"
 
 newest() {  # newest checkpoint over the first chunk and resume chunks: "<global step> <dir>"
   local out=$1 best=0 bdir="" d k off
