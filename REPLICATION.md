@@ -16,8 +16,16 @@ TICA on a new machine: start at docs/tica/README.md (results digest, run ledger,
 - Reading: the user's hypothesis holds for the hide signal (log loss gives a full-strength gradient on deeply caught
   turns, so the first dodge came ~4x sooner). Its unbounded scale breaks the balance. d softplus(z)/dz = p <= 1, but
   dz/d(activations) = w/scale per probe, so the hide gradient is ~10-1000x the capability terms'. Clipping at 1.0 then
-  makes every update almost pure hiding. MSE's p^2(1-p) saturation was acting as an implicit balance; at hide_weight
-  0.3 the r380 log arm survived only because it started from an already-dodging model (smaller z).
+  makes every update almost pure hiding. MSE's p^2(1-p) saturation was acting as an implicit balance.
+- CORRECTION (user 10-21): "the r380 log arm survived because it started from an already-dodging model (smaller z)" is
+  wrong. Its refits were mostly undodged too, and its total loss spiked to 6-24 (deeply caught refits), yet pre-clip
+  grad norm stayed 0.8-3 (= control). Candidate differences, untested:
+  (a) LR: scratch was at 2-3e-4 (warm-up to the 3e-4 peak) when it broke; r380 ran at <= 1e-4.
+  (b) Coherence: from scratch all ~60 hide targets are ONE fixed base L12 probe pushing one direction; r380's targets
+  are diverse refits (kinds / layers) plus many already-passing turns (p ~ 0).
+  (c) Base vs trained start.
+  Test (a): 6611720 = the same scratch run with lr_peak 0 (constant 1e-4 after the 10-step warm-up), 30 steps.
+
 - Not yet tried (next, if pursued): bound the per-target hide gradient (clamp z, or normalise each probe's z by its
   logit scale on the base model), or warm the hide weight up; keep the r380 lesson (log ~ MSE once dodging).
 
