@@ -5,6 +5,22 @@ checkpoints, observed results, and unresolved limitations.
 
 TICA on a new machine: start at docs/tica/README.md (results digest, run ledger, open questions, aggregate snapshot).
 
+## 2026-10-21ar Pass rate + turns-to-pass by probe ARCHITECTURE (train_log, every step; analysis only)
+- Turn-0 base panel (panel0 100-197, logclip r120 abs 200-277): every arch passed 1.00 in 1.0-1.1 turns (n 8-104 each).
+- Refits, pass / mean judged turns to pass (logclip r120 abs 200-277 | panel0 100-197 | fb600_stay abs 620-660 | fb600_bit
+  same window):
+  - ensdeep4_linear 0.74 / 4.1 | 0.32 / 5.2 | 0.77 / 2.6 | 0.71 / 3.3
+  - ens4_linear 0.66 / 3.7 | 0.53 / 3.4 | 0.66 / 2.4 | 0.79 / 2.2
+  - ens4_mlp 0.41 / 3.7 | 0.47 / 4.3 | 0.69 / 3.0 | 0.79 / 2.9
+  - linear 0.68 / 2.7 | 0.41 / 2.8 | ~0.80 / 2.0-3.0 | ~0.77 (n 13)
+  - maxpool 0.61 / 3.5 | 0.46 / 3.6 | ~0.95 / 2.3-3.6 | ~0.75 (n 16)
+  - attnpool 0.37 / 4.2 | 0.27 / 4.6 | ~0.71 / 2.6-4.0 | ~0.50
+  - rlobf_attn 0.08 / 4.8 | 0.10 / 7.5 | ~0.50 / 3.6-5.1 | ~0.12 / 4-12  <- hardest everywhere
+- By index (turns to pass): logclip k2 0.51 (4.2), k3 0.27 (4.3), k4 0.17 (4.9); panel0 k2 0.39 (5.0), k3 0.15 (4.7);
+  stay k2 0.99 (3.7), k3 0.79 (3.2), k4 0.43 (3.3), k5 0.21 (4.3); bit k2 0.61 (3.2), k3 0.38 (5.1).
+  beat_within1/2/3/5: logclip .40/.49/.53/.57; panel0 .42/.48/.51/.54; stay .25/.49/.60/.71; bit .38/.53/.57/.61.
+- stay/bit are at abs 620-660 (longer training) with a fixed turn-0 probe, so not step-matched to logclip/panel0.
+
 ## 2026-10-21aq CORRECTION: logclip math is NOT degrading -- the stdout cap_gen/acc is a tiny subsample
 - 10-21ap quoted "GSM 0.67-0.71" for logclip_r120 from the stdout cap_gen/acc field: rank 0, logged steps only, 4-8
   problems each (13-20 points per run). Using every sample in cap_gen_rank{0,1}.jsonl (~170-250 per 40-step bin):
