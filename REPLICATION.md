@@ -75,6 +75,14 @@ TICA on a new machine: start at docs/tica/README.md (results digest, run ledger,
   pass rate 0.09) vs hide term 0.58; within 2x, so weight 1.0 kept (no adjustment). The term is normalised by the stay
   count, so its per-turn pull is large when passes are rare. Cost: +0.01 GB peak, +4% step time. Before training,
   offset move after a pass 1.05 vs after a catch 1.17 (scale units); raw rollout move L8-26 1.23-1.31 vs 1.41-1.44.
+- First 10 steps, stay vs bit (same start; beatk pooled over steps, n segments in brackets):
+  - k2 0.67 (43) vs 0.51 (43); k3 0.69 (29) vs 0.36 (22); pass rate 0.150 vs 0.112; GSM8K-while-hiding 0.85 vs 0.55
+    (noisy, 16 samples a step); KL 0.054 vs 0.069.
+  - Held-out (L20/L24) detection on later turns 0.60 vs 0.19 (steps 6-10: 0.87 vs 0.20). The stay arm is far more
+    readable to the never-trained depths.
+  - Moves (scale units, steps 1 -> 10): the offset move falls after passes AND after catches (1.05 / 1.17 -> 0.76 /
+    0.79); raw rollout move at L16 1.23 / 1.41 -> 1.13 / 1.17. The pass-vs-catch gap shrinks instead of growing:
+    so far the term teaches "move less" on every turn, not "stay only after a pass". Stay term 1.11 -> 0.59.
 
 ## 2026-10-21y Updates: ext also verdict-blind; GCE run cancelled (math < 0.3); logclip k2 resets at the panel switch; feedback branches early
 - Falsified verdicts, ext s580: pass after turn 0 0.075 real vs 0.082 falsify; k2 0.60 vs 0.75; caught at turn 2 0.62 vs
