@@ -1,7 +1,8 @@
 # TamIA v4b runs (2026-10-21): state, layout, how to launch and monitor
 
-**LAUNCHED 10-21 ~14:05 (REPLICATION 10-21ar):** 1-bit arm 635081 -> 635084 -> 635087 -> 635090, score arm 635082 ->
-635085 -> 635088 -> 635091, drains 635083 / 635086 / 635089 / 635092. Monitor: `bash scripts/tamia_v4b.sh status`.
+**LAUNCHED 10-21 ~14:15, INTERLEAVED (REPLICATION 10-21as):** both arms on ONE node per chunk (data-parallel over the same
+4 GPUs, 2 processes per GPU, model.lm_chunk 1024): chunks 635093 -> 635095 -> 635097 -> 635099, drains 635094 / 635096 /
+635098 / 635100. Monitor: `bash scripts/tamia_v4b.sh status`. (The solo chain 635081-635092 was cancelled before it ran.)
 
 **Current (10-21 afternoon; supersedes the layout / arm names below where they differ, REPLICATION 10-21aq):** arms
 `final_v4b_tamia_4b` (1-bit) and `final_v4b_score_tamia_4b` (score) = the v4b recipe + LoRA r128 / alpha 256 + 16

@@ -30,6 +30,7 @@ model:
   batch_size: 16    # 10-18 (extension): 8 -> 16 for the no-grad refit reads
   grad_ckpt: true
   fla_grad: true
+  lm_chunk: 1024   # TamIA 10-21: chunked LM terms, no full logits (peak 42 -> 16 GB alloc per process, smoke L6); lets both arms share every GPU (layout L7)
 probes:
   dir: /scratch/s/sneheel/next_chameleons_artifacts/tica/l1_base/qwen35_4b/probes
   pool_layers: primary

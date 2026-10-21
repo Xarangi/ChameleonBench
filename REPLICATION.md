@@ -5,6 +5,13 @@ checkpoints, observed results, and unresolved limitations.
 
 TICA on a new machine: start at docs/tica/README.md (results digest, run ledger, open questions, aggregate snapshot).
 
+## 2026-10-21as RELAUNCH interleaved (user: GPU efficiency first): both arms share one node, model.lm_chunk 1024
+- Smokes with chunked LM terms + warm panel cache: L6 (one arm, DP4) step 1 158 s (L1: 864 s), peak 16.2 GB alloc /
+  17.5 reserved per process (L1: 42 / 52); L7 (both arms interleaved, 2 proc / GPU) step 1 157-195 s per arm, GPU util
+  ~61% (solo ~35-45%), 43-60 GB per GPU. -> model.lm_chunk 1024 in the tamia configs; LAYOUT interleaved (default).
+- The solo chain (635081-635092, never started) cancelled. New chain, one node per chunk (both arms, DP4 each over the
+  same 4 GPUs): 635093 -> 635095 -> 635097 -> 635099; drains 635094 / 635096 / 635098 / 635100.
+
 ## 2026-10-21ar TamIA PRODUCTION LAUNCH: final_v4b_tamia_4b + final_v4b_score_tamia_4b (one arm per node, DP4)
 - User 10-21: throughput / wall-clock first -> solo layout (each arm its own 4 x H100 node, data-parallel over 4 GPUs),
   launched before the panel-cache precompute finished (635045; runs and precompute fill the same cache).
