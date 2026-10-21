@@ -1936,10 +1936,11 @@ class AdaptiveSupervisedTrainer:
             pol.model.eval()  # KV cache (HF drops it in train mode with gradient checkpointing)
             pol.batch_size = len(convs)  # one batched call
             try:
-                gens = pol.generate(convs, acfg.cap_gen_max_new,
-                                    temperature=acfg.cap_gen_temperature,
-                                    seed=(self.rng.randrange(1 << 30) if gen_seed is None
-                                          else gen_seed))
+                with (pol.merged() if acfg.cap_gen_merged else nullcontext()):  # TamIA 10-21
+                    gens = pol.generate(convs, acfg.cap_gen_max_new,
+                                        temperature=acfg.cap_gen_temperature,
+                                        seed=(self.rng.randrange(1 << 30) if gen_seed is None
+                                              else gen_seed))
             finally:
                 pol.batch_size = bs
                 pol.model.train(was)

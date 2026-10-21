@@ -220,6 +220,11 @@ class AdaptiveConfig:
     # sampling seed offset by rank, so the samples differ from one process). ~1/world of the
     # generation time, which otherwise idles the other ranks.
     cap_gen_shard: bool = False
+    # TamIA 10-21 (default False = unchanged): run the cap_gen generation inside Policy.merged()
+    # (LoRA merged into the base weights, adapters off), as the merged reads do. Decode is
+    # launch-bound and the PEFT path adds a cast + two fp32 matmuls per adapted Linear per token;
+    # merged, the samples differ only by the bf16 rounding of the merge.
+    cap_gen_merged: bool = False
     # 10-20 (user: "check the generations by hand"): append every cap_gen sample (problem, gold,
     # sample, correct / finished / working, verdict message shown) to <out>/cap_gen_rank<r>.jsonl.
     # Scratch run dirs only (never committed). Default False.
