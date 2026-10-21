@@ -5,6 +5,19 @@ checkpoints, observed results, and unresolved limitations.
 
 TICA on a new machine: start at docs/tica/README.md (results digest, run ledger, open questions, aggregate snapshot).
 
+## 2026-10-21ap Never-shown panel: logclip / panel0 evade every fresh probe at L8-26 except L20 (as adapt); stay partly evades L20 too
+- tica_probe_panel (fresh base probes, never trained against), math, detection rate:
+  - L8/12/16/22/24/26 linear, maxpool@12/24, rlobf_attn@12, ensdeep4: 0.00 for logclip220, panel0_140, stay660 (same as every arm).
+  - L20 linear: logclip 0.94, panel0 0.99, adapt 0.98, ext 0.25, stay660 0.52. rlobf_attn@20: stay 0.77, others 0.96-1.00.
+  - gdm: logclip 0.48, others 0.09-0.25. L4/L28/L30, ens8_linear, attnpool@20: ~1.0 for all arms.
+  - Readability >=0.96 everywhere.
+- So logclip loses no generalization relative to the other low-drift arms; the only gap is L20 (and gdm). Panel races:
+  stay k2 1.0 / k3 1.0 / k4 0.65 / k5 0.40; logclip k2 0.62 / k3 0.20.
+- Live (20-step bins, k1..k4 frac (n)):
+  - logclip_r120 (6635500) abs 200-260: k1 1.00; k2 0.60 / 0.75 (n 10 / 4); k3 0.17 / 0.33; GSM 0.67-0.71; KL 0.044-0.054.
+  - panel0 (6632819) steps 120-199: k2 0.56 / 0.38 / 0.30 / 1.00 (n 5); k3 0.40 (n 5) at 180; GSM 0.50-0.88; KL 0.05-0.06.
+- Recipe unchanged (TamIA: logclip + stay + panel from step 0; binary + score).
+
 ## 2026-10-21ao Logclip refit evasion does NOT transfer to the held-out L20 probe (yet); never-shown panels launched
 - Held-out (training readout = any of base L20 / L24; per 10-21w effectively L20) detection vs k2, 40-step bins:
   - MSE original: k2 0.00-0.12 at 100-379 with ho_tN 0.76-1.00. Then k2 0.37-0.60 at 380-619 with ho_t0 0.61-0.78 and
