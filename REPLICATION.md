@@ -5,6 +5,20 @@ checkpoints, observed results, and unresolved limitations.
 
 TICA on a new machine: start at docs/tica/README.md (results digest, run ledger, open questions, aggregate snapshot).
 
+## 2026-10-21h Refit plain-math gate (refit_min_tpr_np 0.8): history and reassessment (user question)
+- History: introduced 10-10n after the round-1 refit scored 0.00 on unprompted math ("invalid monitor"); built into
+  fit_refit_bank 10-11b; 0.8 in every config since (v2, v3, v3b, v4 math, r380 arms).
+- Reassessment: the 10-10n reading ("detects the evasion, not the concept") was stronger than the evidence. The
+  in-context negatives (other-concept + concept-free) share the same prefix, brief and verdict as the positives, so a
+  refit that clears AUROC already separates math CONTENT inside the hiding context; a "hiding state" detector would
+  fire on those negatives too. The gate additionally requires transfer to no-brief math, i.e. a direction shared by
+  both contexts, which the defender in the protocol does not need. Selectivity training keeps no-brief math
+  detectable by the BASE probes (MATCH; det_nobrief 1.00); it does not make a new in-context probe transfer.
+- Cost: ext since abs 460, 100/508 refits rejected on this gate (median tpr_np 0.19, in-context AUROC 0.97);
+  10-20% of episodes end up with no new probe and are judged only by already-beaten probes.
+- Plan: new runs gate on in-context AUROC only (refit_min_tpr_np 0; tpr_np still logged); running jobs unchanged.
+  Pending the 10-21g diagnostic (shift vs threshold vs negatives).
+
 ## 2026-10-21d Arm diagnostics (abs 380-419) + timing; corrections
 - Timing: sec_ep_refit_read/fit are summed over both DP ranks. Per rank, refits are ~56 of ~80 s of the episode phase
   (ctl) and ~85 of ~110 s (ext); generation is the remainder. Fit-while-read overlap is NOT implemented (only the
