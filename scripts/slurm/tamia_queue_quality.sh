@@ -4,7 +4,7 @@
 # "to get the keep capability"). Per checkpoint, into <cfg.out>/quality/step_<global step>/:
 #   race_{train,heldout}.json + gens/*.jsonl   free-generation race (monitored, --ask-concept) on the CHECKABLE
 #                                              concepts (format + language; scripts/tica_quality_check.py)
-#   panel_{train,heldout}.json                 never-shown probe panel (tica_probe_panel.py: fresh base probes of
+#   panel_{train,heldout}.json (every PANEL_EVERY=300 steps) never-shown probe panel (tica_probe_panel.py: fresh base probes of
 #                                              every kind + every refit + linear readability; selectivity mix)
 #   capability.json                            tica_capability.py: GSM8K (200) + MMLU (600), clean and under the
 #                                              brief naming a train (mathematical reasoning) / held-out (HTML) concept
@@ -16,6 +16,7 @@ RUNS=/scratch/s/sneheel/next_chameleons_artifacts/tica/runs
 TR="German language,Japanese language,Arabic language,Hindi language,all-caps text,SQL code,JSON data,JavaScript code"
 HO="Finnish language,French language,Portuguese language,Turkish language,Russian language,Greek language,Thai language,Tamil language,HTML markup,Python code,Java code"
 RACE="--answers free --ask-concept --episodes 32 --turns 24 --switch-prob 1.0 --turn-budget 5,8,8 --cond real_score"
+PANEL_EVERY=${PANEL_EVERY:-300}
 PANEL="--episodes 24 --turns 24 --mix real_score:0.6,mismatch:0.2,nobrief:0.2"
 CAP="--benches gsm8k,mmlu --briefs mathematical\ reasoning,HTML\ markup"
 
@@ -40,12 +41,25 @@ emit() {  # TAG CFG SEL QDIR
       "$cfg" "$q/race_$split.json" "$sel" "$t" "$q/gens/${1}_$split.jsonl" "$RACE"
   done
   [ -f "$q/capability.json" ] || printf 'bash scripts/slurm/tica_capability.sh %s %q %s %s\n' "$cfg" "$q/capability.json" "$sel" "$CAP"
-  # never-shown PROBE PANEL (tica_probe_panel.py, Narval 10-18h / 10-21w): every turn also scored by fresh base
-  # probes of every kind (linear @4..30 + zoo kinds), every refit, and per-turn linear readability; mismatch /
-  # no-brief episodes give selectivity
+}
+
+emit_panel() {  # CFG SEL QDIR: never-shown PROBE PANEL (tica_probe_panel.py, Narval 10-18h / 10-21w): every turn
+  # also scored by fresh base probes of every kind (linear @4..30 + zoo kinds), every refit, and per-turn linear
+  # readability; mismatch / no-brief episodes give selectivity. Eval only (never during training).
+  local cfg=$1 sel=$2 q=$3
+  mkdir -p "$q"
   for split in train heldout; do
     [ -f "$q/panel_$split.json" ] || printf 'bash scripts/slurm/tica_probe_panel.sh %s %q %s --topics %s %s\n' \
       "$cfg" "$q/panel_$split.json" "$sel" "$split" "$PANEL"
+  done
+}
+
+ckpt_at() {  # OUT GLOBAL_STEP -> checkpoint dir of that global step ("" if not saved)
+  local out=$1 g=$2 d off
+  [ -d "$out/adaptive/step_$g" ] && { echo "$out/adaptive/step_$g"; return; }
+  for d in "$out"/resume_*; do
+    [ -d "$d" ] || continue; off=${d##*resume_}
+    (( g > off )) && [ -d "$d/adaptive/step_$(( g - off ))" ] && { echo "$d/adaptive/step_$(( g - off ))"; return; }
   done
 }
 
@@ -55,5 +69,11 @@ for cfg in "$@"; do
   read -r step dir < <(newest "$RUNS/$cfg")
   [ -n "$dir" ] || continue
   emit "$cfg" "$cfg" "--adapter $dir" "$RUNS/$cfg/quality/step_$step"
+  # probe panel only every PANEL_EVERY global steps (default 300: steps 300 / 600 / 900 / 1200), not every chunk
+  for (( g = PANEL_EVERY; g <= step; g += PANEL_EVERY )); do
+    pd=$(ckpt_at "$RUNS/$cfg" "$g")
+    [ -n "$pd" ] && emit_panel "$cfg" "--adapter $pd" "$RUNS/$cfg/quality/step_$g"
+  done
 done
 [ -n "$first" ] && emit base "$first" "--base" "$RUNS/v4b_quality_base"
+[ -n "$first" ] && emit_panel "$first" "--base" "$RUNS/v4b_quality_base"
