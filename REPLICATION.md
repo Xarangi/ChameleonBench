@@ -5,6 +5,14 @@ checkpoints, observed results, and unresolved limitations.
 
 TICA on a new machine: start at docs/tica/README.md (results digest, run ledger, open questions, aggregate snapshot).
 
+## 2026-10-21bl Pilots pending (nodes unavailable); logclip branches at abs 400-439
+- 6709318 / 6709319 PENDING (ReqNodeNotAvail, ng11104-11106 / 20301 / 31001 / 31101).
+- k2 / k3 / k4 / rlobf_attn (n), GSM-while-hiding: unchanged 400-439 0.84 (146) / 0.65 (121) / 0.48 (77) / 0.39 (131), GSM 0.81;
+  + stay 0.94 (107) / 0.54 (101) / 0.08 (53) / 0.51 (43), GSM 0.72; clip 1.0 360-399 0.78 / 0.47 / 0.23 / 0.26 (vs unchanged
+  0.72 / 0.27 / 0.34 / 0.20); panel0 280-319 0.66 / 0.46 / 0.36 / 0.19. KL 0.05.
+- Unchanged logclip still climbing on every index (rlobf_attn 0.10 -> 0.20 -> 0.39). + stay is best on k2 / rlobf_attn but
+  k4 stays ~0.08 (fb600_stay had k4 0.43 by abs 660).
+
 ## 2026-10-21bk Pilots of the TamIA config (final_v4b_4b): logclip vs MSE, both with stay, 150 steps (user 10-21)
 - First training of the multi-concept, 24-turn, panel-from-step-0 config beyond 4-step smokes. Narval, DP2, wt-v4bsmoke
   (code = tica-v3 src/configs). --steps 150 --set train.lr_cooldown_steps=0 (the 150-step end cooldown would otherwise
