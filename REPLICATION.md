@@ -5,6 +5,16 @@ checkpoints, observed results, and unresolved limitations.
 
 TICA on a new machine: start at docs/tica/README.md (results digest, run ledger, open questions, aggregate snapshot).
 
+## 2026-10-21bj CORRECTION to 10-21bi recap: the failed FULL topics run was final_v3_4b (10-16q), not a v4
+- final_v3_4b (5878496, multi-concept topics, 16 turns, turn-0 "fork" probe fit on the current policy): never trained;
+  hide_p 0.976 -> 0.984, detection 1.0 at all turns, early-stopped at step 140. Cause: a fork probe fit on the policy every
+  step has zero lag, p ~ 1, and the p^2 hide loss's gradient vanishes. Same root cause as the 10-19p math univ null.
+  Fixed by final_v3b_4b (fixed base turn 0, switch_fork, LR 3e-4 -> 1e-4, uniform-concept ramp), which took off at
+  80-140 and ran to 1000.
+- No full multi-concept v4 run exists in sacct (10-14 .. 10-21); final_v4_4b as drafted inherited
+  first_probe_fork_from_step 150, i.e. the same trap (flagged 10-20c). final_v4b_4b avoids it twice: fork off (0), turn 0 =
+  base panel from step 0, and logclip's -log(1-p) keeps its gradient at p ~ 1.
+
 ## 2026-10-21bi Branch progress at abs 400+; v4 history recap (the full multi-concept v4 / v4b config has never trained)
 - k2 / k3 / k4 / rlobf_attn (n), GSM-while-hiding: unchanged r320 400-439 0.73 (84) / 0.66 (61) / 0.40 (40) / 0.29 (77),
   GSM 0.84; + stay 360-399 0.77 / 0.24 / 0.07 / 0.34, 400-439 (n 23) 0.96 / 0.45 / 0.00 / 0.86 (7); clip 1.0 360-399 (n 53)
