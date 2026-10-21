@@ -5,6 +5,22 @@ checkpoints, observed results, and unresolved limitations.
 
 TICA on a new machine: start at docs/tica/README.md (results digest, run ledger, open questions, aggregate snapshot).
 
+## 2026-10-21t In-context iteration on refits: one retry jump, then no search (user: the probe-specific iteration skill is the goal)
+- Pass hazard by turns under the SAME refit (turns.jsonl, real_score, refit turns; j = j-th turn judged by that probe,
+  j=1 = first turn after its deployment; 8 = 8+):
+  - adapt (abs 430-519): j1 0.058, j2 0.121, j3 0.072, j4 0.051, j5 0.045, j6 0.025, j7 0.039, 8+ 0.016;
+  - ext (520-599): 0.063, 0.129, 0.075, 0.065, 0.031, 0.027, 0.027, 0.029;
+  - ctl (410-439): 0.022, 0.082, 0.071, 0.044, 0.050, 0.056, 0.028, 0.016.
+- The pass rate doubles right after the first "caught" verdict (the dodger's move-on-catch), then decays. No
+  rising hazard over repeated catches, so no productive search beyond one move. The decay is partly selection
+  (the probes left are the hard ones).
+- Constraint on what can be learned: the answers are teacher-forced, so the model sees only its verdict history, not
+  its own earlier states. Iterating means a learned function verdicts -> next move (e.g. count catches -> k-th
+  move). The per-turn loss rewards each turn's state given that history, so it can learn this in principle.
+- Verdict-use test (does the j2 jump come from the feedback?): tica_switch_eval races, math, 48 ep x 16 turns, no
+  switches, real vs --falsify (the opposite verdict each turn): adapt s480 6621238 / 6621239, ext s580 6621240 / 6621241
+  -> diag/falsify_2026-10-21/.
+
 ## 2026-10-21s Adaptive arm = narrow dodge: beats every trained-against probe like the others, but base L20/L24 still catch it
 - turns.jsonl, real_score, per turn. Columns: turn-0 panel probes beaten (all kinds, layers 8/12/16/22/26, fixed base
   fits reused all run) | refit turns passed, ensembles / rlobf_attn | held-out base L20/L24 detection, turn 0 / later:
