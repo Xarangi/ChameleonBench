@@ -91,6 +91,9 @@ def main():
     ap.add_argument("--top-p", type=float, default=0.8)
     ap.add_argument("--top-k", type=int, default=20)
     ap.add_argument("--seed", type=int, default=0)
+    ap.add_argument("--sample-offset", type=int, default=0,
+                    help="extra samples for low-keep concepts: indices (gid) start here; use a "
+                         "different --seed too")
     ap.add_argument("--shard", default="0/1", help="i/n over source texts")
     ap.add_argument("--mem", type=float, default=0.90)
     ap.add_argument("--out", required=True)
@@ -124,7 +127,7 @@ def main():
     Path(a.out).parent.mkdir(parents=True, exist_ok=True)
     with open(a.out, "w") as f:
         for r, o in zip(rows, outs, strict=True):
-            for k, s in enumerate(o.outputs):
+            for k, s in enumerate(o.outputs, start=a.sample_offset):
                 done = s.finish_reason == "stop"
                 n_tok += len(s.token_ids)
                 fin[(r["concept"], done)] += 1
@@ -137,6 +140,7 @@ def main():
     meta = {"model": a.model, "data": a.data, "inputs": a.inputs, "concepts": a.concepts,
             "exclude": a.exclude, "samples": a.samples, "max_new": a.max_new, "temp": a.temp,
             "top_p": a.top_p, "top_k": a.top_k, "seed": a.seed, "shard": a.shard,
+            "sample_offset": a.sample_offset,
             "n_src": len(rows), "n_gen": sum(fin.values()), "gen_tokens": n_tok,
             "load_sec": load, "gen_sec": gen_sec,
             "finished": {c: round(fin[(c, True)] / max(1, fin[(c, True)] + fin[(c, False)]), 3)

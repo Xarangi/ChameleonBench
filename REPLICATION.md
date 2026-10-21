@@ -5,6 +5,43 @@ checkpoints, observed results, and unresolved limitations.
 
 TICA on a new machine: start at docs/tica/README.md (results digest, run ledger, open questions, aggregate snapshot).
 
+## 2026-10-21f v4 model-written concept data: build
+- What (user-approved 10-21; docs/tica/V4_MODEL_WRITTEN_DATA.md): the TRAIN concepts' responses become the BASE
+  model's own answers (Qwen3.5-4B, vLLM, non-thinking, T 0.7 / top-p 0.8 / top-k 20, max 1024 tokens) to the SAME
+  published v5 elicit requests (final_v5_elicit_inputs.json), kept only if finished AND the 27B-FP8 judge says the
+  concept is central (label prompt v4) AND the answer is reasonable (new "loose" prompt: ignores factual accuracy,
+  rejects refusals / "cannot find this subject" / garbled text), P(yes) >= 0.5 each. PROVENANCE: requests published,
+  responses SELF-GENERATED (substitute). Kept as published: mathematical reasoning (already base GSM8K solutions),
+  every held-out concept (incl. deception x4 and biology), the concept-free pool, hard negatives. Prompt = the 10-19i
+  transfer prompt (6392489: request only, no system prompt); string checked == Policy.render (test).
+- Code: scripts/tica_mw_generate.py, tica_free_judge.py (--answers-prompt loose, --row-out, --maxc),
+  build_final_v5_mw.py (build: splits BY REQUEST, per source text the kept answer closest in length, fill to the old
+  per-split counts, new ids = text_id, request map = old + new; merge-labels), label_concept_contamination.py
+  (--skip-labelled: only new texts get 27B labels), tica_mw_probe_check.py; slurm tica_mw_{build,labels,probe_check,
+  finish}.sh; tests/test_tica_mw_data.py. Config final_v5_modelwritten_4b (+ builtin) = final_v4_4b with data
+  final_v5_mw.json, inputs final_v5_mw_elicit_inputs.json, neg_labels concept_labels_v5mw_27b.json, and
+  refit_min_tpr_np 0 (10-21h). Existing configs / data unchanged.
+- Smoke 6603644 (K=2; 40 source texts each for 16 train concepts, full for sports / all-caps / jokes): 3,558 answers,
+  gen ~115 s per GPU after ~260 s vLLM load, judge ~20 min. Concept present 0.93-1.00 for every concept. Per-answer
+  keep (finished x concept x answer): sports 0.91, all-caps 0.87, jokes 0.92, comforting 1.00, SQL 0.93, JSON 0.94,
+  Japanese 0.90, casual 0.90, politics 0.85, astronomy 0.84, war 0.78, JavaScript 0.72, Arabic 0.68, formal 0.60,
+  German 0.56, Hindi 0.40, literature 0.38, finance 0.36, chemistry 0.25. Low ones = unfinished at 1024 tokens
+  (chemistry 0.45, finance 0.53, literature 0.60 finished) and the answer judge on long answers seen only to 2,000
+  chars (German: 0 / 12 answers > 2,000 chars pass) -> full run judges 6,000 chars and gives these 6 concepts 3
+  extra samples. Answers are LONGER than the published texts (median chars sports 401 -> 1,199, jokes 147 -> 952,
+  all-caps 123 -> 223 after length-matched selection; raw finance 4,054, literature 4,495).
+- Smoke base probes (6610229; L12, train-only negatives, old v5 labels for both): fit gate AUROC / tpr_np / calib TPR
+  1.0 for sports / jokes / all-caps on both files. Cross-read AUROC (concept episode texts vs other train concepts +
+  free pool): old probe on old / new texts 0.9995 / 0.9996 (sports), 0.999 / 1.000 (jokes), 1.000 / 1.000 (all-caps);
+  new probe on old / new 0.993 / 0.999, 0.999 / 1.000, 1.000 / 1.000. New sports probe FPR on the published free
+  pool 0.13 (old 0.06). Source-shortcut read not informative yet (only 3 concepts were model-written in the smoke).
+- Full build: 4 x 2-A100 shards (all 19 regenerated concepts = 20 train minus math, K=3: 6612571-74) + extra samples for chemistry /
+  finance / literature / Hindi / German / formal (6612576); chain 6612577 rebuilds the file, then queues the 27B
+  labels of the new texts (2 shards), the merge and the base-probe check on 8 concepts.
+- Open / decision points: (1) longer texts raise per-turn read cost and 24-turn memory vs v5 (unverified);
+  (2) train model-written vs held-out published = a distribution gap for held-out races; (3) whether published
+  free-pool negatives become a "human-written" shortcut (read in the full probe check).
+
 ## 2026-10-21l Log loss FROM SCRATCH diverged by step 10 (cancelled at 13); the early-phase hypothesis half-confirmed
 - 6607864 (10-21j) vs the original MSE run, same config otherwise:
   - pre-clip grad norm, steps 1-4: 14-15 (orig 0.4-0.6);

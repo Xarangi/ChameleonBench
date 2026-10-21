@@ -47,7 +47,7 @@ lives in `REPLICATION.md` (newest first; it also holds the RULED-OUT ledger).
 | Training entry | `scripts/tica.py`; chunks: `scripts/slurm/tica_resume.sh`; whole node: `scripts/slurm/tica_node.sh` |
 | Races (held-out, val) | `scripts/tica_switch_eval.py` (+ `slurm/tica_switch_eval.sh`, `tica_val.sh`, `tica_val_local.sh`); `scripts/slurm/final_eval_suite.sh` |
 | Analysis | `scripts/tica_run_report.py` (training logs to probe index / retry / held-out static / readability / timing), `tica_probe_panel.py` (never-shown probe panel, selectivity, `--dump-feats`), `tica_evasion_detector.py` (supervised detector), `tica_frozen_race.py --ood` (unsupervised anomaly detector), `tica_think_hide_eval.py` (free generation, thinking), `tica_thinking_eval.py`, `tica_capability.py` |
-| Data builders | `scripts/build_final_v5.py` (split v5), `build_emotion_eval.py`, `build_safety_eval.py`, `label_concept_contamination.py` (27B negative labels) |
+| Data builders | `scripts/build_final_v5.py` (split v5), `build_final_v5_mw.py` (model-written train concepts, [V4_MODEL_WRITTEN_DATA.md](V4_MODEL_WRITTEN_DATA.md)), `build_emotion_eval.py`, `build_safety_eval.py`, `label_concept_contamination.py` (27B negative labels) |
 
 ## REPLICATION.md sections by date (TICA final runs)
 

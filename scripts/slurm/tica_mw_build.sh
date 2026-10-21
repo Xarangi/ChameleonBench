@@ -46,7 +46,7 @@ done
 echo "generation done $(( $(date +%s) - t0 ))s"
 grep -h -A3 '"n_gen"' $OUT/gen_${TAG}_*.log | head -20 || true
 wait $CP || true; [ -f $L27/.copied ] || { echo "27B copy failed"; exit 1; }
-$VPY scripts/tica_free_judge.py --model $L27 --tp 2 --answers-prompt loose \
+$VPY scripts/tica_free_judge.py --model $L27 --tp 2 --answers-prompt loose --maxc ${MW_MAXC:-6000} \
   --row-out $OUT/scores_$TAG.jsonl --out $OUT/judge_$TAG.json \
   --gens ${TAG}_0=$OUT/gen_${TAG}_0.jsonl ${TAG}_1=$OUT/gen_${TAG}_1.jsonl 2>&1 \
   | grep -vE "it/s\]|^\s*$" | tail -30
