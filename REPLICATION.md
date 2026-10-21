@@ -5,6 +5,20 @@ checkpoints, observed results, and unresolved limitations.
 
 TICA on a new machine: start at docs/tica/README.md (results digest, run ledger, open questions, aggregate snapshot).
 
+## 2026-10-21bg Logclip loss terms: still learning, but the hide gradient is clipped to ~25-30% every step; rlobf_attn margins flat
+- train_log, 40-step means (logclip abs 120 / 200 / 280 / 320; panel0 120 / 200 / 240):
+  - hide loss (-log(1-p), "hide_mse" key) logclip 1.07 / 0.83 / 0.71 / 0.75; panel0 0.82 / 0.66 / 0.61 -> still falling.
+  - mean hide p 0.47 / 0.44 / 0.41 / 0.39; panel0 0.41 / 0.38 / 0.40. n_hide targets 124 -> 152 (more refits deployed).
+  - raw hide grad norm 3-4.4 vs clip 0.5 -> hide_clip_coef 0.24-0.32 at EVERY step since ~abs 120 (0.04-0.08 before, raw
+    50-170). Other terms' grad norm 0.5-0.6. So the hide step is fixed at 0.5, about equal to KL + NLL + match.
+  - KL 0.049-0.05, NLL 0.31-0.34, match 0.001, improve 0 (pursuit off): stable, not fighting.
+- Active refit, margin above threshold on turns it catches (turns.jsonl, median): rlobf_attn 0.53 / 0.57 / 0.58 / 0.48 (prob,
+  thr ~0.36-0.41, so caught at p ~0.9, not near the boundary); ens4_mlp 0.32 -> 0.19, ensdeep4 0.28 -> 0.13, attnpool
+  11.7 -> 9.6 -> shrinking for everything except rlobf_attn.
+- Reading: not stuck -- hide loss falls, margins shrink -- but the clip rate-limits hiding. The clip was needed for the
+  early phase (raw 50-170); now raw is 3-4. Test: logclip_clip1_r320 6697662 = logclip resume_120 final (abs 320) with
+  hide_grad_clip 1.0, otherwise identical to logclip_r320 (6685654), 160 steps, wt-hclip.
+
 ## 2026-10-21bf CONFOUND: stay-vs-logclip held-out gap = stay term OR MSE lineage / length; controls launched
 - fb600_stay vs logclip differ in: stay_standalone (on / off), hide loss (MSE w 1.0 / log w 0.3 + hide clip 0.5), lineage
   (MSE original abs 600, which had evaded L20 with drift, 10-21ao), steps (abs 660 / 260), kind_bandit_refits_only
