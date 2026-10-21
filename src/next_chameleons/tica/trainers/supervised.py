@@ -29,6 +29,7 @@ import random
 import time
 import zlib
 from collections import defaultdict
+from concurrent.futures import ThreadPoolExecutor
 from contextlib import nullcontext
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
@@ -407,6 +408,131 @@ def lr_factor(cfg: SupervisedConfig, k: int, offset: int = 0, warm_up: bool = Tr
         h = min(1.0, max(0.0, (offset + k - start) / cd))
         target = cfg.lr_final + (target - cfg.lr_final) * 0.5 * (1 + math.cos(math.pi * h))
     return warm * target / cfg.lr
+
+
+def _refit_fit(job: dict):
+    """The fit stage of AdaptiveSupervisedTrainer._episode_refit: (probe or None, info) from a job
+    of _refit_reads (+ "name", "excl"). Reads no trainer state, so adaptive.refit_overlap can run
+    it on a worker thread."""
+
+    kind, L, Ls, L0, picks = job["kind"], job["L"], job["Ls"], job["L0"], job["picks"]
+    rl, ft, npl, nt = job["rl"], job["ft"], job["npl"], job["nt"]
+    acfg, name, concept = job["acfg"], job["name"], job["concept"]
+    full_kind, sec_read = job["full_kind"], job["sec_read"]
+    if kind != "linear":  # literature probe bank (probe_zoo), same gate
+        if kind in ZOO_TOKENS_ENS:
+            pos_q = [q for q, (k_, _) in enumerate(picks) if k_ == "pos"]
+            neg_q = [q for q, (k_, _) in enumerate(picks) if k_ == "neg"]
+            P = {Lk: [ft[Lk][q] for q in pos_q] + nt[Lk][0::2] for Lk in Ls}
+            N = {Lk: [ft[Lk][q] for q in neg_q] for Lk in Ls}
+            G = {Lk: nt[Lk][1::2] for Lk in Ls}
+        elif kind in ZOO_ENS:
+            P = {Lk: torch.cat([rl[Lk][q : q + 1] for q, (k_, _) in enumerate(picks)
+                                if k_ == "pos"] + [npl[Lk][0::2]]) for Lk in Ls}
+            N = {Lk: torch.stack([rl[Lk][q] for q, (k_, _) in enumerate(picks) if k_ == "neg"])
+                 for Lk in Ls}
+            G = {Lk: npl[Lk][1::2] for Lk in Ls}
+        elif ft is None:  # pooled single-layer zoo kinds (meandiff): rows, not tokens
+            P = torch.cat([rl[L0][q : q + 1] for q, (k_, _) in enumerate(picks)
+                           if k_ == "pos"] + [npl[L0][0::2]])
+            N = torch.stack([rl[L0][q] for q, (k_, _) in enumerate(picks) if k_ == "neg"])
+            G = npl[L0][1::2]
+        else:
+            P = [ft[L][q] for q, (k_, _) in enumerate(picks) if k_ == "pos"] + nt[L][0::2]
+            N = [ft[L][q] for q, (k_, _) in enumerate(picks) if k_ == "neg"]
+            G = nt[L][1::2]
+        mon, info = gate_fit(kind, P, N, G, acfg, name=name, layer=L, concept=concept,
+                             device=job["device"])
+        return mon, {**info, "kind": full_kind, "sec_read": sec_read}
+    rd = RefitData(layers=[L], concept=concept)
+    for (k, _), v in zip(picks, job["r"], strict=True):
+        (rd.pos if k == "pos" else rd.neg)[L].append(v[None])
+    for j, v in enumerate(job["npr"]):
+        (rd.pos if j % 2 == 0 else rd.np_pos)[L].append(v[None])
+    bank, info = fit_refit_bank(rd, concept, name, acfg, exclude_layers=job["excl"])
+    return bank, {**info, "kind": full_kind, "sec_read": sec_read}
+
+
+_RNG_CANARY = 0x7C3A5EED  # refit_overlap: marks "this fit did not touch the global torch RNG"
+
+
+def _rng_get():
+    cu = (torch.cuda.get_rng_state_all()
+          if torch.cuda.is_available() and torch.cuda.is_initialized() else None)
+    return torch.get_rng_state(), cu
+
+
+def _rng_set(st) -> None:
+    torch.set_rng_state(st[0])
+    if st[1] is not None:
+        torch.cuda.set_rng_state_all(st[1])
+
+
+def _rng_eq(a, b) -> bool:
+    if not torch.equal(a[0], b[0]) or (a[1] is None) != (b[1] is None):
+        return False
+    return a[1] is None or all(torch.equal(x, y) for x, y in zip(a[1], b[1], strict=True))
+
+
+def _iso_fit(job: dict, grad: bool):
+    """adaptive.refit_overlap's worker: _refit_fit(job) with the caller's grad mode and device,
+    the global torch RNG isolated. Fits seed themselves from the probe name (torch.manual_seed +
+    module init), so their results do not depend on the state they start from; the state they
+    END in does, and the main thread restores the serial one at the join. Returns ((probe, info),
+    RNG end state or None if the fit left the RNG untouched, fit seconds)."""
+
+    t0 = time.time()
+    dev = job["device"]
+    if isinstance(dev, torch.device) and dev.type == "cuda":
+        torch.cuda.set_device(dev)
+    before = _rng_get()
+    torch.default_generator.manual_seed(_RNG_CANARY)
+    if before[1] is not None:
+        torch.cuda.manual_seed_all(_RNG_CANARY)
+    canary = _rng_get()
+    try:
+        with torch.set_grad_enabled(grad):
+            out = _refit_fit(job)
+        after = _rng_get()
+    finally:
+        _rng_set(before)
+    return out, (None if _rng_eq(after, canary) else after), time.time() - t0
+
+
+def _probe_tensors(obj, depth: int = 0):
+    """Every tensor of a probe (modules, attributes, nested monitors), on CPU (TICA_DUMP_REFITS)."""
+
+    if isinstance(obj, torch.Tensor):
+        return obj.detach().cpu().clone()
+    if isinstance(obj, torch.nn.Module):
+        return {k: v.detach().cpu().clone() for k, v in obj.state_dict().items()}
+    if depth > 4:
+        return None
+    if isinstance(obj, dict):
+        return {str(k): _probe_tensors(v, depth + 1) for k, v in obj.items()}
+    if isinstance(obj, (list, tuple)):
+        return [_probe_tensors(v, depth + 1) for v in obj]
+    if hasattr(obj, "__dict__"):
+        return {k: _probe_tensors(v, depth + 1) for k, v in vars(obj).items()}
+    return obj if isinstance(obj, (int, float, str, bool, type(None))) else None
+
+
+def _same_reads(a: dict, b: dict) -> bool:
+    """Two _refit_reads jobs carry bit-identical activations (fit inputs)."""
+
+    def same(x, y):
+        if isinstance(x, torch.Tensor):
+            return (isinstance(y, torch.Tensor) and x.shape == y.shape and x.dtype == y.dtype
+                    and bool(torch.equal(x, y)))
+        if isinstance(x, dict):
+            return isinstance(y, dict) and x.keys() == y.keys() and all(same(x[k], y[k])
+                                                                         for k in x)
+        if isinstance(x, (list, tuple)):
+            return (isinstance(y, (list, tuple)) and len(x) == len(y)
+                    and all(same(u, v) for u, v in zip(x, y, strict=True)))
+        return x == y
+
+    return all(same(a[k], b[k]) for k in ("r", "rl", "ft", "npr", "npl", "nt"))
 
 
 @dataclass
@@ -859,6 +985,161 @@ class AdaptiveSupervisedTrainer:
         self._refit_log = []  # one record per refit ATTEMPT (flushed to refits.jsonl)
         cumulative = ep_mode and acfg.episode_cumulative
 
+        def switch_refits(i, s, prefix, shown, c, t, bank, info, tried, refit=None):
+            # refit_switch_max (10-15g): a refit that fails its quality gate is NOT replaced by
+            # the old (already dodged) probe; another probe TYPE is fit instead (same sample
+            # sizes), up to refit_switch_max more types.
+            refit = refit or self._episode_refit
+            while bank is None and len(tried) <= acfg.refit_switch_max:
+                k2 = self._pick_kind(exclude=tried, rng=self._erng(i))
+                if k2 is None:
+                    break
+                t_sw = time.time()
+                bank, info = refit(s, prefix, shown, c, t + 1, kind=k2, **self._ep_kw(i))
+                self._log_refit(info, i, t + 1, c, len(tried), time.time() - t_sw)
+                tried.append(k2)
+                ep_stats["switch_att"] += 1
+            return bank, info
+
+        def finish_refit(i, c, t, dfd, deployed_i, res, bank, info, tried):
+            if bank is None and len(tried) > 1:
+                ep_stats["all_failed"] += 1
+            ep_stats["att"] += 1
+            res["episode_refit"] = bool(bank is not None)
+            res["refit_kinds_tried"] = tried
+            if bank is not None:
+                bank = bank.to(pol.device)
+                pool.add(bank, round=self.step_k, family="episode_refit")
+                if acfg.episode_keep and hasattr(bank, "state"):
+                    torch.save(bank.state(), self.out / "bank" / f"{bank.name}.pt")
+                else:
+                    self._transient.append(bank.name)
+                dump = os.environ.get("TICA_DUMP_REFITS")  # debug: every accepted refit's tensors
+                if dump:
+                    Path(dump).mkdir(parents=True, exist_ok=True)
+                    torch.save(_probe_tensors(bank), Path(dump) / f"{bank.name}.pt")
+                dfd.members.append(bank)
+                dfd.by_name[bank.name] = bank
+                dfd.active, dfd.stage_turn = bank.name, 0
+                deployed_i.append(bank.name)
+                self._kind_of[bank.name] = info.get("kind", "linear")
+                ep_stats["acc"] += 1
+                ep_stats["auroc"].append(info["auroc"])
+                last_refit[(i, c)] = t
+                pending[(i, c)] = {"kind": info.get("kind", "linear"),
+                                   "turns": 0, "concept": c, **self._ep_tag(i)}
+
+        # adaptive.refit_overlap (10-21e): this turn's refits read on the main thread and fit on
+        # ONE worker thread (FIFO = the serial fit order); ovl_join finishes them in episode order
+        # (switch fallback, deploy) before anything uses them. Exactness: see _iso_fit / ovl_join.
+        overlap = (ep_mode and acfg.refit_overlap and ctx is not None
+                   and not (acfg.episode_refit_kind == "mixed" and acfg.refit_switch_max > 0
+                            and acfg.episode_kind_sampling == "prioritized"))
+        ovl: list[dict] = []  # this turn's pending refits (episode order)
+        ovl_recs: list = []  # RNG end states of the turn's effective fits, serial order
+        if overlap:
+            ep_stats.update({"ovl_main": 0.0, "ovl_work": 0.0, "ovl_wait": 0.0, "ovl_waste": 0.0,
+                             "ovl_redo": 0, "ovl_redo_same": 0})
+            if getattr(self, "_ovl_pool", None) is None:
+                self._ovl_pool = ThreadPoolExecutor(max_workers=1,
+                                                    thread_name_prefix="tica-refit-fit")
+
+        def ovl_fit(job):
+            return self._ovl_pool.submit(_iso_fit, job, torch.is_grad_enabled())
+
+        def np_snap():  # the no-prompt read cache (refit_np_cache) after a read
+            cch = getattr(self, "_np_cache", None)
+            return (None if cch is None else dict(cch), getattr(self, "_np_ver", None),
+                    getattr(self, "_np_hits", 0))
+
+        def np_restore(sn):
+            cch, ver, hits = sn
+            self._np_cache = {} if cch is None else dict(cch)
+            self._np_ver, self._np_hits = ver, hits
+
+        def ovl_submit(i, s, c, t, shown, dfd, deployed_i, res):
+            t_ep = time.time()
+            kw = self._ep_kw(i)
+            prefix = list(convs[i])  # the conversation through the passing answer
+            plan = self._refit_plan(s, prefix, shown, c, None, None, kw["rng"])
+            job = self._refit_reads(plan)
+            job["name"], job["excl"] = kw["name"], self._heldout_layers()
+            ovl.append({"i": i, "s": s, "c": c, "t": t, "shown": shown, "dfd": dfd,
+                        "dep": deployed_i, "res": res, "prefix": prefix, "plan": plan,
+                        "job": job, "snap": np_snap(), "fut": ovl_fit(job)})
+            ep_stats["ovl_main"] += time.time() - t_ep
+
+        def ovl_refit(s, prefix, shown, c, turn, kind=None, rng=None, name=None):
+            # a switch attempt at the join: the serial reads, the fit on the worker (FIFO)
+            plan = self._refit_plan(s, prefix, shown, c, kind, None, rng)
+            job = self._refit_reads(plan)
+            job["name"], job["excl"] = name, self._heldout_layers()
+            out, rec, _ = ovl_fit(job).result()
+            ovl_recs.append(rec)
+            return out
+
+        def ovl_join():
+            """Finish the turn's pending refits in episode order = the serial order. A refit that
+            needs the switch fallback rolls the no-prompt read cache back to its own read, runs
+            its switch reads + fits, then redoes the later episodes' reads (their serial place);
+            a later fit is kept when its redone reads are bit-identical, else refit. The global
+            torch RNG ends in the state the serial fits leave."""
+
+            if not ovl:
+                return
+            t_j = time.time()
+            p = 0
+            while p < len(ovl):
+                e = ovl[p]
+                i, c, t = e["i"], e["c"], e["t"]
+                tw = time.time()
+                (bank, info), rec, fsec = e["fut"].result()
+                ep_stats["ovl_wait"] += time.time() - tw
+                excl = self._heldout_layers()
+                if e["job"]["kind"] == "linear" and excl != e["job"]["excl"]:
+                    e["job"]["excl"] = excl  # an earlier deploy changed it: fit as serial would
+                    (bank, info), rec, fsec = ovl_fit(e["job"]).result()
+                info = {**info, "sec_read": e["job"]["sec_read"]}
+                sec = e["job"]["read_dt"] + fsec
+                self._log_refit(info, i, t + 1, c, 0, sec)
+                ovl_recs.append(rec)
+                tried = [info.get("kind")]
+                if bank is None and len(tried) <= acfg.refit_switch_max:
+                    later = ovl[p + 1 :]
+                    for f in later:
+                        f["fut"].cancel()
+                    np_restore(e["snap"])  # the cache as the serial switch reads see it
+                    t_sw = time.time()
+                    bank, info = switch_refits(i, e["s"], e["prefix"], e["shown"], c, t, bank,
+                                               info, tried, refit=ovl_refit)
+                    sec += time.time() - t_sw
+                    for f in later:  # redo the later reads in their serial place
+                        old = f["job"]
+                        job = self._refit_reads(f["plan"], t0=time.time())
+                        job["name"], job["excl"] = old["name"], old["excl"]
+                        self._refit_read_sec -= old["read_dt"]
+                        ep_stats["ovl_waste"] += old["read_dt"]
+                        ep_stats["ovl_redo"] += 1
+                        f["snap"] = np_snap()
+                        if _same_reads(old, job):
+                            ep_stats["ovl_redo_same"] += 1
+                            f["job"] = {**old, "read_dt": job["read_dt"],
+                                        "sec_read": job["sec_read"]}
+                            if f["fut"].cancelled():
+                                f["fut"] = ovl_fit(old)
+                        else:
+                            f["job"], f["fut"] = job, ovl_fit(job)
+                ep_stats["sec"] += sec
+                ep_stats["ovl_work"] += sec
+                finish_refit(i, c, t, e["dfd"], e["dep"], e["res"], bank, info, tried)
+                p += 1
+            last = [r for r in ovl_recs if r is not None]
+            if last:  # the serial fits' RNG end state (the worker restores its own)
+                _rng_set(last[-1])
+            ovl.clear()
+            ovl_recs.clear()
+            ep_stats["ovl_main"] += time.time() - t_j
+
         def _start(s):
             if ep_mode:  # every episode opens on probe 1 (the base concept probe)
                 return pool.concept_monitor(s.monitored).name
@@ -880,6 +1161,7 @@ class AdaptiveSupervisedTrainer:
 
         def defender(i, s, c):
             if c not in def_by[i]:
+                ovl_join()  # refit_overlap: first probes read + fit after the pending refits
                 start = _start(s) if c == s.monitored else pool.concept_monitor(c).name
                 # "switch_fork" (10-17h): the episode's FIRST concept keeps its base probe; every
                 # newly switched-to concept gets a fork-fit first probe
@@ -1083,48 +1365,18 @@ class AdaptiveSupervisedTrainer:
                             res["episode_refit"] = "skip"
                         elif t < T - 1:  # fork at the turn after the pass -> active from t+1
                             dfd.active = read["name"]  # refit, or keep the dodged probe
-                            t_ep = time.time()
-                            bank, info = self._episode_refit(s, convs[i], shown, c, t + 1,
-                                                             **self._ep_kw(i))
-                            self._log_refit(info, i, t + 1, c, 0, time.time() - t_ep)
-                            tried = [info.get("kind")]
-                            # refit_switch_max (10-15g): a refit that fails its quality gate is
-                            # NOT replaced by the old (already dodged) probe; another probe TYPE is
-                            # fit instead (same sample sizes), up to refit_switch_max more types.
-                            while bank is None and len(tried) <= acfg.refit_switch_max:
-                                k2 = self._pick_kind(exclude=tried, rng=self._erng(i))
-                                if k2 is None:
-                                    break
-                                t_sw = time.time()
+                            if overlap:  # read now, fit on the worker, finish at the turn's join
+                                ovl_submit(i, s, c, t, shown, dfd, deployed_i, res)
+                            else:
+                                t_ep = time.time()
                                 bank, info = self._episode_refit(s, convs[i], shown, c, t + 1,
-                                                                 kind=k2, **self._ep_kw(i))
-                                self._log_refit(info, i, t + 1, c, len(tried),
-                                                time.time() - t_sw)
-                                tried.append(k2)
-                                ep_stats["switch_att"] += 1
-                            if bank is None and len(tried) > 1:
-                                ep_stats["all_failed"] += 1
-                            ep_stats["sec"] += time.time() - t_ep
-                            ep_stats["att"] += 1
-                            res["episode_refit"] = bool(bank is not None)
-                            res["refit_kinds_tried"] = tried
-                            if bank is not None:
-                                bank = bank.to(pol.device)
-                                pool.add(bank, round=self.step_k, family="episode_refit")
-                                if acfg.episode_keep and hasattr(bank, "state"):
-                                    torch.save(bank.state(), self.out / "bank" / f"{bank.name}.pt")
-                                else:
-                                    self._transient.append(bank.name)
-                                dfd.members.append(bank)
-                                dfd.by_name[bank.name] = bank
-                                dfd.active, dfd.stage_turn = bank.name, 0
-                                deployed_i.append(bank.name)
-                                self._kind_of[bank.name] = info.get("kind", "linear")
-                                ep_stats["acc"] += 1
-                                ep_stats["auroc"].append(info["auroc"])
-                                last_refit[(i, c)] = t
-                                pending[(i, c)] = {"kind": info.get("kind", "linear"),
-                                                   "turns": 0, "concept": c, **self._ep_tag(i)}
+                                                                 **self._ep_kw(i))
+                                self._log_refit(info, i, t + 1, c, 0, time.time() - t_ep)
+                                tried = [info.get("kind")]
+                                bank, info = switch_refits(i, s, convs[i], shown, c, t, bank,
+                                                           info, tried)
+                                ep_stats["sec"] += time.time() - t_ep
+                                finish_refit(i, c, t, dfd, deployed_i, res, bank, info, tried)
                 else:
                     base = pool.concept_monitor(s.monitored) if s.text_concept else None
                     if base is not None:
@@ -1174,6 +1426,7 @@ class AdaptiveSupervisedTrainer:
                                                     named=s.named, **kw))
                     tr.feedback.append(fb)
                     convs[i].append({"role": "user", "content": fb})
+            ovl_join()  # refit_overlap: the turn's refits, before the next turn uses them
         n_cens, trajs_all = len(last_refit), trajs
         if ctx is not None:  # episode streams: every rank's records merged (dp: all-gathered)
             trajs_all, passed_turn, ep_stats, n_cens = self._merge_rollout(
@@ -1275,6 +1528,19 @@ class AdaptiveSupervisedTrainer:
                 "ep_kinds_tried_per_refit": (ep_stats["att"] + ep_stats["switch_att"])
                 / max(1, ep_stats["att"]),
             })
+            if "ovl_main" in ep_stats:
+                # refit_overlap, pass refits only (first probes stay serial): read + fit work
+                # (refits.jsonl sec), main-thread time on them (reads incl. any slow-down from the
+                # concurrent fit, join waits, switch fallback) and the difference (time saved)
+                metrics.update({
+                    "sec_ep_refit_work": round(ep_stats["ovl_work"], 1),
+                    "sec_ep_refit_main": round(ep_stats["ovl_main"], 1),
+                    "sec_ep_refit_join_wait": round(ep_stats["ovl_wait"], 1),
+                    "sec_ep_refit_overlap_saved": round(ep_stats["ovl_work"] - ep_stats["ovl_main"],
+                                                        1),
+                    "sec_ep_refit_redo_waste": round(ep_stats["ovl_waste"], 1),
+                    "ep_refit_overlap_redo": ep_stats["ovl_redo"],
+                    "ep_refit_overlap_redo_same": ep_stats["ovl_redo_same"]})
             metrics.update(self._flush_refit_log())
         self._flush_turn_log(trajs_all)
         return trajs, metrics
@@ -1441,9 +1707,23 @@ class AdaptiveSupervisedTrainer:
         negatives: in-context other-concept + concept-free follow-ups; the other no-prompt half is
         the out-of-context TPR gate. Same construction as scripts/tica_frozen_race.py.
         rng / name / np_cache (episode streams): the episode's stream, a deterministic probe name
-        (it seeds the fit) and whether no-prompt reads may come from the rollout cache."""
+        (it seeds the fit) and whether no-prompt reads may come from the rollout cache.
+        Stages: _refit_plan (every draw) -> _refit_reads (GPU reads) -> _refit_fit (no trainer
+        state; adaptive.refit_overlap runs it on a worker thread)."""
 
-        acfg, pol = self.cfg.adaptive, self.policy
+        plan = self._refit_plan(s, prefix, shown, concept, kind, fork_msg, rng, np_cache)
+        job = self._refit_reads(plan)
+        if name is None:
+            self.refit_k += 1
+            name = f"ep_refit_{self.refit_k}"
+        job["name"], job["excl"] = name, self._heldout_layers()
+        return _refit_fit(job)
+
+    def _refit_plan(self, s, prefix, shown, concept=None, kind=None, fork_msg=None, rng=None,
+                    np_cache=True) -> dict:
+        """_episode_refit's draws (texts, kind, no-prompt texts) + fork conversations; no reads."""
+
+        acfg = self.cfg.adaptive
         t_read0 = time.time()
         ef = {"pos": 24, "np": 10, "other": 16, "free": 8, **acfg.episode_fork}
         concept = concept or s.monitored
@@ -1492,12 +1772,6 @@ class AdaptiveSupervisedTrainer:
         if Lo is not None:
             L = Lo
         Ls = kind_layers(kind, L) if kind in ZOO_ENS or kind in ZOO_TOKENS_ENS else [L]
-        ft = {} if kind in ZOO_TOKEN else None  # per-token fork states (token-pooled kinds)
-        keep = ZOO_TOK_KEEP if kind in ZOO_TOKENS_ENS else None
-        rall = pol.pooled_shared_prefix(forks, Ls, token_out=ft, token_keep=keep,
-                                        batch=acfg.episode_fork_batch or None)
-        L0 = L if L in Ls else Ls[0]  # an ensemble may not read the primary layer (ensdeep4)
-        r, rl = rall[L0].float().cpu(), {Lk: rall[Lk].float() for Lk in Ls}
         # No-prompt texts disjoint from the fork positives where possible, so the OOC gate half
         # never shares a text with a positive.
         used = {x for k, x in picks if k == "pos"}
@@ -1508,8 +1782,27 @@ class AdaptiveSupervisedTrainer:
              {"role": "assistant", "content": x}]
             for x in nps
         ]
+        return {"t0": t_read0, "concept": concept, "L": L, "kind": kind, "full_kind": full_kind,
+                "Ls": Ls, "picks": picks, "forks": forks, "np_convs": np_convs, "nps": nps,
+                "np_cache": np_cache}
+
+    def _refit_reads(self, plan: dict, t0: float | None = None) -> dict:
+        """_episode_refit's activation reads for a plan -> the fit job (everything _refit_fit
+        needs; the caller adds "name" and "excl"). Re-running it on the same plan repeats the same
+        reads (adaptive.refit_overlap redoes them after a rollback)."""
+
+        acfg, pol = self.cfg.adaptive, self.policy
+        t_read0 = plan["t0"] if t0 is None else t0
+        kind, L, Ls, picks = plan["kind"], plan["L"], plan["Ls"], plan["picks"]
+        ft = {} if kind in ZOO_TOKEN else None  # per-token fork states (token-pooled kinds)
+        keep = ZOO_TOK_KEEP if kind in ZOO_TOKENS_ENS else None
+        rall = pol.pooled_shared_prefix(plan["forks"], Ls, token_out=ft, token_keep=keep,
+                                        batch=acfg.episode_fork_batch or None)
+        L0 = L if L in Ls else Ls[0]  # an ensemble may not read the primary layer (ensdeep4)
+        r, rl = rall[L0].float().cpu(), {Lk: rall[Lk].float() for Lk in Ls}
+        nps, np_convs = plan["nps"], plan["np_convs"]
         nt = {} if kind in ZOO_TOKEN else None
-        if acfg.refit_np_cache and np_cache:  # shared across the rollout's refits (same weights)
+        if acfg.refit_np_cache and plan["np_cache"]:  # shared across the rollout's refits
             nall = self._np_reads(nps, np_convs, Ls, nt, keep)
         else:
             nall = (pol.pooled_incremental(np_convs, Ls, {}, token_out=nt, token_keep=keep)
@@ -1518,43 +1811,12 @@ class AdaptiveSupervisedTrainer:
         npr, npl = nall[L0].float().cpu(), {Lk: nall[Lk].float() for Lk in Ls}
         if pol.device.type == "cuda":
             torch.cuda.synchronize()
-        self._refit_read_sec = getattr(self, "_refit_read_sec", 0.0) + time.time() - t_read0
-        sec_read = round(time.time() - t_read0, 2)  # per-refit read time (refits.jsonl)
-        if name is None:
-            self.refit_k += 1
-            name = f"ep_refit_{self.refit_k}"
-        if kind != "linear":  # literature probe bank (probe_zoo), same gate
-            if kind in ZOO_TOKENS_ENS:
-                pos_q = [q for q, (k_, _) in enumerate(picks) if k_ == "pos"]
-                neg_q = [q for q, (k_, _) in enumerate(picks) if k_ == "neg"]
-                P = {Lk: [ft[Lk][q] for q in pos_q] + nt[Lk][0::2] for Lk in Ls}
-                N = {Lk: [ft[Lk][q] for q in neg_q] for Lk in Ls}
-                G = {Lk: nt[Lk][1::2] for Lk in Ls}
-            elif kind in ZOO_ENS:
-                P = {Lk: torch.cat([rl[Lk][q : q + 1] for q, (k_, _) in enumerate(picks)
-                                    if k_ == "pos"] + [npl[Lk][0::2]]) for Lk in Ls}
-                N = {Lk: torch.stack([rl[Lk][q] for q, (k_, _) in enumerate(picks) if k_ == "neg"])
-                     for Lk in Ls}
-                G = {Lk: npl[Lk][1::2] for Lk in Ls}
-            elif ft is None:  # pooled single-layer zoo kinds (meandiff): rows, not tokens
-                P = torch.cat([rl[L0][q : q + 1] for q, (k_, _) in enumerate(picks)
-                               if k_ == "pos"] + [npl[L0][0::2]])
-                N = torch.stack([rl[L0][q] for q, (k_, _) in enumerate(picks) if k_ == "neg"])
-                G = npl[L0][1::2]
-            else:
-                P = [ft[L][q] for q, (k_, _) in enumerate(picks) if k_ == "pos"] + nt[L][0::2]
-                N = [ft[L][q] for q, (k_, _) in enumerate(picks) if k_ == "neg"]
-                G = nt[L][1::2]
-            mon, info = gate_fit(kind, P, N, G, acfg, name=name, layer=L, concept=concept,
-                                 device=pol.device)
-            return mon, {**info, "kind": full_kind, "sec_read": sec_read}
-        rd = RefitData(layers=[L], concept=concept)
-        for (k, _), v in zip(picks, r, strict=True):
-            (rd.pos if k == "pos" else rd.neg)[L].append(v[None])
-        for j, v in enumerate(npr):
-            (rd.pos if j % 2 == 0 else rd.np_pos)[L].append(v[None])
-        bank, info = fit_refit_bank(rd, concept, name, acfg, exclude_layers=self._heldout_layers())
-        return bank, {**info, "kind": full_kind, "sec_read": sec_read}
+        dt = time.time() - t_read0
+        self._refit_read_sec = getattr(self, "_refit_read_sec", 0.0) + dt
+        return {"kind": kind, "full_kind": plan["full_kind"], "L": L, "Ls": Ls, "L0": L0,
+                "picks": picks, "concept": plan["concept"], "r": r, "rl": rl, "ft": ft,
+                "npr": npr, "npl": npl, "nt": nt, "acfg": acfg, "device": pol.device,
+                "sec_read": round(dt, 2), "read_dt": dt}  # sec_read: refits.jsonl
 
     def _cap_gen_step(self, trajs) -> dict:
         """On-policy capability term (adaptive.cap_gen_*; REPLICATION 10-14r). Fork real episodes at

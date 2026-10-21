@@ -29,6 +29,35 @@ TICA on a new machine: start at docs/tica/README.md (results digest, run ledger,
 - ext (abs 539): k2 0.33-0.52 (flat since 400), GSM 0.61-0.79, held-out tN 0.32-0.49.
 - Plain-math refit gate: new configs set refit_min_tpr_np 0 (fit still includes no-prompt math positives).
 
+## 2026-10-21e Refit fit/read overlap (adaptive.refit_overlap, default off)
+- What: within a turn, episode i's pass refit is read on the main thread, its probe FIT runs on ONE worker thread
+  (FIFO = serial fit order), and the main thread goes on to the next episodes' judging + refit reads; all of a turn's
+  refits are joined in episode order before the next turn (and before any new defender's first probe). The switch
+  fallback (refit_switch_max) runs at the join: the no-prompt read cache is rolled back to that refit's read, its
+  switch reads + fits run, then the later episodes' reads are redone in their serial place (their fit is kept only
+  if the redone activations are bit-identical). Fits run with the global torch RNG isolated; the join restores the
+  RNG state the serial fits would leave. _episode_refit is split into _refit_plan (all draws) / _refit_reads /
+  _refit_fit (no trainer state); the serial path is the same calls in the same order. Restrictions (stays serial):
+  no episode streams (episode_rng off, single process), or prioritized kind sampling + refit_switch_max. First
+  probes (turn-0 fork / panel fits) stay serial. Debug env TICA_DUMP_REFITS=<dir> saves every accepted refit's
+  tensors (any probe kind; used for the check below).
+- Exactness (GPU, final_v4_math_v3b_r380_4b from resume_60 step_320, DP2, --steps 2, off x2 vs on x2, same seed;
+  overlap_test/{off1,off2,on1,on2}): step 1 (abs 380) rollout identical in all pairs: refits.jsonl 8/8 rows equal
+  (kind, kept/why, auroc, tpr_np, sizes; only sec differs), turns.jsonl 128/128 rows equal (score, thr, verdicts,
+  active probes), dumped refit probes 61/61 tensors BIT-identical. Step 2 differs at the off1-vs-off2 level too
+  (training backward is not bit-deterministic: grad_norm 2.74381 vs 2.74372 at step 1), so it is not an overlap
+  effect. CPU test tests/test_tica_refit_overlap.py: 4 episodes x 5 turns, linear / rlobf_attn / meandiff (forced
+  gate failure -> switch fallback with rollback + redone reads exercised): refit records, every turn's results,
+  probe tensors and the final global torch RNG state equal off vs on.
+- Speed (per step, DP max): step 1 sec_rollout off 102.3 / 101.5, on 100.9 / 101.6 (~1 s); step 2 off 70.3 / 70.4,
+  on 62.7 / 68.3 (-2..-8 s, trajectories already diverged). Pass refits main-thread time 58-64 s vs 60-67 s serial
+  (both ranks summed): a SMALL gain. Why: (1) most rank-turns have ONE pass refit (r380_ctl: 73/145 rank-turns),
+  and the last refit of a turn has nothing to overlap with; (2) the fits are largely GPU work on the same stream,
+  so concurrent fits slow the reads (e.g. a read 8.9 -> 12.4 s) and the fits themselves (~1.3x); (3) in these
+  2-step runs ~55% of refit time is turn-0 panel fits (serial; one-time per run per key in long runs). Memory:
+  max_mem_reserved +1.5 GB (28.0 -> 29.5). Not enabled in any config; worth it only with a side CUDA stream or a
+  cross-turn pipeline (untried).
+
 ## 2026-10-21h Refit plain-math gate (refit_min_tpr_np 0.8): history and reassessment (user question)
 - History: introduced 10-10n after the round-1 refit scored 0.00 on unprompted math ("invalid monitor"); built into
   fit_refit_bank 10-11b; 0.8 in every config since (v2, v3, v3b, v4 math, r380 arms).

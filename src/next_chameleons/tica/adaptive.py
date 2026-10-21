@@ -291,6 +291,15 @@ class AdaptiveConfig:
     refit_rlobf_prepad: bool = False
     refit_batched_rlobf: bool = False
     refit_batched_logistic: bool = False
+    # refit_overlap (10-21e; default off): within a turn, episode i's probe FIT runs on one
+    # worker thread while the next episodes' refit activation READS run on the main thread
+    # (joined at the turn's end, before anything uses the refits). Exact by construction: one
+    # FIFO worker (fits keep their serial order and seeds), the switch fallback
+    # (refit_switch_max) runs at the join with the no-prompt read cache rolled back and the later
+    # reads redone in their serial place, and the global torch RNG ends the turn in the serial
+    # state. Needs episode streams (episode_rng / DP); otherwise, and with episode_kind_sampling
+    # "prioritized" + refit_switch_max, refits stay serial.
+    refit_overlap: bool = False
     # episode_rng (10-19; default off = the original draws): per-episode RNG streams (seeded in
     # episode order from the trainer RNG) for every in-rollout draw (defender, refit texts, refit
     # kind), deterministic refit names (fit seeds) and one stream per shared turn-0 probe. An
