@@ -5,6 +5,51 @@ checkpoints, observed results, and unresolved limitations.
 
 TICA on a new machine: start at docs/tica/README.md (results digest, run ledger, open questions, aggregate snapshot).
 
+## 2026-10-21r Bounded far-from-dodge push: GCE hide loss + per-term hide grad clip (both default off); from-scratch runs
+- Problem (10-21l/m): MSE p^2 has d/dz = 2p^2(1-p) ~ 0 on deeply caught turns (slow vs fresh refits); log
+  softplus(z) keeps d/dz = p ~ 1 there but diverged from scratch at the first refits (pre-clip grad norm 69-1000,
+  GSM8K-while-hiding -> 0, KL 2+) at LR 3e-4 and 1e-4. The total-norm clip at 1.0 then makes each update ~pure hiding
+  and starves the capability terms (episode KL, cap_gen RFT + KL, retain anchor).
+- New, both default off (commit 2ac27f9):
+  1. objective.hide_loss "gce" + objective.hide_gce_q (default 0.3, read only under gce): generalized cross-entropy
+     (Zhang & Sabuncu 2018) on the hide side, (1 - (1-p)^q)/q, computed as -expm1(q * logsigmoid(-z))/q. d/dz =
+     p(1-p)^q: q -> 0 = log loss, q = 1 = bounded loss p. Used wherever hide_per_target is (episode hide, cap_gen hide).
+  2. train.hide_grad_clip (0 = off): the HIDE gradient (episode role-"hide" targets + cap_gen hide) goes to its own
+     buffer via torch.autograd.grad(retain_graph) per micro-batch; the other terms (match, LM, KL, pursuit, cap_gen
+     NLL/KL, anchor) backward into .grad as before. After every micro-batch, cap_gen and anchor: DP all-reduce of .grad
+     (unchanged) AND of the hide buffer (dp.allreduce_tensors), then the hide buffer is clipped to the value (L2,
+     clip_grad_norm_'s 1e-6 eps) for the STEP (accumulated over micro-batches and ranks, not per micro-batch), added
+     to .grad, and the existing total-norm clip (1.0) + step run unchanged. Logged on this path only: grad_norm_hide,
+     grad_norm_rest (pre-clip, global), hide_clip_coef; grad_norm stays the pre-total-clip norm (now after the hide
+     clip). Panel / improve terms are counted as "rest". Adaptive trainer only (the plain SupervisedTrainer raises).
+- Default-off exactness: with both off the code path is the old one (one loss.backward per chunk; loss_terms' total
+  expression untouched, the return_hide split is a separate computation; cap_gen hide term added to the loss in the
+  same order). Tests (tests/test_tica_hide_gce_clip.py, test_tica_dp.py) on compute node 6619498, 129 passed together
+  with the hide-loss / KL-anchor / framework / refit / curriculum / adaptive / DP suites:
+  - GCE values and z-gradients = closed forms at q 0.3 / 0.7 / 1.0 (float64, rtol 1e-10 / 1e-8), bounded by 1/q,
+    q = 1 -> p, q = 1e-7 -> softplus(z) and gradient p (rtol 1e-5);
+  - tiny-model trainer step (episode KL on; with and without cap_gen hide): clip 1e9 gives the same summed gradient
+    as the off path (allclose 1e-6) and the same loss; clip 0.25 x ||hide|| gives exactly rest + hide * c/||hide||
+    (the rest unchanged, the hide part's norm = c);
+  - 2 DP ranks = 1 process with the clip active (hide buffer all-reduced before the clip; same grad_norm_hide /
+    grad_norm_rest / coef, equal weights on both ranks).
+- Chosen values:
+  - Run A clip 0.5. In the original MSE run steps 1-23 every hide target was deeply caught (train/hide_p 1.000), so the
+    MSE hide gradient ~0 and its logged pre-clip norm 0.29-0.75 (median ~0.4) IS the non-hide (capability + match +
+    LM) norm. 0.5 = parity with that: hiding can at most equal the rest of the update instead of being ~14-1000x it
+    (log scratch runs), and the total (<= ~1) rarely triggers the 1.0 clip. Check: grad_norm_rest of run A, steps 1-5.
+  - Run B hide_weight 0.6 at q 0.3: max_z p(1-p)^q is at p = 1/(1+q) = 0.769, value 0.4955; MSE's max of 2p^2(1-p) is
+    8/27 = 0.296 (p = 2/3); 0.296 / 0.4955 = 0.598 -> 0.6 (same rule as log at 0.3, whose max push is 1). Unlike log the
+    push still decays when deeply caught (0.6 x p(1-p)^0.3 = 0.6 e^{-0.3 z} for large z: 0.03 at z 10, vs 0.3 for
+    log and ~1e-4 for MSE), so it ramps up as a probe nears the threshold -- watch KL when k1 jumps.
+- Runs (2 GPUs DP2, 120 steps, from scratch; base command of 10-21j: config final_v4_math_v3b_r380_4b,
+  cap_gen_samples 2, kind_bandit_refits_only false; clean worktree /home/sneheel/chameleons-wt-hclip at 2ac27f9 via
+  its run_wt.sh):
+  - 6620902 A scratch_logclip: hide_loss log, hide_weight 0.3, train.hide_grad_clip 0.5;
+  - 6620903 B scratch_gce: hide_loss gce, hide_gce_q 0.3, hide_weight 0.6.
+  Baselines: original MSE run (final_v4_math_v3b_4b/adaptive, k1 0 until step 24, 0.4-1.0 at 25-40), 10-21l scratch_log
+  and 10-21m scratch_log_lr1e4 (both diverged at steps 10-12). Results: pending.
+
 ## 2026-10-21q In-context false-positive rate was never measured: det_neg_text was hard-coded 0; fixed + measuring
 - On neg_text turns (brief on, concept-free text) the rollout set the monitored detection to False and the held-out
   readout to None (the base monitor was looked up only if the text had a concept). So "rollout/det_neg_text_* = 0.00"
