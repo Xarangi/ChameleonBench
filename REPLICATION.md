@@ -5,6 +5,19 @@ checkpoints, observed results, and unresolved limitations.
 
 TICA on a new machine: start at docs/tica/README.md (results digest, run ledger, open questions, aggregate snapshot).
 
+## 2026-10-21m Log loss from scratch at LR 1e-4 ALSO diverges -> LR is not the cause; trigger = first refits
+- 6611720 (= 10-21l run with lr_peak 0, i.e. warm-up to 1e-4 then constant), cancelled at step 12:
+  - steps 1-7: pre-clip grad norm 13-15.5, KL <= 0.08, GSM8K-while-hiding 0.83-1.0;
+  - k1: 0.2 at step 8, 1.00 from step 9 (orig MSE ~20-40);
+  - steps 10-12: grad norm 69 / 55 / 197, KL 0.19 -> 0.64, NLL 0.50 -> 0.93, GSM8K-while-hiding 0.17 / 0.38 / 0.00.
+- In both scratch runs the blow-up starts right after k1 reaches 1.0, i.e. when the first REFITS (fit on a near-base
+  model, deeply caught) become hide targets. Under log loss each deeply caught refit pushes at full strength. Under MSE
+  the same refits sit in the flat zone (orig stage B: k2 ~0 for ~250 steps).
+- Rules out (a) LR (10-21l list). Remaining: (b) coherence / probe sharpness of early refits, (c) base vs trained
+  start; the r380 log arm faced refits from a trained model without blowing up.
+- Log loss as built is NOT usable from scratch. A bounded hide loss (GCE knob q, or per-probe normalised z) is the
+  untested fix; not built.
+
 ## 2026-10-21f v4 model-written concept data: build
 - What (user-approved 10-21; docs/tica/V4_MODEL_WRITTEN_DATA.md): the TRAIN concepts' responses become the BASE
   model's own answers (Qwen3.5-4B, vLLM, non-thinking, T 0.7 / top-p 0.8 / top-k 20, max 1024 tokens) to the SAME
