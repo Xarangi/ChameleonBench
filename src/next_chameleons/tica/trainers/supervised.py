@@ -706,6 +706,15 @@ class AdaptiveSupervisedTrainer:
         self.pursuit_by: dict[str, PursuitState] = {}
         self._ep_acts: dict[tuple[int, int], torch.Tensor] = {}
         self._ep_concept: dict[tuple[int, int], str] = {}
+        # Standalone stay (adaptive.stay_standalone, 10-21x): per (episode, turn) rollout reads at
+        # the stay layers [n_layers, d] (detached targets) + a running scale per (concept, layer).
+        self._ep_stay: dict[tuple[int, int], torch.Tensor] = {}
+        self.stay_by: dict[tuple[str, int], PursuitState] = {}
+        self._stay_L: list[int] = []
+        if cfg.adaptive.stay_standalone and cfg.adaptive.pursuit and (
+                cfg.adaptive.motion == "conditional"):
+            raise ValueError("adaptive.stay_standalone with pursuit + motion='conditional' would "
+                             "add the stay penalty twice; turn one off")
         # Probe-kind curriculum (adaptive.episode_kind_sampling): refit name -> kind, first judged
         # turn per (traj, name), and per-kind [caught, judged] on post-first turns (all training).
         self._kind_of: dict[str, str] = {}
@@ -914,6 +923,8 @@ class AdaptiveSupervisedTrainer:
                      for (i, t), a in self._ep_acts.items()},
             "acts_c": {(gidx[i], t): c for (i, t), c in self._ep_concept.items()},
             "names": [e.monitor.name for e in self.pool.entries],
+            **({"stay": {(gidx[i], t): (a.cpu() if multi else a)
+                         for (i, t), a in self._ep_stay.items()}} if self._ep_stay else {}),
             "t0_fit": dict(ctx["t0_fit"]), "t0_uses": dict(ctx["t0_uses"]),
             "read_sec": getattr(self, "_refit_read_sec", 0.0)}
         parts = dp.gather(part) if multi else [part]
@@ -952,6 +963,9 @@ class AdaptiveSupervisedTrainer:
         order = sorted(acts, key=lambda k: (k[1], k[0]))
         self._g_acts = {k: acts[k] for k in order}
         self._g_concept = {k: conc[k] for k in order}
+        if self.cfg.adaptive.stay_standalone:
+            stay = {k: v for pt in parts for k, v in pt.get("stay", {}).items()}
+            self._g_stay = {k: stay[k] for k in order if k in stay}
         ctx["bank_size"] = len({n for pt in parts for n in pt["names"]})
         # shared turn-0 probes: one fit per key, the other episodes opening on it share it
         t0_fit = {k: v for pt in parts for k, v in pt["t0_fit"].items()}
@@ -1212,6 +1226,8 @@ class AdaptiveSupervisedTrainer:
         # concept (multi-concept runs): concept clouds sit in different places.
         plp = self._plp = pool.concept_monitor(spec0.monitored).layer
         self._ep_acts, self._ep_concept, self._kind_first = {}, {}, {}
+        stay_L = self._stay_L = self._stay_layers(plp) if acfg.stay_standalone else []
+        self._ep_stay = {}
         # Held-out monitors (e.g. L20, never in the training bank): scored every turn for the
         # GENERALISATION -- does the dodge transfer to a probe never trained against, or is it
         # overfit to the bank? Free: these layers are already in pooled.
@@ -1265,9 +1281,11 @@ class AdaptiveSupervisedTrainer:
             tok = {} if roll_tok else None
             # token-pooled refit kinds may read layers no deployed monitor reads (e.g. the 8-layer
             # NC token ensemble, L4-18): read their layers too
-            rl = sorted(set(pool.layers) | set(roll_tok))
+            rl = sorted(set(pool.layers) | set(roll_tok) | set(stay_L))
             pooled = (pol.pooled_incremental(convs, rl, inc_state, token_out=tok)
-                      if acfg.incremental_rollout or roll_tok else pol.pooled(convs, pool.layers))
+                      if acfg.incremental_rollout or roll_tok else pol.pooled(
+                          convs, sorted(set(pool.layers) | set(stay_L)) if stay_L
+                          else pool.layers))
             for L in roll_tok:  # token-pooled refits read this turn's per-token states
                 pooled[("tok", L)] = tok[L]
             for i, (s, tr) in enumerate(zip(specs, trajs, strict=True)):
@@ -1299,6 +1317,9 @@ class AdaptiveSupervisedTrainer:
                 elif dfd is not None:
                     self._ep_acts[(i, t)] = pooled[plp][i : i + 1].detach()
                     self._ep_concept[(i, t)] = c
+                    if stay_L:  # standalone stay: this turn's reads at the stay layers
+                        self._ep_stay[(i, t)] = torch.cat(
+                            [pooled[L][i : i + 1] for L in stay_L]).detach()
                     deployed_i = dep_by[i][c]
                     active_name = dfd.active  # the newest probe (an older one may catch below)
                     read = dfd.score(active_name, pooled, i)
@@ -2410,6 +2431,113 @@ class AdaptiveSupervisedTrainer:
             self.pursuit_by[concept] = PursuitState(layer, self.cfg.adaptive.pursuit_ema)
         return self.pursuit_by[concept]
 
+    def _stay_layers(self, plp: int) -> list[int]:
+        """adaptive.stay_layers ([] = kind_layers, else the base probe layer); held-out depths
+        refused (the config check does not see --set overrides)."""
+        acfg = self.cfg.adaptive
+        out = sorted({int(x) for x in (acfg.stay_layers or acfg.kind_layers or [plp])})
+        held = sorted(set(out) & self._heldout_layers())
+        if held:
+            raise ValueError(f"adaptive.stay_layers reads held-out layers {held}")
+        return out
+
+    def _stay_state(self, concept: str, layer: int) -> PursuitState:
+        if (concept, layer) not in self.stay_by:
+            self.stay_by[(concept, layer)] = PursuitState(layer, self.cfg.adaptive.pursuit_ema)
+        return self.stay_by[(concept, layer)]
+
+    def _stay_src(self):
+        """(reads at the stay layers, concept) per (episode, turn) over the whole step (episode
+        streams: merged over ranks, global episode ids), and the matching trajectories."""
+        if self._ep_ctx is not None:
+            return self._g_stay, self._g_concept
+        return self._ep_stay, self._ep_concept
+
+    def _stay_prep(self, targets, trajs, keys):
+        """Standalone stay (adaptive.stay_standalone): update the per-(concept, layer) scales from
+        the step's judged-turn reads (merged: the same on every rank), then pick this rank's stay
+        targets (hide / excused turn t >= 1; t-1 judged the same concept and PASSED; one per
+        (episode, turn)) and the caught-side diagnostic targets (same, t-1 caught). Returns
+        (stay targets, catch targets, step-global stay count >= 1)."""
+        acfg = self.cfg.adaptive
+        stay_all, epc_all = self._stay_src()
+        by_c = defaultdict(list)
+        for kk, a in stay_all.items():
+            by_c[epc_all[kk]].append(a)
+        for cc, acts in by_c.items():
+            st = torch.stack(acts).to(self.policy.device)  # [N, n_L, d]
+            for j, L in enumerate(self._stay_L):
+                self._stay_state(cc, L).update(st[:, j])
+        epc, have = self._ep_concept, set(keys)
+        stay_ks, mv_ks, seen = set(), set(), set()
+        for k, tg in enumerate(targets):
+            i_, t_ = tg.traj, tg.turn
+            if (tg.role not in ("hide", "motion") or t_ < 1 or (i_, t_) in seen
+                    or (i_, t_) not in self._ep_stay or (i_, t_ - 1) not in self._ep_stay
+                    or epc.get((i_, t_ - 1)) != epc.get((i_, t_))):
+                continue
+            if acfg.stay_offset and (i_, t_ - 1) not in have:  # no base read of turn t-1
+                continue
+            seen.add((i_, t_))
+            (stay_ks if trajs[i_].results[t_ - 1].get("passed") else mv_ks).add(k)
+        n = len(stay_ks)
+        if self.world > 1:  # each rank's term is its share of the step mean
+            n = round(dp.sum_floats([float(n)])[0])
+        return stay_ks, mv_ks, max(1, n)
+
+    def _stay_readout(self) -> dict:
+        """Behavioural readout (rollout reads, every judged turn whose previous turn judged the
+        same concept): mean ||a_t - a_{t-1}|| / scale per stay layer, split by the verdict of t-1.
+        Stay after passes, move after catches = the verdict is used."""
+        stay_all, epc_all = self._stay_src()
+        trs = self._g_trajs
+        sums: dict = defaultdict(list)
+        for (i_, t_), a in stay_all.items():
+            pk = (i_, t_ - 1)
+            if pk not in stay_all or epc_all.get(pk) != epc_all[(i_, t_)]:
+                continue
+            tag = "pass" if trs[i_].results[t_ - 1].get("passed") else "catch"
+            d = (a.float() - stay_all[pk].float()).norm(dim=1).tolist()
+            c = epc_all[(i_, t_)]
+            for j, L in enumerate(self._stay_L):
+                sums[(tag, L)].append(d[j] / max(self._stay_state(c, L).scale, 1e-3))
+        out = {f"move_after_{tag}_L{L}": sum(v) / len(v) for (tag, L), v in sums.items()}
+        L0 = self._stay_L[0] if self._stay_L else None
+        out["n_move_after_pass"] = len(sums.get(("pass", L0), []))
+        out["n_move_after_catch"] = len(sums.get(("catch", L0), []))
+        return out
+
+    def _stay_loss(self, ks, stay_ks, mv_ks, targets, tkey, pos, pooled, ref_stay, n_stay, acc):
+        """This chunk's standalone stay term: stay_standalone_weight * sum over its stay targets of
+        mean_L (||d_L|| / scale_L)^2 / n_stay (step-global), d = a_t - a_{t-1} (stay_offset: the
+        change in the offset from the base read). a_{t-1} is the stored rollout read (no grad)."""
+        acfg = self.cfg.adaptive
+        Ls = self._stay_L
+        s = pooled[Ls[0]].new_zeros((), dtype=torch.float32)
+        for k in ks:
+            on = k in stay_ks
+            if not on and k not in mv_ks:
+                continue
+            i_, t_ = targets[k].traj, targets[k].turn
+            with nullcontext() if on else torch.no_grad():  # caught side: diagnostic only
+                a_t = torch.stack([pooled[L][pos[tkey[k]]] for L in Ls]).float()
+                prev = self._ep_stay[(i_, t_ - 1)].to(a_t.device).float()
+                if acfg.stay_offset:
+                    d = (a_t - ref_stay[(i_, t_)].float()) - (prev - ref_stay[(i_, t_ - 1)].float())
+                else:
+                    d = a_t - prev
+                c = self._ep_concept[(i_, t_)]
+                sc = torch.tensor([self.stay_by[(c, L)].scale for L in Ls], device=d.device)
+                r = d.norm(dim=1) / sc
+            tag = "pass" if on else "catch"
+            acc[f"mv_{tag}"] += float(r.detach().mean())
+            acc[f"n_mv_{tag}"] += 1
+            if on:
+                s = s + (r ** 2).mean()
+                acc["n_stay"] += 1
+        acc["stay_sq"] += float(s.detach())
+        return acfg.stay_standalone_weight * s / n_stay
+
     def _extra_pos(self, concept: str) -> list[str]:
         if not hasattr(self, "_extra_cache"):
             self._extra_cache = {}
@@ -2607,6 +2735,12 @@ class AdaptiveSupervisedTrainer:
                     moves)
         keys = sorted({(tg.traj, tg.turn) for tg in targets})
         layers = pool.layers
+        stay_on = acfg.stay_standalone
+        stay_ks, stay_mv, n_stay, stay_L = set(), {}, 1, self._stay_L
+        if stay_on:
+            stay_ks, stay_mv, n_stay = self._stay_prep(targets, trajs, keys)
+            layers = sorted(set(layers) | set(stay_L))  # the grad forward reads the stay layers
+            metrics |= self._stay_readout()
         tok_layers = pool.token_layers
         if tok_layers and not acfg.single_pass:
             raise ValueError("token-pooled monitors need adaptive.single_pass")
@@ -2614,6 +2748,7 @@ class AdaptiveSupervisedTrainer:
         tkey = [(tg.traj, tg.turn) for tg in targets]
         ref = torch.empty(len(targets), device=pol.device)
         ref_acts = {}  # base-model reads at the pursuit layer (stay_offset)
+        ref_stay = {}  # standalone stay + stay_offset: base reads at the stay layers [n_L, d]
         with pol.reference():
             for chunk in chunks:
                 ckeys, pooled, _ = run(chunk, grad=False, with_nll=False)
@@ -2621,6 +2756,9 @@ class AdaptiveSupervisedTrainer:
                 if acfg.stay_offset and plp is not None:
                     for kk, j in pos.items():
                         ref_acts[kk] = pooled[plp][j].detach()
+                if stay_on and acfg.stay_offset:
+                    for kk, j in pos.items():
+                        ref_stay[kk] = torch.stack([pooled[L][j] for L in stay_L]).detach()
                 ks = [k for k, kk in enumerate(tkey) if kk in pos]
                 if ks:
                     local = [pos[tkey[k]] for k in ks]
@@ -2741,6 +2879,9 @@ class AdaptiveSupervisedTrainer:
                     acc["pursuit_sq"] += float(s_pur.detach())
                     acc["leash"] += float(s_leash.detach())
                     acc["n_pursuit"] += len(pk)
+                if stay_on:  # standalone stay (10-21x): keep the passing turn's state
+                    loss = loss + self._stay_loss(ks, stay_ks, stay_mv, targets, tkey, pos, pooled,
+                                                  ref_stay, n_stay, acc)
                 loss.backward()
                 loss_sum += float(loss.detach()) + (float(h_term.detach()) if hclip else 0.0)
                 for k2, v in st.items():
@@ -2805,6 +2946,22 @@ class AdaptiveSupervisedTrainer:
         if kl_ref is not None:
             pursuit_info["train/kl"] = acc["kl_sum"] / max(1.0, acc["kl_n"])
             pursuit_info["train/kl_ref_fallback"] = kl_fb
+        if stay_on:  # standalone stay: penalty (unweighted mean) + the hide term it competes with
+            ns = acc.get("n_stay", 0.0)
+            hd = totals.get("hide_w_sum", totals["hide"])
+            pursuit_info |= {
+                "train/stay": acc.get("stay_sq", 0.0) / ns if ns else 0.0,
+                "train/stay_term": acfg.stay_standalone_weight * acc.get("stay_sq", 0.0)
+                / max(1.0, ns),
+                "train/hide_term": cfg.objective.hide_weight * acc.get("hide_loss", 0.0)
+                / max(1.0, hd),
+                "train/n_stay": int(ns),
+                # offset-form move (the loss's metric) of the grad forward, after a pass / catch
+                "train/stay_move_pass": acc.get("mv_pass", 0.0) / max(1.0, acc.get("n_mv_pass", 0)),
+                "train/stay_move_catch": acc.get("mv_catch", 0.0)
+                / max(1.0, acc.get("n_mv_catch", 0)),
+                "train/n_stay_catch": int(acc.get("n_mv_catch", 0)),
+            }
         if acfg.pursuit:
             np_ = acc.get("n_pursuit", 0.0)
             pursuit_info |= {

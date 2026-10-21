@@ -233,6 +233,10 @@ class RunConfig:
         pl = sorted({int(x) for x in getattr(self.rl.adaptive, "panel_layers", []) or []} & held)
         if pl:
             bad["adaptive.panel_layers"] = pl
+        # standalone stay (10-21x): the stay penalty trains the read at these depths
+        sl = sorted({int(x) for x in getattr(self.rl.adaptive, "stay_layers", []) or []} & held)
+        if sl:
+            bad["adaptive.stay_layers"] = sl
         for k in getattr(self.rl.adaptive, "first_probe_panel_kinds", []) or []:
             kp = sorted(set(kind_layers(k, primary)) & held)
             if kp:

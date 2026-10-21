@@ -148,6 +148,7 @@ def state(tr, pol, recs) -> dict:
         "concept_bandit": ({f: (b.B, b.N) for f, b in cb.within.items()}, (cb.fam.B, cb.fam.N)),
         "concept_weights": tr.sampler.concept_weights,
         "pursuit": {c: (p.centroid.clone(), p.scale) for c, p in tr.pursuit_by.items()},
+        "stay": {k: p.scale for k, p in tr.stay_by.items()},
         "kind_stats": tr.kind_stats,
         "deploy_log": tr.deploy_log,
         "seg_log": tr.seg_log,
@@ -156,7 +157,7 @@ def state(tr, pol, recs) -> dict:
 
 def run(rank: int, world: int, out: str, port: int, steps: int = 2,
         budget: bool = False, panel: bool = False, shard: bool = False,
-        hclip: float = 0.0, desync: bool = False) -> None:
+        hclip: float = 0.0, desync: bool = False, stay: bool = False) -> None:
     """mp.spawn entry: rank `rank` of `world` (gloo); saves <out>/rank{rank}.pt."""
 
     os.environ.update(MASTER_ADDR="127.0.0.1", MASTER_PORT=str(port), WORLD_SIZE=str(world),
@@ -173,6 +174,8 @@ def run(rank: int, world: int, out: str, port: int, steps: int = 2,
                     first_probe_panel_kinds=["linear@1", "linear@2"], merged_reads=True)
     if shard:  # data-parallel cap_gen (10-20)
         over.update(cap_gen_shard=True, cap_gen_log=True)
+    if stay:  # standalone stay without pursuit (10-21x)
+        over.update(pursuit=False, stay_standalone=True, stay_layers=[1, 2])
     tr, pol = build(d / "run", steps=steps, budget=budget, hclip=hclip, desync=desync, **over)
     recs = [tr.step() for _ in range(steps)]
     torch.save(state(tr, pol, recs), d / f"rank{rank}.pt")

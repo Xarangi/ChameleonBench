@@ -26,7 +26,7 @@ def _port() -> int:
 
 def _spawn(world: int, out: Path, steps: int, budget: bool = False,
            panel: bool = False, shard: bool = False, hclip: float = 0.0,
-           desync: bool = False) -> list[dict]:
+           desync: bool = False, stay: bool = False) -> list[dict]:
     import torch.multiprocessing as mp
 
     out.mkdir(parents=True)
@@ -37,7 +37,8 @@ def _spawn(world: int, out: Path, steps: int, budget: bool = False,
     try:
         from tica_dp_worker import run
 
-        mp.spawn(run, args=(world, str(out), _port(), steps, budget, panel, shard, hclip, desync),
+        mp.spawn(run, args=(world, str(out), _port(), steps, budget, panel, shard, hclip, desync,
+                            stay),
                  nprocs=world, join=True)
     finally:
         os.environ["PYTHONPATH"] = env
@@ -191,3 +192,28 @@ def test_dp_sync_init_aligns_ranks_with_different_inits(tmp_path):
     for n, v in r0["lora"].items():
         assert torch.equal(v, r1["lora"][n]), n
         assert torch.allclose(v, one["lora"][n], atol=1e-5), n
+
+
+def test_two_ranks_match_one_process_with_stay_standalone(tmp_path):
+    """adaptive.stay_standalone (10-21x, pursuit off): merged per-(concept, layer) scales, the
+    step-global stay count and the readout match one process; ranks stay in sync."""
+    steps = 3
+    (one,) = _spawn(1, tmp_path / "w1", steps, stay=True)
+    r0, r1 = _spawn(2, tmp_path / "w2", steps, stay=True)
+    for n in r0["lora"]:
+        assert torch.equal(r0["lora"][n], r1["lora"][n]), n
+        assert torch.allclose(one["lora"][n], r0["lora"][n], atol=1e-5, rtol=1e-4), n
+    assert one["stay"].keys() == r0["stay"].keys() == r1["stay"].keys() and one["stay"]
+    for k, v in one["stay"].items():
+        assert r0["stay"][k] == r1["stay"][k] and _close(v, r0["stay"][k]), k
+    for a, b in zip(one["recs"], r0["recs"], strict=True):
+        for k in ("train/n_stay", "train/n_stay_catch", "rollout/n_move_after_pass",
+                  "rollout/n_move_after_catch"):
+            assert a[k] == b[k], (k, a[k], b[k])
+        for k in ("train/loss", "grad_norm", "train/stay", "train/stay_move_pass",
+                  "train/stay_move_catch", "rollout/move_after_pass_L1",
+                  "rollout/move_after_catch_L2"):
+            if k in a:
+                assert _close(a[k], b[k], 1e-4), (k, a[k], b[k])
+    assert sum(r["train/n_stay"] for r in one["recs"]) > 0
+    assert sum(r["train/n_stay_catch"] for r in one["recs"]) > 0

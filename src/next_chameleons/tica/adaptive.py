@@ -148,6 +148,20 @@ class AdaptiveConfig:
     # Each turn answers a different request, so raw ||a_t - a_{t-1}|| would also push the
     # activations to ignore the text (10-13).
     stay_offset: bool = False
+    # STANDALONE STAY (10-21x; user 10-21: the stay half of motion="conditional" WITHOUT pursuit).
+    # The conditional stay term above lives in the pursuit block, so with pursuit off (10-19) it is
+    # inert. stay_standalone: for every hide / excused ("motion") turn t >= 1 whose previous turn
+    # t-1 judged the same concept and PASSED, add stay_standalone_weight * mean over stay layers of
+    # (||d_L|| / scale_L)^2, d = a_t - a_{t-1} (stay_offset: the change in the offset from the base
+    # model's read, as above), averaged over the step's stay turns. a_{t-1} = the rollout read
+    # (detached target); the gradient flows through turn t only. scale_L = running EMA RMS
+    # distance to the centroid of the step's judged-turn reads at layer L, per concept (merged over
+    # data-parallel ranks). No move term. stay_layers [] = kind_layers (the refit zoo depths), or
+    # the base probe layer if those are empty; held-out depths are refused (TICAConfig). Own weight
+    # (not stay_weight: that one belongs to the pursuit-block term). Needs pursuit off.
+    stay_standalone: bool = False
+    stay_standalone_weight: float = 1.0
+    stay_layers: list = field(default_factory=list)
     episode_refit_prob: float = 1.0  # refit_mode="episode": P(refit | pass); else keep the probe
     excuse_new_probe: bool = False
     # NO CIRCULARITY (user, 10-13): every probe deployed so far in the episode stays on. A turn is
