@@ -5,6 +5,20 @@ checkpoints, observed results, and unresolved limitations.
 
 TICA on a new machine: start at docs/tica/README.md (results digest, run ledger, open questions, aggregate snapshot).
 
+## 2026-10-21q In-context false-positive rate was never measured: det_neg_text was hard-coded 0; fixed + measuring
+- On neg_text turns (brief on, concept-free text) the rollout set the monitored detection to False and the held-out
+  readout to None (the base monitor was looked up only if the text had a concept). So "rollout/det_neg_text_* = 0.00"
+  in every TICA log is a constant, not a measured FPR. CORRECTION: my 10-21d line "negative text 0.00 (no false
+  positives)" is void.
+- Fixed (commit "read base + held-out probes on neg_text turns"; logging only, shown verdicts and losses unchanged):
+  neg_text turns now read the monitored concept's base probe and held-out probes -> det_neg_text_t0/tN = base-probe
+  in-context FPR, detho_neg_text_t0/tN = held-out in-context FPR. Running jobs keep the old code.
+- Refit probes are unaffected: their AUROC and 1% FPR threshold are computed on in-context negative forks (160
+  other-concept + 128 concept-free texts after the same prefix and verdict).
+- Measurement, no learning (lr 1e-12, lr_peak 0), train_mix real 0.5 / neg_text 0.5, 3 steps, offset 580, 1 GPU:
+  6618834 ext step_180 (abs 580), 6618835 adapt step_100 (abs 480), 6618836 base. Out
+  diag/fpr_2026-10-21/{ext,adapt,base}.
+
 ## 2026-10-21p Linear reads of the trained math hider: refits vs held-out base probes (no new runs)
 - Extension turns.jsonl (abs 500-569): held-out base probes (L20 / L24) detect real_score turn 0 0.78 (n 328) and
   later turns 0.36 (n 4920); no-brief 1.00. Single-layer linear REFITS (L8-26, excl. 20/24) clear the gate in only
