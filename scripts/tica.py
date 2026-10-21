@@ -153,6 +153,10 @@ def main() -> None:
     )
     ap.add_argument("--config", required=True)
     ap.add_argument("--adapter")
+    ap.add_argument("--panel-precompute", metavar="I/N", default="",
+                    help="adaptive: fill adaptive.first_probe_panel_cache (shard I of N) and "
+                         "exit instead of training (TamIA 10-21; "
+                         "scripts/slurm/tamia_panel_precompute.sh)")
     ap.add_argument("--out")
     ap.add_argument("--stage", default="train,collect,fit,eval")
     ap.add_argument("--round", type=int)
@@ -312,7 +316,7 @@ def main() -> None:
         # Branch-refit (adaptive.refit_mode="branch"): the FULL covered concept set supplies the
         # other-concept negatives; roots_only = the episode concept(s) we train to hide.
         branch_concepts = data.concepts("fit", ("train",))
-        AdaptiveSupervisedTrainer(
+        tr = AdaptiveSupervisedTrainer(
             pol, pool, sampler, asc, out / "adaptive",
             branch_concepts=branch_concepts, branch_negatives=data.negatives("fit"),
             roots_only=only, prompts=prompts,
@@ -320,7 +324,12 @@ def main() -> None:
             # resume chunks restore optimizer / curriculum / RNG state (train.save_state)
             resume_state=(str(Path(args.adapter) / "trainer_state.pt")
                           if args.adapter and cfg.train.save_state else None),
-        ).train()
+        )
+        if args.panel_precompute:
+            i, n = (int(x) for x in args.panel_precompute.split("/"))
+            tr.precompute_panel(i, n)
+        else:
+            tr.train()
         if data_parallel:
             import torch.distributed as dist
 

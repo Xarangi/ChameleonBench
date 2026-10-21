@@ -409,6 +409,13 @@ class AdaptiveConfig:
     # 10-21 (default off): the panel from global step 0 (first_probe_panel_from_step 0 means off, so
     # its earliest start was step 1, leaving step 0 on the fixed base probe)
     first_probe_panel_from_start: bool = False
+    # TamIA 10-21 (default "" = off, unchanged): disk cache DIRECTORY for the turn-0 panel probes.
+    # They are fit on the BASE model from a deterministic stream, so a probe depends only on its
+    # inputs; the key hashes exactly those (the drawn fork / no-prompt conversations, their rendered
+    # token ids, kind / layers, probe name, excluded layers, base model, every refit_* setting and
+    # the fitting code), so any change is a miss, never a stale probe. Saves the panel fits (most of
+    # the first steps' rollout) in every run after the first.
+    first_probe_panel_cache: str = ""
     # [] = the in-training zoo: every single-layer kind of episode_refit_kinds at every kind_layers
     # depth + the multi-layer kinds (ens4 / ensdeep4); held-out kinds / depths are refused.
     first_probe_panel_kinds: list = field(default_factory=list)

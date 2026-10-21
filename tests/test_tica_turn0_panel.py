@@ -116,3 +116,74 @@ def test_panel_from_start_covers_step_zero(tmp_path):
         tr.step_k = g
         assert tr._first_probe_mode() == "base_panel"
     assert AdaptiveConfig().first_probe_panel_from_start is False
+
+
+def _tensors(obj, pre="", seen=None) -> dict:
+    """Every tensor reachable from a probe object (attributes, lists, dicts, nn.Modules)."""
+    seen = set() if seen is None else seen
+    if id(obj) in seen:
+        return {}
+    seen.add(id(obj))
+    if isinstance(obj, torch.Tensor):
+        return {pre: obj}
+    if isinstance(obj, torch.nn.Module):
+        return {f"{pre}.{k}": v for k, v in obj.state_dict().items()}
+    items = (obj.items() if isinstance(obj, dict) else enumerate(obj)
+             if isinstance(obj, (list, tuple)) else vars(obj).items()
+             if hasattr(obj, "__dict__") else ())
+    out = {}
+    for k, v in items:
+        out.update(_tensors(v, f"{pre}.{k}", seen))
+    return out
+
+
+def test_panel_cache_equals_fresh_fits_and_hits_on_rerun(tmp_path):
+    """adaptive.first_probe_panel_cache (TamIA 10-21): with the cache the turn-0 panel probes and
+    their verdicts equal the uncached run's; a second trainer loads every probe (hits, no fits)."""
+    from next_chameleons.tica.adaptive import AdaptiveConfig
+
+    kw = dict(first_probe_panel_from_start=True, first_probe_panel_kinds=["linear@1", "linear@2"])
+    cache = tmp_path / "panel_cache"
+
+    def run(sub, **ac):
+        tr, base_name = _trainer(tmp_path / sub, **kw, **ac)
+        trajs, _ = tr.rollout([_spec(base_name, f"e{k}") for k in range(4)])
+        probes = {e.monitor.name: e.monitor for e in tr.pool.entries
+                  if e.family == "turn0_panel"}
+        dets = [[r["monitored"]["detected"] for r in t.results] for t in trajs]
+        return tr, probes, dets
+
+    _, fresh, d0 = run("fresh")
+    tr1, cached, d1 = run("c1", first_probe_panel_cache=str(cache))
+    assert fresh and set(fresh) == set(cached) and d0 == d1
+    for n, m in fresh.items():  # identical probes (same stream, name, fit): every tensor equal
+        a, b = _tensors(m), _tensors(cached[n])
+        assert a.keys() == b.keys() and a, n
+        for k in a:
+            assert torch.allclose(a[k].float().cpu(), b[k].float().cpu(), atol=1e-6), (n, k)
+    files = sorted(cache.glob("*.pt"))
+    assert len(files) == len(cached)
+    misses = [r for r in tr1._refit_log if r.get("panel_cache") == "miss"]
+    assert len(misses) == len(cached)
+    tr2, again, d2 = run("c2", first_probe_panel_cache=str(cache))
+    assert set(again) == set(fresh) and d2 == d0
+    assert all(r.get("panel_cache") == "hit" for r in tr2._refit_log if "panel_cache" in r)
+    assert not [r for r in tr2._refit_log if r.get("panel_cache") == "miss"]
+    assert AdaptiveConfig().first_probe_panel_cache == ""
+
+
+def test_panel_precompute_fills_every_key_the_rollout_draws(tmp_path):
+    """precompute_panel (TamIA 10-21): concept x condition x kind through _panel_first's path;
+    a rollout afterwards loads every turn-0 panel probe from the cache (no miss)."""
+    kw = dict(first_probe_panel_from_start=True, first_probe_panel_kinds=["linear@1", "linear@2"],
+              first_probe_panel_cache=str(tmp_path / "pc"))
+    pre, _ = _trainer(tmp_path / "pre", **kw)
+    pre.sampler = SimpleNamespace(conds=("real_score", "nobrief"), weights=(1.0, 0.0),
+                                  hidden=False)
+    got = [pre.precompute_panel(i, 2) for i in range(2)]  # two shards cover every key once
+    assert sum(g["keys"] for g in got) == 2 * 2  # 2 concepts x 1 live condition x 2 kinds
+    assert sum(g["miss"] for g in got) == 4 and sum(g["hit"] for g in got) == 0
+    tr, base_name = _trainer(tmp_path / "run", **kw)
+    tr.rollout([_spec(base_name, f"e{k}") for k in range(6)])
+    recs = [r for r in tr._refit_log if "panel_cache" in r]
+    assert recs and all(r["panel_cache"] == "hit" for r in recs)

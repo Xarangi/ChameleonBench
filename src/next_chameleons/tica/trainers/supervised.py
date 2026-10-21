@@ -1730,9 +1730,12 @@ class AdaptiveSupervisedTrainer:
             except KeyError:
                 t_ep = time.time()
                 with pol.reference():
-                    bank, info = self._episode_refit(
-                        s, [], None, c, None, kind=kind, fork_msg=render,
-                        rng=random.Random(f"panel0|{ks}"), name=name, np_cache=False)
+                    if self.cfg.adaptive.first_probe_panel_cache:  # TamIA 10-21: disk cache
+                        bank, info = self._panel_cached(s, c, kind, render, ks, name)
+                    else:
+                        bank, info = self._episode_refit(
+                            s, [], None, c, None, kind=kind, fork_msg=render,
+                            rng=random.Random(f"panel0|{ks}"), name=name, np_cache=False)
                 self._log_refit({**info, "first_probe": True, "panel": True}, i, 0, c, 0,
                                 time.time() - t_ep)
                 ep_stats["sec"] += time.time() - t_ep
@@ -1746,6 +1749,81 @@ class AdaptiveSupervisedTrainer:
         pending[(i, c)] = {"kind": f"base:{kind}", "turns": 0, "concept": c, "first": True,
                            **self._ep_tag(i)}
         return name
+
+    def precompute_panel(self, shard: int = 0, nshard: int = 1) -> dict:
+        """Fill adaptive.first_probe_panel_cache ahead of training (TamIA 10-21): every turn-0 panel
+        probe the run can draw = train concept x condition of the train mix x panel kind, each
+        through the SAME path as _panel_first (its key string, stream, name and render), this
+        process taking keys shard::nshard. Returns hit / miss / gate-failed counts."""
+
+        from types import SimpleNamespace
+
+        acfg = self.cfg.adaptive
+        if not acfg.first_probe_panel_cache:
+            raise ValueError("precompute_panel needs adaptive.first_probe_panel_cache")
+        conds = [c for c, w in zip(self.sampler.conds, self.sampler.weights, strict=True) if w > 0]
+        concepts = [c.concept for c in self.branch_concepts or []]
+        named = not getattr(self.sampler, "hidden", False)
+        keys = [(c, cond, named, k) for c in concepts for cond in conds
+                for k in self._panel_kinds()][shard::nshard]
+        out = {"keys": len(keys), "hit": 0, "miss": 0, "failed": 0}
+        t0 = time.time()
+        for j, (c, cond, nm, kind) in enumerate(keys):
+            s = SimpleNamespace(cond=cond, named=nm, monitored=c, feedback=None)
+            brief = "real_score" if CONDITION_SPECS[cond]["brief"] else "nobrief"
+
+            def render(x, c=c, nm=nm, b=brief):  # the turn-0 user message (rollout's umsg)
+                return self.opening(b, x, c, named=nm)
+
+            ks = "|".join(map(str, (c, cond, nm, kind)))
+            name = f"panel0_{zlib.crc32(ks.encode())}"
+            with self.policy.reference():
+                bank, info = self._panel_cached(s, c, kind, render, ks, name)
+            out[info["panel_cache"]] += 1
+            out["failed"] += bank is None
+            if j % 20 == 0:
+                print(json.dumps({"panel_precompute": j, **out,
+                                  "sec": round(time.time() - t0, 1)}), flush=True)
+        print(json.dumps({"panel_precompute_done": True, **out,
+                          "sec": round(time.time() - t0, 1)}), flush=True)
+        return out
+
+    def _panel_cached(self, s, c, kind, render, ks, name):
+        """_panel_first's fit through adaptive.first_probe_panel_cache (TamIA 10-21): the same plan
+        -> reads -> fit as _episode_refit (same stream, same name), but the result (probe or None,
+        info) is stored under a hash of everything the fit depends on and loaded on a hit."""
+
+        import dataclasses
+        import hashlib
+
+        acfg, pol = self.cfg.adaptive, self.policy
+        plan = self._refit_plan(s, [], None, c, kind, render, random.Random(f"panel0|{ks}"),
+                                False)
+        src = Path(__file__).resolve().parents[1]
+        code = hashlib.sha256(b"".join((src / f).read_bytes() for f in (
+            "probe_zoo.py", "adaptive.py", "monitors.py"))).hexdigest()[:16]
+        model = Path(str(getattr(getattr(pol.model, "config", None), "_name_or_path", ""))).name
+        key = json.dumps({
+            "v": 1, "code": code, "model": model, "name": name, "kind": plan["full_kind"],
+            "L": plan["L"], "Ls": list(plan["Ls"]), "excl": sorted(self._heldout_layers()),
+            "labels": [k for k, _ in plan["picks"]], "forks": plan["forks"],
+            "np": plan["np_convs"], "ids0": pol.prompt_ids(plan["forks"][0]),
+            "np_ids0": pol.prompt_ids(plan["np_convs"][0]) if plan["np_convs"] else [],
+            "refit": {f.name: getattr(acfg, f.name) for f in dataclasses.fields(acfg)
+                      if f.name.startswith("refit_")}}, sort_keys=True, default=str)
+        d = Path(acfg.first_probe_panel_cache)
+        path = d / f"{hashlib.sha256(key.encode()).hexdigest()[:24]}.pt"
+        if path.exists():
+            st = torch.load(path, map_location="cpu", weights_only=False)
+            return st["bank"], {**st["info"], "panel_cache": "hit"}
+        job = self._refit_reads(plan)
+        job["name"], job["excl"] = name, self._heldout_layers()
+        bank, info = _refit_fit(job)
+        d.mkdir(parents=True, exist_ok=True)
+        tmp = path.with_suffix(f".tmp{os.getpid()}")
+        torch.save({"bank": bank.to("cpu") if bank is not None else None, "info": info}, tmp)
+        os.replace(tmp, path)  # atomic: concurrent ranks / jobs never read a partial file
+        return bank, {**info, "panel_cache": "miss"}
 
     def _episode_refit(self, s, prefix, shown, concept=None, turn=None, kind=None,
                        fork_msg=None, rng=None, name=None, np_cache=True):
@@ -2264,7 +2342,8 @@ class AdaptiveSupervisedTrainer:
             "tpr_np": None if tp is None else round(float(tp), 4),
             "tpr_ic": None if ti is None or ti != ti else round(float(ti), 4),
             "n_pos": info.get("n_pos"), "n_neg": info.get("n_neg"), "sec": round(sec, 2),
-            "sec_read": info.get("sec_read"), "first_probe": bool(info.get("first_probe"))})
+            "sec_read": info.get("sec_read"), "first_probe": bool(info.get("first_probe")),
+            **({"panel_cache": info["panel_cache"]} if "panel_cache" in info else {})})
 
     def _flush_turn_log(self, trajs) -> None:
         """One compact record per episode turn (no text) to <out>/turns.jsonl: condition, concept,

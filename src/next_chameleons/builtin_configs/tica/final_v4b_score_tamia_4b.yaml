@@ -92,6 +92,7 @@ rl:
     kind_bandit_refits_only: true   # v4b: bug fix, turn-0 panel records no longer feed the layer bandit (10-20o)
     first_probe_panel_from_step: 1   # v4b: (superseded by first_probe_panel_from_start)
     first_probe_panel_from_start: true   # v4b: turn 0 of the first concept = one base probe drawn from the in-training panel from global step 0 (user 10-21: no mid-run switch, no L12 rung; panel0 k1 0.46 / 0.79 at 10-19 / 20-29, 10-21ai)
+    first_probe_panel_cache: /scratch/s/sneheel/next_chameleons_artifacts/tica/panel_probe_cache   # TamIA 10-21: base-model turn-0 panel probes cached on disk (content-hashed key; shared by both arms and every later run; filled ahead by scripts/slurm/tamia_panel_precompute.sh)
     refit_min_each: 24
     refit_buf_cap: 512
     refit_C: 1.0
