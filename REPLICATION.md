@@ -11,6 +11,10 @@ TICA on a new machine: start at docs/tica/README.md (results digest, run ledger,
   ~61% (solo ~35-45%), 43-60 GB per GPU. -> model.lm_chunk 1024 in the tamia configs; LAYOUT interleaved (default).
 - The solo chain (635081-635092, never started) cancelled. New chain, one node per chunk (both arms, DP4 each over the
   same 4 GPUs): 635093 -> 635095 -> 635097 -> 635099; drains 635094 / 635096 / 635098 / 635100.
+- 10-21 14:25 (635093, both arms on tg10704 since 14:13): steps 1-4/5 clean, 1-bit 167-178 s, score 127-148 s per
+  16-episode step (~380 ep / h per arm, ~770 per node; single A100 est. 160-190); alloc 16 -> 27.4 GB per process,
+  flat from step 3; ~60 GB and ~60% util per GPU; grad norm 0.8-1.8; GSM8K-while-hiding 0.42-1.0 per step; panel cache
+  1291 / 1840 (precompute still filling).
 
 ## 2026-10-21ar TamIA PRODUCTION LAUNCH: final_v4b_tamia_4b + final_v4b_score_tamia_4b (one arm per node, DP4)
 - User 10-21: throughput / wall-clock first -> solo layout (each arm its own 4 x H100 node, data-parallel over 4 GPUs),
