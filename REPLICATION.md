@@ -5,6 +5,16 @@ checkpoints, observed results, and unresolved limitations.
 
 TICA on a new machine: start at docs/tica/README.md (results digest, run ledger, open questions, aggregate snapshot).
 
+## 2026-10-21aa TamIA config final_v4b_4b (final_v4_4b + math-run carry-overs) and arm flags
+- Changes vs final_v4_4b: episode / cap_gen KL 0.3; first_probe_fork_from_step 0 and first_probe_panel_from_step 60
+  (fixed base rung, then base panel; switched concepts still fork); refit_min_tpr_np 0, refit_np_in_fit false,
+  refit_min_tpr_ic 0.8; refit_batched_logistic / rlobf; kind_bandit_refits_only; cap_gen_samples 4; save_state_all;
+  dp_sync_init (inherited). Loads, and the three arm overrides apply (logclip, stay, score). Data unchanged
+  (published split v5).
+- Score-feedback evidence firming (fb600, steps >= 20 of each branch): pass hazard under the same refit at j3
+  0.174 (n 69) vs 1-bit 0.055 (n 73), j4 0.083 (48) vs 0.000 (58); GSM8K-while-hiding 0.60-0.66 vs 1-bit
+  0.32-0.51; k2 0.78 vs 0.64 at 620-629.
+
 ## 2026-10-21z Check-in: score feedback keeps passing on repeated catches (small n); 1-bit branch math falling
 - fb600 by 10 abs steps (k2 n 22-47):
   - bit: k2 0.51 / 0.79 / 0.73; GSM8K-while-hiding 0.57 -> 0.45 -> 0.32; KL 0.068 -> 0.093.
@@ -49,6 +59,10 @@ TICA on a new machine: start at docs/tica/README.md (results digest, run ledger,
   /home/sneheel/chameleons-wt-stay at 4e8914e. Races queued on each final (48 ep x 16 turns, math, no switches),
   real vs --falsify: bit 6626069 / 6626070 (after 6622721), stay 6626071 / 6626072 (after 6626064) ->
   diag/falsify_2026-10-21/{bit,stay}_{real,falsify}.json.
+- Weight check, step 1 (rollout identical to fb600_bit's step 1: same seed and start): stay term 1.11 (5 stay turns,
+  pass rate 0.09) vs hide term 0.58; within 2x, so weight 1.0 kept (no adjustment). The term is normalised by the stay
+  count, so its per-turn pull is large when passes are rare. Cost: +0.01 GB peak, +4% step time. Before training,
+  offset move after a pass 1.05 vs after a catch 1.17 (scale units); raw rollout move L8-26 1.23-1.31 vs 1.41-1.44.
 
 ## 2026-10-21y Updates: ext also verdict-blind; GCE run cancelled (math < 0.3); logclip k2 resets at the panel switch; feedback branches early
 - Falsified verdicts, ext s580: pass after turn 0 0.075 real vs 0.082 falsify; k2 0.60 vs 0.75; caught at turn 2 0.62 vs

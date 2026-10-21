@@ -81,6 +81,17 @@ done
   stopping, no checkpoint selection: the final checkpoint is the model.
 - Report: `python scripts/tica_run_report.py --run <out>` (pass rate by probe index first).
 
+## USE `final_v4b_4b` (10-21): final_v4_4b + every carry-over below already applied
+
+`configs/tica/final_v4b_4b.yaml` (header lists the changes; each line marked `v4b:`). Arms are `--set` flags on it:
+- main: as is (MSE hide loss, 1-bit verdicts, no stay term);
+- logclip: `--set train.objective.hide_loss=log --set train.objective.hide_weight=0.3 --set train.hide_grad_clip=0.5`;
+- stay: `--set rl.adaptive.stay_standalone=true`;
+- score feedback: `--set episodes.feedback=score`.
+Untested on multi-concept data: the turn-0 base panel (fits one base probe per (concept, kind) on first use, ~20
+concepts x ~30 kinds: expect slower early steps), KL 0.3, the in-context refit gate. Smoke first (section 6), and
+check `max_mem_gb` at 24 turns.
+
 ## Carry-over from the Narval math runs (10-19 .. 10-21) -- apply to the TamIA config before launch
 
 See `docs/tica/README.md` "Since 10-19" for evidence. Exact speed-ups and fixes (no science change):
