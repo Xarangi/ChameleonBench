@@ -17,6 +17,9 @@ TICA on a new machine: start at docs/tica/README.md (results digest, run ledger,
   1291 / 1840 (precompute still filling).
 - Panel precompute 635045 done (~66 min, 8 processes): all 1840 keys cached (58 already written by the runs / L7),
   12 gate failures (cached as "no probe", as training would). From here every turn-0 panel probe is a cache hit.
+- 10-21 16:36, step 56 (last 20 steps): first refit dodge, score arm k2 0.04 (1 / 26); 1-bit k2 0 / 33. k1 0.10 / 0.08;
+  GSM8K-while-hiding 0.71 / 0.69, finished 0.77 / 0.78; KL 0.21 / 0.23 (user: KL not a limit); ~145 s/step per arm.
+  Step-50 held-out races queued for the drain.
 
 ## 2026-10-21ar TamIA PRODUCTION LAUNCH: final_v4b_tamia_4b + final_v4b_score_tamia_4b (one arm per node, DP4)
 - User 10-21: throughput / wall-clock first -> solo layout (each arm its own 4 x H100 node, data-parallel over 4 GPUs),
