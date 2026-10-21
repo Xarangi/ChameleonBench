@@ -5,6 +5,28 @@ checkpoints, observed results, and unresolved limitations.
 
 TICA on a new machine: start at docs/tica/README.md (results digest, run ledger, open questions, aggregate snapshot).
 
+## 2026-10-20u MATH COLLAPSE at abs 389 (real, degenerate text) as refits start falling; profiling results
+- train_log cap_gen (GSM8K while hiding, T 1.0, 400 tok) by 5 abs steps: 0.56-0.93 through 385-389, then 0.12 / 0.19
+  (390-399), 0.30 / 0.33 / 0.44 in the extension (400-414). cap_gen_log steps 389-399 (n 60): correct 0.20, finished
+  0.53, median length 996 chars (vs 0.75 / 0.81 / 666 at 370-388). Read by hand: degenerate, not just wrong --
+  garbled equations ("The jelly beans 1 2. And 1 2."), the same line repeated to the token cap ("The correct answer is
+  25." x N), rambling self-questioning. Confirms the 6587782 capability eval (GSM8K 0.63 / 0.575) is real.
+- Coincides with the first refit passes (abs 380-400: 27 / 1223, margin 4.4) and a grad-norm climb: median 0.4-1.0
+  (s100-320), 1.18 (340-360), 1.29 (360-380), 3.51 (380-400; clip 1.0, so every update is a full clipped step).
+  Episode KL 0.055 -> 0.08-0.095, cap_gen KL 0.10-0.15 -> 0.20-0.28. The anchor KL (off-task) stays 0.01-0.02:
+  the damage is math-specific. Same trade as the no-KL arm (10-20n), reached later under KL 0.3.
+- CORRECTION (chat, 10-20n): "math 0.75 over the last 20 steps" was read at s388, before the collapse.
+- Extension 6588314 resumed FROM the collapsed checkpoint (abs 400). Restart point without the collapse: step_320 (abs
+  380; acc 0.76-0.93 at 370-388) has no trainer_state (newest only) -> fresh Adam / bandit / RNG.
+- PROFILES (6 steps from final, DP2): step 102-224 s in all three.
+  - micro_batch 2: max_mem 33-34 GB allocated / 41.5 GB reserved, step times = baseline (157 / 156 / 208 / 140 / 107 /
+    128 vs 157 / 152 / 224 / 144 / 102 / 125), step-1 loss 0.66763 vs 0.66758 (exact up to numerics). No gain -> DROP.
+  - cap_gen_samples 4: trained GSM8K samples 18 / 14 / 12 / 19 / 8 / 9 vs 10 / 8 / 8 / 9 / 4 / 5 (~2x), sec_cap_gen ~same
+    (generation is length-bound), cap_train +4-15 s -> step +5-8%. Worth it for capability.
+  - py-spy rank 0 (940 s; ~160 s of it startup: model load 30 s, turn-0 panel fits 133 s once per process): refits 491 s
+    (fork reads 293, fits 164: rlobf_attn 79 (NOT batched), LBFGS logistic 54 (CPU-bound Python steps), _pad 26),
+    cap_gen generate 166 s, backward 94 s, DP all_gather waits 82 s (rank imbalance), tokenisation ~30-35 s.
+
 ## 2026-10-20t Capability of the stage-B final (abs 400): GSM8K -0.20 vs base (worse than v3b) -- diagnosing
 - tica_capability 6587782 (step_340 = abs 400; GSM8K 200 greedy 2-shot, 256 tok; MMLU 600): GSM8K clean 0.63 /
   brief math 0.575 / brief HTML 0.57; MMLU clean 0.625 / brief math 0.702 / brief HTML 0.692. Base (same script,
