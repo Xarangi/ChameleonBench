@@ -5,6 +5,19 @@ checkpoints, observed results, and unresolved limitations.
 
 TICA on a new machine: start at docs/tica/README.md (results digest, run ledger, open questions, aggregate snapshot).
 
+## 2026-10-21ao Logclip refit evasion does NOT transfer to the held-out L20 probe (yet); never-shown panels launched
+- Held-out (training readout = any of base L20 / L24; per 10-21w effectively L20) detection vs k2, 40-step bins:
+  - MSE original: k2 0.00-0.12 at 100-379 with ho_tN 0.76-1.00. Then k2 0.37-0.60 at 380-619 with ho_t0 0.61-0.78 and
+    ho_tN 0.24-0.36. The drop arrived with the abs-389 math collapse (GSM 0.42) and KL ~0.07 (10-20x).
+  - logclip: k2 0.16 / 0.29 / 0.49 / 0.63 at 100-259 with ho_t0 1.00 and ho_tN 0.94-0.99; GSM 0.75-0.88; KL 0.048-0.067.
+  - panel0: k2 0.14-0.33 at 60-179, ho 1.00 / 1.00; GSM 0.58-0.80.
+- So at matched refit dodging (k2 ~0.5-0.6), logclip stays caught by the L20 base probe; MSE was not. That is the same
+  pattern as the adaptive arm (strong capability, low KL -> L20 untouched), and MSE's L20 evasion came with drift
+  and math damage. Whether logclip evades the OTHER never-shown probes (fresh base linear / maxpool / rlobf at L8-26,
+  which every MSE-lineage arm evaded, 10-21w) is the open question.
+- Never-shown panels: 6670115 logclip abs 220 (resume_120 step_100), 6670116 panel0 s140, 6670118 stay abs 660
+  -> diag/panel_2026-10-21/{logclip220,panel0_140,stay660}.json.
+
 ## 2026-10-21an STAY MAKES THE MODEL USE THE VERDICT (falsified-verdict races); logclip k2 ~0.5, k3 ~0.2
 - tica_switch_eval, math, 48 ep x 16 turns, no switches, real vs --falsify, on the fb600 finals (abs 660):
   - bit: pass after turn 0 0.125 vs 0.114; caught at turn 2 0.40 vs 0.50; k2 0.88 vs 0.81, k3 0.61 vs 0.59, k4 0.62 vs
