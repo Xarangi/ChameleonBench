@@ -4,9 +4,9 @@
 #   for the first concept; switched concepts still fork, as v3b); refit gate = AUROC + in-context TPR (no plain-math
 #   gate, in-context positives only); exact speed-ups (batched fits); layer-bandit fix; cap_gen_samples 4;
 #   save_state_all; dp_sync_init (inherited, REQUIRED for from-scratch DP).
-# Arms (same config, --set): logclip = train.objective.hide_loss=log, train.objective.hide_weight=0.3,
-#   train.hide_grad_clip=0.5 (10-21r..z); stay = rl.adaptive.stay_standalone=true (10-21x); score feedback =
-#   episodes.feedback=score (10-21u). Data: published split v5 (final_v5_clean.json), as final_v4_4b.
+# 10-21 (user): logclip + stay are ON in this config. Arms: score feedback = --set episodes.feedback=score (10-21u);
+#   MSE baseline = --set train.objective.hide_loss=mse --set train.objective.hide_weight=1.0 --set train.hide_grad_clip=0;
+#   no stay = --set rl.adaptive.stay_standalone=false. Data: published split v5 (final_v5_clean.json), as final_v4_4b.
 # FINAL v4 (DRAFT 10-18, NOT LAUNCHED; docs/tica-v4-recipe.md): final_v3b_4b from scratch on split v5
 # (scripts/build_final_v5.py, REPLICATION 10-18f: 20 train = 4 per area; 38 held-out incl. the emotion and
 # safety families; dev merged into held-out) + the 10-17/18 levers:
@@ -52,11 +52,15 @@ train:
   warmup_steps: 10
   save_every: 20    # checkpoints (the held-out race runs every adaptive.eval_every = 50 steps)
   save_state: true  # 10-18: Adam moments + curriculum + RNG restored across resume chunks (no re-warmup)
+  hide_grad_clip: 0.5   # v4b: logclip (see objective)
   save_state_all: true   # v4b: optimizer state in every checkpoint (branch from any step; 10-21b)
   dp_sync_init: true   # 10-21v: from-scratch DP ranks start from rank 0's LoRA init (unseeded init otherwise differs per rank)
   seed: 0
   # 10-16i: no pinning; the first probe of every concept is fit on the policy itself (first_probe)
-  objective: {hide_weight: 1.0, retry_hide_ladder: [2.0, 3.0, 4.0], match_weight: 2.0, lm_weight: 0.1, hide_from_turn: 0, pin_first_turn: false,
+  # v4b: LOGCLIP (10-21r..ae): log hide loss -log(1-p) at weight 0.3 (its max push = MSE's peak) + the hide gradient
+  # clipped separately to 0.5 (train.hide_grad_clip); beat the fixed rung / panel / refits ~6 / ~100 / ~200 steps sooner
+  # than MSE on math with capability intact. MSE baseline: --set train.objective.hide_loss=mse --set train.objective.hide_weight=1.0 --set train.hide_grad_clip=0
+  objective: {hide_loss: log, hide_weight: 0.3, retry_hide_ladder: [2.0, 3.0, 4.0], match_weight: 2.0, lm_weight: 0.1, hide_from_turn: 0, pin_first_turn: false,
               pin_segment_first: false}
 rl:
   adaptive:
@@ -92,6 +96,8 @@ rl:
     motion: conditional
     stay_weight: 1.0
     stay_offset: true
+    stay_standalone: true   # v4b: stay-after-pass penalty at kind_layers WITHOUT pursuit (10-21x); the pursuit-block stay is inert with pursuit off
+    stay_standalone_weight: 1.0
     pursuit_from_turn: 1
     pursuit_window: 1
     pursuit_weight: 1.0

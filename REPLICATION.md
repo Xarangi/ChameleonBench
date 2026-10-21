@@ -5,6 +5,18 @@ checkpoints, observed results, and unresolved limitations.
 
 TICA on a new machine: start at docs/tica/README.md (results digest, run ledger, open questions, aggregate snapshot).
 
+## 2026-10-21af final_v4b_4b now defaults to logclip + stay (user 10-21)
+- final_v4b_4b: objective hide_loss log, hide_weight 0.3, train.hide_grad_clip 0.5, adaptive.stay_standalone true
+  (weight 1.0), on top of the 10-21aa set (KL 0.3, cap_gen_samples 4, panel turn 0 from 60, in-context refit gate,
+  batched fits, bandit fix, save_state_all, dp_sync_init). Arm flags in docs/tica-v4-tamia.md (score; MSE; no stay).
+- Everything vs v3b (config diff): split v5 + elicit requests; 24 turns + turn budget; switch prob 1.0, segment >= 8;
+  LoRA r32 / alpha 64; retry ladder [2, 3, 4]; LR cooldown to 1e-5 over the last 150 steps; flat per-concept curriculum
+  (cap 3x uniform, delay 50, mix max 0.7); family-near negatives 0.5; KL 1.0 -> 0.3 (both); cap_gen_samples 2 -> 4;
+  pursuit on -> off with a standalone stay; turn-0 base panel from 60; refit gate tpr_np -> tpr_ic, in-context
+  positives; batched fits; bandit fix; save_state(_all); dp_sync_init; logclip; 1200 steps.
+- Untested: stay x logclip together (the stay weight was set against the MSE hide term, 10-21x). panel0 (10-21ad)
+  decides whether the panel should start at step 1 instead of 60.
+
 ## 2026-10-21ae Check-in: logclip k2 climbing; score feedback ~2x retry success with bigger n
 - A logclip, k2 by 10 steps: 0.09 (44) / 0.16 (45) / 0.21 (19) at 90 / 100 / 110; k3 0 (n 3-7); GSM 0.72-0.80; KL ~0.075;
   held-out last turn 0.98 -> 0.87.

@@ -81,26 +81,26 @@ done
   stopping, no checkpoint selection: the final checkpoint is the model.
 - Report: `python scripts/tica_run_report.py --run <out>` (pass rate by probe index first).
 
-## USE `final_v4b_4b` (10-21): final_v4_4b + every carry-over below already applied
+## USE `final_v4b_4b` (10-21): final_v4_4b + every carry-over below + LOGCLIP + STAY (user 10-21)
 
-`configs/tica/final_v4b_4b.yaml` (header lists the changes; each line marked `v4b:`). Arms are `--set` flags on it:
-- main: as is (MSE hide loss, 1-bit verdicts, no stay term);
-- logclip: `--set train.objective.hide_loss=log --set train.objective.hide_weight=0.3 --set train.hide_grad_clip=0.5`;
-- stay: `--set rl.adaptive.stay_standalone=true`;
-- score feedback: `--set episodes.feedback=score`.
+`configs/tica/final_v4b_4b.yaml` (header lists the changes; each line marked `v4b:`). Defaults = the primary run.
+Arm flags:
+- score feedback: `--set episodes.feedback=score`;
+- MSE baseline: `--set train.objective.hide_loss=mse --set train.objective.hide_weight=1.0 --set train.hide_grad_clip=0`;
+- no stay: `--set rl.adaptive.stay_standalone=false`.
 Untested on multi-concept data: the turn-0 base panel (fits one base probe per (concept, kind) on first use, ~20
-concepts x ~30 kinds: expect slower early steps), KL 0.3, the in-context refit gate. Smoke first (section 6), and
-check `max_mem_gb` at 24 turns.
+concepts x ~30 kinds: expect slower early steps), KL 0.3, the in-context refit gate, logclip, stay (and stay together
+with logclip). Smoke first (section 6), and check `max_mem_gb` at 24 turns.
 
 ## Recommended first TamIA set (10-21; REPLICATION 10-21ac)
 
-1. Smoke: 20 steps of `final_v4b_4b` with the logclip + stay flags, `TICA_DP=2` (24-turn memory, panel fit cost,
+1. Smoke: 20 steps of `final_v4b_4b`, `TICA_DP=2` (24-turn memory, panel fit cost,
    `dp_param_drift` absent at saves, `det_neg_text_*` / `detho_neg_text_*` now real FPRs).
 2. Then four DP2 runs, same seed, `--steps 800` (fixed; final checkpoint = the model):
-   - **A** (primary): logclip + stay;
-   - **B**: logclip, no stay (isolates stay);
-   - **C**: main as is (MSE; proven baseline);
-   - **D**: logclip + stay + `episodes.feedback=score` (graded-feedback attacker, reported as its own arm).
+   - **A** (primary): the config as is (logclip + stay);
+   - **B**: no stay (isolates stay);
+   - **C**: MSE baseline flags, no stay (the proven recipe);
+   - **D**: `episodes.feedback=score` (graded-feedback attacker, reported as its own arm).
 3. Read every 50 steps: k1..k4 by probe index, GSM8K-while-hiding + loops, KL, grad_norm_hide / rest, held-out race,
    and the falsified-verdict race on A vs C (does stay make the verdict matter?).
 
