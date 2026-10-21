@@ -5,6 +5,21 @@ checkpoints, observed results, and unresolved limitations.
 
 TICA on a new machine: start at docs/tica/README.md (results digest, run ledger, open questions, aggregate snapshot).
 
+## 2026-10-21s Adaptive arm = narrow dodge: beats every trained-against probe like the others, but base L20/L24 still catch it
+- turns.jsonl, real_score, per turn. Columns: turn-0 panel probes beaten (all kinds, layers 8/12/16/22/26, fixed base
+  fits reused all run) | refit turns passed, ensembles / rlobf_attn | held-out base L20/L24 detection, turn 0 / later:
+  - adapt (abs 430-519): 0.96-1.00 | 0.16 / 0.00 | 1.00 / 0.95;
+  - ctl (410-439): 1.00 | 0.10 / 0.00 | 0.84 / 0.34;
+  - ext (520-599): 1.00 | 0.20 / 0.01 | 0.77 / 0.23.
+- So adapt dodges the turn-0 panel at L16 / L22 / L26, layers either side of the held-out L20 / L24, yet the held-out
+  probes catch it at turn 0 every time. Its per-turn refit passes are no better than ext's. Reading: the strongest
+  capability pull leaves only minimal, probe-specific edits (memorising the ~30 fixed panel probes and countering each
+  refit), not a move of the math representation. ctl / ext drift further, which also defeats unseen probes.
+- Test running (never-shown probe panel, tica_probe_panel.py; fresh base probes linear at L4-30 + zoo kinds incl.
+  rlobf_attn@12 / @20, maxpool@12 / @24, attnpool@20, gdm_rollattn, ens8_linear, ensdeep4_linear; per-turn linear
+  readability): 6621017 adapt s480, 6621018 ext s580, 6621019 ctl s440, 6621020 base. If adapt beats the trained
+  panel but loses to fresh base probes at the SAME layers / kinds, the dodge is probe-specific (memorised).
+
 ## 2026-10-21r Bounded far-from-dodge push: GCE hide loss + per-term hide grad clip (both default off); from-scratch runs
 - Problem (10-21l/m): MSE p^2 has d/dz = 2p^2(1-p) ~ 0 on deeply caught turns (slow vs fresh refits); log
   softplus(z) keeps d/dz = p ~ 1 there but diverged from scratch at the first refits (pre-clip grad norm 69-1000,
