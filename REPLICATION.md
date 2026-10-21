@@ -5,6 +5,14 @@ checkpoints, observed results, and unresolved limitations.
 
 TICA on a new machine: start at docs/tica/README.md (results digest, run ledger, open questions, aggregate snapshot).
 
+## 2026-10-21bc panel0 vs logclip, step-matched: panel0 slightly ahead from abs 160 (1 seed each, 2 config diffs)
+- 40-step bins, k2 / k3 / rlobf_attn beat (n): abs 160-199 logclip 0.49 / 0.10 / 0.06 vs panel0 0.57 / 0.26 / 0.09;
+  200-239 logclip 0.54 / 0.24 / 0.06 vs panel0 0.69 (96) / 0.42 (65) / 0.18 (55). logclip 280-319 0.70 / 0.33 / 0.16, then
+  320-359 0.48 (77) / 0.24 / 0.06 (resume restored optimizer + LR 1e-4 continuous; a wobble like 10-21al or noise).
+- Differences: turn-0 base panel from step 1 (panel0) vs 60 (logclip); kind_bandit_refits_only true vs false; dp_sync_init
+  (panel0 from scratch). Not separable with one seed each. 10-21bb compared panel0 at 201-215 with logclip at 321-328
+  (logclip's post-peak dip), which overstated the gap.
+
 ## 2026-10-21bb Ensemble fit seeds: logclip IS caught by Bailey / NC (the 0.15 fit was the outlier); stay gdm race; extensions early
 - logclip abs 260, 3 more fit seeds (16 ep x 16 turns): bailey_ens_tok 1.00 / 1.00 / 1.00, nc_ens8_tok 1.00 / 0.96 / 1.00,
   linear@20 0.90 / 0.86 / 0.89. With panel2 (0.98 / 0.94) that is 4 of 5 fits >= 0.94 for each ensemble; the reread run's
