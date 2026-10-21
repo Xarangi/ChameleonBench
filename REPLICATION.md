@@ -5,6 +5,26 @@ checkpoints, observed results, and unresolved limitations.
 
 TICA on a new machine: start at docs/tica/README.md (results digest, run ledger, open questions, aggregate snapshot).
 
+## 2026-10-21bh STAY (not the MSE lineage) gives in-context dodging of held-out judges; branch progress
+- Held-out-judge races, k2/k3/k4/k5 (32 ep x 16 turns), abs 660 MSE lineage with vs without stay, and logclip abs 260:
+  - bailey: stay 1.00 / 0.78 / 0.12 / 0.33; bit 0.03 / 0.00; logclip 0.00.
+  - linear@20: stay 1.00 / 0.12 / 0.00; bit 0.00; logclip 0.00.
+  - gdm: stay 0.47 / 0.36 / 0.20; bit 0.16 / 0.00; logclip 0.09 / 0.00.
+  - nc_ens8_tok: stay 1.00 / 1.00 / 0.97 / 0.40; bit 0.84 / 0.62 / 0.31 / 0.40; logclip 0.44 / 0.50 / 0.43.
+  - mck_attnlite: stay 1.00 / 1.00 / 1.00 / 0.62; bit 1.00 / 0.90 / 0.64 / 0.60; logclip 1.00 / 0.62 / 0.64 / 0.75.
+- Never-shown fits (seeds 2-4, det overall, t0 -> t15): bit linear@20 0.44-0.48 (0.75-0.94 -> 0.33-0.54), nc 0.23-1.00,
+  bailey 1.00; stay linear@20 0.49-0.52 (1.0 -> 0.00-0.14), nc 0.27-0.70 (1.0 -> 0.00-0.07), bailey 0.96-0.99.
+- Reading: the MSE lineage gives a STATIC partial L20 evasion (bit already 0.75-0.94 at turn 0, flat-ish after); stay gives
+  IN-CONTEXT evasion (caught 1.0 at turn 0, gone by turn 15) and is the only arm that beats Bailey / L20 / gdm refits. With
+  bit as the control (same config minus stay), this is the stay term. Supports stay in the TamIA recipe.
+- Branches from logclip abs 320 (40-step bins; k2 / k3 / k4 / rlobf_attn beat; GSM-while-hiding, all samples):
+  - unchanged r320: 320-359 0.59 / 0.40 / 0.22 / 0.10, GSM 0.77; 360-399 0.72 / 0.27 / 0.34 / 0.20, GSM 0.75; 400-439 (n 37)
+    0.70 / 0.58 / 0.40 / 0.24.
+  - + stay: 320-359 0.40 / 0.17 / 0.10 / 0.21, hide loss up 0.75 -> 1.18 (clip coef 0.04), stay term 0.41; 360-399 0.75 / 0.23
+    / 0.05 / 0.35 (n 48), hide 0.93, GSM 0.74. Initial setback, then the highest rlobf_attn rate of any logclip run.
+  - clip 1.0: 320-359 0.58 / 0.25 / 0.16 / 0.14, hide clip coef 0.55, GSM 0.74 (41 steps so far).
+  - panel0 240-279: 0.76 / 0.42 / 0.29 / 0.23, GSM 0.80.
+
 ## 2026-10-21bg Logclip loss terms: still learning, but the hide gradient is clipped to ~25-30% every step; rlobf_attn margins flat
 - train_log, 40-step means (logclip abs 120 / 200 / 280 / 320; panel0 120 / 200 / 240):
   - hide loss (-log(1-p), "hide_mse" key) logclip 1.07 / 0.83 / 0.71 / 0.75; panel0 0.82 / 0.66 / 0.61 -> still falling.
