@@ -5,6 +5,16 @@ checkpoints, observed results, and unresolved limitations.
 
 TICA on a new machine: start at docs/tica/README.md (results digest, run ledger, open questions, aggregate snapshot).
 
+## 2026-10-21ag logclip A finished 120 steps; extended to 320 (6635500); panel0 early
+- A logclip at 110-119: k2 0.19 (48), k3 0.00 (8), GSM 0.79, KL 0.078, held-out tN 0.93. Extension 6635500:
+  resume from scratch_logclip/adaptive/final (trainer_state), offset 120, 200 steps, same overrides, same worktree
+  (-wt-hclip, 2ac27f9), out scratch_logclip/resume_120. Watch k3 onset and collapse signs (orig MSE collapsed at
+  abs 389 as refits fell).
+- panel0 (panel from step 1), k1: 0.05 (39) at 0-9, 0.14 (14) at 10-14 (A vs the L12 rung: 0.13 / 0.28). GSM 0.96 / 0.75,
+  KL 0.04-0.07.
+- fb600 at 640-649: bit k2 0.58, k3 0.41, GSM 0.57; score k2 0.73, k3 0.32, GSM 0.64; stay (620-629, n 9) k2 1.00, k3 0.56,
+  GSM 0.83. Verdict races still queued.
+
 ## 2026-10-21af final_v4b_4b now defaults to logclip + stay (user 10-21)
 - final_v4b_4b: objective hide_loss log, hide_weight 0.3, train.hide_grad_clip 0.5, adaptive.stay_standalone true
   (weight 1.0), on top of the 10-21aa set (KL 0.3, cap_gen_samples 4, panel turn 0 from 60, in-context refit gate,
