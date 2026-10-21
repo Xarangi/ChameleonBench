@@ -5,6 +5,13 @@ checkpoints, observed results, and unresolved limitations.
 
 TICA on a new machine: start at docs/tica/README.md (results digest, run ledger, open questions, aggregate snapshot).
 
+## 2026-10-21be stay beats mck_attnlite refits 4 in a row; panel0 holding, math-while-hiding 0.68; logclip flat
+- stay abs 660 vs mck_attnlite refits: k2 1.00, k3 1.00, k4 1.00, k5 0.62 (n 32).
+- 40-step bins (GSM-while-hiding from every cap_gen sample, n):
+  - panel0 200-239: k2 0.71 (156), k3 0.45 (110), k4 0.27 (49); rlobf_attn 0.16 (100), attnpool 0.55; GSM 0.68 (190), down
+    from 0.74 at 160-199 (sampled, 400-token cap, so partly length; clean eval pending).
+  - logclip 320-359: k2 0.56 (140), k3 0.34 (74), k4 0.20; rlobf_attn 0.08 (74); GSM 0.78 (178). Flat vs 280-319.
+
 ## 2026-10-21bd panel0 still improving at abs 200-239; logclip flat after its 280-319 peak; stay dodges NC / L20 in context
 - 40-step bins, k2 / k3 / k4 / rlobf_attn / attnpool beat (n), GSM-while-hiding:
   - panel0 200-239: 0.73 (119) / 0.44 (86) / 0.24 (37) / 0.21 (73) / 0.57 (46); GSM 0.65 (from 0.76; stdout subsample).
