@@ -5,6 +5,22 @@ checkpoints, observed results, and unresolved limitations.
 
 TICA on a new machine: start at docs/tica/README.md (results digest, run ledger, open questions, aggregate snapshot).
 
+## 2026-10-21ba Held-out-judge races: STAY beats Bailey / L20 refits in context, logclip cannot; text control; ensemble fits unstable
+- Races (32 ep x 16 turns, every refit = a fresh probe of kind K fit on the model's own states), k: frac (n, turns):
+  - logclip abs 260: bailey k2 0.00 (32); linear@20 k2 0.00 (32); gdm k2 0.09 (32, 4.0); nc_ens8_tok k2 0.44 (32, 3.3),
+    k3 0.50 (14), k4 0.43 (7); mck_attnlite k2 1.00 (2.9), k3 0.62, k4 0.64, k5 0.75 (4).
+  - stay abs 660: bailey k2 1.00 (32, 3.9), k3 0.78 (32, 4.0), k4 0.12 (25); linear@20 k2 1.00 (5.1), k3 0.12 (32).
+  - base linear@20: k1 0.00 (32). gdm / mck for stay running (6684987); stay nc_ens8_tok OOM'd when packed with bailey
+    (token ensembles need > half an A100-40GB; the pack wrapper is only safe for single-layer kinds) -> rerun 6687681.
+- Text-only control (--base-reread, 16 ep, 222 monitored turns): the BASE model reading either arm's transcripts is caught
+  1.00 by all 15 probes, including L12 / L24 / mck@12 where the policy is 0.00. The written text is plainly math; all
+  evasion is internal. So the control does not separate input/output layers from mid layers: any base probe catches the
+  text. (LoRA covers every layer, so L4 / L28 states can be moved in principle.)
+- CAVEAT, probe-fit variance: the same checkpoint scored by a second fresh fit (different draw of fit data):
+  bailey_ens_tok logclip 0.98 -> 0.15, stay 0.95 -> 0.24; nc_ens8_tok logclip 0.94 -> 0.55, stay 0.21 -> 0.10. Single-layer
+  probes agree (linear@20 0.88 / 0.88, 0.51 / 0.51; ens8_linear 1.00 / 1.00). One fit of a token ensemble is not a
+  measurement. 3 more fit seeds per arm: 6687693-98 -> diag/ensseeds_2026-10-21/.
+
 ## 2026-10-21az Logclip keeps climbing on the HARD refit kinds -> both logclip runs extended 200 steps
 - Refit beat rate by kind, 40-step bins (train_log, n = refits faced):
   - logclip abs 160 / 200 / 240 / 280: k2 0.49 / 0.54 / 0.49 / 0.71; k3 0.10 / 0.24 / 0.29 / 0.32; k4 0.11 / 0.21 / 0.12 /
