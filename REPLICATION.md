@@ -5,6 +5,31 @@ checkpoints, observed results, and unresolved limitations.
 
 TICA on a new machine: start at docs/tica/README.md (results digest, run ledger, open questions, aggregate snapshot).
 
+## 2026-10-21aq TamIA: TamIA configs (r128, 16 ep/step), H100 layout smokes, speed levers, panel-probe cache
+- Configs final_v4b_tamia_4b / final_v4b_score_tamia_4b (+ builtin) = final_v4b{,_score}_4b + LoRA r128 / alpha 256
+  (alpha = 2 x rank, LR unchanged; user 10-21) + episodes_per_step 16 (4 per rank at DP4) + train.dp_drift_fatal
+  (new, default off: stop if ranks' weights differ at a checkpoint; test) + cap_gen_shard + cap_gen_merged (new,
+  default off: cap_gen decode inside Policy.merged(); test) + first_probe_panel_cache (new, default off; below).
+- Data verified on a CPU node (scripts/tamia_verify_data.py): split v5 20 / 38 = git; every text has a request; 27B
+  labels = Narval's file (covers 0.932 of texts, unlabelled = clean as on Narval); gsm8k_train 7473, Dolly 15011,
+  cap_gen_pool ok rows 354 / 89 / 729, probes primary layer 12.
+- Smoke 634724 (final_v4b{,_score}_4b, r32, 8 ep, DP2 per arm, 20 steps): clean; 33-34 GB alloc / 42 GB reserved;
+  steady ~120 s/step (88-168). Breakdown at ~207 s steps: cap_gen 54 + cap_train 43 on rank 0 alone, rollout ~60.
+- Layout smokes (tamia configs, 16 ep/step; s/step steps 4+):
+  L1 one arm DP4 / node: ~155 s, GPU util ~44%, 51 GB; L3 = L1 + read batch 32: ~210 s (worse, keep 16);
+  L5 = L1 + cap_gen_merged + micro_batch 2: cap_gen 7-20 s vs 15-42 s, train not faster, 77 GB (mb2 off, merged on);
+  L2 both arms interleaved (2 proc / GPU): util ~72% but the score arm OOMed at step 4 (7.5 GB backward
+  allocation next to the other arm's 39 GB); L4 = L2 + CUDA MPS: illegal memory access at step 3. -> solo layout
+  (one arm per node, DP4). Interleaving needs chunked full-vocab logits first (future work).
+- Turn-0 panel probes were refit by every run (~8-19 new (concept, cond, kind) keys per step, 13-60 s each; 1840
+  keys for these configs): adaptive.first_probe_panel_cache = content-hashed disk cache (drawn conversations + token
+  ids, kind / layers, name, excluded layers, base model, refit_* settings, fitting-code hash), precompute via
+  tica.py --panel-precompute I/N (scripts/slurm/tamia_panel_precompute.sh); tests: cached == fresh tensor for
+  tensor, rerun all hits, precompute covers the rollout's keys, DP panel tests pass. First precompute 635031 failed
+  (train mode drops the KV cache; fixed: eval mode); 635045 running.
+- Throughput (episodes / h per arm): single A100 est. ~160-190 (Narval 2xA100 v4b smoke 107-160 s per 8 ep);
+  TamIA L1 ~370 before the panel cache and merged generation; projected ~500+ with both (~3x per arm).
+
 ## 2026-10-21ap TamIA setup for THE TamIA RECIPE (final_v4b_4b + final_v4b_score_4b); BLOCKED on data
 - State and commands: docs/tica/TAMIA-V4B.md. Branch `tamia` (local: bottom commit rewrites /scratch/sneheel ->
   /scratch/s/sneheel, repo -> /scratch/s/sneheel/ChameleonBench; never push it).

@@ -1768,6 +1768,9 @@ class AdaptiveSupervisedTrainer:
                 for k in self._panel_kinds()][shard::nshard]
         out = {"keys": len(keys), "hit": 0, "miss": 0, "failed": 0}
         t0 = time.time()
+        # eval mode as in the rollout: HF drops the KV cache (shared-prefix reads) in train mode
+        # with gradient checkpointing
+        self.policy.model.eval()
         for j, (c, cond, nm, kind) in enumerate(keys):
             s = SimpleNamespace(cond=cond, named=nm, monitored=c, feedback=None)
             brief = "real_score" if CONDITION_SPECS[cond]["brief"] else "nobrief"

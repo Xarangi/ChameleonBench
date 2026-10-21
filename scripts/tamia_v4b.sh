@@ -24,7 +24,7 @@ QUEUE=$RUNS/v4b_val_queue.txt
 read -ra ARMS <<< "${ARMS:-final_v4b_tamia_4b final_v4b_score_tamia_4b}"
 # LAYOUT (chosen by the layout smokes, docs/tica/TAMIA-V4B.md): interleaved = ONE node, both arms data-parallel over
 # all 4 GPUs (2 processes per GPU); solo = one node per arm, 4 GPUs each
-LAYOUT=${LAYOUT:-interleaved}
+LAYOUT=${LAYOUT:-solo}   # 10-21 smokes: interleaved OOMs at r128 / 24 turns (2 x ~40-50 GB + 7.5 GB logit spikes)
 G=0,1,2,3
 mkdir -p logs
 

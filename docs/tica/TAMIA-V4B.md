@@ -1,5 +1,14 @@
 # TamIA v4b runs (2026-10-21): state, layout, how to launch and monitor
 
+**Current (10-21 afternoon; supersedes the layout / arm names below where they differ, REPLICATION 10-21aq):** arms
+`final_v4b_tamia_4b` (1-bit) and `final_v4b_score_tamia_4b` (score) = the v4b recipe + LoRA r128 / alpha 256 + 16
+episodes per step + dp_drift_fatal + cap_gen_shard + cap_gen_merged + first_probe_panel_cache. Layout: ONE ARM PER
+NODE, data-parallel over its 4 GPUs (`LAYOUT=solo`, the default): two arms per node out-of-memory at r128 / 24 turns
+(layout smokes L2 / L4). Before launch: `sbatch scripts/slurm/tamia_panel_precompute.sh final_v4b_tamia_4b` (fills
+the panel-probe cache, ~1840 probes, shared by both arms). Launch: `bash scripts/tamia_v4b.sh launch 4`. Each chunk
+is followed by a drain job: queued held-out races + in-run quality checks (newest checkpoint per arm:
+free-generation format / language checks + GSM8K / MMLU clean and under the brief; base reference once).
+
 THE TamIA RECIPE (docs/tica-v4-tamia.md, REPLICATION 10-21ak) on TamIA, 4 x H100 80 GB nodes allocated whole.
 Two arms, identical except the feedback channel:
 
