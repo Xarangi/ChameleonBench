@@ -113,6 +113,13 @@ TICA on a new machine: start at docs/tica/README.md (results digest, run ledger,
   191 k2 0.46, k3 0.25, held-out 0.47. = the math logclip run's k2 0.63 (at 259) on 5 concepts. r32 pilots (339-364):
   k2 0.27 / 0.49, held-out 0.70-0.74. Production 481 / 466: k2 0.22 / 0.21 (1-bit recovered from the 452 regression),
   margin 7.2 / 6.1, GSM8K-while-hiding 0.88 / 0.71.
+- 10-22 14:15 vLLM FOR EVAL JOBS (user: always use vLLM for evals where it helps). The colocated generator
+  (tica/vllm_gen.py, Narval 10-14s: merged-weights mode, ~5x HF decode) is now attached in tica_switch_eval.py and
+  tica_probe_panel.py when TICA_VLLM=1; vllm_gen gains TICA_VLLM_MODULES (TamIA vllm-latest = vLLM 0.21, Qwen3.5
+  supported: "StdEnv/2023 python/3.11 arrow/24.0.0 cuda/12.6"), TICA_VLLM_MODE, TICA_VLLM_MAX_RANK (128). GSM8K in
+  tica_capability (HF batched, ~1 min per condition) left as is. Smoke 637200 (scripts/slurm/tamia_vllm_eval_smoke.sh):
+  same small race + panel on production 1-bit step_500, HF vs vLLM concurrently; turn it on in the drains if it
+  agrees and is faster.
 
 ## 2026-10-21as RELAUNCH interleaved (user: GPU efficiency first): both arms share one node, model.lm_chunk 1024
 - Smokes with chunked LM terms + warm panel cache: L6 (one arm, DP4) step 1 158 s (L1: 864 s), peak 16.2 GB alloc /

@@ -154,6 +154,9 @@ def main():
         **{f.name: getattr(tcfg, f.name) for f in dataclasses.fields(SupervisedConfig)},
         adaptive=cfg.rl.adaptive)
     out = Path(a.out)
+    from next_chameleons.tica.vllm_gen import maybe_attach
+
+    maybe_attach(pol, cfg.model.path, out.parent / (out.stem + "_vllm"))  # TICA_VLLM=1: colocated vLLM generation
     tr = AdaptiveSupervisedTrainer(
         pol, pool, sampler, asc, out.parent / (out.stem + "_work"),
         branch_concepts=data.concepts("fit", CONCEPT_SPLITS),
