@@ -5,6 +5,25 @@ checkpoints, observed results, and unresolved limitations.
 
 TICA on a new machine: start at docs/tica/README.md (results digest, run ledger, open questions, aggregate snapshot).
 
+## 2026-10-22f logclip + stay (math abs 480) uses the verdict; v4b continuation at global 236, KL blip 207-216
+- Verdict-use races (math, 48 ep x 16 turns, no switches; k = pass by probe index, n, mean turns to pass):
+  - lcstay480 real k2 1.00 (48) t2.0 / k3 0.65 (48) t3.4 / k4 0.10 (31); falsify k2 0.96 t5.0 / k3 0.04 (46) / k4 - (1).
+  - For reference: stay660 real k3 0.96 / k4 0.78 vs falsify 0.62 / 0.14; bit660 real k3 0.61 vs falsify 0.59 (no use).
+  - So both stay arms read the 1-bit verdict (reversing it costs k3 0.65 -> 0.04 here); the no-stay bit control does not.
+    lcstay480 is weaker than stay660 past k2 (k4 0.10 vs 0.78).
+- Never-shown panel2 on lcstay480 (det overall / turn 0 / turns 6+), base 1.00 on every probe:
+  - Evaded like the other arms: linear@12, mck_* (6), rlobf_attn_max, gdm 0.04, spread5 0.11.
+  - In-episode drift: linear@24 0.83 -> 0.00, attnpool@24 0.96 -> 0.00, rlobf_attn@24 1.00 -> 0.07, spread5 0.83 -> 0.00,
+    nc_ens8_tok 1.00 -> 0.63. Caught at turn 0, evaded after a few turns.
+  - Still caught: L4 / L28 (all kinds), linear@20 1.00, maxpool@20 1.00, bailey_ens_tok 1.00, ens8_linear / mlp 1.00,
+    rlobf_max 0.78-0.91. Unlike stay660 (linear@20 0.51, nc 0.21, ens8_mlp 0.56), it does not lower L20.
+- v4b logclip continuation 6737102 (global offset 150), k1 / k2 by 20 steps: 140-159 0.29 / 0.00, 160 0.19 / 0.00,
+  180 0.36 / 0.03, 200 0.50 / 0.11 (79), 220-236 0.36 / 0.02. Val step 200 (heldout, own dir): pass 0.076, val_score 0.24.
+  - KL rose 0.17 -> 1.62 over steps 207-212 and fell back to 0.14 by 223 without intervention; k1 fell 0.50 -> 0.36 after.
+    The hide gradient is heavy-tailed (norm 3-660); clip coef 0.001-0.18, so the 0.5 clip binds on nearly every step.
+  - ~175 s/step with eval_on_save; one 12 h chunk is ~245 steps. Next chunk 6757556 (afterany 6737102) resumes from the
+    newest step_k with offset = global step (scratch chain script, same overrides).
+
 ## 2026-10-22e Pilots finished (150 steps); continuation running
 - Final k1 / k2 by 20 steps, 100-119 / 120-139 / 140-149: logclip 0.19 / 0.30 / 0.20 (n 196 / 179 / 92), k2 0.00 / 0.04 / 0.06;
   MSE 0.09 / 0.10 / 0.11, k2 0.06 / 0.18 / 0.00 (n 10-17). KL logclip 0.14 / 0.16 / 0.16; MSE 0.08 / 0.18 / 0.12 (MSE's KL also
