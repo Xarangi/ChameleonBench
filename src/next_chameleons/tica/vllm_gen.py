@@ -110,6 +110,7 @@ class VLLMGenerator:
                f"exec {self.py} -m vllm.entrypoints.openai.api_server --model {model_path} "
                f"--host 127.0.0.1 --port {self.port} --dtype bfloat16 "
                f"--gpu-memory-utilization {mem} --max-model-len {max_len} "
+               f"--max-num-seqs {os.environ.get('TICA_VLLM_MAX_SEQS', '256')} "  # vLLM 0.21 default 1024 > Qwen3.5 Mamba blocks (637200)
                f"{lora_flags}--enable-sleep-mode --enable-prefix-caching")
         env = {**os.environ, "VLLM_SERVER_DEV_MODE": "1",
                "VLLM_ALLOW_RUNTIME_LORA_UPDATING": "True"}
