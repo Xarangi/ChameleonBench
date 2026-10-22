@@ -120,6 +120,12 @@ TICA on a new machine: start at docs/tica/README.md (results digest, run ledger,
   tica_capability (HF batched, ~1 min per condition) left as is. Smoke 637200 (scripts/slurm/tamia_vllm_eval_smoke.sh):
   same small race + panel on production 1-bit step_500, HF vs vLLM concurrently; turn it on in the drains if it
   agrees and is faster.
+- vLLM smoke 637200 failed at startup: vLLM 0.21 default max_num_seqs 1024 > Qwen3.5 Mamba cache blocks (936 at
+  mem 0.35) -> vllm_gen passes --max-num-seqs (TICA_VLLM_MAX_SEQS, default 256); resubmitted as 637253. HF reference
+  from 637200: the small race (8 episodes x 16 turns, 4 concepts) took 562 s.
+- Chunk 1 TIMEOUT at 24 h as planned; chunk 2 (635095) resumed at 500 / 480 (resume_500, resume_480), drain 635364
+  running. Steps now 180-210 s (more refits per episode). a64 pilots at 202-220 after 12 h with ~255 s steps would not
+  reach 400 inside their 24 h job -> resume chunk 637254 (afterany:636254) + drain 637255 queued.
 
 ## 2026-10-21as RELAUNCH interleaved (user: GPU efficiency first): both arms share one node, model.lm_chunk 1024
 - Smokes with chunked LM terms + warm panel cache: L6 (one arm, DP4) step 1 158 s (L1: 864 s), peak 16.2 GB alloc /
