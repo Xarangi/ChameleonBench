@@ -86,6 +86,14 @@ TICA on a new machine: start at docs/tica/README.md (results digest, run ledger,
   0.677 -> at base under the brief (base 512-tok 0.90 / 0.825; MMLU 0.695 / 0.663 / 0.662). So only the 1-bit arm
   trips (GSM8K brief 0.665 / 0.645): score feedback keeps capability at matched refit dodging (training k2 0.26 / 0.27 at
   ~390, held-out race k2 0.37 / 0.34 at 350).
+- NEVER-SHOWN PROBE PANEL, 1-bit step_300, train concepts (tica_probe_panel: fresh BASE probes of 18 kinds fit on the
+  base model, never used in training; selectivity mix): mean detection of real-brief turns 0.73 (base model 0.996).
+  By probe: linear@16 0.20, linear@26 0.39, attnpool 0.43, linear@22 0.44, ensdeep4_linear 0.44, mck_attnlite 0.67,
+  linear@8 0.72, spread5 0.79, linear@24 0.81, maxpool@24 0.83, nc_ens8_tok 0.85, linear@20 0.86, gdm_rollattn 0.88,
+  ens8_linear 0.96, linear@28 0.96, linear@30 0.98, linear@4 1.00, linear@12 1.00. -> real generalisation to unseen
+  probe instances, strongest at the training depths 16 / 22 / 26, weaker at held-out depths 20 / 24 / 28 / 30 and
+  none at L4 / L12. Selectivity: no-brief detection 0.81 (base 0.99) = some hiding without being asked (leak);
+  mismatch 0.92 (0.98); false alarms 0.004 (0.007).
 
 ## 2026-10-21as RELAUNCH interleaved (user: GPU efficiency first): both arms share one node, model.lm_chunk 1024
 - Smokes with chunked LM terms + warm panel cache: L6 (one arm, DP4) step 1 158 s (L1: 864 s), peak 16.2 GB alloc /
