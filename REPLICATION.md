@@ -5,6 +5,15 @@ checkpoints, observed results, and unresolved limitations.
 
 TICA on a new machine: start at docs/tica/README.md (results digest, run ledger, open questions, aggregate snapshot).
 
+## 2026-10-21at FAST PILOTS launched: production recipe on 5 concepts, r128 and r32 pairs (user)
+- Why: per concept the 20-concept run gets ~1/7 of the math runs' training (k2 ~0 at step 140; expected ~700-1500 if
+  nothing transfers), and v3b's faster k2 leaned on its fixed L12 turn 0 + pursuit (10-17v: beaten L12 0.84 vs
+  0.16-0.48 elsewhere), which the panel recipe removed on purpose.
+- final_split_v5_pilot5 (sports, German, JSON, casual tone, mathematical reasoning; one per family; same data and refit
+  negatives); configs final_v4b_pilot5_{,score_}{,r32_}tamia_4b = production + that split, 400 steps, no cooldown.
+  r32 = rank 32 / alpha 64. Layout as production (pair interleaved DP4, 16 ep / step), one node per rank:
+  r128 635793 (drain 635794), r32 635795 (drain 635796). docs/tica/TAMIA-V4B.md "Fast pilots".
+
 ## 2026-10-21as RELAUNCH interleaved (user: GPU efficiency first): both arms share one node, model.lm_chunk 1024
 - Smokes with chunked LM terms + warm panel cache: L6 (one arm, DP4) step 1 158 s (L1: 864 s), peak 16.2 GB alloc /
   17.5 reserved per process (L1: 42 / 52); L7 (both arms interleaved, 2 proc / GPU) step 1 157-195 s per arm, GPU util

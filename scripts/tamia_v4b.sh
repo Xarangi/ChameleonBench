@@ -7,6 +7,7 @@
 #   bash scripts/tamia_v4b.sh smoke            # 20 steps of BOTH arms on one node (DP2 each), ~1-2 h
 #   [LAYOUT=interleaved|solo] bash scripts/tamia_v4b.sh launch [CHUNKS]  # 4 x 24 h chain + drains (races + quality)
 #   bash scripts/tamia_v4b.sh quality ADAPTER_A ADAPTER_B   # queue quality-check races, then drain
+#   ARMS="A B" QUEUE=... JOBNAME=v4p bash scripts/tamia_v4b.sh launch 1   # e.g. the 5-concept fast pilots (TAMIA-V4B.md)
 #   bash scripts/tamia_v4b.sh status           # jobs, latest step per arm, last metrics
 #
 # NODE LAYOUT (4 x H100 80 GB, whole nodes; reasoning in docs/tica/TAMIA-V4B.md):
@@ -19,7 +20,8 @@ ACCT=${ACCT:-aip-rrabba}
 R=/scratch/s/sneheel/next_chameleons_raw_cache
 A=/scratch/s/sneheel/next_chameleons_artifacts
 RUNS=$A/tica/runs
-QUEUE=$RUNS/v4b_val_queue.txt
+QUEUE=${QUEUE:-$RUNS/v4b_val_queue.txt}   # override per run set (pilots: their own queue + drain)
+JN=${JOBNAME:-v4b}   # job name prefix (pilots: v4p)
 # TamIA arms (user 10-21): final_v4b + LoRA r128 + 16 episodes / step + dp_drift_fatal; override with ARMS="a b"
 read -ra ARMS <<< "${ARMS:-final_v4b_tamia_4b final_v4b_score_tamia_4b}"
 # LAYOUT (chosen by the layout smokes, docs/tica/TAMIA-V4B.md): interleaved = ONE node, both arms data-parallel over
@@ -61,11 +63,11 @@ case "${1:-}" in
     submit_chunk() {  # PREFIX (""|resume:) DEPENDENCY -> job ids
       local pre=$1 dep=$2 ids=() j
       if [ "$LAYOUT" = interleaved ]; then
-        j=$(sbatch --parsable --account="$ACCT" $dep -J v4b scripts/slurm/tamia_node.sh \
+        j=$(sbatch --parsable --account="$ACCT" $dep -J "$JN" scripts/slurm/tamia_node.sh \
             "${pre}${ARMS[0]}@$G" "${pre}${ARMS[1]}@$G"); ids+=("$j")
       else
         for a in "${ARMS[@]}"; do
-          j=$(sbatch --parsable --account="$ACCT" $dep -J "v4b-${a}" scripts/slurm/tamia_node.sh "${pre}${a}@$G"); ids+=("$j")
+          j=$(sbatch --parsable --account="$ACCT" $dep -J "$JN-${a}" scripts/slurm/tamia_node.sh "${pre}${a}@$G"); ids+=("$j")
         done
       fi
       echo "${ids[*]}"
@@ -74,7 +76,7 @@ case "${1:-}" in
     for (( i = 1; i <= N; i++ )); do
       echo "chunk $i ($LAYOUT): $J"
       DEP="--dependency=afterany:${J// /:}"
-      D=$(TICA_DRAIN_QUALITY="${ARMS[*]}" sbatch --parsable --account="$ACCT" --time=16:00:00 $DEP -J v4b-drain \
+      D=$(TICA_DRAIN_QUALITY="${ARMS[*]}" sbatch --parsable --account="$ACCT" --time=16:00:00 $DEP -J "$JN-drain" \
           scripts/slurm/tica_val_drain.sh "$QUEUE")
       echo "  drain + quality checks: $D"
       (( i < N )) && J=$(submit_chunk "resume:" "$DEP")

@@ -121,3 +121,22 @@ sbatch --account=aip-rrabba scripts/slurm/tamia_quality_summary.sh /scratch/s/sn
 
 Read `quality.json`: per concept / family, valid share on passed vs caught vs no-brief vs base. A dodge that breaks
 the format or the language shows as valid(passed) < valid(nobrief).
+
+## Fast pilots (10-21 20:30; user: "same set-up as we have currently ... score vs no score on 1 node", plus an r32 variant)
+Why: per concept, the 20-concept production run gets ~1/7 of the math runs' training, so refit dodging (k2) is expected
+only around steps 700-1500 there. The pilots keep the production recipe and data and cut the concepts to 5, so each
+concept gets ~4x the production share per step.
+- Split `configs/tica/final_split_v5_pilot5.json`: train = sports, German language, JSON data, casual tone,
+  mathematical reasoning (one per family; mid-difficulty in production at step ~130; German + JSON are checkable).
+  Held-out set and families unchanged. Refit negatives still come from all 20 v5 train concepts (tica.py
+  `branch_concepts` = the data file's train split), and the turn-0 panel probes are the cached production ones.
+- Configs (and builtin mirrors): `final_v4b_pilot5_{,score_}tamia_4b` (r128 / alpha 256) and
+  `final_v4b_pilot5_{,score_}r32_tamia_4b` (r32 / alpha 64). Each = its production config except the split, 400 steps
+  and `lr_cooldown_steps 0` (so the LR equals production's over steps 0-400).
+- Layout = production (both arms of a pair data-parallel over one node's 4 GPUs, 2 processes per GPU, 16 episodes per
+  step); one node per rank, so ~145 s/step and 400 steps in ~16 h, one chunk. Held-out races every 50 steps + quality
+  checks queue to their own files and drain after the chunk:
+  `ARMS="final_v4b_pilot5_tamia_4b final_v4b_pilot5_score_tamia_4b" QUEUE=$RUNS/v4p_r128_val_queue.txt JOBNAME=v4p128 bash scripts/tamia_v4b.sh launch 1`
+  (same with the r32 pair, `v4p_r32_val_queue.txt`, `v4p32`). Jobs: r128 635793 (drain 635794), r32 635795 (drain 635796).
+- Reads: score vs 1-bit and r128 vs r32 on k0 / k1 (start vs switched concept) / k2 / k3, at matched steps;
+  GSM8K-while-hiding and quality vs base as in production.
