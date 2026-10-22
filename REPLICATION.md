@@ -5,6 +5,16 @@ checkpoints, observed results, and unresolved limitations.
 
 TICA on a new machine: start at docs/tica/README.md (results digest, run ledger, open questions, aggregate snapshot).
 
+## 2026-10-22c The logclip pilot BECOMES the Narval full v4b run (continue to 1200); pilots at 131-140
+- The pilots are the full final_v4b_4b config except --steps 150 and lr_cooldown_steps 0 (the cooldown only acts in the
+  last 150 global steps, so to step 150 the LR is identical to the full run's). User 10-22: continue it instead of
+  restarting. v4b_logclip_r150 6737102 (afterok 6709318): adapter pilot/logclip/adaptive/final, TICA_STEP_OFFSET 150,
+  --steps 1050 (cooldown restored: lr_factor puts it at global 1050-1200), save_state_all -> optimizer restored; val races
+  to pilot/logclip/val (eval_on_save override). 12 h chunks (~300 steps at 136 s/step) -> resubmit from the newest
+  step_N with offset 150 + N.
+- Last 20 steps: logclip k1 0.30 (179), k2 0.04 (51); MSE k1 0.10 (175), k2 0.18 (17). MSE pilot ends at 150 (not
+  continued).
+
 ## 2026-10-22b Pilots at 117-127 steps: logclip k1 0.27, 19 / 20 concepts; MSE k1 0.10; shared val dir clobbers
 - logclip k1 0.18 / 0.19 / 0.27 (80-99 / 100-119 / 120-127, n 60-196), k2 0.00 / 0.00 / 0.07, hide p 0.89 -> 0.84, KL 0.13-0.16,
   NLL 1.54; concepts beaten at least once in the last 40 steps 19 / 20.
