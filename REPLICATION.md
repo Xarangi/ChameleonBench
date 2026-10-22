@@ -5,6 +5,18 @@ checkpoints, observed results, and unresolved limitations.
 
 TICA on a new machine: start at docs/tica/README.md (results digest, run ledger, open questions, aggregate snapshot).
 
+## 2026-10-21bm TamIA-config pilots early: k1 vs the turn-0 panel 0.03 -> 0.11 by step 40-59 (both losses); logclip KL rising
+- 20-step bins (logclip 58 steps, MSE 39): k1 logclip 0.03 / 0.06 / 0.11 (n 168-192), MSE 0.03 / 0.06; k2 n 5-18 (too few).
+  Mean hide p 0.97 -> 0.92 (logclip), 0.97 -> 0.91 (MSE); hide loss 2.64 -> 2.38 / 2.61 -> 2.45. Refits accepted per
+  episode 0.25 -> 1.0 / 0.63.
+- logclip raw hide grad 40-167, clip coef 0.04-0.10 (the clip is doing its job); episode KL 0.07 -> 0.13 -> 0.15 (math-only
+  logclip ran 0.05-0.08); MSE KL 0.05 -> 0.07. Stay term 0.04 -> 0.17 / 0.01 -> 0.08.
+- 136 / 134 s per step, 41 GB reserved per GPU (24 turns on A100-40GB fits; TamIA H100s have room).
+- Context: single-concept math with panel from step 0 had k1 0.98 by step 30-40 (10-21ah). Multi-concept is slower,
+  in line with v3b taking off at steps 80-140. Not judged before ~step 100.
+- The trainer auto-submits validation (tica_val.sh, 6719820 at step 50) into the CONFIG's eval dir
+  runs/final_v4b_4b/val (Narval scratch; TamIA separate). Pilot vals land there; delete before any Narval full run.
+
 ## 2026-10-21bl Pilots pending (nodes unavailable); logclip branches at abs 400-439
 - 6709318 / 6709319 PENDING (ReqNodeNotAvail, ng11104-11106 / 20301 / 31001 / 31101).
 - k2 / k3 / k4 / rlobf_attn (n), GSM-while-hiding: unchanged 400-439 0.84 (146) / 0.65 (121) / 0.48 (77) / 0.39 (131), GSM 0.81;
