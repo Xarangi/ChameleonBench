@@ -13,6 +13,13 @@ TICA on a new machine: start at docs/tica/README.md (results digest, run ledger,
   negatives); configs final_v4b_pilot5_{,score_}{,r32_}tamia_4b = production + that split, 400 steps, no cooldown.
   r32 = rank 32 / alpha 64. Layout as production (pair interleaved DP4, 16 ep / step), one node per rank:
   r128 635793 (drain 635794), r32 635795 (drain 635796). docs/tica/TAMIA-V4B.md "Fast pilots".
+- Pilots started 20:25 (tg11101 / tg10602): 120-124 s/step, reserved 30 GB (r128) / 25 GB (r32) per process, panel
+  cache all hits, no errors. Step 17-18: k1 0.04-0.06 (n ~310), KL 0.07-0.10, GSM8K-while-hiding 0.81-0.89.
+- PRODUCTION score-arm SPIKE, steps 148-151: non-hide grad norm 1.5 -> 80-86 (total clipped to 1.0), KL 0.17 -> 1.39,
+  NLL 1.4 -> 2.8, GSM8K-while-hiding 0 for 3 steps (preceded by a stay_term jump 0.3-0.9 -> 7.2 at 149); 1-bit arm a
+  smaller one (grad norm 10, KL 0.45 at 148-149). Recovered without intervention: steps 153-165 KL 0.13-0.25, grad norm
+  0.8-3, GSM8K 0.38 -> 0.62-1.0, finished 0.75-1.0. The 20-step GSM tripwire (0.52 -> 0.58) was the spike window only;
+  no rollback (step_140 with optimizer state kept as the fallback). Watch for recurrence (alpha 64 if it repeats).
 
 ## 2026-10-21as RELAUNCH interleaved (user: GPU efficiency first): both arms share one node, model.lm_chunk 1024
 - Smokes with chunked LM terms + warm panel cache: L6 (one arm, DP4) step 1 158 s (L1: 864 s), peak 16.2 GB alloc /
