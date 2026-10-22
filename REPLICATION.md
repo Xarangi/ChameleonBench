@@ -5,6 +5,15 @@ checkpoints, observed results, and unresolved limitations.
 
 TICA on a new machine: start at docs/tica/README.md (results digest, run ledger, open questions, aggregate snapshot).
 
+## 2026-10-22a Pilots diverge: logclip k1 0.18-0.19 by step 80-108 vs MSE flat 0.06; logclip+stay vs gdm refits k2 1.00
+- TamIA-config pilots, k1 (turn-0 panel) by 20 steps: logclip 0.03 / 0.06 / 0.10 / 0.11 / 0.18 / 0.19 (108 steps), MSE
+  0.03 / 0.06 / 0.09 / 0.06 / 0.06 (97); k2 <= 0.06 both (n 10-26 per bin); KL 0.13-0.14 vs 0.07; concepts beaten at least
+  once in the last 40 steps 17 / 20 vs 6 / 20 (logclip top: formal tone 0.32, math 0.29, politics 0.24, JSON 0.21).
+- logclip + stay abs 480 vs gdm_rollattn refits: k2 1.00 (32), k3 0.50 (32), k4 0.06 (16) (logclip abs 260: 0.09; MSE stay
+  0.47 / 0.36 / 0.20). Every held-out judge kind now beaten at k2 = 1.00 by logclip + stay.
+- Branches: unchanged logclip 480-519 k2 0.91 / k3 0.51 / k4 0.45 / rlobf 0.49 (done, 200 steps); clip 1.0 440-479 0.81 /
+  0.47 / 0.35 / 0.37 (done, 160); panel0 360-399 0.66 / 0.40 / 0.43 / 0.27.
+
 ## 2026-10-21bq logclip + stay (abs 480) vs held-out judges: beats the FIRST Bailey / L20 / NC refit (logclip: never); pilots
 - Races (32 ep x 16 turns), k2 / k3 / k4: bailey 1.00 / 0.16 / 0.00; nc_ens8_tok 1.00 / 0.72 / 0.00; mck_attnlite 1.00 / 0.78 /
   0.08; linear@20 1.00 / 0.00; gdm running. Compare logclip abs 260 (no stay): bailey 0.00, linear@20 0.00, nc 0.44; MSE stay
