@@ -78,6 +78,8 @@ TICA on a new machine: start at docs/tica/README.md (results digest, run ledger,
   switched 0.03 / 0.14), k2 0.01 (77) / 0.03 (105); GSM8K-while-hiding 0.73 / 0.77, finished 0.83 / 0.83, KL 0.18 / 0.15,
   gn <= 2.3; held-out det tN 0.89 / 0.94. Refit dodging still ~0 at step 200 -> the 5-concept pilots (635793 / 635795,
   other session, aad3cd7) answer the faster-signal question; production continues unchanged.
+- 10-21 23:06, steps 213 / 212: REFIT DODGING STARTS in both arms, k2 0.10 (42) / 0.11 (47) over the last 10 steps
+  (20: 0.05 / 0.07; before step 200 <= 0.03); switched-concept k1 0.17 / 0.12; GSM8K-while-hiding 0.69 / 0.76, KL 0.19 / 0.16.
 
 ## 2026-10-21ar TamIA PRODUCTION LAUNCH: final_v4b_tamia_4b + final_v4b_score_tamia_4b (one arm per node, DP4)
 - User 10-21: throughput / wall-clock first -> solo layout (each arm its own 4 x H100 node, data-parallel over 4 GPUs),
