@@ -126,6 +126,11 @@ TICA on a new machine: start at docs/tica/README.md (results digest, run ledger,
 - Chunk 1 TIMEOUT at 24 h as planned; chunk 2 (635095) resumed at 500 / 480 (resume_500, resume_480), drain 635364
   running. Steps now 180-210 s (more refits per episode). a64 pilots at 202-220 after 12 h with ~255 s steps would not
   reach 400 inside their 24 h job -> resume chunk 637254 (afterany:636254) + drain 637255 queued.
+- vLLM smoke 637253, RACE (8 episodes x 16 turns, 4 concepts, production 1-bit step_500): vLLM server up in 70 s, 16
+  completion calls, merged-weights reload works on vLLM 0.21. Wall-clock HF 437 s vs vLLM 506 s; the race loop itself
+  383 vs 366 s -> generation is a small share of a race (refit fits + activation reads dominate), so vLLM does not pay
+  for races at this size (startup 70 s). Aggregates (n 8 episodes, noisy): beat 0.87 vs 0.95, pass after first turn
+  0.25 vs 0.43, refits 14 vs 23. Panel comparison pending.
 
 ## 2026-10-21as RELAUNCH interleaved (user: GPU efficiency first): both arms share one node, model.lm_chunk 1024
 - Smokes with chunked LM terms + warm panel cache: L6 (one arm, DP4) step 1 158 s (L1: 864 s), peak 16.2 GB alloc /
