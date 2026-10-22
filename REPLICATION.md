@@ -5,6 +5,19 @@ checkpoints, observed results, and unresolved limitations.
 
 TICA on a new machine: start at docs/tica/README.md (results digest, run ledger, open questions, aggregate snapshot).
 
+## 2026-10-21bn logclip + stay branch DONE (abs 480): best of all logclip runs; held-out tests launched; pilots at 53-70
+- k2 / k3 / k4 / rlobf_attn (n), GSM-while-hiding (all samples):
+  - + stay 400-439 0.95 / 0.62 / 0.12 / 0.60, GSM 0.72; 440-479 0.99 (183) / 0.77 (182) / 0.20 (138) / 0.62 (87), GSM 0.78.
+  - unchanged 440-479 0.83 / 0.42 / 0.34 / 0.47, GSM 0.76.
+  - clip 1.0 400-439 0.56 / 0.22 / 0.26 / 0.21; 440-479 (n 67) 0.72 / 0.23 / 0.10 / 0.24 -> NOT better than unchanged (its
+    360-399 lead was one window). The clip is not the bottleneck.
+  - panel0 320-359 0.74 / 0.39 / 0.48 / 0.26.
+- On logclip abs 480 + stay (= TamIA recipe on math): held-out-judge races bailey / nc / gdm / mck / linear@20 6722357-61;
+  ensemble fit seeds 6722362-64; clean GSM8K at 768 tok 6722365.
+- TamIA-config pilots (logclip 70 steps / MSE 53): k1 0.03 / 0.06 / 0.10 / 0.09 vs 0.03 / 0.06 / 0.08; KL 0.13-0.14 vs 0.07;
+  concepts with any beat in the last 40 steps 13 / 20 vs 4 / 20 (logclip top: SQL 0.20, formal tone 0.14, JavaScript 0.13;
+  MSE: formal tone 0.33, jokes 0.18).
+
 ## 2026-10-21bm TamIA-config pilots early: k1 vs the turn-0 panel 0.03 -> 0.11 by step 40-59 (both losses); logclip KL rising
 - 20-step bins (logclip 58 steps, MSE 39): k1 logclip 0.03 / 0.06 / 0.11 (n 168-192), MSE 0.03 / 0.06; k2 n 5-18 (too few).
   Mean hide p 0.97 -> 0.92 (logclip), 0.97 -> 0.91 (MSE); hide loss 2.64 -> 2.38 / 2.61 -> 2.45. Refits accepted per
