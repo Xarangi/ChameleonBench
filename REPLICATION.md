@@ -5,6 +5,18 @@ checkpoints, observed results, and unresolved limitations.
 
 TICA on a new machine: start at docs/tica/README.md (results digest, run ledger, open questions, aggregate snapshot).
 
+## 2026-10-22h v4b chunk 2 started from global 400; val s400 k2 0.32; third KL rise (milder); GSM8K check queued
+- 6737102 timed out at 12 h after saving step_250 (global 400); chain 6757556 resumed from it into resume_400 (800 steps,
+  offset 400, 10-step LR re-warmup 2e-5 -> 1e-4 as designed).
+- Train k1 / k2 / k3 (n): 380-399 0.56 / 0.11 (72); 400-419 0.47 / 0.11 (72); 420-430 0.64 / 0.17 (54) / 0.25 (8) --
+  first k3 passes of the run.
+- Val s400 (heldout concepts): k1 0.55 (64), k2 0.32 (31), k3 0.00 (6), pass 0.071, val_score 0.243. k2 0.32 is the best
+  heldout k2 so far (s200-350: 0.07 / 0.12 / 0.00 / 0.17).
+- KL: third rise from 418 (0.28 -> 0.55 at 428, 0.39 at 430), milder than 207-216 (1.62) and 324-334 (1.23). The KL highs
+  keep coinciding with k1 / k2 highs.
+- GSM8K 768-token on step 400 (adapter resume_150/adaptive/step_250) + base, same config: 6807338 / 6807339 ->
+  pilot_v4b_2026-10-21/eval_cap/{s400,base}_768.json. Decides whether the KL rises cost capability before any KL change.
+
 ## 2026-10-22g v4b continuation at global ~390: k1 up to ~0.55, k2 still <0.10; second KL excursion, self-recovered
 - k1 / k2 (n) by 20 steps: 240 0.42 / 0.01 (73), 260 0.55 / 0.09 (93), 280 0.28 / 0.02, 300 0.33 / 0.03, 320 0.63 / 0.08 (106),
   340 0.27 / 0.02, 360 0.54 / 0.03 (94), 380-389 0.56 / 0.07 (27). k3 0 / 1-6 throughout.
