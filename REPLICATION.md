@@ -72,6 +72,16 @@ TICA on a new machine: start at docs/tica/README.md (results digest, run ledger,
   v4b_val_queue.txt (14 held-out races, steps 50-350, both arms) + TICA_DRAIN_QUALITY both arms (newest ckpt step_360:
   free-gen validity races train / held-out + GSM8K / MMLU clean + brief at 512 tok; never-shown probe panel at step_300),
   quality.json summaries at the end; done items are skipped by the later drains.
+- 10-22 07:35 HELD-OUT RACES (38 held-out concepts, held-out probe kinds; 32 episodes; val/step_N.json), steps
+  50 / 100 / 150 / 200 / 250 / 300 / 350: 1-bit k1 0.18 / 0.35 / 0.23 / 0.25 / 0.26 / 0.39 / 0.56, k2 0.30 (10) / 0.17 /
+  0.13 / 0.21 / 0.14 / 0.29 / 0.34 (29); score k1 0.06 / 0.29 / 0.37 / 0.34 / 0.56 / 0.22 / 0.61, k2 0.33 (3) / 0.12 /
+  0.14 / 0.18 / 0.24 / 0.23 / 0.37 (35). Beat fraction 0.18 -> 0.46 (1-bit), 0.06 -> 0.49 (score) -> the skill
+  transfers to never-trained concepts and probe kinds (noisy, n 64 first probes per race).
+- CAPABILITY TRIPWIRE, 1-bit step_360 (tica_capability, 512 tok): GSM8K clean 0.785, brief math 0.665, brief HTML 0.645;
+  MMLU 0.63 / 0.59 / 0.60. Base (256-tok file) 0.835 / 0.815 / 0.82, MMLU 0.695 / 0.663 / 0.662; base at 512 tok
+  (635446) 0.90 clean / 0.825 brief math -> GSM8K under the brief ~0.16 below base (> 0.10). MMLU ~0.06 below. User
+  10-22: no restart. The base reference file was 256-tok: moved to capability_256tok.json so the next drain recomputes
+  it at 512 (tamia_queue_quality re-emits the missing file).
 
 ## 2026-10-21as RELAUNCH interleaved (user: GPU efficiency first): both arms share one node, model.lm_chunk 1024
 - Smokes with chunked LM terms + warm panel cache: L6 (one arm, DP4) step 1 158 s (L1: 864 s), peak 16.2 GB alloc /
