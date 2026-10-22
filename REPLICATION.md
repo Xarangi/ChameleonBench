@@ -156,6 +156,11 @@ TICA on a new machine: start at docs/tica/README.md (results digest, run ledger,
 - r32 pilot never-shown panel step_300 (their 5 train concepts): mean real-brief detection 1-bit 0.87 / score 0.85
   (production s300, 20 concepts: 0.73 / 0.81; base 1.00); no-brief 0.91 / 0.91 (production 0.81 / 0.77) -> less
   evasion of unseen probes but less leak into no-brief turns; most evaded linear@16/22/26 + ensdeep4 (0.76-0.78).
+- r32 drain 635796 DONE. Held-out-concept panel s300: real 0.87 / 0.85 (production 0.78 / 0.86, base 0.99). Validity
+  s400 (checkable concepts; note only German + JSON are pilot TRAIN concepts, the other 6 "train" checkables are unseen
+  for the pilots): passed turns valid 1-bit 0.47 / 0.42, score 0.49 / 0.50 (production 0.74-0.86 / 0.57-0.65, base
+  0.08 / 0.04); caught 0.76-0.83; off 0.77-0.87. -> on unseen concepts about half of the pilots' passes are real hiding.
+  The r32 pilot node is free.
 
 ## 2026-10-21as RELAUNCH interleaved (user: GPU efficiency first): both arms share one node, model.lm_chunk 1024
 - Smokes with chunked LM terms + warm panel cache: L6 (one arm, DP4) step 1 158 s (L1: 864 s), peak 16.2 GB alloc /
