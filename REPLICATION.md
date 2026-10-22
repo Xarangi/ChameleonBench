@@ -5,6 +5,17 @@ checkpoints, observed results, and unresolved limitations.
 
 TICA on a new machine: start at docs/tica/README.md (results digest, run ledger, open questions, aggregate snapshot).
 
+## 2026-10-22g v4b continuation at global ~390: k1 up to ~0.55, k2 still <0.10; second KL excursion, self-recovered
+- k1 / k2 (n) by 20 steps: 240 0.42 / 0.01 (73), 260 0.55 / 0.09 (93), 280 0.28 / 0.02, 300 0.33 / 0.03, 320 0.63 / 0.08 (106),
+  340 0.27 / 0.02, 360 0.54 / 0.03 (94), 380-389 0.56 / 0.07 (27). k3 0 / 1-6 throughout.
+- Val (heldout concepts, 32 ep, own dir) k1 / k2 / pass: s200 0.52 / 0.07 / 0.076; s250 0.31 / 0.12 / 0.035;
+  s300 0.28 / 0.00 / 0.029; s350 0.42 / 0.17 (23) / 0.050. Noisy at n ~65; no trend yet.
+- KL excursions: 207-216 (peak 1.62) and 324-334 (peak 1.23), both back to ~0.12 within ~10 steps with no intervention;
+  each coincides with a k1 high (0.50, 0.63) that falls back after. 360-389 reaches k1 ~0.55 at KL 0.12, so the gain
+  is not only the excursions. Left as is (no mid-run KL change: it would confound the run); a third excursion or
+  one that does not recover -> raise KL weight in the next chunk.
+- Chunk 6737102 ends at its 12 h limit near global 395; 6757556 resumes from step_240 (global 390).
+
 ## 2026-10-22f logclip + stay (math abs 480) uses the verdict; v4b continuation at global 236, KL blip 207-216
 - Verdict-use races (math, 48 ep x 16 turns, no switches; k = pass by probe index, n, mean turns to pass):
   - lcstay480 real k2 1.00 (48) t2.0 / k3 0.65 (48) t3.4 / k4 0.10 (31); falsify k2 0.96 t5.0 / k3 0.04 (46) / k4 - (1).
