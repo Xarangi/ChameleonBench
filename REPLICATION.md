@@ -24,6 +24,9 @@ TICA on a new machine: start at docs/tica/README.md (results digest, run ledger,
   Both recovered by 35-36 (KL 0.25-0.28, grad norm ~2). r32 pilots never spiked (grad norm <= 6, KL 0.08-0.15).
   Reading: at fixed alpha / rank = 2, Adam's per-parameter steps make the weight change per step grow with rank
   (~2-4x r32's at r128); total-norm clipping does not bound Adam's step. Candidate fix: alpha 64 at r128 (or LR / 4).
+- 22:35: second r128 pilot spike (score arm, steps 54-58: grad norm 4 -> 38, KL 0.36 -> 2.76, GSM8K 0.17). r32 pilots
+  still no spike (grad norm <= 12). Held-out detection at steps 40-59: r32 0.77-0.78 (from 0.91), r128 0.86-0.91,
+  production 0.89-0.94 -> the r32 pilots are the only runs evading the never-trained held-out probe so far.
 
 ## 2026-10-21as RELAUNCH interleaved (user: GPU efficiency first): both arms share one node, model.lm_chunk 1024
 - Smokes with chunked LM terms + warm panel cache: L6 (one arm, DP4) step 1 158 s (L1: 864 s), peak 16.2 GB alloc /
