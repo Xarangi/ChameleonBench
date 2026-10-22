@@ -5,6 +5,13 @@ checkpoints, observed results, and unresolved limitations.
 
 TICA on a new machine: start at docs/tica/README.md (results digest, run ledger, open questions, aggregate snapshot).
 
+## 2026-10-21bo logclip + stay (abs 480) keeps base math (GSM8K 768 tok 0.895 / brief 0.89); pilots at 59-76 steps
+- tica_capability 6722365: clean 0.895, brief math 0.89 (base 0.895 / 0.805; logclip abs 260 0.900 / 0.875). Stay costs
+  nothing on clean math.
+- Held-out races / ensemble fits on it running (6722357-64, ~15 min in).
+- Pilots: logclip (76 steps) k1 0.06 / 0.10 / 0.11 (20-step bins), KL 0.12-0.14, concepts with any beat in last 40 steps
+  16 / 20; MSE (59) k1 0.06 / 0.09, KL 0.07-0.08, 5 / 20. k2 n 10-18 per bin (~0.06; too few).
+
 ## 2026-10-21bn logclip + stay branch DONE (abs 480): best of all logclip runs; held-out tests launched; pilots at 53-70
 - k2 / k3 / k4 / rlobf_attn (n), GSM-while-hiding (all samples):
   - + stay 400-439 0.95 / 0.62 / 0.12 / 0.60, GSM 0.72; 440-479 0.99 (183) / 0.77 (182) / 0.20 (138) / 0.62 (87), GSM 0.78.
