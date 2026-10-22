@@ -60,6 +60,14 @@ TICA on a new machine: start at docs/tica/README.md (results digest, run ledger,
   Refit margins (last 40 steps, 04:03) median 7.4 / 7.4, share within 2 logits 0.08 / 0.11. Score-arm spike #2 at
   322-329 (grad norm 55, KL 1.5) recovered by 330 with GSM8K 0.83-1.0 throughout. Pilots: r32 k2 0.21 / 0.18, k3 0.17 /
   0.22 (step ~220); a64 step ~70 k2 0.11 / 0.09, held-out detection a64 score 0.62-0.64 for 3 windows (lowest of any run).
+- 10-22 06:33 SPIKES ARE NOT r128/alpha-256-ONLY: r32 bit 239-240 (grad norm 64, KL 0.44, recovered by 241); r32 score
+  222-234 (grad norm 8-35, KL 0.8-1.8 for 10+ steps, GSM8K 0.56-1.0); a64 bit 86-91 (grad norm 53, KL 2.6-3.2, GSM8K 0
+  at 88-89). They arrive when k2 reaches ~0.15-0.3 in every config (r128/a256 earliest and worst: its pilots collapsed).
+  Revised reading: the step-size argument explains the ORDER (r128/a256 first), but the dodging regime itself destabilises
+  training; hide_grad_clip only rebalances hide vs rest (Adam is scale-invariant), so a consistent hide direction still
+  moves ~lr per step, KL then grows and the KL / NLL gradients spike (grad_norm_rest). Candidate mitigations for later
+  runs (not applied): lower held LR (1e-4 -> 5e-5) once k2 > 0.1, higher KL weight in that phase, Adam eps / beta2.
+  Production 369 / 361: k2 0.26 / 0.19, k3 0.11 / 0.07, refit margin median 6.3 / 7.2 (share < 2 logits 0.15 / 0.18).
 
 ## 2026-10-21as RELAUNCH interleaved (user: GPU efficiency first): both arms share one node, model.lm_chunk 1024
 - Smokes with chunked LM terms + warm panel cache: L6 (one arm, DP4) step 1 158 s (L1: 864 s), peak 16.2 GB alloc /
