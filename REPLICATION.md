@@ -146,6 +146,13 @@ TICA on a new machine: start at docs/tica/README.md (results digest, run ledger,
   validity tripwire (1-bit held-out off-turns 0.76 = base - 0.09).
 - r32 pilots FINISHED 400 steps (15:30 / 15:50): final 20 steps k2 0.42 / 0.36, k3 0.35 / 0.19, held-out detection
   0.73 / 0.65, GSM8K-while-hiding 0.82 / 0.81, KL 0.15 / 0.12; drain 635796 running (held-out races, quality, panel 300).
+- r32 PILOT EVALS (drain 635796, partial): held-out races (38 held-out concepts) 1-bit 100 / 200 / 300 / 400: k1 0.10 /
+  0.33 / 0.17 / 0.22, k2 0.29 / 0.30 / 0.30 / 0.17 (n 7-20), beat 0.11-0.31; score k1 0.12 / 0.20 / 0.26 / 0.27, k2 0.43 /
+  0.31 / 0.38 / 0.33, beat 0.13-0.26. vs PRODUCTION (20 concepts) at 400-500: k1 0.46-0.62, k2 0.33-0.51, beat 0.40-0.56.
+  -> 5 training concepts dodge their own refits as well or better but transfer much less to held-out concepts:
+  concept diversity drives generalisation. Capability step_400 (512 tok): GSM8K clean / brief math / brief HTML 1-bit
+  0.88 / 0.905 / 0.905, score 0.85 / 0.875 / 0.875; MMLU 0.655-0.667 (base 0.90 / 0.825 / 0.82, MMLU 0.66-0.695) ->
+  at or above base under the brief.
 
 ## 2026-10-21as RELAUNCH interleaved (user: GPU efficiency first): both arms share one node, model.lm_chunk 1024
 - Smokes with chunked LM terms + warm panel cache: L6 (one arm, DP4) step 1 158 s (L1: 864 s), peak 16.2 GB alloc /
