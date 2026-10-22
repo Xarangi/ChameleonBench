@@ -11,7 +11,7 @@ TICA on a new machine: start at docs/tica/README.md (results digest, run ledger,
   once in the last 40 steps 17 / 20 vs 6 / 20 (logclip top: formal tone 0.32, math 0.29, politics 0.24, JSON 0.21).
 - logclip + stay abs 480 vs gdm_rollattn refits: k2 1.00 (32), k3 0.50 (32), k4 0.06 (16) (logclip abs 260: 0.09; MSE stay
   0.47 / 0.36 / 0.20). Every held-out judge kind now beaten at k2 = 1.00 by logclip + stay.
-- Branches: unchanged logclip 480-519 k2 0.91 / k3 0.51 / k4 0.45 / rlobf 0.49 (done, 200 steps); clip 1.0 440-479 0.81 /
+- Branches: unchanged logclip 480-519 k2 0.91 / k3 0.51 / k4 0.45 / rlobf 0.49 (188 / 200 steps, running); clip 1.0 440-479 0.81 /
   0.47 / 0.35 / 0.37 (done, 160); panel0 360-399 0.66 / 0.40 / 0.43 / 0.27.
 
 ## 2026-10-21bq logclip + stay (abs 480) vs held-out judges: beats the FIRST Bailey / L20 / NC refit (logclip: never); pilots
