@@ -85,6 +85,10 @@ TICA on a new machine: start at docs/tica/README.md (results digest, run ledger,
   other session, aad3cd7) answer the faster-signal question; production continues unchanged.
 - 10-21 23:06, steps 213 / 212: REFIT DODGING STARTS in both arms, k2 0.10 (42) / 0.11 (47) over the last 10 steps
   (20: 0.05 / 0.07; before step 200 <= 0.03); switched-concept k1 0.17 / 0.12; GSM8K-while-hiding 0.69 / 0.76, KL 0.19 / 0.16.
+- 10-22 00:06 SCORE ARM SECOND SPIKE, steps 223-226: KL 0.25 -> 0.46 / 0.86 / 0.59 / 0.40, pre-clip gn 3.7-8.8 (smaller
+  than 148-151), recovered by 228 (KL 0.19). 20-step GSM8K-while-hiding 0.56 (TRIPWIRE < 0.60), finished 0.70; 20-step pools
+  between the spikes 0.72-0.82. Two transient KL spikes in ~80 steps, 1-bit arm none (KL 0.16, GSM 0.67). Capability ground
+  truth: job 636117 (cap220_check: GSM8K 200 @512 + MMLU 600, clean / brief math / brief HTML; base, score s200 / s220, bit s220).
 
 ## 2026-10-21ar TamIA PRODUCTION LAUNCH: final_v4b_tamia_4b + final_v4b_score_tamia_4b (one arm per node, DP4)
 - User 10-21: throughput / wall-clock first -> solo layout (each arm its own 4 x H100 node, data-parallel over 4 GPUs),
