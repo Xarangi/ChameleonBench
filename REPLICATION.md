@@ -5,6 +5,37 @@ checkpoints, observed results, and unresolved limitations.
 
 TICA on a new machine: start at docs/tica/README.md (results digest, run ledger, open questions, aggregate snapshot).
 
+## 2026-10-21bq logclip + stay (abs 480) vs held-out judges: beats the FIRST Bailey / L20 / NC refit (logclip: never); pilots
+- Races (32 ep x 16 turns), k2 / k3 / k4: bailey 1.00 / 0.16 / 0.00; nc_ens8_tok 1.00 / 0.72 / 0.00; mck_attnlite 1.00 / 0.78 /
+  0.08; linear@20 1.00 / 0.00; gdm running. Compare logclip abs 260 (no stay): bailey 0.00, linear@20 0.00, nc 0.44; MSE stay
+  abs 660: bailey 1.00 / 0.78, nc 1.00 / 1.00 / 0.97, linear@20 1.00 / 0.12.
+- Never-shown static fits (seeds 2-4): bailey 1.00 / 1.00 / 1.00, linear@20 1.00 / 1.00 / 1.00 (no in-episode decline, unlike
+  MSE stay 1.0 -> ~0.07), nc 1.00 / 0.81 / 0.93.
+- So on the logclip lineage, stay turns "never beats a held-out refit" into "beats the first one every time", but not
+  deeper chains (k3 0.00-0.78), and the static never-shown L20 / Bailey probes stay at 1.0 throughout the episode. The MSE
+  stay arm's in-episode L20 decline needs the MSE lineage (its drift) as well as stay.
+- TamIA-config pilots: logclip (98 steps) k1 0.11 / 0.15 at 60-79 / 80-99, k2 0.00-0.05 (n 20), KL 0.13, 17 / 20 concepts
+  beaten at least once in the last 40 steps; MSE (85) k1 0.06 / 0.06, KL 0.07, 6 / 20.
+
+## 2026-10-21bp Score vs 1-bit: what we have, and a score-USE control (--score-bit)
+- Evidence so far (fb600 arms, MSE lineage abs 600-660, 1 seed, 60 steps each):
+  - retry pass hazard under the same refit, j = 1..6+: bit 0.070 / 0.183 / 0.047 / 0.033 / 0.019 / 0.023, score 0.075 / 0.223 /
+    0.113 / 0.067 / 0.051 / 0.033 (n 99-358) -> ~2x at the 3rd-5th retry (10-21ae).
+  - training k (abs 620+): bit k2 0.61 / k3 0.36 / k4 0.23, GSM 0.60; score 0.78 / 0.43 / 0.27, GSM 0.65 (10-21ah).
+  - Not measured for score: verdict / score USE, held-out races, never-shown panels. Stay beat both on every metric.
+  - Older Level-0 in-context study (pre-training): sham score = real score at every bank (no score use, untrained).
+- Missing control: does the model use the score's MAGNITUDE, or only the verdict it implies? New eval-only flags
+  (default off): tica_switch_eval --score-bit (true verdict; |score - thr| replaced by the probe's running median, so the
+  per-turn magnitude carries no information) and --feedback {verdict,score} (override episodes.feedback for arms trained
+  with --set episodes.feedback=score; earlier evals of fb600_score would have shown VERDICT feedback).
+- Races on fb600_score final, math, 48 ep x 16 turns, no switches: 6723263 real score, 6723264 --score-bit
+  -> diag/scorebit_2026-10-21/. If score-bit matches real, the score's benefit is not from reading its magnitude.
+- RESULT: real vs score-bit: k2 0.67 vs 0.65 (n 48), k3 0.50 vs 0.45 (32 / 31), k4 0.40 vs 0.54 (15 / 13); pass after turn 0
+  0.083 vs 0.075; refits beaten 0.56 vs 0.54 (n 102 / 97); within 5 turns 0.40 vs 0.34. -> NO use of the magnitude. The score
+  arm's training edge over bit (if real at 1 seed) is not the model reading how close it came; plausibly the score text
+  acting as a different / richer prompt or training noise. Checked: the override reaches rendering (sampler feedback =
+  cfg.episodes.feedback, set before the sampler is built; render_feedback uses spec.feedback).
+
 ## 2026-10-21bo logclip + stay (abs 480) keeps base math (GSM8K 768 tok 0.895 / brief 0.89); pilots at 59-76 steps
 - tica_capability 6722365: clean 0.895, brief math 0.89 (base 0.895 / 0.805; logclip abs 260 0.900 / 0.875). Stay costs
   nothing on clean math.

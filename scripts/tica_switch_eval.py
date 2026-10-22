@@ -57,6 +57,11 @@ def main():
     ap.add_argument("--switch-kinds", help="comma list of fallback kinds for --refit-switch")
     ap.add_argument("--falsify", action="store_true",
                     help="show the OPPOSITE verdict each turn (does the model USE the feedback?)")
+    ap.add_argument("--score-bit", action="store_true",
+                    help="score feedback with the TRUE verdict but no per-turn magnitude (|score - "
+                         "thr| = the probe's running median): is the score used beyond the bit?")
+    ap.add_argument("--feedback", choices=["verdict", "score"],
+                    help="override episodes.feedback (arms trained with --set episodes.feedback)")
     ap.add_argument("--model-path")
     ap.add_argument("--data", help="override the config's data file (e.g. concept_eval_v1.json)")
     ap.add_argument("--inputs", help="override the config's answer-format inputs map")
@@ -94,6 +99,8 @@ def main():
     )
 
     cfg = load_run_config(a.config)
+    if a.feedback:
+        cfg.episodes.feedback = a.feedback
     if a.model_path:
         cfg.model.path = a.model_path
     if a.kind:
@@ -167,6 +174,7 @@ def main():
         roots_only=set(topics), prompts=ask_concept(fmt) if a.ask_concept else fmt,
         hard_neg={c: data.hard_negatives(c, "fit") for c in topics})
     tr.falsify = a.falsify
+    tr.score_bit = a.score_bit
     if a.answers == "free":
         tr.free_answers = {"max_new": a.answer_max}
     gen_f = open(a.gen_out, "w") if a.gen_out else None  # noqa: SIM115
@@ -248,7 +256,8 @@ def main():
     mean = lambda v: sum(v) / len(v) if v else None  # noqa: E731
     rep = {"config": a.config, "adapter": a.adapter, "base": a.base, "topics": topics,
            "episodes": a.episodes, "turns": a.turns, "switch_prob": a.switch_prob,
-           "falsify": a.falsify, "turn_budget": budget, "cond": a.cond, "answers": a.answers,
+           "falsify": a.falsify, "score_bit": a.score_bit, "turn_budget": budget,
+           "cond": a.cond, "answers": a.answers,
            "ask_concept": a.ask_concept,
            "answer_max": a.answer_max if a.answers == "free" else None,
            "min_seg": a.min_seg, "return_prob": a.return_prob,

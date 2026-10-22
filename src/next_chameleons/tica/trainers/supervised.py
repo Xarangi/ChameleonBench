@@ -634,6 +634,8 @@ class AdaptiveSupervisedTrainer:
         # negatives come from these (e.g. DolusChat truthful twins for deception)
         self.hard_neg = hard_neg or {}
         self.falsify = False  # eval-only control (tica_switch_eval --falsify)
+        self.score_bit = False  # eval-only control (tica_switch_eval --score-bit)
+        self._score_bit_hist: dict[str, list[float]] = {}
         self.deploy_log: list[dict] = []  # turns-to-beat records (rollout; beat_summary)
         self._cap_mult, self._cap_acc_ema = 1.0, None  # adaptive capability weight (off: 1.0)
         self.seg_log: list[dict] = []  # per (episode, concept): turns until its first pass
@@ -1376,6 +1378,12 @@ class AdaptiveSupervisedTrainer:
                         # follow TRUE passes; forks carry the verdict the model actually saw)
                         th = read["thr"]
                         shown = (th - 1.0, th) if read["detected"] else (th + 1.0, th)
+                    elif self.score_bit:  # eval control (score feedback): TRUE verdict, no per-turn
+                        # magnitude -- |score - thr| is replaced by this probe's median so far
+                        th, hist = read["thr"], self._score_bit_hist.setdefault(read["name"], [])
+                        hist.append(abs(read["score"] - th))
+                        m = sorted(hist)[len(hist) // 2]
+                        shown = (th + m, th) if read["detected"] else (th - m, th)
                     shown_cond = s.cond
                     bact = self._budget_step(s, i, t, off, tail, judged=True,
                                              passed=obs["passed"])
