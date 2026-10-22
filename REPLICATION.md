@@ -5,6 +5,15 @@ checkpoints, observed results, and unresolved limitations.
 
 TICA on a new machine: start at docs/tica/README.md (results digest, run ledger, open questions, aggregate snapshot).
 
+## 2026-10-22i v4b at global 480: GSM8K unharmed at s400 -> KL left as is; k2 not climbing
+- GSM8K 768 tok, n 200, same config (final_v4b_4b): step 400 clean 0.900 (180) vs base 0.895 (179); math brief 0.885
+  vs base 0.805. No capability cost from the KL rises, so the KL weight stays.
+- Train k1 / k2 / k3 (n): 400-419 0.47 / 0.11 (72) / 0 (5); 420-439 0.64 / 0.17 (99) / 0.12 (16); 440-459 0.36 / 0.10 (58)
+  / 0.25 (4); 460-479 0.58 / 0.05 (101) / 0 (4).
+- Val (heldout) s450: k1 0.36 (67), k2 0.14 (22), pass 0.043; s400's k2 0.32 (31) did not hold.
+- Third KL excursion 425-440, peak 0.98 at 434, back to ~0.15 by 441. Excursions at ~207, ~324, ~425 (100-120 steps
+  apart), each with a k1 high then a drop. k1 now oscillates 0.36-0.64 between 20-step windows; k2 flat at ~0.1.
+
 ## 2026-10-22h v4b chunk 2 started from global 400; val s400 k2 0.32; third KL rise (milder); GSM8K check queued
 - 6737102 timed out at 12 h after saving step_250 (global 400); chain 6757556 resumed from it into resume_400 (800 steps,
   offset 400, 10-step LR re-warmup 2e-5 -> 1e-4 as designed).
