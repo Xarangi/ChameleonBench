@@ -161,6 +161,15 @@ TICA on a new machine: start at docs/tica/README.md (results digest, run ledger,
   for the pilots): passed turns valid 1-bit 0.47 / 0.42, score 0.49 / 0.50 (production 0.74-0.86 / 0.57-0.65, base
   0.08 / 0.04); caught 0.76-0.83; off 0.77-0.87. -> on unseen concepts about half of the pilots' passes are real hiding.
   The r32 pilot node is free.
+- WHY THE PANEL'S linear@12 IS NEVER EVADED (user question 10-22): not under-sampling (Thompson layer shares in
+  production 0.16-0.21 for L12; refits at L12 caught 0.90 / 0.95 in the last 60 steps, turn-0 base-panel linear@12 caught
+  0.51 / 0.87). The panel's base:linear@12 margin did fall 9.5 -> 3.5 logits but stays above threshold, while L16 / L22 /
+  L26 went 9-10 -> -1.6 / 0.3 / -0.3. Cause: the MATCH / selectivity targets (nobrief, neg_text, mismatch and
+  monitor-OFF turns; match_weight 2.0) are all on `s.monitor`, the round-0 base concept probe at the PRIMARY layer L12
+  (supervised.py _targets) -> L12 is explicitly trained to stay base-readable in every non-hiding context, and that
+  anchor carries into hiding turns. v3b beat L12 because its fixed turn-0 probe AND pursuit were at L12. Caveat for
+  the panel: linear@12 (the bank probe = MATCH anchor direction) is not a fair unseen probe; generalisation claims
+  should exclude L12 or anchor MATCH at several depths.
 
 ## 2026-10-21as RELAUNCH interleaved (user: GPU efficiency first): both arms share one node, model.lm_chunk 1024
 - Smokes with chunked LM terms + warm panel cache: L6 (one arm, DP4) step 1 158 s (L1: 864 s), peak 16.2 GB alloc /
