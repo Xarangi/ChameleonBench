@@ -5,6 +5,16 @@ checkpoints, observed results, and unresolved limitations.
 
 TICA on a new machine: start at docs/tica/README.md (results digest, run ledger, open questions, aggregate snapshot).
 
+## 2026-10-22d Math-run takeaways (all branches done) + last two checks on logclip + stay
+- Final windows (k2 / k3 / k4 / rlobf_attn): unchanged logclip abs 480-519 0.91 / 0.51 / 0.45 / 0.49; + stay 440-479 0.99 /
+  0.77 / 0.20 / 0.62; clip 1.0 440-479 0.81 / 0.47 / 0.35 / 0.37; panel0 360-399 0.66 / 0.40 / 0.43 / 0.27. Logclip was still
+  improving at every stop; nothing plateaued for good.
+- Settled: stay is what transfers to held-out judges (bit control); score magnitude unused; clip 0.5 not the bottleneck;
+  logclip keeps base GSM8K at 768 tokens (with and without stay); long answers explain every "math drop" at 256 tokens.
+- Open: never-shown layers 4 / 20 / 28 and all-layer ensembles stay at ~1.0 for every logclip arm (only the MSE lineage
+  with stay lowers L20 in-episode); k4+ against held-out judges near 0 for logclip + stay.
+- Queued on logclip + stay abs 480: panel2 (30 never-shown probes) 6739173; verdict-use races real / --falsify 6739176-77.
+
 ## 2026-10-22c The logclip pilot BECOMES the Narval full v4b run (continue to 1200); pilots at 131-140
 - The pilots are the full final_v4b_4b config except --steps 150 and lr_cooldown_steps 0 (the cooldown only acts in the
   last 150 global steps, so to step 150 the LR is identical to the full run's). User 10-22: continue it instead of
