@@ -103,6 +103,11 @@ TICA on a new machine: start at docs/tica/README.md (results digest, run ledger,
   score 0.90 / 0.76; monitor-off: base 0.90 / 0.85, 1-bit 0.82 / 0.83, score 0.94 / 0.93. No validity tripwire (all >=
   base - 0.15), but held-out passes are less often valid than at step 20 (some held-out dodges = not doing the concept),
   and finished on passed turns 0.42-0.69 (answer cap 320 tok; verbosity, most in 1-bit).
+- 10-22 11:35 PRODUCTION 1-bit REGRESSION at step 452 (after a small bump 448-451: grad norm 2.5-4, KL 0.33): KL 0.20-0.30
+  -> 0.13-0.15 flat, train hide_p 0.6-0.7 -> 0.8-0.9, first-probe beaten 0.6-1.0 -> 0.2-0.6, refits per episode 8-12 ->
+  2-7, k2 0 / ~60 over 453-464 (0.33-0.38 in the windows to ~440); refit margin back 5.7 -> 7.3. The policy moved back
+  toward base (lost part of the hiding), not a capability problem (GSM8K-while-hiding 0.82). Curriculum unchanged
+  (lambda 0.7, LR 1e-4 held). First-probe beats partly back by 461-464 (0.38-0.75). Score arm unaffected (k2 0.21).
 
 ## 2026-10-21as RELAUNCH interleaved (user: GPU efficiency first): both arms share one node, model.lm_chunk 1024
 - Smokes with chunked LM terms + warm panel cache: L6 (one arm, DP4) step 1 158 s (L1: 864 s), peak 16.2 GB alloc /
