@@ -5,6 +5,14 @@ checkpoints, observed results, and unresolved limitations.
 
 TICA on a new machine: start at docs/tica/README.md (results digest, run ledger, open questions, aggregate snapshot).
 
+## 2026-10-22b Pilots at 117-127 steps: logclip k1 0.27, 19 / 20 concepts; MSE k1 0.10; shared val dir clobbers
+- logclip k1 0.18 / 0.19 / 0.27 (80-99 / 100-119 / 120-127, n 60-196), k2 0.00 / 0.00 / 0.07, hide p 0.89 -> 0.84, KL 0.13-0.16,
+  NLL 1.54; concepts beaten at least once in the last 40 steps 19 / 20.
+- MSE k1 0.06 / 0.07 / 0.10, k2 0.00-0.09, hide p 0.94 -> 0.92, KL 0.07, 7 / 20.
+- BUG (logging only): both pilots auto-validate into the config's eval dir runs/final_v4b_4b/val/, so step_N.json is
+  overwritten by whichever pilot finishes its val last (step_50 read 0.065 / 0.029 at 10-21bm, now 0.034 / 0.013). The
+  val numbers cannot be attributed to an arm. Training logs are unaffected. Next pilots: --set the eval dir per arm.
+
 ## 2026-10-22a Pilots diverge: logclip k1 0.18-0.19 by step 80-108 vs MSE flat 0.06; logclip+stay vs gdm refits k2 1.00
 - TamIA-config pilots, k1 (turn-0 panel) by 20 steps: logclip 0.03 / 0.06 / 0.10 / 0.11 / 0.18 / 0.19 (108 steps), MSE
   0.03 / 0.06 / 0.09 / 0.06 / 0.06 (97); k2 <= 0.06 both (n 10-26 per bin); KL 0.13-0.14 vs 0.07; concepts beaten at least
