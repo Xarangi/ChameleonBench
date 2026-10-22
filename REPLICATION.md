@@ -55,6 +55,11 @@ TICA on a new machine: start at docs/tica/README.md (results digest, run ledger,
 - 10-22 03:03: a64 pilots started 02:36 (tg10801): 116-118 s/step, 28.5 GB reserved, panel cache 99/99 hits, step 13
   grad norm <= 1, KL 0.08, GSM8K 0.79-0.90. Production step 301 / 294: 1-bit k2 0.13 (126) (highest so far), score 0.06
   (140); start-concept k1 0.64 / 0.70; GSM8K-while-hiding 0.76 / 0.75.
+- 10-22 05:33 PRODUCTION k2 CLIMBING: last 20 steps k2 1-bit 0.21 (149) / score 0.17 (163) (0.06-0.08 at ~290, 0.13 / 0.06
+  at ~300), k3 0.14 (29) / 0.00 (23); start-concept k1 0.75 / 0.74; GSM8K-while-hiding 0.75 / 0.86, finished 0.91.
+  Refit margins (last 40 steps, 04:03) median 7.4 / 7.4, share within 2 logits 0.08 / 0.11. Score-arm spike #2 at
+  322-329 (grad norm 55, KL 1.5) recovered by 330 with GSM8K 0.83-1.0 throughout. Pilots: r32 k2 0.21 / 0.18, k3 0.17 /
+  0.22 (step ~220); a64 step ~70 k2 0.11 / 0.09, held-out detection a64 score 0.62-0.64 for 3 windows (lowest of any run).
 
 ## 2026-10-21as RELAUNCH interleaved (user: GPU efficiency first): both arms share one node, model.lm_chunk 1024
 - Smokes with chunked LM terms + warm panel cache: L6 (one arm, DP4) step 1 158 s (L1: 864 s), peak 16.2 GB alloc /
