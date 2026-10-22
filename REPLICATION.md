@@ -40,6 +40,12 @@ TICA on a new machine: start at docs/tica/README.md (results digest, run ledger,
 - 10-22 02:05 r128 spikes continue: pilot bit 125-127 (grad norm 126, KL 0.91, GSM 0), pilot score 133-139 the worst yet
   (grad norm 577 / 732, KL 5.4, NLL 6.3, GSM 0 for 3 steps; KL still 2.6 at 139). r32 pilots: none. k2 (last 20 steps):
   production 0.06 / 0.07, pilots r128 0.15 / 0.20, r32 0.16 / 0.12; GSM8K-while-hiding r128 bit 0.59, r32 0.82 / 0.71.
+- REFIT MARGINS (turns.jsonl; real_score monitored turns judged by an in-episode refit; logit(score) - logit(thr)),
+  production 1-bit / score by 40 steps from 0: median 12.2 / 12.0 -> 11.0 / 10.9 -> 10.7 / 10.1 -> 11.0 / 10.1 ->
+  10.3 / 8.5 -> 9.0 / 8.7 -> 8.8 / 8.5 -> 7.6 / 7.9 (280+); share within 2 logits 0.01 -> 0.08 / 0.07; per-turn refit pass
+  0.003 -> 0.02. r32 pilot: 11.6 -> 9.9 -> 9.5 -> 8.3 by 120+ (production reaches that ~2x later). v3b's topic refits
+  were at 9.9 -> 6.3 -> 4.6 -> 4.3 (s40-200) when its k2 took off (10-20i). Reading: production is closing in on the
+  refits steadily (~1 logit per 40-60 steps); at this pace margins reach v3b's takeoff range (~4-5) around step 420-500.
 
 ## 2026-10-21as RELAUNCH interleaved (user: GPU efficiency first): both arms share one node, model.lm_chunk 1024
 - Smokes with chunked LM terms + warm panel cache: L6 (one arm, DP4) step 1 158 s (L1: 864 s), peak 16.2 GB alloc /
