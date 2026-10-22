@@ -49,6 +49,11 @@ TICA on a new machine: start at docs/tica/README.md (results digest, run ledger,
 - 10-21 19:32, steps 131 / 128 (last 20): k0 (turn-0 pass) 0.10 / 0.12, k1 0.20 / 0.21, k2 0.00 (68) / 0.06 (69);
   k1 split: episode-first concept (base panel probe) 0.31-0.47, switched concept (fork-fit probe, switch_fork) 0.04-0.09.
   GSM8K-while-hiding 0.64 / 0.71, finished 0.78 / 0.81, KL 0.22 / 0.19, 140-148 s/step.
+- 10-21 20:36 SCORE ARM SPIKE, steps 148-151: pre-clip grad norm 1-4 -> 10 / 86 / 85 / 82 (the NON-hide part,
+  grad_norm_rest; total clip 1.0 still bounds each update), KL 0.2 -> 0.50 / 1.39 / 1.16, NLL 1.5 -> 2.77, GSM8K-while-hiding
+  0 at 149-151. Recovering by 152-153 (gn 7.4 / 2.8, KL 0.34 / 0.21, NLL 1.6) but the 20-step pools TRIP the tripwires
+  (GSM8K 0.49 < 0.60, finished 0.69 < 0.70). 1-bit arm: no spike (gn 1.5-10, KL 0.25-0.45, GSM 0.69). Clean rollback
+  point: score step_140 (adapter + trainer_state). Proposed to the user; watching steps 154-165.
 
 ## 2026-10-21ar TamIA PRODUCTION LAUNCH: final_v4b_tamia_4b + final_v4b_score_tamia_4b (one arm per node, DP4)
 - User 10-21: throughput / wall-clock first -> solo layout (each arm its own 4 x H100 node, data-parallel over 4 GPUs),
