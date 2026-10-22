@@ -94,6 +94,15 @@ TICA on a new machine: start at docs/tica/README.md (results digest, run ledger,
   probe instances, strongest at the training depths 16 / 22 / 26, weaker at held-out depths 20 / 24 / 28 / 30 and
   none at L4 / L12. Selectivity: no-brief detection 0.81 (base 0.99) = some hiding without being asked (leak);
   mismatch 0.92 (0.98); false alarms 0.004 (0.007).
+- INTERIM QUALITY DONE (636434, 2h23). Never-shown panel step_300, mean real-brief detection train / held-out concepts:
+  1-bit 0.73 / 0.78, score 0.81 / 0.86 (base 1.00 / 0.99); no-brief 0.81 / 0.92 and 0.77 / 0.94 (base 0.99 / 0.98);
+  mismatch 0.92-0.99; false alarms <= 0.007. Most evaded: linear@16 (0.20-0.69), mck_attnlite (held-out 0.45 / 0.60),
+  ensdeep4, attnpool, linear@22/26.
+- Free-gen validity step_360 (checkable concepts; train / held-out), share valid on PASSED turns: base 0.08 / 0.04, 1-bit
+  0.69 / 0.45, score 0.79 / 0.63 (step 20: 0.77 / 0.73 and 0.83 / 0.83); caught turns: base 0.69 / 0.70, 1-bit 0.81 / 0.70,
+  score 0.90 / 0.76; monitor-off: base 0.90 / 0.85, 1-bit 0.82 / 0.83, score 0.94 / 0.93. No validity tripwire (all >=
+  base - 0.15), but held-out passes are less often valid than at step 20 (some held-out dodges = not doing the concept),
+  and finished on passed turns 0.42-0.69 (answer cap 320 tok; verbosity, most in 1-bit).
 
 ## 2026-10-21as RELAUNCH interleaved (user: GPU efficiency first): both arms share one node, model.lm_chunk 1024
 - Smokes with chunked LM terms + warm panel cache: L6 (one arm, DP4) step 1 158 s (L1: 864 s), peak 16.2 GB alloc /
