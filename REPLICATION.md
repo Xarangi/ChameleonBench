@@ -27,6 +27,10 @@ TICA on a new machine: start at docs/tica/README.md (results digest, run ledger,
 - 22:35: second r128 pilot spike (score arm, steps 54-58: grad norm 4 -> 38, KL 0.36 -> 2.76, GSM8K 0.17). r32 pilots
   still no spike (grad norm <= 12). Held-out detection at steps 40-59: r32 0.77-0.78 (from 0.91), r128 0.86-0.91,
   production 0.89-0.94 -> the r32 pilots are the only runs evading the never-trained held-out probe so far.
+- 22:55 first k2 movement (small n): production score 200-208 k2 0.11 (45); pilots 60-68: r32 bit 0.15 (39), r32 score
+  0.12 (32), r128 bit 0.04 (45). r128 score pilot NOT recovered from its spike: steps 58-65 KL 1.1-1.9, grad norm 8-52,
+  yet k0 0.53 / k2 0.35 (34) / k3 0.30 (10), GSM8K 0.72 -> dodging in a high-KL regime; check its outputs' validity at
+  the quality checkpoint before reading it as progress.
 
 ## 2026-10-21as RELAUNCH interleaved (user: GPU efficiency first): both arms share one node, model.lm_chunk 1024
 - Smokes with chunked LM terms + warm panel cache: L6 (one arm, DP4) step 1 158 s (L1: 864 s), peak 16.2 GB alloc /
