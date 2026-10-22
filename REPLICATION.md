@@ -46,6 +46,12 @@ TICA on a new machine: start at docs/tica/README.md (results digest, run ledger,
   0.003 -> 0.02. r32 pilot: 11.6 -> 9.9 -> 9.5 -> 8.3 by 120+ (production reaches that ~2x later). v3b's topic refits
   were at 9.9 -> 6.3 -> 4.6 -> 4.3 (s40-200) when its k2 took off (10-20i). Reading: production is closing in on the
   refits steadily (~1 logit per 40-60 steps); at this pace margins reach v3b's takeoff range (~4-5) around step 420-500.
+- 10-22 02:40 r128 / alpha 256 PILOT PAIR COLLAPSED -> cancelled (635793 at steps 151 / 147; drain 635794 cancelled, its
+  5 queued held-out races kept in v4p_r128_val_queue.txt). Score pilot: steps 133-147 KL 1.8-5.9, grad norm 19-732,
+  GSM8K 0-0.58 (mostly 0), no recovery in 15 steps; 1-bit pilot sliding the same way (148-151 KL 0.9-1.9, GSM8K 0).
+  Its late k2 0.20-0.31 / k3 0.18-0.36 are collapse artifacts. Checkpoints + logs kept. Node reused for the r128 /
+  ALPHA 64 pair (production's fallback; scale 0.5): final_v4b_pilot5_a64_{,score_}tamia_4b, job 636254 (drain 636255).
+  r32 / alpha 64 pilots (step ~160): never spiked, KL 0.10-0.12, GSM8K 0.71-0.87, k2 0.10-0.11.
 
 ## 2026-10-21as RELAUNCH interleaved (user: GPU efficiency first): both arms share one node, model.lm_chunk 1024
 - Smokes with chunked LM terms + warm panel cache: L6 (one arm, DP4) step 1 158 s (L1: 864 s), peak 16.2 GB alloc /

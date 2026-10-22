@@ -138,5 +138,9 @@ concept gets ~4x the production share per step.
   checks queue to their own files and drain after the chunk:
   `ARMS="final_v4b_pilot5_tamia_4b final_v4b_pilot5_score_tamia_4b" QUEUE=$RUNS/v4p_r128_val_queue.txt JOBNAME=v4p128 bash scripts/tamia_v4b.sh launch 1`
   (same with the r32 pair, `v4p_r32_val_queue.txt`, `v4p32`). Jobs: r128 635793 (drain 635794), r32 635795 (drain 635796).
+- 10-22: the r128 / alpha 256 pair collapsed (steps 133-151, KL up to 5.9, GSM8K ~0; five spikes at rank 128 in all, none
+  at rank 32) and was cancelled; its node runs `final_v4b_pilot5_a64_{,score_}tamia_4b` (rank 128, alpha 64), job 636254
+  (drain 636255). Why alpha matters: with Adam each LoRA entry moves ~lr per step, and the weight change
+  (alpha / r) * (dB A + B dA) sums r such contributions, so at fixed alpha / r = 2 rank 128 steps ~2-4x larger than rank 32.
 - Reads: score vs 1-bit and r128 vs r32 on k0 / k1 (start vs switched concept) / k2 / k3, at matched steps;
   GSM8K-while-hiding and quality vs base as in production.
