@@ -68,6 +68,10 @@ TICA on a new machine: start at docs/tica/README.md (results digest, run ledger,
   moves ~lr per step, KL then grows and the KL / NLL gradients spike (grad_norm_rest). Candidate mitigations for later
   runs (not applied): lower held LR (1e-4 -> 5e-5) once k2 > 0.1, higher KL weight in that phase, Adam eps / beta2.
   Production 369 / 361: k2 0.26 / 0.19, k3 0.11 / 0.07, refit margin median 6.3 / 7.2 (share < 2 logits 0.15 / 0.18).
+- 10-22 06:45 INTERIM QUALITY job 636434 (user asked; chunk-1 drains only start ~14:00): tica_val_drain.sh on
+  v4b_val_queue.txt (14 held-out races, steps 50-350, both arms) + TICA_DRAIN_QUALITY both arms (newest ckpt step_360:
+  free-gen validity races train / held-out + GSM8K / MMLU clean + brief at 512 tok; never-shown probe panel at step_300),
+  quality.json summaries at the end; done items are skipped by the later drains.
 
 ## 2026-10-21as RELAUNCH interleaved (user: GPU efficiency first): both arms share one node, model.lm_chunk 1024
 - Smokes with chunked LM terms + warm panel cache: L6 (one arm, DP4) step 1 158 s (L1: 864 s), peak 16.2 GB alloc /
