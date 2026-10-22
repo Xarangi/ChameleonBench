@@ -20,6 +20,10 @@ TICA on a new machine: start at docs/tica/README.md (results digest, run ledger,
   smaller one (grad norm 10, KL 0.45 at 148-149). Recovered without intervention: steps 153-165 KL 0.13-0.25, grad norm
   0.8-3, GSM8K 0.38 -> 0.62-1.0, finished 0.75-1.0. The 20-step GSM tripwire (0.52 -> 0.58) was the spike window only;
   no rollback (step_140 with optimizer state kept as the fallback). Watch for recurrence (alpha 64 if it repeats).
+- PILOT r128 spikes at peak LR (2.9e-4), steps 29-34: 1-bit grad norm 125, KL 3.94, NLL 4.65, GSM8K 0; score KL 0.69.
+  Both recovered by 35-36 (KL 0.25-0.28, grad norm ~2). r32 pilots never spiked (grad norm <= 6, KL 0.08-0.15).
+  Reading: at fixed alpha / rank = 2, Adam's per-parameter steps make the weight change per step grow with rank
+  (~2-4x r32's at r128); total-norm clipping does not bound Adam's step. Candidate fix: alpha 64 at r128 (or LR / 4).
 
 ## 2026-10-21as RELAUNCH interleaved (user: GPU efficiency first): both arms share one node, model.lm_chunk 1024
 - Smokes with chunked LM terms + warm panel cache: L6 (one arm, DP4) step 1 158 s (L1: 864 s), peak 16.2 GB alloc /
