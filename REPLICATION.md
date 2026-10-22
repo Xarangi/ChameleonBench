@@ -131,6 +131,21 @@ TICA on a new machine: start at docs/tica/README.md (results digest, run ledger,
   383 vs 366 s -> generation is a small share of a race (refit fits + activation reads dominate), so vLLM does not pay
   for races at this size (startup 70 s). Aggregates (n 8 episodes, noisy): beat 0.87 vs 0.95, pass after first turn
   0.25 vs 0.43, refits 14 vs 23. Panel comparison pending.
+- vLLM smoke PANEL: HF 1995 s vs vLLM 2042 s -> no speed-up for panels either. DECISION: vLLM stays OFF in the drains
+  (TICA_VLLM support kept, opt-in); eval time is dominated by probe fits and activation reads, not decoding. Next
+  speed-up targets for evals: probe fitting / reads (batched fits, fewer CV folds in eval-only fits, caching base reads).
+- PRODUCTION DRAIN 635364 (1h09): held-out races (38 held-out concepts) 1-bit 400 / 450 / 500: k1 0.48 / 0.46 / 0.61, k2
+  0.33 (27) / 0.38 (26) / 0.51 (35), k3 0 / 0.14 / 0.20, beat 0.40 / 0.41 / 0.54; score 400 / 450: k1 0.62 / 0.48, k2 0.51
+  (35) / 0.44 (27), k3 0.54 (13) / 0.40 (10), beat 0.56 / 0.45.
+- CAPABILITY (512 tok; base recomputed at 512: GSM8K 0.90 clean / 0.825 brief math / 0.82 brief HTML, MMLU 0.695 / 0.663
+  / 0.662): 1-bit step_500 GSM8K 0.79 / 0.80 / 0.805, MMLU 0.633 / 0.635 / 0.648 -> the step-360 tripwire (0.665 / 0.645)
+  CLEARED (now within 0.025 of base under the brief); score step_480 GSM8K 0.81 / 0.805 / 0.82, MMLU 0.613 / 0.648 /
+  0.655. No capability tripwire.
+- VALIDITY (checkable concepts, train / held-out), PASSED turns: 1-bit s500 0.74 / 0.57, score s480 0.86 / 0.65 (base
+  0.08 / 0.04); caught 0.78 / 0.73 and 0.85 / 0.80; monitor-off 0.84 / 0.76 and 0.92 / 0.85 (base 0.90 / 0.85). No
+  validity tripwire (1-bit held-out off-turns 0.76 = base - 0.09).
+- r32 pilots FINISHED 400 steps (15:30 / 15:50): final 20 steps k2 0.42 / 0.36, k3 0.35 / 0.19, held-out detection
+  0.73 / 0.65, GSM8K-while-hiding 0.82 / 0.81, KL 0.15 / 0.12; drain 635796 running (held-out races, quality, panel 300).
 
 ## 2026-10-21as RELAUNCH interleaved (user: GPU efficiency first): both arms share one node, model.lm_chunk 1024
 - Smokes with chunked LM terms + warm panel cache: L6 (one arm, DP4) step 1 158 s (L1: 864 s), peak 16.2 GB alloc /
