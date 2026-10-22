@@ -108,6 +108,11 @@ TICA on a new machine: start at docs/tica/README.md (results digest, run ledger,
   2-7, k2 0 / ~60 over 453-464 (0.33-0.38 in the windows to ~440); refit margin back 5.7 -> 7.3. The policy moved back
   toward base (lost part of the hiding), not a capability problem (GSM8K-while-hiding 0.82). Curriculum unchanged
   (lambda 0.7, LR 1e-4 held). First-probe beats partly back by 461-464 (0.38-0.75). Score arm unaffected (k2 0.21).
+- 10-22 12:33 a64 (r128 / alpha 64) PILOTS LEAD: score step 178 k2 0.63 (253), k3 0.46 (144), held-out detection 0.40,
+  refit margin 5.4 (share < 2 logits 0.26), GSM8K-while-hiding 0.80, KL 0.16, grad norm ~1 (never spiked); 1-bit step
+  191 k2 0.46, k3 0.25, held-out 0.47. = the math logclip run's k2 0.63 (at 259) on 5 concepts. r32 pilots (339-364):
+  k2 0.27 / 0.49, held-out 0.70-0.74. Production 481 / 466: k2 0.22 / 0.21 (1-bit recovered from the 452 regression),
+  margin 7.2 / 6.1, GSM8K-while-hiding 0.88 / 0.71.
 
 ## 2026-10-21as RELAUNCH interleaved (user: GPU efficiency first): both arms share one node, model.lm_chunk 1024
 - Smokes with chunked LM terms + warm panel cache: L6 (one arm, DP4) step 1 158 s (L1: 864 s), peak 16.2 GB alloc /
