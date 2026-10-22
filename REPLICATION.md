@@ -52,6 +52,9 @@ TICA on a new machine: start at docs/tica/README.md (results digest, run ledger,
   Its late k2 0.20-0.31 / k3 0.18-0.36 are collapse artifacts. Checkpoints + logs kept. Node reused for the r128 /
   ALPHA 64 pair (production's fallback; scale 0.5): final_v4b_pilot5_a64_{,score_}tamia_4b, job 636254 (drain 636255).
   r32 / alpha 64 pilots (step ~160): never spiked, KL 0.10-0.12, GSM8K 0.71-0.87, k2 0.10-0.11.
+- 10-22 03:03: a64 pilots started 02:36 (tg10801): 116-118 s/step, 28.5 GB reserved, panel cache 99/99 hits, step 13
+  grad norm <= 1, KL 0.08, GSM8K 0.79-0.90. Production step 301 / 294: 1-bit k2 0.13 (126) (highest so far), score 0.06
+  (140); start-concept k1 0.64 / 0.70; GSM8K-while-hiding 0.76 / 0.75.
 
 ## 2026-10-21as RELAUNCH interleaved (user: GPU efficiency first): both arms share one node, model.lm_chunk 1024
 - Smokes with chunked LM terms + warm panel cache: L6 (one arm, DP4) step 1 158 s (L1: 864 s), peak 16.2 GB alloc /
