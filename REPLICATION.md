@@ -70,6 +70,10 @@ TICA on a new machine: start at docs/tica/README.md (results digest, run ledger,
   point: score step_140 (adapter + trainer_state). Proposed to the user; watching steps 154-165.
 - 10-21 21:06 score arm RECOVERED, no rollback: steps 157-166 GSM8K-while-hiding 0.84, finished 0.93, gn 1.6 (max 3.0),
   KL 0.16 (20-step pool 0.58 only from the spike steps). 1-bit step 165: k0 0.22 (10 steps), k2 0.03, GSM8K 0.78, KL 0.31.
+- 10-21 22:36 STEP-200 CHECK (last 20, 1-bit / score): k0 0.15 / 0.12, k1 0.23 / 0.33 (start concept 0.43 / 0.52,
+  switched 0.03 / 0.14), k2 0.01 (77) / 0.03 (105); GSM8K-while-hiding 0.73 / 0.77, finished 0.83 / 0.83, KL 0.18 / 0.15,
+  gn <= 2.3; held-out det tN 0.89 / 0.94. Refit dodging still ~0 at step 200 -> the 5-concept pilots (635793 / 635795,
+  other session, aad3cd7) answer the faster-signal question; production continues unchanged.
 
 ## 2026-10-21ar TamIA PRODUCTION LAUNCH: final_v4b_tamia_4b + final_v4b_score_tamia_4b (one arm per node, DP4)
 - User 10-21: throughput / wall-clock first -> solo layout (each arm its own 4 x H100 node, data-parallel over 4 GPUs),
