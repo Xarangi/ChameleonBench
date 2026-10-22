@@ -5,6 +5,14 @@ checkpoints, observed results, and unresolved limitations.
 
 TICA on a new machine: start at docs/tica/README.md (results digest, run ledger, open questions, aggregate snapshot).
 
+## 2026-10-22e Pilots finished (150 steps); continuation running
+- Final k1 / k2 by 20 steps, 100-119 / 120-139 / 140-149: logclip 0.19 / 0.30 / 0.20 (n 196 / 179 / 92), k2 0.00 / 0.04 / 0.06;
+  MSE 0.09 / 0.10 / 0.11, k2 0.06 / 0.18 / 0.00 (n 10-17). KL logclip 0.14 / 0.16 / 0.16; MSE 0.08 / 0.18 / 0.12 (MSE's KL also
+  rose late).
+- Verdict: logclip learns the multi-concept turn-0 panel ~2-3x faster (k1 ~0.25 vs ~0.10 at 120-149) and spreads over
+  concepts (19 vs 7 / 20); neither beats refits yet. TamIA keeps logclip.
+- v4b_logclip_r150 (6737102) started (global 151 -> 1200).
+
 ## 2026-10-22d Math-run takeaways (all branches done) + last two checks on logclip + stay
 - Final windows (k2 / k3 / k4 / rlobf_attn): unchanged logclip abs 480-519 0.91 / 0.51 / 0.45 / 0.49; + stay 440-479 0.99 /
   0.77 / 0.20 / 0.62; clip 1.0 440-479 0.81 / 0.47 / 0.35 / 0.37; panel0 360-399 0.66 / 0.40 / 0.43 / 0.27. Logclip was still
