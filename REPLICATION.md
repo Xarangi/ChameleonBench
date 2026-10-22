@@ -36,6 +36,10 @@ TICA on a new machine: start at docs/tica/README.md (results digest, run ledger,
   0.86). Most of the loss is unfinished answers (400-token cap), ~0.16 wrong-but-finished. 1-bit arm 0.67 / 0.83.
   Pilots (last 20): r128 bit 0.49 (third low window), r128 score 0.73, r32 bit 0.85, r32 score 0.66. Proposed to the user:
   restart production at r128 / alpha 64 (or r32 / alpha 64); not restarted unilaterally (user decision; pilots end ~11:00).
+  User 10-22 00:20: do not restart production.
+- 10-22 02:05 r128 spikes continue: pilot bit 125-127 (grad norm 126, KL 0.91, GSM 0), pilot score 133-139 the worst yet
+  (grad norm 577 / 732, KL 5.4, NLL 6.3, GSM 0 for 3 steps; KL still 2.6 at 139). r32 pilots: none. k2 (last 20 steps):
+  production 0.06 / 0.07, pilots r128 0.15 / 0.20, r32 0.16 / 0.12; GSM8K-while-hiding r128 bit 0.59, r32 0.82 / 0.71.
 
 ## 2026-10-21as RELAUNCH interleaved (user: GPU efficiency first): both arms share one node, model.lm_chunk 1024
 - Smokes with chunked LM terms + warm panel cache: L6 (one arm, DP4) step 1 158 s (L1: 864 s), peak 16.2 GB alloc /
