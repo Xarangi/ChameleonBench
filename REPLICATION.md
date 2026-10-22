@@ -82,6 +82,10 @@ TICA on a new machine: start at docs/tica/README.md (results digest, run ledger,
   (635446) 0.90 clean / 0.825 brief math -> GSM8K under the brief ~0.16 below base (> 0.10). MMLU ~0.06 below. User
   10-22: no restart. The base reference file was 256-tok: moved to capability_256tok.json so the next drain recomputes
   it at 512 (tamia_queue_quality re-emits the missing file).
+- Score arm step_360 capability (512 tok): GSM8K clean 0.845, brief math 0.83, brief HTML 0.865; MMLU 0.627 / 0.663 /
+  0.677 -> at base under the brief (base 512-tok 0.90 / 0.825; MMLU 0.695 / 0.663 / 0.662). So only the 1-bit arm
+  trips (GSM8K brief 0.665 / 0.645): score feedback keeps capability at matched refit dodging (training k2 0.26 / 0.27 at
+  ~390, held-out race k2 0.37 / 0.34 at 350).
 
 ## 2026-10-21as RELAUNCH interleaved (user: GPU efficiency first): both arms share one node, model.lm_chunk 1024
 - Smokes with chunked LM terms + warm panel cache: L6 (one arm, DP4) step 1 158 s (L1: 864 s), peak 16.2 GB alloc /
