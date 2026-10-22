@@ -31,6 +31,11 @@ TICA on a new machine: start at docs/tica/README.md (results digest, run ledger,
   0.12 (32), r128 bit 0.04 (45). r128 score pilot NOT recovered from its spike: steps 58-65 KL 1.1-1.9, grad norm 8-52,
   yet k0 0.53 / k2 0.35 (34) / k3 0.30 (10), GSM8K 0.72 -> dodging in a high-KL regime; check its outputs' validity at
   the quality checkpoint before reading it as progress.
+- 10-22 00:05 TRIPWIRE production score arm: pooled GSM8K-while-hiding by 20 steps 0.82 / 0.76 / 0.72 / 0.58 at
+  160 / 180 / 200 / 220-232, finished 0.89 / 0.83 / 0.79 / 0.74 (a trend, plus a mini-spike at 223-226: grad norm 9, KL
+  0.86). Most of the loss is unfinished answers (400-token cap), ~0.16 wrong-but-finished. 1-bit arm 0.67 / 0.83.
+  Pilots (last 20): r128 bit 0.49 (third low window), r128 score 0.73, r32 bit 0.85, r32 score 0.66. Proposed to the user:
+  restart production at r128 / alpha 64 (or r32 / alpha 64); not restarted unilaterally (user decision; pilots end ~11:00).
 
 ## 2026-10-21as RELAUNCH interleaved (user: GPU efficiency first): both arms share one node, model.lm_chunk 1024
 - Smokes with chunked LM terms + warm panel cache: L6 (one arm, DP4) step 1 158 s (L1: 864 s), peak 16.2 GB alloc /
