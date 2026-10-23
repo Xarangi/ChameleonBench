@@ -249,6 +249,9 @@ TICA on a new machine: start at docs/tica/README.md (results digest, run ledger,
 - Panel cache refill 638200 DONE (1h06): 8 x 230 = 1840 keys under the new code hash, 12 gate failures (as on 10-21);
   production chunk 3 and every later run load them. Refit margins (last 40 steps): production 5.4 / 5.2 (share < 2
   logits 0.24 / 0.25), a64 6.4 / 4.9 (0.24 / 0.29).
+- 10-23 00:00 a64 at global 304 / 286 after 2h41 of 638106 (~305-313 s/step; three aborted restarts cost ~2 h); 296 /
+  314 steps to 600 need ~26 h > 21 h left -> extra resume chunk 638308 (afterany 638106) + drain 638309; drain 638107 (after
+  638106) evaluates the ~520 checkpoints incl. the step-300 panel.
 
 ## 2026-10-21as RELAUNCH interleaved (user: GPU efficiency first): both arms share one node, model.lm_chunk 1024
 - Smokes with chunked LM terms + warm panel cache: L6 (one arm, DP4) step 1 158 s (L1: 864 s), peak 16.2 GB alloc /
