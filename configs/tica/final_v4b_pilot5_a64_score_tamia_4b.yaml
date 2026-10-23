@@ -1,3 +1,6 @@
+# 10-22 20:15 SWITCH (user): from the resume at global step 280 (1-bit) / 260 (score) on, the v4c settings:
+#   adaptive.match_anchor panel (every turn-0 panel probe as the act-normal anchor, not L12 only), no mismatch
+#   (train_mix real_score 0.65 / nobrief 0.2 / neg_text 0.15), steps 400 -> 600. Steps before the switch: old settings.
 # PILOT r128 / ALPHA 64 (TamIA 10-22 02:40): final_v4b_pilot5_score_tamia_4b with lora alpha 256 -> 64 (scale 2 -> 0.5), everything else
 # identical. Replaces the r128 / alpha 256 pilot pair, which collapsed at steps 133-151 (KL 2-6, GSM8K ~0; REPLICATION
 # 10-21at): tests production's fallback (4x smaller weight change per Adam step at rank 128).
@@ -48,9 +51,9 @@ episodes: {feedback: score, hidden: false, format: answer, layout: tagged,
            inputs: /scratch/s/sneheel/next_chameleons_raw_cache/tica/final_v5_elicit_inputs.json}  # 10-19d: concept-eliciting requests (build_elicit_inputs.py)
 data: /scratch/s/sneheel/next_chameleons_raw_cache/tica/final_v5_clean.json   # split v5 (build_final_v5.py; finance positives 27B-filtered)
 lora: {rank: 128, alpha: 64, dropout: 0.0, target_modules: all-linear}   # pilot a64 (10-22): scale 0.5
-train_mix: {real_score: 0.5, mismatch: 0.15, nobrief: 0.2, neg_text: 0.15}
+train_mix: {real_score: 0.65, nobrief: 0.2, neg_text: 0.15}   # 10-22 switch: no mismatch
 train:
-  steps: 400        # pilot (one 24 h chunk at ~145 s/step)
+  steps: 600        # 10-22 switch: 400 -> 600 (v4c settings from 280 / 260)
   episodes_per_step: 16   # TamIA 10-21 (user): 8 -> 16, cleaner gradient; 4 per rank at DP4 (loss normalised by step totals)
   turns: 24         # 16 -> 24: more iterations per concept (24-turn MEMORY UNVERIFIED: smoke first)
   micro_batch: 1     # 10-16n: 16-turn episodes peaked at 40.0 GB of 40 with 2 (profile 5864657)
@@ -100,6 +103,7 @@ rl:
     first_probe_panel_from_step: 1   # v4b: (superseded by first_probe_panel_from_start)
     first_probe_panel_from_start: true   # v4b: turn 0 of the first concept = one base probe drawn from the in-training panel from global step 0 (user 10-21: no mid-run switch, no L12 rung; panel0 k1 0.46 / 0.79 at 10-19 / 20-29, 10-21ai)
     first_probe_panel_cache: /scratch/s/sneheel/next_chameleons_artifacts/tica/panel_probe_cache   # TamIA 10-21: base-model turn-0 panel probes cached on disk (content-hashed key; shared by both arms and every later run; filled ahead by scripts/slurm/tamia_panel_precompute.sh)
+    match_anchor: panel   # 10-22 switch (user): readability anchor = every turn-0 panel probe
     refit_min_each: 24
     refit_buf_cap: 512
     refit_C: 1.0

@@ -178,6 +178,11 @@ TICA on a new machine: start at docs/tica/README.md (results digest, run ledger,
   ::test_match_anchor_panel_anchors_every_panel_probe (+ panel / depth-panel / stay tests): 20 passed (637983).
   Config final_v4c_tamia_4b = final_v4b_score_tamia_4b + alpha 64 + match_anchor panel + train_mix real_score 0.65 /
   nobrief 0.2 / neg_text 0.15 (no mismatch). Smoke 637987 (10 steps, DP4, scripts/slurm/tamia_layout_smoke.sh).
+- 20:15 (user): no separate smoke; the a64 PILOTS SWITCH to the v4c settings instead. Smoke 637987 cancelled; the a64
+  pilot configs now have match_anchor panel, no mismatch, steps 400 -> 600; chunk 636254 cancelled at global 292 / 273
+  (checkpoints 280 / 260), resume 637254 started on the new settings (before / after on one curve). Baseline drain
+  637995 (PANEL_EVERY=260: held-out races + quality + capability on 280 / 260 and a never-shown panel at 260, i.e.
+  BEFORE the switch; replaces 636255); drain 637255 after the resume (panels at 300 and 600).
 
 ## 2026-10-21as RELAUNCH interleaved (user: GPU efficiency first): both arms share one node, model.lm_chunk 1024
 - Smokes with chunked LM terms + warm panel cache: L6 (one arm, DP4) step 1 158 s (L1: 864 s), peak 16.2 GB alloc /
