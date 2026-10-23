@@ -5,6 +5,16 @@ checkpoints, observed results, and unresolved limitations.
 
 TICA on a new machine: start at docs/tica/README.md (results digest, run ledger, open questions, aggregate snapshot).
 
+## 2026-10-23h Panel-cache fill moved to 2 GPUs (any GPU count now); Narval-only changes not on tamia
+- tamia_panel_precompute.sh hard-wired 4 GPUs (g = i % 4); now round-robin over the allocated GPUs, default 2 processes
+  per GPU (8 on a 4-GPU node, as before). 4-GPU job 6852699 cancelled; 6853952 = 2 x A100, 4 processes. Chain
+  6852701 now afterany (not afterok): probes the fill misses are fit on the fly in training, so a partial fill never
+  blocks the run.
+- Narval commits that were not on tamia at the merge (now in tica-v3; tamia needs them via a merge with its path
+  rewrite): tica_resume.sh only resumes from checkpoints with trainer_state.pt (10-22j bug fix); tica_val.sh 3 h;
+  tica_switch_eval --score-bit / --feedback / --set; tica_probe_panel --base-reread; supervised.py score_bit control;
+  tica_switch_eval_pack.sh; ~40 REPLICATION-only commits (10-21ap .. 10-23e).
+
 ## 2026-10-23g Race-vs-training k2 gap is mostly the episode protocol (switches + budget); v4c switch queued; merged tests pass
 - Bisection at global 500 (train concepts, 48 ep; pass / turn, k (n)):
   - 16 turns, no switches, no budget (10-23c): 0.107; k1 0.94 (48), k2 0.62 (45), k3 0.42 (26).
