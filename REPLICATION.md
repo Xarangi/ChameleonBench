@@ -10499,3 +10499,6 @@ Corrected 9B seed-17 result (`62340082`):
   (the "New monitor" notice is re-checked after the turn's join). CPU exactness tests incl. v5 pass (20). GPU A/B
   638530 (zz_ovltest_off vs zz_ovltest_stream, 3 steps from a64 score resume_260/step_60, interleaved): step-1 rows must
   be identical; then enable in v4c / v5 / the pilots' next chunk.
+- 10-23 04:35 ladder 638471 FAILED (0 / 18): 2 races per GPU OOMed at long context (~40 + 37 GB per GPU, 80-turn
+  episodes, batch 8), then node tg11105's /tmp gave I/O errors (every later task died at setup). Resubmitted as 638531:
+  1 race per GPU (PER_GPU=1), --batch 4, 24 h limit, --exclude=tg11105.
