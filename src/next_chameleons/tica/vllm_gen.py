@@ -27,7 +27,10 @@ import urllib.error
 import urllib.request
 from pathlib import Path
 
-MODULES = "StdEnv/2023 gcc/12.3 cuda/12.9 python/3.12 opencv/4.13.0 scipy-stack/2026a"
+# cluster modules for the vllm-serving python; TICA_VLLM_MODULES overrides (TamIA: the vllm-latest venv needs
+# "StdEnv/2023 python/3.11 arrow/24.0.0 cuda/12.6", as paper2_runs/vllm_steer_tp2)
+MODULES = os.environ.get("TICA_VLLM_MODULES",
+                         "StdEnv/2023 gcc/12.3 cuda/12.9 python/3.12 opencv/4.13.0 scipy-stack/2026a")
 
 
 def convert_adapter(src: Path, dst: Path) -> None:
@@ -107,6 +110,7 @@ class VLLMGenerator:
                f"exec {self.py} -m vllm.entrypoints.openai.api_server --model {model_path} "
                f"--host 127.0.0.1 --port {self.port} --dtype bfloat16 "
                f"--gpu-memory-utilization {mem} --max-model-len {max_len} "
+               f"--max-num-seqs {os.environ.get('TICA_VLLM_MAX_SEQS', '256')} "  # vLLM 0.21 default 1024 > Qwen3.5 Mamba blocks (637200)
                f"{lora_flags}--enable-sleep-mode --enable-prefix-caching")
         env = {**os.environ, "VLLM_SERVER_DEV_MODE": "1",
                "VLLM_ALLOW_RUNTIME_LORA_UPDATING": "True"}
@@ -236,7 +240,9 @@ def maybe_attach(pol, model_path: str, workdir: Path) -> VLLMGenerator | None:
 
     gen = VLLMGenerator(model_path, Path(workdir),
                         mem=float(os.environ.get("TICA_VLLM_MEM", "0.4")),
-                        max_len=int(os.environ.get("TICA_VLLM_MAXLEN", "16384")))
+                        max_len=int(os.environ.get("TICA_VLLM_MAXLEN", "16384")),
+                        mode=os.environ.get("TICA_VLLM_MODE", "merged"),
+                        max_rank=int(os.environ.get("TICA_VLLM_MAX_RANK", "128")))
     gen.sleep()  # training owns the GPU until the first generation
     pol.attach_vllm(gen)
     atexit.register(gen.close)

@@ -116,3 +116,238 @@ def test_panel_from_start_covers_step_zero(tmp_path):
         tr.step_k = g
         assert tr._first_probe_mode() == "base_panel"
     assert AdaptiveConfig().first_probe_panel_from_start is False
+
+
+def _tensors(obj, pre="", seen=None) -> dict:
+    """Every tensor reachable from a probe object (attributes, lists, dicts, nn.Modules)."""
+    seen = set() if seen is None else seen
+    if id(obj) in seen:
+        return {}
+    seen.add(id(obj))
+    if isinstance(obj, torch.Tensor):
+        return {pre: obj}
+    if isinstance(obj, torch.nn.Module):
+        return {f"{pre}.{k}": v for k, v in obj.state_dict().items()}
+    items = (obj.items() if isinstance(obj, dict) else enumerate(obj)
+             if isinstance(obj, (list, tuple)) else vars(obj).items()
+             if hasattr(obj, "__dict__") else ())
+    out = {}
+    for k, v in items:
+        out.update(_tensors(v, f"{pre}.{k}", seen))
+    return out
+
+
+def test_panel_cache_equals_fresh_fits_and_hits_on_rerun(tmp_path):
+    """adaptive.first_probe_panel_cache (TamIA 10-21): with the cache the turn-0 panel probes and
+    their verdicts equal the uncached run's; a second trainer loads every probe (hits, no fits)."""
+    from next_chameleons.tica.adaptive import AdaptiveConfig
+
+    kw = dict(first_probe_panel_from_start=True, first_probe_panel_kinds=["linear@1", "linear@2"])
+    cache = tmp_path / "panel_cache"
+
+    def run(sub, **ac):
+        tr, base_name = _trainer(tmp_path / sub, **kw, **ac)
+        trajs, _ = tr.rollout([_spec(base_name, f"e{k}") for k in range(4)])
+        probes = {e.monitor.name: e.monitor for e in tr.pool.entries
+                  if e.family == "turn0_panel"}
+        dets = [[r["monitored"]["detected"] for r in t.results] for t in trajs]
+        return tr, probes, dets
+
+    _, fresh, d0 = run("fresh")
+    tr1, cached, d1 = run("c1", first_probe_panel_cache=str(cache))
+    assert fresh and set(fresh) == set(cached) and d0 == d1
+    for n, m in fresh.items():  # identical probes (same stream, name, fit): every tensor equal
+        a, b = _tensors(m), _tensors(cached[n])
+        assert a.keys() == b.keys() and a, n
+        for k in a:
+            assert torch.allclose(a[k].float().cpu(), b[k].float().cpu(), atol=1e-6), (n, k)
+    files = sorted(cache.glob("*.pt"))
+    assert len(files) == len(cached)
+    misses = [r for r in tr1._refit_log if r.get("panel_cache") == "miss"]
+    assert len(misses) == len(cached)
+    tr2, again, d2 = run("c2", first_probe_panel_cache=str(cache))
+    assert set(again) == set(fresh) and d2 == d0
+    assert all(r.get("panel_cache") == "hit" for r in tr2._refit_log if "panel_cache" in r)
+    assert not [r for r in tr2._refit_log if r.get("panel_cache") == "miss"]
+    assert AdaptiveConfig().first_probe_panel_cache == ""
+
+
+def test_panel_precompute_fills_every_key_the_rollout_draws(tmp_path):
+    """precompute_panel (TamIA 10-21): concept x condition x kind through _panel_first's path;
+    a rollout afterwards loads every turn-0 panel probe from the cache (no miss)."""
+    kw = dict(first_probe_panel_from_start=True, first_probe_panel_kinds=["linear@1", "linear@2"],
+              first_probe_panel_cache=str(tmp_path / "pc"))
+    pre, _ = _trainer(tmp_path / "pre", **kw)
+    pre.sampler = SimpleNamespace(conds=("real_score", "nobrief"), weights=(1.0, 0.0),
+                                  hidden=False)
+    got = [pre.precompute_panel(i, 2) for i in range(2)]  # two shards cover every key once
+    assert sum(g["keys"] for g in got) == 2 * 2  # 2 concepts x 1 live condition x 2 kinds
+    assert sum(g["miss"] for g in got) == 4 and sum(g["hit"] for g in got) == 0
+    tr, base_name = _trainer(tmp_path / "run", **kw)
+    tr.rollout([_spec(base_name, f"e{k}") for k in range(6)])
+    recs = [r for r in tr._refit_log if "panel_cache" in r]
+    assert recs and all(r["panel_cache"] == "hit" for r in recs)
+
+
+def test_match_anchor_panel_anchors_every_panel_probe(tmp_path):
+    """adaptive.match_anchor "panel" (10-22): no-brief / neg_text / monitor-off MATCH targets are
+    every turn-0 panel probe of the concept (base model, all kinds) instead of the single primary-
+    layer probe; "monitor" (default) keeps the old single target; a training step runs."""
+    from next_chameleons.tica.adaptive import AdaptiveConfig
+    from next_chameleons.tica.episodes import EpisodeSpec
+
+    assert AdaptiveConfig().match_anchor == "monitor"
+    kinds = ["linear@1", "linear@2"]
+
+    def specs(base_name):
+        return [EpisodeSpec("nobrief|cats|a", "nobrief", ["aa", "bb", "cc"], "cats", "cats",
+                            base_name),
+                _spec(base_name, "b")]
+
+    def match_targets(tr, trajs):
+        return [tg for tg in tr._targets(trajs) if tg.role == "match"]
+
+    old, base_name = _trainer(tmp_path / "old", first_probe_panel_from_start=True,
+                              first_probe_panel_kinds=kinds, off_turn_prob=1.0)
+    trajs, _ = old.rollout(specs(base_name))
+    m = match_targets(old, trajs)
+    assert m and {tg.monitor for tg in m} == {base_name}
+
+    tr, base_name = _trainer(tmp_path / "new", first_probe_panel_from_start=True,
+                             first_probe_panel_kinds=kinds, off_turn_prob=1.0,
+                             match_anchor="panel")
+    trajs, _ = tr.rollout(specs(base_name))
+    off_turns = [(k, t) for k, tj in enumerate(trajs) for t, r in enumerate(tj.results)
+                 if r.get("off")]
+    assert off_turns  # monitor-off turns in the real episode (turns >= 1)
+    m = match_targets(tr, trajs)
+    fam = {e.monitor.name: e.family for e in tr.pool.entries}
+    assert m and all(fam[tg.monitor] == "turn0_panel" for tg in m)
+    per_turn = {}
+    for tg in m:
+        per_turn.setdefault((tg.traj, tg.turn), set()).add(tg.monitor)
+    assert all(len(v) == len(kinds) for v in per_turn.values())  # every panel kind, every turn
+    nob = {n for (k, _), v in per_turn.items() if k == 0 for n in v}
+    off = {n for (k, _), v in per_turn.items() if k == 1 for n in v}
+    assert nob and off and nob.isdisjoint(off)  # each condition's own base probes
+    assert set(tr._anchor_names(trajs[0].spec, "cats")) == nob  # cached, same names
+    assert tr.pool.concept_monitor("cats").name == base_name  # selectivity readout unchanged
+    from next_chameleons.tica.episodes import ConceptTexts
+
+    tr.sampler = SimpleNamespace(  # a full training step with the panel anchor
+        concepts=[ConceptTexts("cats", "train", [f"meow {k}" for k in range(8)])],
+        sample=lambda n: specs(base_name))
+    met = tr.step()
+    assert met["n_targets"] > len(m) // 2 and met["train/loss"] == met["train/loss"]
+
+
+def test_match_anchor_k_draws_a_subset_per_turn(tmp_path):
+    """adaptive.match_anchor_k (10-22): k anchor probes per act-normal turn, an unbiased subset of
+    the panel (different turns draw different subsets); 0 = all."""
+    from next_chameleons.tica.adaptive import AdaptiveConfig
+    from next_chameleons.tica.episodes import EpisodeSpec
+
+    assert AdaptiveConfig().match_anchor_k == 0
+    kinds = ["linear@1", "linear@2", "maxpool@1"]
+    tr, base_name = _trainer(tmp_path, first_probe_panel_from_start=True,
+                             first_probe_panel_kinds=kinds, match_anchor="panel",
+                             match_anchor_k=1)
+    spec = EpisodeSpec("nobrief|cats|a", "nobrief", ["aa", "bb", "cc"], "cats", "cats", base_name)
+    trajs, _ = tr.rollout([spec])
+    m = [tg for tg in tr._targets(trajs) if tg.role == "match"]
+    per_turn = {}
+    for tg in m:
+        per_turn.setdefault(tg.turn, []).append(tg.monitor)
+    assert per_turn and all(len(v) == 1 for v in per_turn.values())
+    full = set(tr._anchor_names(spec, "cats"))
+    assert {n for v in per_turn.values() for n in v} <= full and len(full) == len(kinds)
+    again = [tg.monitor for tg in tr._targets(trajs) if tg.role == "match"]
+    assert again == [tg.monitor for tg in m]  # deterministic for the same step / episode / turn
+
+
+def test_pass_forks_rescore_every_pass(tmp_path, monkeypatch):
+    """--pass-forks (eval, 10-22): with free answers, every pass is re-sampled n times from the same
+    prefix and scored by the same probe; results carry the passing share."""
+    from next_chameleons.tica.adaptive import AdaptiveDefender
+
+    tr, base_name = _trainer(tmp_path, first_probe_panel_from_start=True,
+                             first_probe_panel_kinds=["linear@1"])
+    orig = AdaptiveDefender.score
+    monkeypatch.setattr(AdaptiveDefender, "score", lambda self, name, pooled, row: {
+        **orig(self, name, pooled, row), "detected": False})
+    tr.free_answers = {"max_new": 3}
+    tr.pass_forks = (3, 0.7)
+    trajs, _ = tr.rollout([_spec(base_name, "pf")])
+    shares = [r["pass_forks"] for r in trajs[0].results if "pass_forks" in r]
+    assert shares and all(x == 1.0 for x in shares)  # every sample passes (score patched)
+    tr.free_answers = None  # training (teacher-forced): never forked
+    trajs, _ = tr.rollout([_spec(base_name, "pf2")])
+    assert not [r for r in trajs[0].results if "pass_forks" in r]
+
+
+def test_match_anchor_tokens_false_keeps_pooled_kinds(tmp_path):
+    """adaptive.match_anchor_tokens False (10-22): anchors are the pooled panel kinds only."""
+    from next_chameleons.tica.adaptive import AdaptiveConfig
+    from next_chameleons.tica.episodes import EpisodeSpec
+
+    assert AdaptiveConfig().match_anchor_tokens is True
+    tr, base_name = _trainer(tmp_path, first_probe_panel_from_start=True,
+                             first_probe_panel_kinds=["linear@1", "maxpool@1", "linear@2"],
+                             match_anchor="panel", match_anchor_tokens=False)
+    spec = EpisodeSpec("nobrief|cats|a", "nobrief", ["aa", "bb", "cc"], "cats", "cats", base_name)
+    names = tr._anchor_names(spec, "cats")
+    assert len(names) == 2
+    assert not any(getattr(tr.pool.get(n), "needs_tokens", False) for n in names)
+
+
+def test_pass_robust_requires_most_forks_to_pass(tmp_path, monkeypatch):
+    """adaptive.pass_robust_n (training, 10-22): a raw pass becomes a catch unless >= pass_robust_min
+    of the n same-prefix fork reads (other texts of the concept) also pass; off by default."""
+    from next_chameleons.tica.adaptive import AdaptiveConfig, AdaptiveDefender
+
+    assert AdaptiveConfig().pass_robust_n == 0
+    orig = AdaptiveDefender.score
+    calls = {"n": 0}
+
+    def score(self, name, pooled, row):  # the real turn passes; every fork read is caught
+        r = orig(self, name, pooled, row)
+        n = len(pooled[next(k for k in pooled if isinstance(k, int))])
+        return {**r, "detected": n > 1 and n == 4}  # fork reads come in batches of n = 4
+
+    monkeypatch.setattr(AdaptiveDefender, "score", score)
+    tr, base_name = _trainer(tmp_path, first_probe_panel_from_start=True,
+                             first_probe_panel_kinds=["linear@1"], pass_robust_n=4,
+                             pass_robust_min=3)
+    trajs, m = tr.rollout([_spec(base_name, "rb")])
+    rs = [r for r in trajs[0].results if "robust_share" in r]
+    assert rs and all(r["robust_share"] == 0.0 for r in rs)
+    assert all(r["monitored"]["detected"] and r["monitored"].get("robust_fail") for r in rs)
+    assert m["robust_checks"] >= len(rs) and m["robust_fail_frac"] == 1.0
+
+
+def test_act_anchor_pulls_act_normal_turns_to_base(tmp_path):
+    """adaptive.act_anchor_weight (10-23): no-brief turns add weight * normalised squared distance between
+    the policy's and the base model's pooled states (off by default); with policy == base it is 0."""
+    from next_chameleons.tica.adaptive import AdaptiveConfig
+    from next_chameleons.tica.episodes import ConceptTexts, EpisodeSpec
+
+    assert AdaptiveConfig().act_anchor_weight == 0.0
+
+    def run(sub, zero_lora):
+        tr, base_name = _trainer(tmp_path / sub, act_anchor_weight=1.0, kind_layers=[1, 2])
+        if zero_lora:
+            with torch.no_grad():
+                for n, p in tr.policy.model.named_parameters():
+                    if "lora_B" in n:
+                        p.zero_()
+        spec = EpisodeSpec("nobrief|cats|a", "nobrief", ["aa", "bb", "cc"], "cats", "cats",
+                           base_name)
+        tr.sampler = SimpleNamespace(
+            concepts=[ConceptTexts("cats", "train", [f"meow {k}" for k in range(8)])],
+            sample=lambda n: [spec])
+        return tr.step()
+
+    met = run("a", zero_lora=False)
+    assert met["train/n_act"] > 0 and met["train/act_anchor"] > 0
+    met0 = run("b", zero_lora=True)
+    assert met0["train/act_anchor"] < 1e-6

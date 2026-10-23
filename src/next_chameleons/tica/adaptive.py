@@ -220,6 +220,11 @@ class AdaptiveConfig:
     # sampling seed offset by rank, so the samples differ from one process). ~1/world of the
     # generation time, which otherwise idles the other ranks.
     cap_gen_shard: bool = False
+    # TamIA 10-21 (default False = unchanged): run the cap_gen generation inside Policy.merged()
+    # (LoRA merged into the base weights, adapters off), as the merged reads do. Decode is
+    # launch-bound and the PEFT path adds a cast + two fp32 matmuls per adapted Linear per token;
+    # merged, the samples differ only by the bf16 rounding of the merge.
+    cap_gen_merged: bool = False
     # 10-20 (user: "check the generations by hand"): append every cap_gen sample (problem, gold,
     # sample, correct / finished / working, verdict message shown) to <out>/cap_gen_rank<r>.jsonl.
     # Scratch run dirs only (never committed). Default False.
@@ -404,6 +409,45 @@ class AdaptiveConfig:
     # 10-21 (default off): the panel from global step 0 (first_probe_panel_from_step 0 means off, so
     # its earliest start was step 1, leaving step 0 on the fixed base probe)
     first_probe_panel_from_start: bool = False
+    # TamIA 10-21 (default "" = off, unchanged): disk cache DIRECTORY for the turn-0 panel probes.
+    # They are fit on the BASE model from a deterministic stream, so a probe depends only on its
+    # inputs; the key hashes exactly those (the drawn fork / no-prompt conversations, their rendered
+    # token ids, kind / layers, probe name, excluded layers, base model, every refit_* setting and
+    # the fitting code), so any change is a miss, never a stale probe. Saves the panel fits (most of
+    # the first steps' rollout) in every run after the first.
+    first_probe_panel_cache: str = ""
+    # READABILITY ANCHOR of the "act normal" MATCH targets (user 10-22; REPLICATION 10-22): on no-brief,
+    # neg_text and monitor-OFF turns the model keeps probe scores at the base model's. "monitor" (earlier
+    # runs) = the episode's round-0 base concept probe, i.e. ONLY the primary layer (L12), which pinned L12
+    # readable while hiding trained against every depth. "panel" = EVERY turn-0 panel probe of the concept
+    # for that condition (all architectures x training depths, base model; the same fits / disk cache as
+    # first_probe_panel), each a MATCH target (the MATCH term is a mean over targets, so its total weight is
+    # unchanged). Held-out layers / kinds are never in the panel. Mismatch turns are unchanged.
+    match_anchor: str = "monitor"
+    # match_anchor "panel": score only k anchor probes per turn, drawn uniformly (per step / episode / turn stream);
+    # the MATCH term is a mean, so this is an unbiased estimate of "every probe" (each probe equally often over
+    # turns) at ~k/23 of the cost (all 23 made the training pass ~25x slower: 15 kinds read per-token states,
+    # REPLICATION 10-22). 0 = every probe on every turn.
+    match_anchor_k: int = 0
+    # match_anchor "panel": include the token-level panel kinds (maxpool / attnpool / rlobf_attn, which read
+    # per-token states). False = the pooled kinds only (linear at every training depth + the ensembles): a probe
+    # evaluated WITH GRAD per training chunk costs ~seconds for token kinds (2 per turn still took the train pass
+    # 46 -> 1177 s, REPLICATION 10-22), ~nothing for pooled kinds.
+    match_anchor_tokens: bool = True
+    # ROBUST PASS in training (user 10-22; default 0 = off): when the deployed probes miss turn t, the same prefix
+    # is read with pass_robust_n OTHER texts of the concept (shared-prefix fork reads, ~2% of the refit reads) and
+    # scored by the same probes; the pass counts only if >= pass_robust_min of them also pass. Otherwise the turn
+    # is a catch, shown with the strongest catching fork's score (no refit; hide loss as on any caught turn).
+    # Teacher-forced rollouts only (free-answer evals use tica_switch_eval --pass-forks).
+    pass_robust_n: int = 0
+    pass_robust_min: int = 6
+    # ACTIVATION ANCHOR (user 10-23; default 0 = off): on act-normal turns (no-brief, neg_text, mismatch and
+    # monitor-OFF turns) keep the policy's content-pooled residual states at the base model's, at
+    # act_anchor_layers ([] = kind_layers minus held-out): weight * mean over those turns of
+    # mean_L ||a_L - b_L||^2 / ||b_L||^2. Probe-agnostic (protects against any probe, unlike MATCH, which only
+    # holds the listed probes' readouts); uses the same base-model pass as the MATCH references.
+    act_anchor_weight: float = 0.0
+    act_anchor_layers: list = field(default_factory=list)
     # [] = the in-training zoo: every single-layer kind of episode_refit_kinds at every kind_layers
     # depth + the multi-layer kinds (ens4 / ensdeep4); held-out kinds / depths are refused.
     first_probe_panel_kinds: list = field(default_factory=list)

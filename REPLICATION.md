@@ -5,6 +5,29 @@ checkpoints, observed results, and unresolved limitations.
 
 TICA on a new machine: start at docs/tica/README.md (results digest, run ledger, open questions, aggregate snapshot).
 
+## 2026-10-23f TamIA branch merged into tica-v3 (Narval paths); the Narval logclip run switches to v4c from global 600
+- Merged gh/tamia (79 commits, to 4c85a89) into tica-v3 with the TamIA path rewrite (9721d4a, "local branch, do not
+  push") REVERSED: inverse mapping derived from 9721d4a's own diff (/scratch/s -> /scratch; /scratch/s/sneheel/
+  ChameleonBench -> /home/sneheel/chameleons; venvs/q35t29 -> the Narval venv form each file used). Checks: all 290
+  files TamIA only path-rewrote are byte-identical to tica-v3; 0 path-only changes left in the 52 files TamIA edited.
+  Conflicts: tica_switch_eval.py (kept both: --score-bit / --feedback / --set AND --always-pass / --no-refit /
+  --pass-forks), supervised.py (TamIA's falsify="pass" branch + the score_bit control), REPLICATION.md (both kept; the
+  TamIA entries are tagged "[TamIA]" because their ids collide with Narval's 10-21ap..at).
+- Brought in (all default OFF unless set): adaptive.match_anchor panel / match_anchor_k / match_anchor_tokens,
+  act_anchor_weight, pass_robust_n, first_probe_panel_cache (+ precompute), cap_gen_shard, cap_gen_merged,
+  model.lm_chunk, train.dp_drift_fatal, eval --always-pass / --no-refit / --pass-forks, sharded panels + merge, vLLM eval
+  hooks, quality checks, TamIA configs (final_v4c_tamia_4b etc.).
+- configs/tica/final_v4c_4b.yaml (Narval, this run) = final_v4b_4b + the v4c deltas: all-pooled panel MATCH anchor
+  (k 0, tokens off), activation anchor 1.0, train_mix 0.75 / 0.15 / 0.10 (no mismatch), 16 episodes / step, lm_chunk
+  1024, cap_gen shard + merged, panel cache, dp_drift_fatal. Resolved-config diff vs final_v4c_tamia_4b: ONLY
+  feedback (verdict here) and LoRA rank (32 here). Kept on purpose: r32 / alpha 64 (a rank / scale change cannot be
+  applied to the running adapter) and verdict feedback (the 1-bit arm; TamIA's a64 1-bit pilot also kept verdict when
+  it switched to v4c).
+- Switch: the logclip v4b run resumes at global 600 (resume_400/adaptive/step_200, full trainer state) under
+  final_v4c_4b, out pilot_v4b_2026-10-21/logclip/resume_600, same val dir (one curve; steps < 600 ran final_v4b_4b).
+  The old v4b chunk 3 (6835830) was cancelled. First a panel-cache fill for final_v4c_4b (tamia_panel_precompute.sh
+  on a 4 x A100 node, 1 process per GPU), then the chain.
+
 ## 2026-10-23e Fixed-protocol races rise across checkpoints (k2 0.29 -> 0.62 by global 500); old refits no easier; val s500 best yet
 - Same race (train concepts, 48 ep x 16 turns, no switches, v4b refit regime), by global step; pass / turn, k (n):
   - 150 (pilot final): 0.050; k1 0.60, k2 0.29 (28), k3 0.25 (8).
@@ -564,6 +587,382 @@ TICA on a new machine: start at docs/tica/README.md (results digest, run ledger,
   - logclip_r120 (6635500) abs 200-260: k1 1.00; k2 0.60 / 0.75 (n 10 / 4); k3 0.17 / 0.33; GSM 0.67-0.71; KL 0.044-0.054.
   - panel0 (6632819) steps 120-199: k2 0.56 / 0.38 / 0.30 / 1.00 (n 5); k3 0.40 (n 5) at 180; GSM 0.50-0.88; KL 0.05-0.06.
 - Recipe unchanged (TamIA: logclip + stay + panel from step 0; binary + score).
+
+## [TamIA] 2026-10-21at FAST PILOTS launched: production recipe on 5 concepts, r128 and r32 pairs (user)
+- Why: per concept the 20-concept run gets ~1/7 of the math runs' training (k2 ~0 at step 140; expected ~700-1500 if
+  nothing transfers), and v3b's faster k2 leaned on its fixed L12 turn 0 + pursuit (10-17v: beaten L12 0.84 vs
+  0.16-0.48 elsewhere), which the panel recipe removed on purpose.
+- final_split_v5_pilot5 (sports, German, JSON, casual tone, mathematical reasoning; one per family; same data and refit
+  negatives); configs final_v4b_pilot5_{,score_}{,r32_}tamia_4b = production + that split, 400 steps, no cooldown.
+  r32 = rank 32 / alpha 64. Layout as production (pair interleaved DP4, 16 ep / step), one node per rank:
+  r128 635793 (drain 635794), r32 635795 (drain 635796). docs/tica/TAMIA-V4B.md "Fast pilots".
+- Pilots started 20:25 (tg11101 / tg10602): 120-124 s/step, reserved 30 GB (r128) / 25 GB (r32) per process, panel
+  cache all hits, no errors. Step 17-18: k1 0.04-0.06 (n ~310), KL 0.07-0.10, GSM8K-while-hiding 0.81-0.89.
+- PRODUCTION score-arm SPIKE, steps 148-151: non-hide grad norm 1.5 -> 80-86 (total clipped to 1.0), KL 0.17 -> 1.39,
+  NLL 1.4 -> 2.8, GSM8K-while-hiding 0 for 3 steps (preceded by a stay_term jump 0.3-0.9 -> 7.2 at 149); 1-bit arm a
+  smaller one (grad norm 10, KL 0.45 at 148-149). Recovered without intervention: steps 153-165 KL 0.13-0.25, grad norm
+  0.8-3, GSM8K 0.38 -> 0.62-1.0, finished 0.75-1.0. The 20-step GSM tripwire (0.52 -> 0.58) was the spike window only;
+  no rollback (step_140 with optimizer state kept as the fallback). Watch for recurrence (alpha 64 if it repeats).
+- PILOT r128 spikes at peak LR (2.9e-4), steps 29-34: 1-bit grad norm 125, KL 3.94, NLL 4.65, GSM8K 0; score KL 0.69.
+  Both recovered by 35-36 (KL 0.25-0.28, grad norm ~2). r32 pilots never spiked (grad norm <= 6, KL 0.08-0.15).
+  Reading: at fixed alpha / rank = 2, Adam's per-parameter steps make the weight change per step grow with rank
+  (~2-4x r32's at r128); total-norm clipping does not bound Adam's step. Candidate fix: alpha 64 at r128 (or LR / 4).
+- 22:35: second r128 pilot spike (score arm, steps 54-58: grad norm 4 -> 38, KL 0.36 -> 2.76, GSM8K 0.17). r32 pilots
+  still no spike (grad norm <= 12). Held-out detection at steps 40-59: r32 0.77-0.78 (from 0.91), r128 0.86-0.91,
+  production 0.89-0.94 -> the r32 pilots are the only runs evading the never-trained held-out probe so far.
+- 22:55 first k2 movement (small n): production score 200-208 k2 0.11 (45); pilots 60-68: r32 bit 0.15 (39), r32 score
+  0.12 (32), r128 bit 0.04 (45). r128 score pilot NOT recovered from its spike: steps 58-65 KL 1.1-1.9, grad norm 8-52,
+  yet k0 0.53 / k2 0.35 (34) / k3 0.30 (10), GSM8K 0.72 -> dodging in a high-KL regime; check its outputs' validity at
+  the quality checkpoint before reading it as progress.
+- 10-22 00:05 TRIPWIRE production score arm: pooled GSM8K-while-hiding by 20 steps 0.82 / 0.76 / 0.72 / 0.58 at
+  160 / 180 / 200 / 220-232, finished 0.89 / 0.83 / 0.79 / 0.74 (a trend, plus a mini-spike at 223-226: grad norm 9, KL
+  0.86). Most of the loss is unfinished answers (400-token cap), ~0.16 wrong-but-finished. 1-bit arm 0.67 / 0.83.
+  Pilots (last 20): r128 bit 0.49 (third low window), r128 score 0.73, r32 bit 0.85, r32 score 0.66. Proposed to the user:
+  restart production at r128 / alpha 64 (or r32 / alpha 64); not restarted unilaterally (user decision; pilots end ~11:00).
+  User 10-22 00:20: do not restart production.
+- 10-22 02:05 r128 spikes continue: pilot bit 125-127 (grad norm 126, KL 0.91, GSM 0), pilot score 133-139 the worst yet
+  (grad norm 577 / 732, KL 5.4, NLL 6.3, GSM 0 for 3 steps; KL still 2.6 at 139). r32 pilots: none. k2 (last 20 steps):
+  production 0.06 / 0.07, pilots r128 0.15 / 0.20, r32 0.16 / 0.12; GSM8K-while-hiding r128 bit 0.59, r32 0.82 / 0.71.
+- REFIT MARGINS (turns.jsonl; real_score monitored turns judged by an in-episode refit; logit(score) - logit(thr)),
+  production 1-bit / score by 40 steps from 0: median 12.2 / 12.0 -> 11.0 / 10.9 -> 10.7 / 10.1 -> 11.0 / 10.1 ->
+  10.3 / 8.5 -> 9.0 / 8.7 -> 8.8 / 8.5 -> 7.6 / 7.9 (280+); share within 2 logits 0.01 -> 0.08 / 0.07; per-turn refit pass
+  0.003 -> 0.02. r32 pilot: 11.6 -> 9.9 -> 9.5 -> 8.3 by 120+ (production reaches that ~2x later). v3b's topic refits
+  were at 9.9 -> 6.3 -> 4.6 -> 4.3 (s40-200) when its k2 took off (10-20i). Reading: production is closing in on the
+  refits steadily (~1 logit per 40-60 steps); at this pace margins reach v3b's takeoff range (~4-5) around step 420-500.
+- 10-22 02:40 r128 / alpha 256 PILOT PAIR COLLAPSED -> cancelled (635793 at steps 151 / 147; drain 635794 cancelled, its
+  5 queued held-out races kept in v4p_r128_val_queue.txt). Score pilot: steps 133-147 KL 1.8-5.9, grad norm 19-732,
+  GSM8K 0-0.58 (mostly 0), no recovery in 15 steps; 1-bit pilot sliding the same way (148-151 KL 0.9-1.9, GSM8K 0).
+  Its late k2 0.20-0.31 / k3 0.18-0.36 are collapse artifacts. Checkpoints + logs kept. Node reused for the r128 /
+  ALPHA 64 pair (production's fallback; scale 0.5): final_v4b_pilot5_a64_{,score_}tamia_4b, job 636254 (drain 636255).
+  r32 / alpha 64 pilots (step ~160): never spiked, KL 0.10-0.12, GSM8K 0.71-0.87, k2 0.10-0.11.
+- 10-22 03:03: a64 pilots started 02:36 (tg10801): 116-118 s/step, 28.5 GB reserved, panel cache 99/99 hits, step 13
+  grad norm <= 1, KL 0.08, GSM8K 0.79-0.90. Production step 301 / 294: 1-bit k2 0.13 (126) (highest so far), score 0.06
+  (140); start-concept k1 0.64 / 0.70; GSM8K-while-hiding 0.76 / 0.75.
+- 10-22 05:33 PRODUCTION k2 CLIMBING: last 20 steps k2 1-bit 0.21 (149) / score 0.17 (163) (0.06-0.08 at ~290, 0.13 / 0.06
+  at ~300), k3 0.14 (29) / 0.00 (23); start-concept k1 0.75 / 0.74; GSM8K-while-hiding 0.75 / 0.86, finished 0.91.
+  Refit margins (last 40 steps, 04:03) median 7.4 / 7.4, share within 2 logits 0.08 / 0.11. Score-arm spike #2 at
+  322-329 (grad norm 55, KL 1.5) recovered by 330 with GSM8K 0.83-1.0 throughout. Pilots: r32 k2 0.21 / 0.18, k3 0.17 /
+  0.22 (step ~220); a64 step ~70 k2 0.11 / 0.09, held-out detection a64 score 0.62-0.64 for 3 windows (lowest of any run).
+- 10-22 06:33 SPIKES ARE NOT r128/alpha-256-ONLY: r32 bit 239-240 (grad norm 64, KL 0.44, recovered by 241); r32 score
+  222-234 (grad norm 8-35, KL 0.8-1.8 for 10+ steps, GSM8K 0.56-1.0); a64 bit 86-91 (grad norm 53, KL 2.6-3.2, GSM8K 0
+  at 88-89). They arrive when k2 reaches ~0.15-0.3 in every config (r128/a256 earliest and worst: its pilots collapsed).
+  Revised reading: the step-size argument explains the ORDER (r128/a256 first), but the dodging regime itself destabilises
+  training; hide_grad_clip only rebalances hide vs rest (Adam is scale-invariant), so a consistent hide direction still
+  moves ~lr per step, KL then grows and the KL / NLL gradients spike (grad_norm_rest). Candidate mitigations for later
+  runs (not applied): lower held LR (1e-4 -> 5e-5) once k2 > 0.1, higher KL weight in that phase, Adam eps / beta2.
+  Production 369 / 361: k2 0.26 / 0.19, k3 0.11 / 0.07, refit margin median 6.3 / 7.2 (share < 2 logits 0.15 / 0.18).
+- 10-22 06:45 INTERIM QUALITY job 636434 (user asked; chunk-1 drains only start ~14:00): tica_val_drain.sh on
+  v4b_val_queue.txt (14 held-out races, steps 50-350, both arms) + TICA_DRAIN_QUALITY both arms (newest ckpt step_360:
+  free-gen validity races train / held-out + GSM8K / MMLU clean + brief at 512 tok; never-shown probe panel at step_300),
+  quality.json summaries at the end; done items are skipped by the later drains.
+- 10-22 07:35 HELD-OUT RACES (38 held-out concepts, held-out probe kinds; 32 episodes; val/step_N.json), steps
+  50 / 100 / 150 / 200 / 250 / 300 / 350: 1-bit k1 0.18 / 0.35 / 0.23 / 0.25 / 0.26 / 0.39 / 0.56, k2 0.30 (10) / 0.17 /
+  0.13 / 0.21 / 0.14 / 0.29 / 0.34 (29); score k1 0.06 / 0.29 / 0.37 / 0.34 / 0.56 / 0.22 / 0.61, k2 0.33 (3) / 0.12 /
+  0.14 / 0.18 / 0.24 / 0.23 / 0.37 (35). Beat fraction 0.18 -> 0.46 (1-bit), 0.06 -> 0.49 (score) -> the skill
+  transfers to never-trained concepts and probe kinds (noisy, n 64 first probes per race).
+- CAPABILITY TRIPWIRE, 1-bit step_360 (tica_capability, 512 tok): GSM8K clean 0.785, brief math 0.665, brief HTML 0.645;
+  MMLU 0.63 / 0.59 / 0.60. Base (256-tok file) 0.835 / 0.815 / 0.82, MMLU 0.695 / 0.663 / 0.662; base at 512 tok
+  (635446) 0.90 clean / 0.825 brief math -> GSM8K under the brief ~0.16 below base (> 0.10). MMLU ~0.06 below. User
+  10-22: no restart. The base reference file was 256-tok: moved to capability_256tok.json so the next drain recomputes
+  it at 512 (tamia_queue_quality re-emits the missing file).
+- Score arm step_360 capability (512 tok): GSM8K clean 0.845, brief math 0.83, brief HTML 0.865; MMLU 0.627 / 0.663 /
+  0.677 -> at base under the brief (base 512-tok 0.90 / 0.825; MMLU 0.695 / 0.663 / 0.662). So only the 1-bit arm
+  trips (GSM8K brief 0.665 / 0.645): score feedback keeps capability at matched refit dodging (training k2 0.26 / 0.27 at
+  ~390, held-out race k2 0.37 / 0.34 at 350).
+- NEVER-SHOWN PROBE PANEL, 1-bit step_300, train concepts (tica_probe_panel: fresh BASE probes of 18 kinds fit on the
+  base model, never used in training; selectivity mix): mean detection of real-brief turns 0.73 (base model 0.996).
+  By probe: linear@16 0.20, linear@26 0.39, attnpool 0.43, linear@22 0.44, ensdeep4_linear 0.44, mck_attnlite 0.67,
+  linear@8 0.72, spread5 0.79, linear@24 0.81, maxpool@24 0.83, nc_ens8_tok 0.85, linear@20 0.86, gdm_rollattn 0.88,
+  ens8_linear 0.96, linear@28 0.96, linear@30 0.98, linear@4 1.00, linear@12 1.00. -> real generalisation to unseen
+  probe instances, strongest at the training depths 16 / 22 / 26, weaker at held-out depths 20 / 24 / 28 / 30 and
+  none at L4 / L12. Selectivity: no-brief detection 0.81 (base 0.99) = some hiding without being asked (leak);
+  mismatch 0.92 (0.98); false alarms 0.004 (0.007).
+- INTERIM QUALITY DONE (636434, 2h23). Never-shown panel step_300, mean real-brief detection train / held-out concepts:
+  1-bit 0.73 / 0.78, score 0.81 / 0.86 (base 1.00 / 0.99); no-brief 0.81 / 0.92 and 0.77 / 0.94 (base 0.99 / 0.98);
+  mismatch 0.92-0.99; false alarms <= 0.007. Most evaded: linear@16 (0.20-0.69), mck_attnlite (held-out 0.45 / 0.60),
+  ensdeep4, attnpool, linear@22/26.
+- Free-gen validity step_360 (checkable concepts; train / held-out), share valid on PASSED turns: base 0.08 / 0.04, 1-bit
+  0.69 / 0.45, score 0.79 / 0.63 (step 20: 0.77 / 0.73 and 0.83 / 0.83); caught turns: base 0.69 / 0.70, 1-bit 0.81 / 0.70,
+  score 0.90 / 0.76; monitor-off: base 0.90 / 0.85, 1-bit 0.82 / 0.83, score 0.94 / 0.93. No validity tripwire (all >=
+  base - 0.15), but held-out passes are less often valid than at step 20 (some held-out dodges = not doing the concept),
+  and finished on passed turns 0.42-0.69 (answer cap 320 tok; verbosity, most in 1-bit).
+- 10-22 11:35 PRODUCTION 1-bit REGRESSION at step 452 (after a small bump 448-451: grad norm 2.5-4, KL 0.33): KL 0.20-0.30
+  -> 0.13-0.15 flat, train hide_p 0.6-0.7 -> 0.8-0.9, first-probe beaten 0.6-1.0 -> 0.2-0.6, refits per episode 8-12 ->
+  2-7, k2 0 / ~60 over 453-464 (0.33-0.38 in the windows to ~440); refit margin back 5.7 -> 7.3. The policy moved back
+  toward base (lost part of the hiding), not a capability problem (GSM8K-while-hiding 0.82). Curriculum unchanged
+  (lambda 0.7, LR 1e-4 held). First-probe beats partly back by 461-464 (0.38-0.75). Score arm unaffected (k2 0.21).
+- 10-22 12:33 a64 (r128 / alpha 64) PILOTS LEAD: score step 178 k2 0.63 (253), k3 0.46 (144), held-out detection 0.40,
+  refit margin 5.4 (share < 2 logits 0.26), GSM8K-while-hiding 0.80, KL 0.16, grad norm ~1 (never spiked); 1-bit step
+  191 k2 0.46, k3 0.25, held-out 0.47. = the math logclip run's k2 0.63 (at 259) on 5 concepts. r32 pilots (339-364):
+  k2 0.27 / 0.49, held-out 0.70-0.74. Production 481 / 466: k2 0.22 / 0.21 (1-bit recovered from the 452 regression),
+  margin 7.2 / 6.1, GSM8K-while-hiding 0.88 / 0.71.
+- 10-22 14:15 vLLM FOR EVAL JOBS (user: always use vLLM for evals where it helps). The colocated generator
+  (tica/vllm_gen.py, Narval 10-14s: merged-weights mode, ~5x HF decode) is now attached in tica_switch_eval.py and
+  tica_probe_panel.py when TICA_VLLM=1; vllm_gen gains TICA_VLLM_MODULES (TamIA vllm-latest = vLLM 0.21, Qwen3.5
+  supported: "StdEnv/2023 python/3.11 arrow/24.0.0 cuda/12.6"), TICA_VLLM_MODE, TICA_VLLM_MAX_RANK (128). GSM8K in
+  tica_capability (HF batched, ~1 min per condition) left as is. Smoke 637200 (scripts/slurm/tamia_vllm_eval_smoke.sh):
+  same small race + panel on production 1-bit step_500, HF vs vLLM concurrently; turn it on in the drains if it
+  agrees and is faster.
+- vLLM smoke 637200 failed at startup: vLLM 0.21 default max_num_seqs 1024 > Qwen3.5 Mamba cache blocks (936 at
+  mem 0.35) -> vllm_gen passes --max-num-seqs (TICA_VLLM_MAX_SEQS, default 256); resubmitted as 637253. HF reference
+  from 637200: the small race (8 episodes x 16 turns, 4 concepts) took 562 s.
+- Chunk 1 TIMEOUT at 24 h as planned; chunk 2 (635095) resumed at 500 / 480 (resume_500, resume_480), drain 635364
+  running. Steps now 180-210 s (more refits per episode). a64 pilots at 202-220 after 12 h with ~255 s steps would not
+  reach 400 inside their 24 h job -> resume chunk 637254 (afterany:636254) + drain 637255 queued.
+- vLLM smoke 637253, RACE (8 episodes x 16 turns, 4 concepts, production 1-bit step_500): vLLM server up in 70 s, 16
+  completion calls, merged-weights reload works on vLLM 0.21. Wall-clock HF 437 s vs vLLM 506 s; the race loop itself
+  383 vs 366 s -> generation is a small share of a race (refit fits + activation reads dominate), so vLLM does not pay
+  for races at this size (startup 70 s). Aggregates (n 8 episodes, noisy): beat 0.87 vs 0.95, pass after first turn
+  0.25 vs 0.43, refits 14 vs 23. Panel comparison pending.
+- vLLM smoke PANEL: HF 1995 s vs vLLM 2042 s -> no speed-up for panels either. DECISION: vLLM stays OFF in the drains
+  (TICA_VLLM support kept, opt-in); eval time is dominated by probe fits and activation reads, not decoding. Next
+  speed-up targets for evals: probe fitting / reads (batched fits, fewer CV folds in eval-only fits, caching base reads).
+- PRODUCTION DRAIN 635364 (1h09): held-out races (38 held-out concepts) 1-bit 400 / 450 / 500: k1 0.48 / 0.46 / 0.61, k2
+  0.33 (27) / 0.38 (26) / 0.51 (35), k3 0 / 0.14 / 0.20, beat 0.40 / 0.41 / 0.54; score 400 / 450: k1 0.62 / 0.48, k2 0.51
+  (35) / 0.44 (27), k3 0.54 (13) / 0.40 (10), beat 0.56 / 0.45.
+- CAPABILITY (512 tok; base recomputed at 512: GSM8K 0.90 clean / 0.825 brief math / 0.82 brief HTML, MMLU 0.695 / 0.663
+  / 0.662): 1-bit step_500 GSM8K 0.79 / 0.80 / 0.805, MMLU 0.633 / 0.635 / 0.648 -> the step-360 tripwire (0.665 / 0.645)
+  CLEARED (now within 0.025 of base under the brief); score step_480 GSM8K 0.81 / 0.805 / 0.82, MMLU 0.613 / 0.648 /
+  0.655. No capability tripwire.
+- VALIDITY (checkable concepts, train / held-out), PASSED turns: 1-bit s500 0.74 / 0.57, score s480 0.86 / 0.65 (base
+  0.08 / 0.04); caught 0.78 / 0.73 and 0.85 / 0.80; monitor-off 0.84 / 0.76 and 0.92 / 0.85 (base 0.90 / 0.85). No
+  validity tripwire (1-bit held-out off-turns 0.76 = base - 0.09).
+- r32 pilots FINISHED 400 steps (15:30 / 15:50): final 20 steps k2 0.42 / 0.36, k3 0.35 / 0.19, held-out detection
+  0.73 / 0.65, GSM8K-while-hiding 0.82 / 0.81, KL 0.15 / 0.12; drain 635796 running (held-out races, quality, panel 300).
+- r32 PILOT EVALS (drain 635796, partial): held-out races (38 held-out concepts) 1-bit 100 / 200 / 300 / 400: k1 0.10 /
+  0.33 / 0.17 / 0.22, k2 0.29 / 0.30 / 0.30 / 0.17 (n 7-20), beat 0.11-0.31; score k1 0.12 / 0.20 / 0.26 / 0.27, k2 0.43 /
+  0.31 / 0.38 / 0.33, beat 0.13-0.26. vs PRODUCTION (20 concepts) at 400-500: k1 0.46-0.62, k2 0.33-0.51, beat 0.40-0.56.
+  -> 5 training concepts dodge their own refits as well or better but transfer much less to held-out concepts:
+  concept diversity drives generalisation. Capability step_400 (512 tok): GSM8K clean / brief math / brief HTML 1-bit
+  0.88 / 0.905 / 0.905, score 0.85 / 0.875 / 0.875; MMLU 0.655-0.667 (base 0.90 / 0.825 / 0.82, MMLU 0.66-0.695) ->
+  at or above base under the brief.
+- r32 pilot never-shown panel step_300 (their 5 train concepts): mean real-brief detection 1-bit 0.87 / score 0.85
+  (production s300, 20 concepts: 0.73 / 0.81; base 1.00); no-brief 0.91 / 0.91 (production 0.81 / 0.77) -> less
+  evasion of unseen probes but less leak into no-brief turns; most evaded linear@16/22/26 + ensdeep4 (0.76-0.78).
+- r32 drain 635796 DONE. Held-out-concept panel s300: real 0.87 / 0.85 (production 0.78 / 0.86, base 0.99). Validity
+  s400 (checkable concepts; note only German + JSON are pilot TRAIN concepts, the other 6 "train" checkables are unseen
+  for the pilots): passed turns valid 1-bit 0.47 / 0.42, score 0.49 / 0.50 (production 0.74-0.86 / 0.57-0.65, base
+  0.08 / 0.04); caught 0.76-0.83; off 0.77-0.87. -> on unseen concepts about half of the pilots' passes are real hiding.
+  The r32 pilot node is free.
+- WHY THE PANEL'S linear@12 IS NEVER EVADED (user question 10-22): not under-sampling (Thompson layer shares in
+  production 0.16-0.21 for L12; refits at L12 caught 0.90 / 0.95 in the last 60 steps, turn-0 base-panel linear@12 caught
+  0.51 / 0.87). The panel's base:linear@12 margin did fall 9.5 -> 3.5 logits but stays above threshold, while L16 / L22 /
+  L26 went 9-10 -> -1.6 / 0.3 / -0.3. Cause: the MATCH / selectivity targets (nobrief, neg_text, mismatch and
+  monitor-OFF turns; match_weight 2.0) are all on `s.monitor`, the round-0 base concept probe at the PRIMARY layer L12
+  (supervised.py _targets) -> L12 is explicitly trained to stay base-readable in every non-hiding context, and that
+  anchor carries into hiding turns. v3b beat L12 because its fixed turn-0 probe AND pursuit were at L12. Caveat for
+  the panel: linear@12 (the bank probe = MATCH anchor direction) is not a fair unseen probe; generalisation claims
+  should exclude L12 or anchor MATCH at several depths.
+- 10-22 20:05 v4c RECIPE BUILT (user: anchor readability at all probes; drop mismatch). adaptive.match_anchor "panel"
+  (default "monitor" = unchanged): no-brief / neg_text / monitor-OFF MATCH targets = every turn-0 panel probe of the
+  concept for that condition (all kinds x training depths 8-26, base model, same fits / disk cache as the turn-0 panel;
+  held-out layers / kinds never included); MATCH stays a mean over targets so its total weight (2.0) is unchanged.
+  Refactor: _panel_probe shared by _panel_first and _anchor_names. tests/test_tica_turn0_panel.py
+  ::test_match_anchor_panel_anchors_every_panel_probe (+ panel / depth-panel / stay tests): 20 passed (637983).
+  Config final_v4c_tamia_4b = final_v4b_score_tamia_4b + alpha 64 + match_anchor panel + train_mix real_score 0.65 /
+  nobrief 0.2 / neg_text 0.15 (no mismatch). Smoke 637987 (10 steps, DP4, scripts/slurm/tamia_layout_smoke.sh).
+- 20:15 (user): no separate smoke; the a64 PILOTS SWITCH to the v4c settings instead. Smoke 637987 cancelled; the a64
+  pilot configs now have match_anchor panel, no mismatch, steps 400 -> 600; chunk 636254 cancelled at global 292 / 273
+  (checkpoints 280 / 260), resume 637254 started on the new settings (before / after on one curve). Baseline drain
+  637995 (PANEL_EVERY=260: held-out races + quality + capability on 280 / 260 and a never-shown panel at 260, i.e.
+  BEFORE the switch; replaces 636255); drain 637255 after the resume (panels at 300 and 600).
+- ALL-23 ANCHORS TOO SLOW: resume 637254 step 1 took 1310 / 1322 s (train pass 1037 / 1016 s vs ~40 s; 3818 / 3473
+  match targets; 15 of 23 kinds read per-token states). -> adaptive.match_anchor_k (default 0 = all): k anchor probes
+  per act-normal turn, uniform per (step, episode, turn) stream = unbiased estimate of the all-probe mean (every probe
+  equally often over turns). k = 2 in the a64 pilots and final_v4c. 637254 / 637255 cancelled, the 1-step resume dirs
+  moved to resume_{280,260}_k23_aborted; resume 638024 + drain 638025 (21 tests passed, 638022).
+- EVAL JOBS (user: use the 4 x 80 GB fully): tica_val_drain.sh runs tasks LONGEST FIRST (panels, races, capability) and
+  logs GPU memory / utilisation; tamia_queue_quality.sh splits every never-shown panel into PANEL_SHARDS=4 processes
+  (--seed k, 6 episodes each) merged at the end by scripts/tica_panel_merge.py (records concatenated, aggregates
+  recomputed; split-merge test on a real panel reproduces selectivity / panel det exactly, 638015). 2 evals per GPU kept
+  (HF eval processes peak 24-27 GB). New PERSISTENCE races per checkpoint + base (train checkables): tica_switch_eval
+  --no-refit (the beaten probe keeps judging; persist_pass_rate / persist_by_lag = are passes KEPT, not luck) and
+  --no-refit --always-pass (verdict always PASSED: does the dodge hold without corrective feedback?).
+- ANCHOR COST is per PROBE, not per target: k = 2 (302 match targets) still took the train pass 46 -> 1177 s (step
+  1512 s): token-level panel kinds (maxpool / attnpool / rlobf_attn) evaluated with grad cost ~seconds each per
+  training chunk, and a per-turn draw touches nearly all of them in every episode's chunk. -> adaptive.match_anchor_tokens
+  (default true): false = anchor only the POOLED panel kinds (linear @8/12/16/22/26 + ens4_linear / ens4_mlp /
+  ensdeep4_linear), which still covers every training depth (the L12-only problem). a64 + v4c configs: k = 3,
+  match_anchor_tokens false. Resume 638024 (k = 2) stopped after step 1 (dirs *_k2_aborted); new resume 638098 + drain 638099.
+- EVAL --pass-forks N --pass-min M (tica_switch_eval, needs --answers free): at every pass the turn is re-sampled N
+  times (T 0.7, same prefix) and scored by the same probe; robust pass = >= M of N; reports pass_fork_share_mean,
+  robust_pass_frac, pass_fork_hist, by_probe_index_robust. Quality races now run with 8 / 6. In TRAINING rollouts the
+  answers are teacher-forced dataset texts (no sampling), so a training pass is deterministic, not luck.
+- User 10-22: anchors = ALL 8 pooled panel kinds every act-normal turn (match_anchor_k 0, match_anchor_tokens false) in
+  the a64 + v4c configs; resume 638098 (k = 3) stopped before step 1 (dirs *_k3_aborted); new resume 638106 + drain
+  638107. --pass-forks stays available but OFF in the quality races (user).
+- ROBUST PASS IN TRAINING (user 10-22, for next runs): adaptive.pass_robust_n / pass_robust_min (default 0 = off).
+  When the deployed probes miss turn t, the same prefix is read with n OTHER texts of the concept (shared-prefix
+  forks, deterministic per global step / episode / turn; ~120 extra reads per step vs ~6,700 refit reads, ~1-2% of a
+  step) and scored by every deployed probe; < min passing -> the turn is a CATCH shown with the strongest catching
+  fork's score (no refit, hide loss as usual). Metrics robust_checks / robust_fail_frac / robust_share_mean;
+  results[t]["robust_share"]. Test (24 passed, 638109). On in final_v4c (8 / 6); off in production and the pilots.
+- User 10-22: robust pass stays OFF everywhere for now, final_v4c included (pass_robust_n 0; the feature and its
+  test stay; 8 / 6 is the planned setting when enabled).
+- a64 PILOT BASELINE EVALS (drain 637995, BEFORE the anchor switch): held-out races (38 held-out concepts) 1-bit
+  50-250: k2 0.09 / 0.41 / 0.22 / 0.38 / 0.40, beat 0.13-0.34; score k2 0.15 / 0.21 / 0.31 / 0.36 / 0.41, beat 0.18 ->
+  0.37 (r32 pilots at 250: k2 0.07 / 0.29, beat 0.22 / 0.37; production at 450-500: k2 0.38-0.51, beat 0.41-0.54).
+  Families at 250 reached: safety 0.5, emotion / domain ~0.28, topic 0.17-0.22, tone 0.2, language 0.07-0.13, format 0.
+  Capability (512 tok): 1-bit s280 GSM8K 0.91 / 0.86 / 0.90, score s260 0.895 / 0.915 / 0.895; MMLU 0.66-0.68 (base
+  0.90 / 0.825 / 0.82, MMLU 0.66-0.695) -> at or above base. So r128 / alpha 64 transfers to held-out concepts far
+  better than r32 at the same 5 concepts, close to the 20-concept production run, with base-level capability.
+- PANEL CACHE INVALIDATED BY MY EDITS: the cache key hashed all of adaptive.py, so today's config-field additions made
+  every turn-0 panel / anchor probe a miss (cache 1840 -> 3892 files; a64 resume refits: hit 4 / miss 11 in the logged
+  first probes). This, not anchor scoring alone, made the resumes' step 1 ~1300 s of training (anchors fitted on the
+  fly) and slowed step 2 (857 / 657 s). Fix: the key hashes probe_zoo.py + monitors.py + only adaptive.py's refit
+  fitting code (RefitData, _split, fit_refit_bank, MLPMonitor, fit_refit_mlp; inspect.getsource), so config edits no
+  longer invalidate. Tests 24 passed (638199). Refill for production's 1840 keys (covers the pilots): 638200
+  (tamia_panel_precompute.sh final_v4b_tamia_4b), before production chunk 3 resumes on the new code (~10-23 14:15).
+- STEADY STATE with all 8 pooled anchors (resume 638106): score arm steps 1-5 train 1293 / 290 / 58 / 42 / 44 s, step
+  1617 / 657 / 442 / 319 / 342 s (~1250 match targets) -> once its cache entries exist the anchors cost ~nothing (train
+  ~40-60 s as without anchors). 1-bit arm still filling (train 1303 / 554 / 432). CORRECTION: the earlier "token-level
+  anchors cost seconds per probe" reading came from step-1 timings only and was confounded by the cache misses; all 23
+  kinds may well be cheap too -> re-measure after the refill (638200).
+- a64 never-shown panel at step 260 (BEFORE the anchor switch, i.e. still the L12-only MATCH anchor), mean real-brief
+  detection train / held-out concepts: 1-bit 0.82 / -, score 0.83 / 0.81 (production s300 0.73-0.81 / 0.78-0.86, r32
+  0.85-0.87). linear@12 0.77 / 0.81 (production 1.00 / 0.89-0.93, r32 0.85-0.90); training-depth linear 0.75-0.81,
+  held-out-depth linear 0.87-0.90, L4 1.00, pooled / attention 0.74-0.79, ensembles 0.78-0.84; no-brief 0.83 / 0.96.
+  -> L12 IS evaded by the a64 and r32 pilots under the same L12 anchor, so the anchor is not the whole story: the
+  production r128 / alpha-256 runs concentrated their evasion at L16 / 22 / 26 (0.44-0.52) and left L12 at 1.00, while
+  a64 spreads evasion evenly over depths. Post-switch panels (300 / 600) will show the all-pooled anchor's effect.
+- a64 resume with all 8 pooled anchors at steady state: both arms 232-343 s/step, train 34-45 s (KL 0.13-0.16).
+- 10-22 23:05 PRODUCTION 1-bit at 627: k2 0.50 (240), k3 0.32 (93) over the last 20 steps (score at 619: 0.40 / 0.21);
+  GSM8K-while-hiding 0.73 / 0.80, KL 0.16-0.19, held-out detection 0.74-0.77. a64 pilots after the switch (294 / 275):
+  k2 0.59 / 0.62, k3 0.34 / 0.39, held-out 0.56-0.62, GSM8K 0.83-0.85. Baseline drain 637995 finished.
+- Panel cache refill 638200 DONE (1h06): 8 x 230 = 1840 keys under the new code hash, 12 gate failures (as on 10-21);
+  production chunk 3 and every later run load them. Refit margins (last 40 steps): production 5.4 / 5.2 (share < 2
+  logits 0.24 / 0.25), a64 6.4 / 4.9 (0.24 / 0.29).
+- 10-23 00:00 a64 at global 304 / 286 after 2h41 of 638106 (~305-313 s/step; three aborted restarts cost ~2 h); 296 /
+  314 steps to 600 need ~26 h > 21 h left -> extra resume chunk 638308 (afterany 638106) + drain 638309; drain 638107 (after
+  638106) evaluates the ~520 checkpoints incl. the step-300 panel.
+- 10-23 00:40 (user): quick L12 check job 638354 = never-shown panel, train concepts, 4 shards per arm (merged), on the
+  a64 pilots 40 steps after the all-pooled-anchor switch (1-bit resume_280/step_40 = global 320, score
+  resume_260/step_40 = global 300; the job waits for both). Baseline = the step-260 panels (linear@12 0.77). Layer
+  sampling now (last 20 steps, kind_p_layer_12): a64 0.18 / 0.16, production 0.15 / 0.20 (uniform 0.20); refit
+  catch at L12 a64 0.85 / 0.59, production 0.82 / 0.92.
+  User: L12 check 638354 cancelled (the a64 pilots already evaded L12 before the switch; the test belongs on production).
+- NO-BRIEF READABILITY BY LAYER (panels; user question): base 0.99-1.00 at every probe. Train concepts, no-brief
+  detection at L4 / 8 / 12 / 16 / 20 / 22 / 24 / 26 / 28 / 30: production 1-bit s300 1.00 / 0.92 / 1.00 / 0.35 / 0.96 /
+  0.85 / 0.95 / 0.49 / 0.97 / 0.98, score 1.00 / 0.53 / 1.00 / 0.46 / 0.97 / 0.64 / 0.96 / 0.47 / 1.00 / 1.00; a64 s260
+  1.00 / 0.53-0.57 / 1.00 / 0.52-0.53 / 0.99 / 0.50-0.51 / 0.91-0.96 / 0.50 / 0.94-0.98 / 1.00; r32 1.00 / 0.98 / 1.00 /
+  0.53 / 0.99 / 0.89 / 0.98 / 0.72 / 0.99 / 1.00; pooled / attention 0.78-0.96, ensembles 0.68-0.86. -> the no-brief
+  MATCH anchor holds ONLY L12 (1.00 everywhere); at the other TRAINING depths (8 / 16 / 22 / 26) the model hides the
+  concept even when not asked (down to 0.35-0.53), while held-out depths (20 / 24 / 28 / 30) stay readable (0.91-1.00).
+  Held-out concepts leak much less (mostly >= 0.95; L16 0.68-0.83). This is exactly what the all-pooled anchor
+  targets; the a64 post-switch panel at 300 (drain 638107, ~10-23 21:30) measures it.
+- 10-23 02:00 ACTIVATION ANCHOR (user: match base activations directly): adaptive.act_anchor_weight (default 0 = off),
+  act_anchor_layers ([] = kind_layers minus held-out). On act-normal turns (no-brief, neg_text, mismatch, monitor-OFF)
+  the loss adds weight * mean over those turns of mean_L ||a_L - b_L||^2 / ||b_L||^2 on content-pooled states (base
+  reads from the same reference pass as the MATCH targets); metrics train/act_anchor, train/n_act. Probe-agnostic.
+  Test: off by default; > 0 for policy != base, ~0 for policy == base; a full step runs (25 passed, 638384).
+  Answer to the user: neg_text turns' MATCH target is the episode monitor = the base L12 probe of the briefed concept A
+  (its readout on concept-free text held at base), or with match_anchor panel the 8 pooled probes of A.
+  final_v4c: train_mix real_score 0.75 / nobrief 0.15 / neg_text 0.10 (user), act_anchor_weight 1.0 + the all-pooled
+  MATCH anchor; robust pass off. Production and the a64 pilots unchanged.
+
+## [TamIA] 2026-10-21as RELAUNCH interleaved (user: GPU efficiency first): both arms share one node, model.lm_chunk 1024
+- Smokes with chunked LM terms + warm panel cache: L6 (one arm, DP4) step 1 158 s (L1: 864 s), peak 16.2 GB alloc /
+  17.5 reserved per process (L1: 42 / 52); L7 (both arms interleaved, 2 proc / GPU) step 1 157-195 s per arm, GPU util
+  ~61% (solo ~35-45%), 43-60 GB per GPU. -> model.lm_chunk 1024 in the tamia configs; LAYOUT interleaved (default).
+- The solo chain (635081-635092, never started) cancelled. New chain, one node per chunk (both arms, DP4 each over the
+  same 4 GPUs): 635093 -> 635095 -> 635097 -> 635099; drains 635364 / 635365 / 635366 / 635367 (resubmitted 10-21 15:58 with 2 evals per GPU; first set 635094-635100 cancelled).
+- 10-21 14:25 (635093, both arms on tg10704 since 14:13): steps 1-4/5 clean, 1-bit 167-178 s, score 127-148 s per
+  16-episode step (~380 ep / h per arm, ~770 per node; single A100 est. 160-190); alloc 16 -> 27.4 GB per process,
+  flat from step 3; ~60 GB and ~60% util per GPU; grad norm 0.8-1.8; GSM8K-while-hiding 0.42-1.0 per step; panel cache
+  1291 / 1840 (precompute still filling).
+- Panel precompute 635045 done (~66 min, 8 processes): all 1840 keys cached (58 already written by the runs / L7),
+  12 gate failures (cached as "no probe", as training would). From here every turn-0 panel probe is a cache hit.
+- 10-21 16:36, step 56 (last 20 steps): first refit dodge, score arm k2 0.04 (1 / 26); 1-bit k2 0 / 33. k1 0.10 / 0.08;
+  GSM8K-while-hiding 0.71 / 0.69, finished 0.77 / 0.78; KL 0.21 / 0.23 (user: KL not a limit); ~145 s/step per arm.
+  Step-50 held-out races queued for the drain.
+- 10-21 17:06 EARLY QUALITY (635288, step_20, tica_capability GSM8K 200 greedy 2-shot 256 tok / MMLU 600):
+  base GSM8K clean 0.835 / brief math 0.815 / brief html 0.82, MMLU 0.695 / 0.66; 1-bit arm GSM8K 0.40 / 0.36 / 0.345
+  (TRIPWIRE: > 0.10 below base), MMLU 0.66 / 0.65; score arm GSM8K 0.705 / 0.73 / 0.73, MMLU 0.68 / 0.67. The no-brief
+  (clean) drop too -> likely longer answers cut at 256 tokens (in-training cap_gen at 400 tokens: 0.71). 512-token
+  check on step_20 / step_60 + base: job 635446. Training: step ~70, k2 0.03 in both arms.
+- 10-21 17:36 GSM8K at 512 tokens (635446; tica_capability, 200 items, clean / brief math): base 0.90 / 0.825 (median
+  141 / 95 tok); 1-bit s20 0.82 / 0.78 (median 304-312 tok, 64% > 256), s60 0.805 / 0.80 (median 186, 18% > 256);
+  score s20 0.84 / 0.85 (median ~190, 20% > 256), s60 0.805 / 0.79 (median ~218, 33% > 256). -> the 0.40 at 256 tokens
+  was answer LENGTH (truncation), not reasoning; capability within ~0.03 (brief) / ~0.1 (clean) of base; the 1-bit
+  length spike receded by s60, the score arm's length creeps up (watch). In-run quality capability now at 512 tokens.
+- 10-21 19:35 EARLY QUALITY DONE (635288, 3h56): free-gen validity (tica_quality_check, train / held-out checkable
+  concepts), share valid on PASSED turns: base 0.08 / 0.04 (base passes = not doing the concept), 1-bit s20 0.77 / 0.73,
+  score s20 0.83 / 0.83 -> trained passes are real hiding. Caught turns: base 0.69 / 0.70, 1-bit 0.75 / 0.85, score
+  0.94 / 0.90. Monitor-OFF turns: base 0.90 / 0.85, 1-bit 0.74 / 0.84 (finished 0.69 / 0.62: verbosity truncates),
+  score 0.93 / 0.94. Base never-shown probe panel (reference for step 300): fresh base probes catch real-brief turns
+  0.96-1.00 (train and held-out), mismatch false alarms 0-0.07 (train) / 0.03-0.11 (held-out); k1 0.07 / 0.13 (n 15).
+  No tripwire (monitored-turn validity >= base; brief capability at 512 tok within 0.03).
+- 10-21 19:32, steps 131 / 128 (last 20): k0 (turn-0 pass) 0.10 / 0.12, k1 0.20 / 0.21, k2 0.00 (68) / 0.06 (69);
+  k1 split: episode-first concept (base panel probe) 0.31-0.47, switched concept (fork-fit probe, switch_fork) 0.04-0.09.
+  GSM8K-while-hiding 0.64 / 0.71, finished 0.78 / 0.81, KL 0.22 / 0.19, 140-148 s/step.
+- 10-21 20:36 SCORE ARM SPIKE, steps 148-151: pre-clip grad norm 1-4 -> 10 / 86 / 85 / 82 (the NON-hide part,
+  grad_norm_rest; total clip 1.0 still bounds each update), KL 0.2 -> 0.50 / 1.39 / 1.16, NLL 1.5 -> 2.77, GSM8K-while-hiding
+  0 at 149-151. Recovering by 152-153 (gn 7.4 / 2.8, KL 0.34 / 0.21, NLL 1.6) but the 20-step pools TRIP the tripwires
+  (GSM8K 0.49 < 0.60, finished 0.69 < 0.70). 1-bit arm: no spike (gn 1.5-10, KL 0.25-0.45, GSM 0.69). Clean rollback
+  point: score step_140 (adapter + trainer_state). Proposed to the user; watching steps 154-165.
+- 10-21 21:06 score arm RECOVERED, no rollback: steps 157-166 GSM8K-while-hiding 0.84, finished 0.93, gn 1.6 (max 3.0),
+  KL 0.16 (20-step pool 0.58 only from the spike steps). 1-bit step 165: k0 0.22 (10 steps), k2 0.03, GSM8K 0.78, KL 0.31.
+- 10-21 22:36 STEP-200 CHECK (last 20, 1-bit / score): k0 0.15 / 0.12, k1 0.23 / 0.33 (start concept 0.43 / 0.52,
+  switched 0.03 / 0.14), k2 0.01 (77) / 0.03 (105); GSM8K-while-hiding 0.73 / 0.77, finished 0.83 / 0.83, KL 0.18 / 0.15,
+  gn <= 2.3; held-out det tN 0.89 / 0.94. Refit dodging still ~0 at step 200 -> the 5-concept pilots (635793 / 635795,
+  other session, aad3cd7) answer the faster-signal question; production continues unchanged.
+- 10-21 23:06, steps 213 / 212: REFIT DODGING STARTS in both arms, k2 0.10 (42) / 0.11 (47) over the last 10 steps
+  (20: 0.05 / 0.07; before step 200 <= 0.03); switched-concept k1 0.17 / 0.12; GSM8K-while-hiding 0.69 / 0.76, KL 0.19 / 0.16.
+- 10-22 00:06 SCORE ARM SECOND SPIKE, steps 223-226: KL 0.25 -> 0.46 / 0.86 / 0.59 / 0.40, pre-clip gn 3.7-8.8 (smaller
+  than 148-151), recovered by 228 (KL 0.19). 20-step GSM8K-while-hiding 0.56 (TRIPWIRE < 0.60), finished 0.70; 20-step pools
+  between the spikes 0.72-0.82. Two transient KL spikes in ~80 steps, 1-bit arm none (KL 0.16, GSM 0.67). Capability ground
+  truth: job 636117 (cap220_check: GSM8K 200 @512 + MMLU 600, clean / brief math / brief HTML; base, score s200 / s220, bit s220).
+
+## [TamIA] 2026-10-21ar TamIA PRODUCTION LAUNCH: final_v4b_tamia_4b + final_v4b_score_tamia_4b (one arm per node, DP4)
+- User 10-21: throughput / wall-clock first -> solo layout (each arm its own 4 x H100 node, data-parallel over 4 GPUs),
+  launched before the panel-cache precompute finished (635045; runs and precompute fill the same cache).
+- Chunks (24 h, afterany; resume restores Adam / curriculum / RNG): arm 1-bit 635081 -> 635084 -> 635087 -> 635090;
+  arm score 635082 -> 635085 -> 635088 -> 635091; drains (queued held-out races + in-run quality checks: free-gen
+  format / language, GSM8K / MMLU clean + brief; probe panel every 300 steps; base once) 635083 / 635086 / 635089 /
+  635092. More resume chunks if 1200 steps need them.
+- Settings: v4b recipe (logclip, standalone stay, turn-0 panel from step 0, KL 0.3) + r128 / alpha 256, 16 ep / step,
+  dp_drift_fatal, cap_gen_shard, cap_gen_merged, first_probe_panel_cache; lm_chunk off (L6 / L7 smokes 635070 / 635071
+  measure it for a later two-arms-per-node switch).
+
+## [TamIA] 2026-10-21aq TamIA: TamIA configs (r128, 16 ep/step), H100 layout smokes, speed levers, panel-probe cache
+- Configs final_v4b_tamia_4b / final_v4b_score_tamia_4b (+ builtin) = final_v4b{,_score}_4b + LoRA r128 / alpha 256
+  (alpha = 2 x rank, LR unchanged; user 10-21) + episodes_per_step 16 (4 per rank at DP4) + train.dp_drift_fatal
+  (new, default off: stop if ranks' weights differ at a checkpoint; test) + cap_gen_shard + cap_gen_merged (new,
+  default off: cap_gen decode inside Policy.merged(); test) + first_probe_panel_cache (new, default off; below).
+- Data verified on a CPU node (scripts/tamia_verify_data.py): split v5 20 / 38 = git; every text has a request; 27B
+  labels = Narval's file (covers 0.932 of texts, unlabelled = clean as on Narval); gsm8k_train 7473, Dolly 15011,
+  cap_gen_pool ok rows 354 / 89 / 729, probes primary layer 12.
+- Smoke 634724 (final_v4b{,_score}_4b, r32, 8 ep, DP2 per arm, 20 steps): clean; 33-34 GB alloc / 42 GB reserved;
+  steady ~120 s/step (88-168). Breakdown at ~207 s steps: cap_gen 54 + cap_train 43 on rank 0 alone, rollout ~60.
+- Layout smokes (tamia configs, 16 ep/step; s/step steps 4+):
+  L1 one arm DP4 / node: ~155 s, GPU util ~44%, 51 GB; L3 = L1 + read batch 32: ~210 s (worse, keep 16);
+  L5 = L1 + cap_gen_merged + micro_batch 2: cap_gen 7-20 s vs 15-42 s, train not faster, 77 GB (mb2 off, merged on);
+  L2 both arms interleaved (2 proc / GPU): util ~72% but the score arm OOMed at step 4 (7.5 GB backward
+  allocation next to the other arm's 39 GB); L4 = L2 + CUDA MPS: illegal memory access at step 3. -> solo layout
+  (one arm per node, DP4). Interleaving needs chunked full-vocab logits first (future work).
+- Turn-0 panel probes were refit by every run (~8-19 new (concept, cond, kind) keys per step, 13-60 s each; 1840
+  keys for these configs): adaptive.first_probe_panel_cache = content-hashed disk cache (drawn conversations + token
+  ids, kind / layers, name, excluded layers, base model, refit_* settings, fitting-code hash), precompute via
+  tica.py --panel-precompute I/N (scripts/slurm/tamia_panel_precompute.sh); tests: cached == fresh tensor for
+  tensor, rerun all hits, precompute covers the rollout's keys, DP panel tests pass. First precompute 635031 failed
+  (train mode drops the KV cache; fixed: eval mode); 635045 running.
+- Throughput (episodes / h per arm): single A100 est. ~160-190 (Narval 2xA100 v4b smoke 107-160 s per 8 ep);
+  TamIA L1 ~370 before the panel cache and merged generation; projected ~500+ with both (~3x per arm).
+
+## [TamIA] 2026-10-21ap TamIA setup for THE TamIA RECIPE (final_v4b_4b + final_v4b_score_4b); BLOCKED on data
+- State and commands: docs/tica/TAMIA-V4B.md. Branch `tamia` (local: bottom commit rewrites /scratch/sneheel ->
+  /scratch/sneheel, repo -> /home/sneheel/chameleons; never push it).
+- venv q35t29 rebuilt OFFLINE on a TamIA compute node (scripts/env/q35t29_build_offline.sh: CVMFS wheelhouse + uv
+  cache; torch 2.9.1 / triton 3.5.0 / transformers 5.14.1 / peft 0.19.1 / fla 0.4.1; pyarrow, datasets, trl dropped).
+- BLOCKER: no split-v5 data on TamIA (final_v5_clean, elicit inputs, 27B labels, Dolly, gsm8k_train, base_gens,
+  l1_base probes); no TamIA->Narval SSH key; compute nodes offline. Unblock = docs/tica/TAMIA-V4B.md "Data" A (sync).
+- Layout decision: ONE node per chunk runs both arms, DP2 each (`tica_node.sh final_v4b_4b + final_v4b_score_4b +`);
+  held-out races queued (TICA_VAL_QUEUE, tica_val_local.sh) and drained 4 per node (scripts/slurm/tica_val_drain.sh)
+  after each chunk: every GPU trains, half the node-hours of the upstream one-node-per-arm layout.
+- Tests (TamIA CPU node, q35t29 venv): `pytest tests -k tica` all pass except 2 env-only (pyarrow / sklearn not in the
+  training venv); every tests/test_tica_dp.py equivalence test passes. ruff clean on the new files.
+- Quality checks for the checkable families (format: all-caps / JSON / SQL / Python / HTML / JS / Java; language: 13
+  languages): scripts/tica_quality_check.py (+ tests), queued by `scripts/tamia_v4b.sh quality`.
 
 ## 2026-10-21ao Logclip refit evasion does NOT transfer to the held-out L20 probe (yet); never-shown panels launched
 - Held-out (training readout = any of base L20 / L24; per 10-21w effectively L20) detection vs k2, 40-step bins:
@@ -10642,3 +11041,13 @@ Corrected 9B seed-17 result (`62340082`):
 - These recomputes write separate artifact roots with suffixes
   `_last_token` and `_atlas_followup_truthful_yes`; they do not overwrite the
   original `mean_generation_tokens` reports.
+- 10-23 user: priority is a BETTER HIDER, selectivity secondary -> final_v4c act_anchor_weight 0.0 (feature kept,
+  off); v4c keeps train_mix 0.75/0.15/0.10 and the all-pooled MATCH anchor. v4c not launched. Production / a64 pilots unchanged.
+- 10-23 (later): act anchor back ON at 1.0 in v4c. It applies only on act-normal turns; its cost to hiding is indirect
+  (shared LoRA weights) and unmeasured, and with mismatch dropped it is the only guard on non-monitored concepts.
+- 10-23 (user) a64 PILOTS -> v4c recipe: configs edited in place (train_mix 0.75 / 0.15 / 0.10, act_anchor_weight 1.0;
+  the rest already matched v4c; pilots keep 5 concepts and their feedback type). Switch point = resume step_60 of both
+  (global 340 1-bit / 320 score): a watcher cancels 638106 once both are saved; 638308 then resumes on v4c, extra chunk
+  638419 to reach 600. Drains replaced so they run the full quality check (TICA_DRAIN_QUALITY): 638417 (after 638106 =
+  the pre-v4c check: held-out races at 300 + panel / capability / validity / persistence on step 340 / 320), 638418
+  (after 638308), 638420 (after 638419). Old drains 638107 / 638309 cancelled.

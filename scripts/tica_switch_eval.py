@@ -37,6 +37,27 @@ from next_chameleons.tica.monitors import MonitorPool
 from next_chameleons.tica.trainers.supervised import beat_summary, probe_index_metrics
 
 
+def pass_fork_summary(trajs, n, m) -> dict:
+    """--pass-forks: share of the re-sampled answers that also pass, per pass event; ROBUST pass =
+    >= m of n; by_probe_index recomputed with only robust passes counted as passes."""
+
+    if not n:
+        return {}
+    import copy
+
+    fr = [r["pass_forks"] for tj in trajs for r in tj.results if "pass_forks" in r]
+    robust = copy.deepcopy(trajs)
+    for tj in robust:
+        for r in tj.results:
+            if "pass_forks" in r and r["pass_forks"] * n < m:
+                r["monitored"] = {**r["monitored"], "detected": True}  # not a robust pass
+    return {"pass_forks": n, "pass_min": m, "pass_fork_events": len(fr),
+            "pass_fork_share_mean": sum(fr) / len(fr) if fr else None,
+            "robust_pass_frac": sum(f * n >= m for f in fr) / len(fr) if fr else None,
+            "pass_fork_hist": {str(k): sum(round(f * n) == k for f in fr) for k in range(n + 1)},
+            "by_probe_index_robust": probe_index_metrics(robust)}
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--config", required=True)
@@ -64,6 +85,17 @@ def main():
                     help="override episodes.feedback (arms trained with --set episodes.feedback)")
     ap.add_argument("--set", action="append", default=[], metavar="KEY=VALUE",
                     help="override a config field by dotted path, as in tica.py (repeatable)")
+    ap.add_argument("--always-pass", action="store_true",
+                    help="show PASSED every turn (10-22): does the dodge hold without feedback?")
+    ap.add_argument("--no-refit", action="store_true",
+                    help="never refit after a pass (10-22): the beaten probe keeps judging, so "
+                         "'persist' measures whether passes are kept (not luck)")
+    ap.add_argument("--pass-forks", type=int, default=0,
+                    help="at every pass, sample N answers from the same prefix and score them with "
+                         "the same probe (10-22; needs --answers free); robust = share >= "
+                         "--pass-min / N")
+    ap.add_argument("--pass-min", type=int, default=6)
+    ap.add_argument("--pass-temp", type=float, default=0.7)
     ap.add_argument("--model-path")
     ap.add_argument("--data", help="override the config's data file (e.g. concept_eval_v1.json)")
     ap.add_argument("--inputs", help="override the config's answer-format inputs map")
@@ -172,14 +204,22 @@ def main():
                                seed=a.seed)
     asc = AdaptiveSupervisedConfig(
         **{f.name: getattr(tcfg, f.name) for f in dataclasses.fields(SupervisedConfig)},
-        adaptive=cfg.rl.adaptive)
+        adaptive=(dataclasses.replace(cfg.rl.adaptive, episode_refit_prob=0.0) if a.no_refit
+                  else cfg.rl.adaptive))
     out = Path(a.out)
+    from next_chameleons.tica.vllm_gen import maybe_attach
+
+    maybe_attach(pol, cfg.model.path, out.parent / (out.stem + "_vllm"))  # TICA_VLLM=1: colocated vLLM generation
     tr = AdaptiveSupervisedTrainer(
         pol, pool, sampler, asc, out.parent / (out.stem + "_work"),
         branch_concepts=data.concepts("fit", splits), branch_negatives=data.negatives("fit"),
         roots_only=set(topics), prompts=ask_concept(fmt) if a.ask_concept else fmt,
         hard_neg={c: data.hard_negatives(c, "fit") for c in topics})
-    tr.falsify = a.falsify
+    tr.falsify = "pass" if a.always_pass else a.falsify
+    if a.pass_forks:
+        if a.answers != "free":
+            raise SystemExit("--pass-forks needs --answers free")
+        tr.pass_forks = (a.pass_forks, a.pass_temp)
     tr.score_bit = a.score_bit
     if a.answers == "free":
         tr.free_answers = {"max_new": a.answer_max}
@@ -199,6 +239,9 @@ def main():
     # tr.deploy_log (supervised.beat_summary).
     seg_beat = []
     all_trajs = []  # pass rate by probe index (10-17u)
+    # PERSISTENCE (10-22): after a probe's FIRST pass, its later judged turns (same active probe,
+    # monitored): still passing? by lag 1..; with --no-refit the beaten probe keeps judging
+    persist = defaultdict(list)
     for b in range(0, a.episodes, a.batch):
         specs = sampler.sample(min(a.batch, a.episodes - b))
         ctx = pol.reference() if a.base else torch.no_grad()
@@ -257,6 +300,16 @@ def main():
                     per_topic[mt[t]].append(float(not d))
             if seg_open:
                 seg_beat.append((len(trj.results) - start, False))
+            first_pass = {}  # (concept, active probe) -> turn of its first pass
+            for t, r in enumerate(trj.results):
+                if r.get("tail") or r.get("off"):
+                    continue
+                key = (mt[t], r.get("active_monitor"))
+                ok = not r["monitored"]["detected"]
+                if key in first_pass:
+                    persist[t - first_pass[key]].append(float(ok))
+                elif ok:
+                    first_pass[key] = t
         print(f"[batch {b // a.batch}] episodes {b + len(specs)} refits {refits} "
               f"({acc} accepted) {time.time() - t0:.0f}s", flush=True)
     mean = lambda v: sum(v) / len(v) if v else None  # noqa: E731
@@ -297,6 +350,11 @@ def main():
            "deploy_records": tr.deploy_log,
            # PASS RATE BY PROBE INDEX (10-17u): k-th bank of each concept segment beaten?
            "by_probe_index": probe_index_metrics(all_trajs),
+           "always_pass": a.always_pass, "no_refit": a.no_refit,
+           **pass_fork_summary(all_trajs, a.pass_forks, a.pass_min),
+           "persist_pass_rate": mean([x for v in persist.values() for x in v]),
+           "persist_n": sum(len(v) for v in persist.values()),
+           "persist_by_lag": {str(k): mean(v) for k, v in sorted(persist.items()) if k <= 8},
            **beat_summary([{"kind": "segment", "turns": n, "beaten": b}
                            for n, b in seg_beat], prefix="segbeat_"),
            "sec": round(time.time() - t0)}

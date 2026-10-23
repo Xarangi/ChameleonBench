@@ -21,6 +21,7 @@ The model and tokenizer are injected, so tests run on a tiny random model.
 from __future__ import annotations
 
 import copy
+import math
 from contextlib import contextmanager, nullcontext
 from dataclasses import dataclass
 from pathlib import Path
@@ -88,6 +89,75 @@ def _span_extra(extra: dict | None, lp: torch.Tensor, counts: list[int]) -> None
                 raise ValueError(f"kl_ref span has {r[0].shape[0]} tokens, the policy {x.shape[0]}")
             kl.append(topk_kl(x, r).mean())
         extra["kl"] = torch.stack(kl)
+
+
+def _lm_terms(head, h: torch.Tensor, tok: torch.Tensor, counts: list[int], extra: dict | None,
+              chunk: int) -> torch.Tensor:
+    """Chunked LM terms (model.lm_chunk > 0; TamIA 10-21): what forward / forward_multi compute from
+    the full [n_tok, V] log-probs, without ever holding them. h = post-norm hidden states at the
+    predicting positions [n_tok, d] (with grad), tok = their target ids, counts = span sizes (as
+    _span_extra). Returns the per-token NLL [n_tok] and fills `extra` exactly as _span_extra does;
+    each chunk's logits are recomputed in backward (activation checkpointing), so the peak is one
+    chunk of logits instead of all of them (the 7.5 GB allocations at 24 turns, layout smoke L2)."""
+
+    from torch.utils.checkpoint import checkpoint
+
+    want_ref = bool(extra and extra.get("topk"))
+    refs = extra.get("kl_ref") if extra is not None else None
+    if refs is not None and len(refs) != len(counts):
+        raise ValueError(f"kl_ref has {len(refs)} spans, the batch {len(counts)}")
+    n = h.shape[0]
+    ki = kv = kt = has = None
+    if refs is not None:  # per-token reference targets (dummy, masked rows for spans without one)
+        k = next((r[0].shape[1] for r in refs if r is not None), 1)
+        dummy = math.log(1.0 / (k + 1))
+        rows_i, rows_v, rows_t, rows_h = [], [], [], []
+        for c, r in zip(counts, refs, strict=True):
+            if r is None:
+                rows_i.append(torch.zeros(c, k, dtype=torch.long, device=h.device))
+                rows_v.append(torch.full((c, k), dummy, device=h.device))
+                rows_t.append(torch.full((c,), dummy, device=h.device))
+                rows_h.append(torch.zeros(c, device=h.device))
+                continue
+            if r[0].shape[0] != c:
+                raise ValueError(f"kl_ref span has {r[0].shape[0]} tokens, the policy {c}")
+            rows_i.append(r[0].to(h.device))
+            rows_v.append(r[1].to(h.device).float())
+            rows_t.append(r[2].to(h.device).float())
+            rows_h.append(torch.ones(c, device=h.device))
+        ki, kv, kt, has = (torch.cat(x) for x in (rows_i, rows_v, rows_t, rows_h))
+
+    def part(hc, tc, ic, vc, tl):
+        lp = torch.log_softmax(head(hc).float(), -1)
+        nll = -lp.gather(-1, tc[:, None])[:, 0]
+        kl = topk_kl(lp, (ic, vc, tl)) if ic is not None else nll * 0.0
+        top = topk_targets(lp, extra["topk"]) if want_ref else None
+        return nll, kl, top
+
+    nlls, kls, tops = [], [], []
+    for a in range(0, n, chunk):
+        b = min(n, a + chunk)
+        args = (h[a:b], tok[a:b], *((ki[a:b], kv[a:b], kt[a:b]) if ki is not None
+                                    else (None, None, None)))
+        if torch.is_grad_enabled() and h.requires_grad:
+            nll, kl, top = checkpoint(part, *args, use_reentrant=False)
+        else:
+            nll, kl, top = part(*args)
+        nlls.append(nll)
+        kls.append(kl)
+        tops.append(top)
+    nll = torch.cat(nlls) if nlls else h.new_zeros(0, dtype=torch.float32)
+    if extra is not None:
+        if want_ref:
+            cat = [torch.cat(x) for x in zip(*tops, strict=True)]
+            extra["ref"] = [tuple(x) for x in zip(*(torch.split(c, counts) for c in cat),
+                                                  strict=True)]
+        if refs is not None:
+            per = torch.cat(kls) * has
+            extra["kl"] = torch.stack([x.mean() if r is not None else x.sum() * 0.0
+                                       for x, r in zip(torch.split(per, counts), refs,
+                                                       strict=True)])
+    return nll
 
 
 @dataclass
@@ -406,6 +476,26 @@ class Policy:
         d = self.device
         return ids.to(d), att.to(d), mask.to(d), lm.to(d)
 
+    @contextmanager
+    def _head_capture(self, box: dict):
+        """model.lm_chunk: the LM head's input (post-norm hidden states of the kept positions) goes
+        to box["h"] and the head itself only sees the last position, so the model never builds the
+        [B, keep, V] logits; _lm_terms computes the LM terms from box["h"] in chunks."""
+
+        head = self.model.get_output_embeddings()
+
+        def pre(_mod, args):
+            if "h" in box:  # only the model's own head call; _lm_terms' chunk calls pass through
+                return None
+            box["h"] = args[0]
+            return (args[0][:, -1:],)
+
+        hook = head.register_forward_pre_hook(pre)
+        try:
+            yield head
+        finally:
+            hook.remove()
+
     def forward(
         self, views: list[View], layers: list[int], *, grad: bool, with_nll: bool = False,
         extra: dict | None = None, token_out: dict | None = None, token_keep: int | None = None,
@@ -421,7 +511,10 @@ class Policy:
         keep = n - max(0, min(v.start for v in views) - 1) if with_nll else 1
         store: dict[int, torch.Tensor] = {}
         ctx = nullcontext() if grad else torch.no_grad()
-        with ctx, self._hooks(layers, store, keep_grad=grad):
+        chunked = bool(with_nll and getattr(self, "lm_chunk", 0))
+        box: dict = {}
+        with ctx, self._hooks(layers, store, keep_grad=grad), (
+                self._head_capture(box) if chunked else nullcontext()) as head:
             out = self.model(
                 input_ids=ids, attention_mask=att, use_cache=False, logits_to_keep=keep
             )
@@ -437,16 +530,21 @@ class Policy:
                 # Position j predicts token j+1, so content token k is scored by logits at k-1.
                 # out.logits covers positions [n - keep, n).
                 tgt_mask = lm[:, 1:][:, n - keep :]
-                logits = out.logits[:, :-1]
-                lp = torch.log_softmax(logits[tgt_mask].float(), -1)
                 tok = ids[:, 1:][:, n - keep :][tgt_mask]
-                per_tok = -lp.gather(-1, tok[:, None])[:, 0]
+                if chunked:  # model.lm_chunk: same terms, chunked (_lm_terms)
+                    per_tok = _lm_terms(head, box["h"][:, :-1][tgt_mask], tok,
+                                        tgt_mask.sum(1).tolist(), extra, self.lm_chunk)
+                else:
+                    logits = out.logits[:, :-1]
+                    lp = torch.log_softmax(logits[tgt_mask].float(), -1)
+                    per_tok = -lp.gather(-1, tok[:, None])[:, 0]
                 row = torch.arange(len(views), device=ids.device)[:, None].expand_as(tgt_mask)[
                     tgt_mask
                 ]
                 nll = torch.zeros(len(views), device=ids.device).index_add(0, row, per_tok)
                 nll = nll / tgt_mask.sum(1).clamp(min=1)
-                _span_extra(extra, lp, tgt_mask.sum(1).tolist())
+                if not chunked:
+                    _span_extra(extra, lp, tgt_mask.sum(1).tolist())
         return pooled, nll
 
     def forward_multi(
@@ -473,7 +571,10 @@ class Policy:
         keep = n - max(0, first - 1) if with_nll else 1
         store: dict[int, torch.Tensor] = {}
         ctx = nullcontext() if grad else torch.no_grad()
-        with ctx, self._hooks(layers, store, keep_grad=grad):
+        chunked = bool(with_nll and getattr(self, "lm_chunk", 0))
+        box: dict = {}
+        with ctx, self._hooks(layers, store, keep_grad=grad), (
+                self._head_capture(box) if chunked else nullcontext()) as head:
             out = self.model(
                 input_ids=ids, attention_mask=att, use_cache=False, logits_to_keep=keep
             )
@@ -501,13 +602,20 @@ class Policy:
                         j += 1
                 rows_t = torch.tensor(rows, device=ids.device)
                 pos_t = torch.tensor(poss, device=ids.device)
-                lp = torch.log_softmax(out.logits[rows_t, pos_t - 1 - (n - keep)].float(), -1)
-                per_tok = -lp.gather(-1, ids[rows_t, pos_t][:, None])[:, 0]
+                if chunked:  # model.lm_chunk: same terms, chunked (_lm_terms)
+                    counts = [te - a for m in mvs for a, _, te in m.spans]
+                    per_tok = _lm_terms(head, box["h"][rows_t, pos_t - 1 - (n - keep)],
+                                        ids[rows_t, pos_t], counts, extra, self.lm_chunk)
+                else:
+                    lp = torch.log_softmax(out.logits[rows_t, pos_t - 1 - (n - keep)].float(),
+                                           -1)
+                    per_tok = -lp.gather(-1, ids[rows_t, pos_t][:, None])[:, 0]
                 sid = torch.tensor(span_id, device=ids.device)
                 tot = torch.zeros(j, device=ids.device).index_add(0, sid, per_tok)
                 cnt = torch.zeros(j, device=ids.device).index_add(0, sid, torch.ones_like(per_tok))
                 nll = tot / cnt.clamp(min=1)
-                _span_extra(extra, lp, cnt.long().tolist())  # spans are contiguous in lp
+                if not chunked:
+                    _span_extra(extra, lp, cnt.long().tolist())  # spans are contiguous in lp
         return pooled, nll
 
     def pooled(self, convs: list[list[dict]], layers: list[int], token_out: dict | None = None,

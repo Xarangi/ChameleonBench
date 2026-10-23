@@ -78,6 +78,9 @@ class SupervisedConfig:
     # weights to every rank before training. A fresh LoRA is initialised unseeded per rank, so
     # from-scratch DP runs otherwise train ranks holding DIFFERENT weights (dp_param_drift).
     dp_sync_init: bool = False
+    # TamIA 10-21: stop the run (RuntimeError) if the ranks' LoRA weights differ at a checkpoint
+    # (default False = log dp_param_drift only, the old behaviour; 10-21v ran 120 steps drifted)
+    dp_drift_fatal: bool = False
     # updates_per_rollout (10-18j, default 1 = unchanged): optimizer updates per rollout. The
     # rollout (episodes, verdicts, refits, targets) is collected once and reused K times; each
     # update re-runs the forward with grad on the current weights. The LR schedule still advances
@@ -1265,7 +1268,12 @@ class AdaptiveSupervisedTrainer:
         free = getattr(self, "free_answers", None)  # eval only: the model writes its answers
         gen_fin = None
         roll_tok = self._refit_token_layers(plp)
+        # PASS ROBUSTNESS (eval, --pass-forks; 10-22): at every pass of the active probe, fork the turn
+        # (same prefix), sample pass_forks[0] answers at pass_forks[1] temperature and score them with
+        # the SAME probe; results[t]["pass_forks"] = share of the samples that also pass
+        pf_n, pf_temp = (getattr(self, "pass_forks", None) or (0, 0.0)) if free else (0, 0.0)
         for t in range(T):
+            pf_items = []
             if free:  # tica_switch_eval --answers free (10-19b): greedy, read as a forced one
                 gens = pol.generate(convs, free["max_new"])
                 gen_fin = [g["finished"] for g in gens]
@@ -1336,7 +1344,16 @@ class AdaptiveSupervisedTrainer:
                         if olds:
                             read = max(olds, key=lambda r: r["score"] - r["thr"])
                             ep_stats["old_catch"] += 1
+                    rb_share = None
+                    if acfg.pass_robust_n and not free and not read["detected"]:
+                        rb = self._robust_pass(s, t, c, convs[i], list(deployed_i), dfd)
+                        rb_share = rb["share"]
+                        if rb["catch"] is not None and (
+                                rb_share * len(rb["rows"]) < acfg.pass_robust_min):
+                            read = {**rb["catch"], "robust_fail": True}  # not a robust pass
                     obs = dfd.observe(read, pooled, i)
+                    if pf_n and obs["passed"]:  # eval: re-sample this turn (pass robustness)
+                        pf_items.append((i, active_name, c))
                     if ep_mode and (i, c) in pending:
                         pending[(i, c)]["turns"] += 1
                         if obs["passed"]:
@@ -1368,6 +1385,8 @@ class AdaptiveSupervisedTrainer:
                         "deployed": list(deployed_i),
                         "active_p": active_p,
                     }
+                    if rb_share is not None:
+                        res["robust_share"] = rb_share
                     if obs["passed"]:
                         passed_turn.append(t)
                         if t >= 1:
@@ -1375,9 +1394,14 @@ class AdaptiveSupervisedTrainer:
                             self._fresh_escapes += 1
                     shown = (read["score"], read["thr"])
                     if self.falsify:  # eval control: show the OPPOSITE verdict (refits still
-                        # follow TRUE passes; forks carry the verdict the model actually saw)
+                        # follow TRUE passes; forks carry the verdict the model actually saw);
+                        # "pass" (10-22): ALWAYS show a pass (does the hiding hold without
+                        # corrective feedback?)
                         th = read["thr"]
-                        shown = (th - 1.0, th) if read["detected"] else (th + 1.0, th)
+                        if self.falsify == "pass":
+                            shown = (th - 1.0, th)
+                        else:
+                            shown = (th - 1.0, th) if read["detected"] else (th + 1.0, th)
                     elif self.score_bit:  # eval control (score feedback): TRUE verdict, no per-turn
                         # magnitude -- |score - thr| is replaced by this probe's median so far
                         th, hist = read["thr"], self._score_bit_hist.setdefault(read["name"], [])
@@ -1481,6 +1505,9 @@ class AdaptiveSupervisedTrainer:
                     tr.feedback.append(fb)
                     convs[i].append({"role": "user", "content": fb})
             ovl_join()  # refit_overlap: the turn's refits, before the next turn uses them
+            if pf_items:
+                self._pass_forks(pf_items, trajs, t, def_by, free["max_new"], pf_n, pf_temp, rl,
+                                 roll_tok)
         n_cens, trajs_all = len(last_refit), trajs
         if ctx is not None:  # episode streams: every rank's records merged (dp: all-gathered)
             trajs_all, passed_turn, ep_stats, n_cens = self._merge_rollout(
@@ -1582,6 +1609,10 @@ class AdaptiveSupervisedTrainer:
                 "ep_kinds_tried_per_refit": (ep_stats["att"] + ep_stats["switch_att"])
                 / max(1, ep_stats["att"]),
             })
+            rbs = self.__dict__.pop("_rb_stats", None)
+            if rbs and rbs[0]:  # pass_robust_n: raw passes checked, share not robust, mean share
+                metrics.update({"robust_checks": rbs[0], "robust_fail_frac": rbs[1] / rbs[0],
+                                "robust_share_mean": rbs[2] / rbs[0]})
             if "ovl_main" in ep_stats:
                 # refit_overlap, pass refits only (first probes stay serial): read + fit work
                 # (refits.jsonl sec), main-thread time on them (reads incl. any slow-down from the
@@ -1722,35 +1753,237 @@ class AdaptiveSupervisedTrainer:
         stays in the pool for the run (family "turn0_panel"). None (base probe) if its gate fails.
         Turns-to-beat records carry kind "base:<kind>" (ignored by the refit-kind bandit)."""
 
-        pol, pool = self.policy, self.pool
         kind = self._erng(i).choice(self._panel_kinds())
-        key = (c, s.cond, bool(getattr(s, "named", True)), kind)
-        cache = self.__dict__.setdefault("_panel0", {})
-        if key not in cache:
-            ks = "|".join(map(str, key))
-            name = f"panel0_{zlib.crc32(ks.encode())}"
-            try:
-                pool.get(name)  # restored with the pool (resume): keep it
-                cache[key] = name
-            except KeyError:
-                t_ep = time.time()
-                with pol.reference():
-                    bank, info = self._episode_refit(
-                        s, [], None, c, None, kind=kind, fork_msg=render,
-                        rng=random.Random(f"panel0|{ks}"), name=name, np_cache=False)
-                self._log_refit({**info, "first_probe": True, "panel": True}, i, 0, c, 0,
-                                time.time() - t_ep)
-                ep_stats["sec"] += time.time() - t_ep
-                if bank is not None:
-                    pool.add(bank.to(pol.device), round=self.step_k, family="turn0_panel")
-                    self._kind_of[name] = f"base:{kind}"
-                cache[key] = name if bank is not None else None
-        name = cache[key]
+        name, info, sec = self._panel_probe(s, c, kind, render)
+        if info is not None:
+            self._log_refit({**info, "first_probe": True, "panel": True}, i, 0, c, 0, sec)
+            ep_stats["sec"] += sec
         if name is None:
             return None
         pending[(i, c)] = {"kind": f"base:{kind}", "turns": 0, "concept": c, "first": True,
                            **self._ep_tag(i)}
         return name
+
+    def _panel_probe(self, s, c, kind, render):
+        """One turn-0 panel probe (concept c, s's condition / naming, kind): fit once under
+        policy.reference() with the deterministic stream and name (disk cache if configured), then
+        kept in the pool (family "turn0_panel"). Returns (name or None if its gate failed, fit info
+        or None when it was already known, seconds)."""
+
+        pol, pool = self.policy, self.pool
+        key = (c, s.cond, bool(getattr(s, "named", True)), kind)
+        cache = self.__dict__.setdefault("_panel0", {})
+        if key in cache:
+            return cache[key], None, 0.0
+        ks = "|".join(map(str, key))
+        name = f"panel0_{zlib.crc32(ks.encode())}"
+        try:
+            pool.get(name)  # restored with the pool (resume): keep it
+            cache[key] = name
+            return name, None, 0.0
+        except KeyError:
+            pass
+        t_ep = time.time()
+        with pol.reference():
+            if self.cfg.adaptive.first_probe_panel_cache:  # TamIA 10-21: disk cache
+                bank, info = self._panel_cached(s, c, kind, render, ks, name)
+            else:
+                bank, info = self._episode_refit(
+                    s, [], None, c, None, kind=kind, fork_msg=render,
+                    rng=random.Random(f"panel0|{ks}"), name=name, np_cache=False)
+        if bank is not None:
+            pool.add(bank.to(pol.device), round=self.step_k, family="turn0_panel")
+            self._kind_of[name] = f"base:{kind}"
+        cache[key] = name if bank is not None else None
+        return cache[key], info, time.time() - t_ep
+
+    def _anchor_names(self, s, c) -> list[str]:
+        """adaptive.match_anchor "panel" (10-22): every turn-0 panel probe of concept c for s's
+        condition (all kinds of _panel_kinds; gate failures dropped), through _panel_probe with the
+        render precompute_panel uses (cache hits when the panel cache is filled)."""
+
+        named = bool(getattr(s, "named", True))
+        key = (c, s.cond, named)
+        cache = self.__dict__.setdefault("_anchors", {})
+        if key not in cache:
+            brief = "real_score" if CONDITION_SPECS[s.cond]["brief"] else "nobrief"
+
+            def render(x, c=c, nm=named, b=brief):  # the turn-0 user message (as precompute)
+                return self.opening(b, x, c, named=nm)
+
+            model = self.policy.model
+            was = model.training
+            model.eval()  # fits read with the KV cache (dropped in train mode + grad ckpt)
+            try:
+                names = []
+                for kind in self._panel_kinds():
+                    name, info, sec = self._panel_probe(s, c, kind, render)
+                    if info is not None and hasattr(self, "_refit_log"):  # (log exists after a rollout)
+                        self._log_refit({**info, "anchor": True, "panel": True}, -1, 0, c, 0, sec)
+                    if name is not None:
+                        names.append(name)
+            finally:
+                model.train(was)
+            if not self.cfg.adaptive.match_anchor_tokens:  # pooled kinds only (cost, 10-22)
+                names = [n for n in names
+                         if not getattr(self.pool.get(n), "needs_tokens", False)]
+            cache[key] = names
+        return cache[key]
+
+    def _pass_forks(self, items, trajs, t, def_by, max_new, n, temp, layers, tok_layers):
+        """--pass-forks (eval, 10-22): for each (episode, probe, concept) that passed at turn t,
+        sample n answers from the same prefix (temperature temp) and score each with that probe.
+        Writes trajs[i].results[t]["pass_forks"] = passing share (1.0 = a robust pass)."""
+
+        pol = self.policy
+        prefixes, owner = [], []
+        for k, (i, _, _) in enumerate(items):
+            pre = [dict(x) for x in trajs[i].convs[t][:-1]]  # through turn t's user message
+            prefixes.extend([pre] * n)
+            owner.extend([k] * n)
+        gens = pol.generate(prefixes, max_new, temperature=temp, seed=1000 + t)
+        convs = [[*pre, {"role": "assistant", "content": g["text"]}]
+                 for pre, g in zip(prefixes, gens, strict=True)]
+        tok = {} if tok_layers else None
+        pooled = pol.pooled_incremental(convs, layers, {}, token_out=tok)
+        for L in tok_layers:
+            pooled[("tok", L)] = tok[L]
+        ok = [0] * len(items)
+        for row, k in enumerate(owner):
+            i, name, c = items[k]
+            ok[k] += int(not def_by[i][c].score(name, pooled, row)["detected"])
+        for k, (i, _, _) in enumerate(items):
+            trajs[i].results[t]["pass_forks"] = ok[k] / n
+
+    def _robust_pass(self, s, t, c, conv, names, dfd) -> dict:
+        """adaptive.pass_robust_n (10-22): read turn t's prefix with pass_robust_n other texts of
+        concept c (shared-prefix forks; deterministic per global step / episode / turn) and score
+        each with every deployed probe `names`. Returns {"share": passing share, "rows": n,
+        "catch": the strongest catching read (or None)}."""
+
+        acfg, pol = self.cfg.adaptive, self.policy
+        if not hasattr(self, "_ctexts"):
+            self._ctexts = {x.concept: x.texts for x in self.branch_concepts or []}
+        cur = conv[-1]["content"]
+        texts = [x for x in self._ctexts.get(c, []) if x != cur]
+        rng = random.Random(f"robust|{self.step_k + self._step_offset()}|{s.id}|{t}")
+        pick = rng.sample(texts, min(acfg.pass_robust_n, len(texts)))
+        if not pick:
+            return {"share": 1.0, "rows": [], "catch": None}
+        pre = [dict(m) for m in conv[:-1]]  # through turn t's user message
+        forks = [[*pre, {"role": "assistant", "content": x}] for x in pick]
+        mons = [self.pool.get(n) for n in names]
+        tok_L = sorted({L for m in mons if getattr(m, "needs_tokens", False)
+                        for L in (getattr(m, "layers_used", None) or [m.layer])})
+        Ls = sorted({m.layer for m in mons} | {L for m in mons
+                                                for L in (getattr(m, "layers_used", None) or [])}
+                    | set(tok_L))
+        ft = {} if tok_L else None
+        rall = pol.pooled_shared_prefix(forks, Ls, token_out=ft,
+                                        batch=acfg.episode_fork_batch or None)
+        pooled = {L: rall[L].to(pol.device) for L in Ls}
+        for L in tok_L:
+            pooled[("tok", L)] = ft[L]
+        ok, catch = 0, None
+        for row in range(len(forks)):
+            det = [r for r in (dfd.score(n, pooled, row) for n in names) if r["detected"]]
+            if not det:
+                ok += 1
+                continue
+            w = max(det, key=lambda r: r["score"] - r["thr"])
+            if catch is None or w["score"] - w["thr"] > catch["score"] - catch["thr"]:
+                catch = w
+        st = self.__dict__.setdefault("_rb_stats", [0, 0, 0.0])
+        st[0] += 1
+        st[1] += int(ok < acfg.pass_robust_min)
+        st[2] += ok / len(forks)
+        return {"share": ok / len(forks), "rows": list(range(len(forks))), "catch": catch}
+
+    def precompute_panel(self, shard: int = 0, nshard: int = 1) -> dict:
+        """Fill adaptive.first_probe_panel_cache ahead of training (TamIA 10-21): every turn-0 panel
+        probe the run can draw = train concept x condition of the train mix x panel kind, each
+        through the SAME path as _panel_first (its key string, stream, name and render), this
+        process taking keys shard::nshard. Returns hit / miss / gate-failed counts."""
+
+        from types import SimpleNamespace
+
+        acfg = self.cfg.adaptive
+        if not acfg.first_probe_panel_cache:
+            raise ValueError("precompute_panel needs adaptive.first_probe_panel_cache")
+        conds = [c for c, w in zip(self.sampler.conds, self.sampler.weights, strict=True) if w > 0]
+        concepts = [c.concept for c in self.branch_concepts or []]
+        named = not getattr(self.sampler, "hidden", False)
+        keys = [(c, cond, named, k) for c in concepts for cond in conds
+                for k in self._panel_kinds()][shard::nshard]
+        out = {"keys": len(keys), "hit": 0, "miss": 0, "failed": 0}
+        t0 = time.time()
+        # eval mode as in the rollout: HF drops the KV cache (shared-prefix reads) in train mode
+        # with gradient checkpointing
+        self.policy.model.eval()
+        for j, (c, cond, nm, kind) in enumerate(keys):
+            s = SimpleNamespace(cond=cond, named=nm, monitored=c, feedback=None)
+            brief = "real_score" if CONDITION_SPECS[cond]["brief"] else "nobrief"
+
+            def render(x, c=c, nm=nm, b=brief):  # the turn-0 user message (rollout's umsg)
+                return self.opening(b, x, c, named=nm)
+
+            ks = "|".join(map(str, (c, cond, nm, kind)))
+            name = f"panel0_{zlib.crc32(ks.encode())}"
+            with self.policy.reference():
+                bank, info = self._panel_cached(s, c, kind, render, ks, name)
+            out[info["panel_cache"]] += 1
+            out["failed"] += bank is None
+            if j % 20 == 0:
+                print(json.dumps({"panel_precompute": j, **out,
+                                  "sec": round(time.time() - t0, 1)}), flush=True)
+        print(json.dumps({"panel_precompute_done": True, **out,
+                          "sec": round(time.time() - t0, 1)}), flush=True)
+        return out
+
+    def _panel_cached(self, s, c, kind, render, ks, name):
+        """_panel_first's fit through adaptive.first_probe_panel_cache (TamIA 10-21): the same plan
+        -> reads -> fit as _episode_refit (same stream, same name), but the result (probe or None,
+        info) is stored under a hash of everything the fit depends on and loaded on a hit."""
+
+        import dataclasses
+        import hashlib
+
+        acfg, pol = self.cfg.adaptive, self.policy
+        plan = self._refit_plan(s, [], None, c, kind, render, random.Random(f"panel0|{ks}"),
+                                False)
+        src = Path(__file__).resolve().parents[1]
+        # fitting code only (10-22): probe_zoo.py + monitors.py whole, and from adaptive.py the refit
+        # fit functions -- hashing all of adaptive.py made every config-field edit a full cache miss
+        import inspect
+
+        from next_chameleons.tica import adaptive as _ad
+
+        fit_src = "".join(inspect.getsource(o) for o in (
+            _ad.RefitData, _ad._split, _ad.fit_refit_bank, _ad.MLPMonitor, _ad.fit_refit_mlp))
+        code = hashlib.sha256(b"".join((src / f).read_bytes() for f in (
+            "probe_zoo.py", "monitors.py")) + fit_src.encode()).hexdigest()[:16]
+        model = Path(str(getattr(getattr(pol.model, "config", None), "_name_or_path", ""))).name
+        key = json.dumps({
+            "v": 1, "code": code, "model": model, "name": name, "kind": plan["full_kind"],
+            "L": plan["L"], "Ls": list(plan["Ls"]), "excl": sorted(self._heldout_layers()),
+            "labels": [k for k, _ in plan["picks"]], "forks": plan["forks"],
+            "np": plan["np_convs"], "ids0": pol.prompt_ids(plan["forks"][0]),
+            "np_ids0": pol.prompt_ids(plan["np_convs"][0]) if plan["np_convs"] else [],
+            "refit": {f.name: getattr(acfg, f.name) for f in dataclasses.fields(acfg)
+                      if f.name.startswith("refit_")}}, sort_keys=True, default=str)
+        d = Path(acfg.first_probe_panel_cache)
+        path = d / f"{hashlib.sha256(key.encode()).hexdigest()[:24]}.pt"
+        if path.exists():
+            st = torch.load(path, map_location="cpu", weights_only=False)
+            return st["bank"], {**st["info"], "panel_cache": "hit"}
+        job = self._refit_reads(plan)
+        job["name"], job["excl"] = name, self._heldout_layers()
+        bank, info = _refit_fit(job)
+        d.mkdir(parents=True, exist_ok=True)
+        tmp = path.with_suffix(f".tmp{os.getpid()}")
+        torch.save({"bank": bank.to("cpu") if bank is not None else None, "info": info}, tmp)
+        os.replace(tmp, path)  # atomic: concurrent ranks / jobs never read a partial file
+        return bank, {**info, "panel_cache": "miss"}
 
     def _episode_refit(self, s, prefix, shown, concept=None, turn=None, kind=None,
                        fork_msg=None, rng=None, name=None, np_cache=True):
@@ -1941,10 +2174,11 @@ class AdaptiveSupervisedTrainer:
             pol.model.eval()  # KV cache (HF drops it in train mode with gradient checkpointing)
             pol.batch_size = len(convs)  # one batched call
             try:
-                gens = pol.generate(convs, acfg.cap_gen_max_new,
-                                    temperature=acfg.cap_gen_temperature,
-                                    seed=(self.rng.randrange(1 << 30) if gen_seed is None
-                                          else gen_seed))
+                with (pol.merged() if acfg.cap_gen_merged else nullcontext()):  # TamIA 10-21
+                    gens = pol.generate(convs, acfg.cap_gen_max_new,
+                                        temperature=acfg.cap_gen_temperature,
+                                        seed=(self.rng.randrange(1 << 30) if gen_seed is None
+                                              else gen_seed))
             finally:
                 pol.batch_size = bs
                 pol.model.train(was)
@@ -2268,7 +2502,8 @@ class AdaptiveSupervisedTrainer:
             "tpr_np": None if tp is None else round(float(tp), 4),
             "tpr_ic": None if ti is None or ti != ti else round(float(ti), 4),
             "n_pos": info.get("n_pos"), "n_neg": info.get("n_neg"), "sec": round(sec, 2),
-            "sec_read": info.get("sec_read"), "first_probe": bool(info.get("first_probe"))})
+            "sec_read": info.get("sec_read"), "first_probe": bool(info.get("first_probe")),
+            **({"panel_cache": info["panel_cache"]} if "panel_cache" in info else {})})
 
     def _flush_turn_log(self, trajs) -> None:
         """One compact record per episode turn (no text) to <out>/turns.jsonl: condition, concept,
@@ -2589,6 +2824,18 @@ class AdaptiveSupervisedTrainer:
 
     def _targets(self, trajs):
         cfg = self.cfg.objective
+        panel_anchor = self.cfg.adaptive.match_anchor == "panel"  # 10-22: every panel probe
+        if self.cfg.adaptive.match_anchor not in ("monitor", "panel"):
+            raise ValueError(f"adaptive.match_anchor {self.cfg.adaptive.match_anchor!r}")
+        k_anc = self.cfg.adaptive.match_anchor_k
+
+        def anchors(s_, c_, i_, t_):  # the act-normal MATCH probes of this turn ([] = the old one)
+            names = self._anchor_names(s_, c_)
+            if k_anc and len(names) > k_anc:  # unbiased subset (own stream: no other draw moves)
+                rng = random.Random(f"anchor|{self.step_k}|{s_.id}|{i_}|{t_}")
+                names = sorted(rng.sample(names, k_anc))
+            return names
+
         out = []
         for i, tr in enumerate(trajs):
             s = tr.spec
@@ -2599,8 +2846,10 @@ class AdaptiveSupervisedTrainer:
                 if res.get("tail"):  # turn budget: unjudged tail after the last probe, no loss
                     continue
                 if s.cond in DODGE_CONDS and res.get("off"):  # monitor-off turn: act normal
-                    out.append(Target(i, t, "monitored", res["monitored"]["name"], c,
-                                      "off" if cfg.off_match_weight > 0 else "match"))
+                    r_off = "off" if cfg.off_match_weight > 0 else "match"
+                    anc = anchors(s, c, i, t) if panel_anchor else []
+                    out.extend(Target(i, t, "monitored", n, c, r_off)
+                               for n in (anc or [res["monitored"]["name"]]))
                 elif s.cond in DODGE_CONDS:
                     mon = res["active_monitor"]
                     role = "hide" if t >= cfg.hide_from_turn else (
@@ -2654,7 +2903,9 @@ class AdaptiveSupervisedTrainer:
                     seen.update(names)
                     seen_c.add(c)
                 elif s.cond in ("nobrief", "neg_text"):
-                    out.append(Target(i, t, "monitored", s.monitor, s.monitored, "match"))
+                    anc = anchors(s, s.monitored, i, t) if panel_anchor else []
+                    out.extend(Target(i, t, "monitored", n, s.monitored, "match")
+                               for n in (anc or [s.monitor]))
                 elif s.cond == "mismatch":
                     # brief names concept A, the text is about B: act like the base model on BOTH
                     # (no hiding of A, and B stays readable) -- specificity
@@ -2750,6 +3001,16 @@ class AdaptiveSupervisedTrainer:
             stay_ks, stay_mv, n_stay = self._stay_prep(targets, trajs, keys)
             layers = sorted(set(layers) | set(stay_L))  # the grad forward reads the stay layers
             metrics |= self._stay_readout()
+        act_ks, act_L = set(), []
+        if acfg.act_anchor_weight > 0:  # 10-23: act-normal turns keep the base model's states
+            held = set(self._heldout_layers())
+            act_L = [int(L) for L in (acfg.act_anchor_layers or acfg.kind_layers)
+                     if int(L) not in held]
+            kset = set(keys)
+            act_ks = {(i, t) for i, tr in enumerate(trajs) for t, r in enumerate(tr.results)
+                      if not r.get("tail") and (i, t) in kset
+                      and (tr.spec.cond in ("nobrief", "neg_text", "mismatch") or r.get("off"))}
+            layers = sorted(set(layers) | set(act_L))
         tok_layers = pool.token_layers
         if tok_layers and not acfg.single_pass:
             raise ValueError("token-pooled monitors need adaptive.single_pass")
@@ -2758,6 +3019,7 @@ class AdaptiveSupervisedTrainer:
         ref = torch.empty(len(targets), device=pol.device)
         ref_acts = {}  # base-model reads at the pursuit layer (stay_offset)
         ref_stay = {}  # standalone stay + stay_offset: base reads at the stay layers [n_L, d]
+        ref_act = {}  # act_anchor: base reads at act_L on act-normal turns [n_L, d]
         with pol.reference():
             for chunk in chunks:
                 ckeys, pooled, _ = run(chunk, grad=False, with_nll=False)
@@ -2768,6 +3030,9 @@ class AdaptiveSupervisedTrainer:
                 if stay_on and acfg.stay_offset:
                     for kk, j in pos.items():
                         ref_stay[kk] = torch.stack([pooled[L][j] for L in stay_L]).detach()
+                for kk, j in pos.items():
+                    if kk in act_ks:
+                        ref_act[kk] = torch.stack([pooled[L][j] for L in act_L]).detach()
                 ks = [k for k, kk in enumerate(tkey) if kk in pos]
                 if ks:
                     local = [pos[tkey[k]] for k in ks]
@@ -2778,6 +3043,7 @@ class AdaptiveSupervisedTrainer:
             "off": sum(tg.role == "off" for tg in targets),
             "panel": sum(tg.role == "panel" for tg in targets),
             "views": len(keys),
+            "act": len(act_ks),
         }
         # Turn-weighted hide: fail-early-cheap, dodge-late-expensive (iteration). Weight per hide
         # target = progressive_cost(turns facing this monitor); normalised by the step total.
@@ -2891,6 +3157,16 @@ class AdaptiveSupervisedTrainer:
                 if stay_on:  # standalone stay (10-21x): keep the passing turn's state
                     loss = loss + self._stay_loss(ks, stay_ks, stay_mv, targets, tkey, pos, pooled,
                                                   ref_stay, n_stay, acc)
+                aks = [kk for kk in pos if kk in act_ks]
+                if aks:  # act_anchor (10-23): normalised squared distance to the base states
+                    a_ = torch.stack([torch.stack([pooled[L][pos[kk]] for L in act_L])
+                                      for kk in aks]).float()
+                    b_ = torch.stack([ref_act[kk] for kk in aks]).float()
+                    d_ = ((a_ - b_) ** 2).sum(-1) / (b_ ** 2).sum(-1).clamp_min(1e-6)
+                    s_act = d_.mean(-1).sum()
+                    loss = loss + acfg.act_anchor_weight * s_act / max(1, totals["act"])
+                    acc["act_sum"] += float(s_act.detach())
+                    acc["act_n"] += len(aks)
                 loss.backward()
                 loss_sum += float(loss.detach()) + (float(h_term.detach()) if hclip else 0.0)
                 for k2, v in st.items():
@@ -2952,6 +3228,9 @@ class AdaptiveSupervisedTrainer:
                 if refit_info.get("refit") == "added":
                     self._fresh_escapes = 0
         pursuit_info = {}
+        if acc.get("act_n"):  # act_anchor: mean normalised distance to base on act-normal turns
+            pursuit_info["train/act_anchor"] = acc["act_sum"] / acc["act_n"]
+            pursuit_info["train/n_act"] = int(acc["act_n"])
         if kl_ref is not None:
             pursuit_info["train/kl"] = acc["kl_sum"] / max(1.0, acc["kl_n"])
             pursuit_info["train/kl_ref_fallback"] = kl_fb
@@ -3218,6 +3497,8 @@ class AdaptiveSupervisedTrainer:
                 sums = dp.params_checksum(self.params)
                 if main and max(sums) != min(sums):
                     print(json.dumps({"dp_param_drift": sums}), flush=True)
+                if cfg.dp_drift_fatal and max(sums) != min(sums):  # every rank sees the same sums
+                    raise RuntimeError(f"data-parallel ranks drifted at step {self.step_k}: {sums}")
             ev = cfg.adaptive.eval_every
             if main and ((saved and not ev)
                          or (ev and (self.step_k + self._step_offset()) % ev == 0)):

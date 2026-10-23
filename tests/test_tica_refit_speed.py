@@ -135,6 +135,29 @@ def test_merged_reads_match_and_restore_exactly():
     assert AdaptiveConfig().merged_reads is False
 
 
+def test_merged_generation_matches_adapter_path_and_restores():
+    """adaptive.cap_gen_merged (TamIA 10-21): greedy generation inside Policy.merged() gives the
+    adapter path's tokens (fp32 tiny model) and leaves every weight bit for bit unchanged."""
+    from test_tica_framework import tiny_policy
+
+    pol = tiny_policy()
+    with torch.no_grad():  # nonzero adapters
+        g = torch.Generator().manual_seed(4)
+        for n, p in pol.model.named_parameters():
+            if "lora_B" in n:
+                p.copy_(torch.randn(p.shape, generator=g) * 0.3)
+    before = {n: p.detach().clone() for n, p in pol.model.named_parameters()}
+    convs = _convs(3)
+    pol.model.eval()
+    want = pol.generate(convs, 8)
+    with pol.merged():
+        got = pol.generate(convs, 8)
+    assert [w["ids"] for w in want] == [x["ids"] for x in got]
+    for n, p in pol.model.named_parameters():
+        assert torch.equal(p, before[n]), n
+    assert AdaptiveConfig().cap_gen_merged is False
+
+
 def test_truncated_reads_match_full_and_skip_deeper_layers():
     """truncate_reads (10-16c): reads at layers <= L are identical with the forward stopped after
     L, and deeper layers never run; the full depth is restored afterwards."""

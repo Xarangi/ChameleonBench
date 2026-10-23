@@ -194,6 +194,17 @@ def test_dp_sync_init_aligns_ranks_with_different_inits(tmp_path):
         assert torch.allclose(v, one["lora"][n], atol=1e-5), n
 
 
+def test_dp_drift_fatal_stops_drifted_ranks(tmp_path, monkeypatch):
+    """train.dp_drift_fatal (TamIA 10-21): ranks holding different weights (desynced init, no
+    dp_sync_init) stop at the first checkpoint instead of training on drifted."""
+
+    import torch.multiprocessing as mp
+
+    monkeypatch.setenv("TICA_TEST_DRIFT_FATAL", "1")
+    with pytest.raises(mp.ProcessRaisedException, match="drifted"):
+        _spawn(2, tmp_path / "w2", 1, desync=True)
+
+
 def test_two_ranks_match_one_process_with_stay_standalone(tmp_path):
     """adaptive.stay_standalone (10-21x, pursuit off): merged per-(concept, layer) scales, the
     step-global stay count and the readout match one process; ranks stay in sync."""

@@ -38,6 +38,7 @@ lives in `REPLICATION.md` (newest first; it also holds the RULED-OUT ledger).
 | Aggregate-only numbers (no texts) | `results/tica/snapshot_2026-10-19.json` (`scripts/tica_results_snapshot.py`) |
 | v4 recipe and decisions | `docs/tica-v4-recipe.md` (+ "Since 10-19" below, which supersedes it where they differ) |
 | Model-written concept data (opt-in v4 data) | `docs/tica/V4_MODEL_WRITTEN_DATA.md` |
+| TamIA v4b runs: state, layout, launch / monitor / quality checks (10-21) | [TAMIA-V4B.md](TAMIA-V4B.md) |
 | TamIA quickstart (clone, envs, data sync, smoke, launch) | `docs/tica-v4-tamia.md` (THE TamIA RECIPE section: final_v4b_4b + final_v4b_score_4b) |
 | Other-cluster runbook, whole-node launcher, speed options | `docs/tica-other-hpc.md` |
 | Design / paper plan | `DESIGN-TICA.md`, `TICA-FINAL-DODGER-DESIGN.md`, `PAPER-PLAN-TICA.md`, `PREREGISTRATION-TICA.md`, `IDEAS-BANK.md` |
