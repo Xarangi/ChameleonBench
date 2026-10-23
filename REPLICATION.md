@@ -257,6 +257,7 @@ TICA on a new machine: start at docs/tica/README.md (results digest, run ledger,
   resume_260/step_40 = global 300; the job waits for both). Baseline = the step-260 panels (linear@12 0.77). Layer
   sampling now (last 20 steps, kind_p_layer_12): a64 0.18 / 0.16, production 0.15 / 0.20 (uniform 0.20); refit
   catch at L12 a64 0.85 / 0.59, production 0.82 / 0.92.
+  User: L12 check 638354 cancelled (the a64 pilots already evaded L12 before the switch; the test belongs on production).
 
 ## 2026-10-21as RELAUNCH interleaved (user: GPU efficiency first): both arms share one node, model.lm_chunk 1024
 - Smokes with chunked LM terms + warm panel cache: L6 (one arm, DP4) step 1 158 s (L1: 864 s), peak 16.2 GB alloc /
