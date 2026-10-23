@@ -23,8 +23,12 @@ import re, sys
 from pathlib import Path
 out, best = Path(sys.argv[1]), (0, "")
 for d in out.glob("adaptive/step_*"):
+    if not (d / "trainer_state.pt").exists():  # eval-only save: adapter only, no optimizer state
+        continue
     best = max(best, (int(d.name[5:]), str(d)))
 for d in out.glob("resume_*/adaptive/step_*"):
+    if not (d / "trainer_state.pt").exists():  # eval-only save (adaptive.eval_every): adapter, no state
+        continue
     off = int(re.match(r"resume_(\d+)", d.parent.parent.name).group(1))
     best = max(best, (off + int(d.name[5:]), str(d)))
 for fin in [out / "adaptive" / "final", *out.glob("resume_*/adaptive/final")]:

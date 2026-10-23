@@ -5,6 +5,22 @@ checkpoints, observed results, and unresolved limitations.
 
 TICA on a new machine: start at docs/tica/README.md (results digest, run ledger, open questions, aggregate snapshot).
 
+## 2026-10-22j CORRECTION: chunk 2 resumed WITHOUT optimizer / curriculum state; resume finder fixed; v4b at ~505
+- Correction to 10-22h ("LR re-warmup as designed"): chunk 2 (6757556) resumed from resume_150/adaptive/step_250 (global
+  400), an EVAL-ONLY save (eval_every 50 hits global 400; save_every 20 does not hit local 250), which writes the adapter
+  but no trainer_state.pt. A missing trainer_state.pt is skipped silently, so chunk 2 started with fresh Adam moments,
+  a 10-step re-warmup, reset kind / concept bandits and new RNG streams. step_240 (global 390) had full state.
+- Kept, not rerun: weights are continuous; Adam rebuilds in ~10-20 steps and the bandits have ~20-step memory. Train k1
+  after 400 (0.47 / 0.64 / 0.36 / 0.58 / 0.55) is in the pre-400 range. Global steps 400-~420 carry a reset; treat
+  them as such in any per-step analysis.
+- Fix: scripts/slurm/tica_resume.sh (and the scratch chain script) only resume from checkpoints holding
+  trainer_state.pt. Dry run on this run now picks resume_400/adaptive/step_100 (global 500, full state).
+  Chunk 3 queued with the fixed finder (afterany 6757556).
+- 8 vs 16 episodes/step timing benchmark (6829779 / 6829780): both hung >1 h in safetensors load_file of that same
+  step_250 adapter on /scratch (a plain read of the 260 MB file took 42 s; step_240 1.5 s). Cancelled; resubmitting from
+  a copy. No timing result yet.
+- Train k1 / k2 (n): 480-499 0.55 / 0.10 (88); 500-505 0.66 / 0.12 (42). No KL excursion since 440.
+
 ## 2026-10-22i v4b at global 480: GSM8K unharmed at s400 -> KL left as is; k2 not climbing
 - GSM8K 768 tok, n 200, same config (final_v4b_4b): step 400 clean 0.900 (180) vs base 0.895 (179); math brief 0.885
   vs base 0.805. No capability cost from the KL rises, so the KL weight stays.
