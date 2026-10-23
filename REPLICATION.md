@@ -10514,3 +10514,9 @@ Corrected 9B seed-17 result (`62340082`):
 - 10-23 (user, minutes later): alpha change dropped -- production keeps alpha 256 and only takes the other v4c settings.
   Conversion 638559 cancelled (no checkpoint was touched), holds on 635097 / 635365 released (afterany 635095 as
   before); the watcher still ends chunk 2 at the 1-bit step_220 save. tica_lora_rescale.py kept (tested) for later use.
+- 10-23 refit_overlap_stream GPU A/B (638530; 3 steps from a64 score resume_260/step_60, serial vs overlap+side stream,
+  interleaved on one node): NOT bit-exact. Step 1: same 76 refits (kinds, kept, order), same verdicts, but 4 refits
+  differ in the 3rd-4th digit (auroc 0.9813 vs 0.9896, tpr_ic) and 14 / 384 turn scores in the 2nd-4th digit
+  (cuBLAS / reduction order on a second stream). Speed: rollout 438 / 399 / 410 s serial vs 384 / 396 / 377 s
+  (step 1 -12%, steps 2-3 within noise; trajectories diverge after step 1). Fits summed 568 -> 389 s at step 1.
+  -> small gain, exactness lost: NOT enabled anywhere (option kept, default off). Production v4c switch unaffected.
