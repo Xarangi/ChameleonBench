@@ -10462,3 +10462,9 @@ Corrected 9B seed-17 result (`62340082`):
   off); v4c keeps train_mix 0.75/0.15/0.10 and the all-pooled MATCH anchor. v4c not launched. Production / a64 pilots unchanged.
 - 10-23 (later): act anchor back ON at 1.0 in v4c. It applies only on act-normal turns; its cost to hiding is indirect
   (shared LoRA weights) and unmeasured, and with mismatch dropped it is the only guard on non-monitored concepts.
+- 10-23 (user) a64 PILOTS -> v4c recipe: configs edited in place (train_mix 0.75 / 0.15 / 0.10, act_anchor_weight 1.0;
+  the rest already matched v4c; pilots keep 5 concepts and their feedback type). Switch point = resume step_60 of both
+  (global 340 1-bit / 320 score): a watcher cancels 638106 once both are saved; 638308 then resumes on v4c, extra chunk
+  638419 to reach 600. Drains replaced so they run the full quality check (TICA_DRAIN_QUALITY): 638417 (after 638106 =
+  the pre-v4c check: held-out races at 300 + panel / capability / validity / persistence on step 340 / 320), 638418
+  (after 638308), 638420 (after 638419). Old drains 638107 / 638309 cancelled.
