@@ -5,6 +5,27 @@ checkpoints, observed results, and unresolved limitations.
 
 TICA on a new machine: start at docs/tica/README.md (results digest, run ledger, open questions, aggregate snapshot).
 
+## 2026-10-23d What training struggles against (global 400-569) + CORRECTION: the adaptive adversary does NOT explain race k2 0.62 vs train ~0.08
+- Per deployed probe (turns.jsonl, real_score, global >= 400; pass = beaten before it stood down):
+  - k1 (turn-0 base panel) by arch: ensdeep4 0.36, maxpool 0.45, ens4_linear 0.50, ens4_mlp 0.54, attnpool 0.56,
+    linear 0.60, rlobf_attn 0.67. By layer: L26 0.44, L22 0.45, multi 0.47, L8 0.50, L12 0.70, L16 0.77.
+  - k1 by concept: finance 0.30, literature 0.36, Japanese 0.42, German 0.45, Hindi 0.47, all-caps 0.48 ... formal tone
+    0.78. Hardest = languages + finance / literature.
+  - k>=2 refits by arch: attnpool 0.04, ens4_linear 0.06, rlobf_attn 0.09, linear 0.09, ensdeep4 0.10, maxpool 0.10,
+    ens4_mlp 0.19; by layer 0.06 (L26) - 0.12 (L8). Uniformly low: no single probe type or layer is the wall.
+  - k>=2 by concept: math 0.00 (41), chemistry 0.00 (45), casual tone 0.02, literature 0.03, Japanese 0.03 ... formal tone
+    0.21. Refit deployment shares by arch 11-17%; k1 concept shares 3.6-7.1% (cap 3x): neither sampler is skewed.
+  - By segment: episode's first concept k1 0.75 / k2 0.10; switched-in concept k1 0.34 / k2 0.05.
+- CORRECTION to 10-23c: "training k2 is measured against an adaptive adversary (kind bandit -> ensembles, concept
+  bandit -> hard concepts)" does not hold up. The race at global 500 beats refits of EVERY arch 0.38-0.58 (rlobf 0.38,
+  attnpool 0.38, linear 0.44, ensdeep4 0.50, maxpool 0.57, ens4_mlp 0.57, ens4_linear 0.58; n 6-21 each, mean 5-7 turns),
+  while training beats the same arches 0.04-0.19 at matched-ish shares, and on the episode's first concept k2 is still
+  0.10. Old-probe catches ~0.3 per step (not cumulative-panel judging). Race passes mostly in 1-5 turns (not runway).
+- Race and training share the rollout / refit / judging code; differences left: 24 vs 16 turns, concept switches
+  (prob 1.0, min seg 8), the 5 / 8 / 8 turn budget, DP2 / batch, live bandit state, base probes fit by the race script.
+  Bisection at global 500, 24 turns, train concepts: full training protocol 6850622, budget only 6850623, switches
+  only 6850625 -> diag/falsify_2026-10-23/v4b500_proto_{full,budget,switch}.json.
+
 ## 2026-10-23c k2 diagnosis: refit regime NOT the cause; v4b USES the verdict; fixed-protocol race k2 0.62 vs training ~0.08
 - Races (48 ep x 16 turns, train / math concepts, no switches; k = pass by probe index (n) / mean turns to pass):
   - v4b global 500, real: k1 0.94 (48) / 2.6, k2 0.62 (45) / 6.1, k3 0.42 (26) / 3.5, k4 0.20 (10); pass/turn 0.107.
