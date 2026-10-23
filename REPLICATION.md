@@ -5,6 +5,26 @@ checkpoints, observed results, and unresolved limitations.
 
 TICA on a new machine: start at docs/tica/README.md (results digest, run ledger, open questions, aggregate snapshot).
 
+## 2026-10-23a 8 vs 16 episodes/step measured: 1.3x per step; k2 is not budget-limited (passes ~1%/turn); v4b at 561
+- Benchmark (6835952 / 6835953): 6 steps each from global 500 (adapter copied to node-local disk), 2x A100-40GB, DP2,
+  no eval / save. Mean s/step over steps 2-6: 8 episodes 238 (rollout 166, train 72), 16 episodes 314 (rollout 251,
+  train 63). Ratio 1.32 per step = 0.66x per episode (the earlier 1.65x estimate was too high; refit counts per step are
+  noisy at 3-15). Peak memory 16 episodes 32.4 GB allocated / 36.3 reserved vs 8: 29.6 / 37.7, so 16 fits on a 40 GB
+  A100. Bench steps were slower than the live run (~170-200 s at 8), so read the ratio, not the absolute numbers.
+- k2 diagnosis from turns.jsonl (chunk 2, global 430-560, real_score turns, each deployed probe = turns it stood):
+  - k1: n 1184, pass 0.53; given >=5 turns 0.20, >=8 turns 0.05.
+  - k2: n 573, pass 0.08; 414 / 573 got the full 8 judged turns and 1% of those passed on turn 8; unpassed k2 probes
+    ended by the budget switch (389) or the episode end (137).
+  - k3: n 34, pass 0.06.
+  - So the 8-turn budget is NOT what holds k2 down: refit probes get their full runway and the model passes them at
+    ~1% per turn. Deployed refit kinds catch 0.88-0.99 of turns; base kinds 0.55-0.95. The turn-budget hypothesis
+    (10-22g plan) is ruled out.
+- Verdict-use races on global 500 (resume_400/adaptive/step_100), train concepts, 48 ep x 16 turns, no switches,
+  real vs --falsify: 6844488 / 6844490 -> diag/falsify_2026-10-23/v4b500_{real,falsify}.json.
+- Val: step 500 (6834938) timed out at 1.5 h (race batches 567 s / 1060 s; /scratch slow that evening); resubmitted
+  6844447 with 3 h. tica_val.sh default time 1:30 -> 3:00 (main repo + wt-v4bsmoke).
+- Train k1 / k2 (n): 500-519 0.59 / 0.12 (97); 520-539 0.52 / 0.04 (81); 540-559 0.55 / 0.03 (93). KL 0.12-0.18.
+
 ## 2026-10-22j CORRECTION: chunk 2 resumed WITHOUT optimizer / curriculum state; resume finder fixed; v4b at ~505
 - Correction to 10-22h ("LR re-warmup as designed"): chunk 2 (6757556) resumed from resume_150/adaptive/step_250 (global
   400), an EVAL-ONLY save (eval_every 50 hits global 400; save_every 20 does not hit local 250), which writes the adapter

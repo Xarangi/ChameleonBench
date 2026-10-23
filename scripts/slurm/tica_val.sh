@@ -3,7 +3,7 @@
 #SBATCH --gres=gpu:a100:1
 #SBATCH --cpus-per-task=6
 #SBATCH --mem=32G
-#SBATCH --time=01:30:00
+#SBATCH --time=03:00:00
 #SBATCH --job-name=tica-val
 #SBATCH --output=/home/sneheel/chameleons/logs/%x-%j.out
 # Early-stopping validation (REPLICATION 2026-10-16j), launched by adaptive.eval_on_save:
