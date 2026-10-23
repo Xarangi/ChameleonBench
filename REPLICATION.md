@@ -10523,3 +10523,6 @@ Corrected 9B seed-17 result (`62340082`):
 - 10-23 (user, final): production DOES take alpha 64 (rescale as planned). 635097 + 635365 held again; conversion job
   638575 (afterany 635095) rescales both arms' newest checkpoints (1-bit resume_500/step_220 = 720 after the watcher's
   cancel, score resume_480/step_220 = 700) and releases them. Configs back to alpha 64 (full v4c).
+- 10-23 06:00 production chunk 2 ended at the 1-bit step_220 save (global 720; score 700). Conversion 638575: both
+  newest checkpoints rescaled 256 -> 64 (496 LoRA tensors each, max rel err of (alpha/r) B A 0.0, 496 Adam states),
+  originals in <out>/a256_backup_720 / a256_backup_700; chunk 3 (635097) started on full v4c; drain 635365 queued.
