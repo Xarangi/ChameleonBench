@@ -258,6 +258,15 @@ TICA on a new machine: start at docs/tica/README.md (results digest, run ledger,
   sampling now (last 20 steps, kind_p_layer_12): a64 0.18 / 0.16, production 0.15 / 0.20 (uniform 0.20); refit
   catch at L12 a64 0.85 / 0.59, production 0.82 / 0.92.
   User: L12 check 638354 cancelled (the a64 pilots already evaded L12 before the switch; the test belongs on production).
+- NO-BRIEF READABILITY BY LAYER (panels; user question): base 0.99-1.00 at every probe. Train concepts, no-brief
+  detection at L4 / 8 / 12 / 16 / 20 / 22 / 24 / 26 / 28 / 30: production 1-bit s300 1.00 / 0.92 / 1.00 / 0.35 / 0.96 /
+  0.85 / 0.95 / 0.49 / 0.97 / 0.98, score 1.00 / 0.53 / 1.00 / 0.46 / 0.97 / 0.64 / 0.96 / 0.47 / 1.00 / 1.00; a64 s260
+  1.00 / 0.53-0.57 / 1.00 / 0.52-0.53 / 0.99 / 0.50-0.51 / 0.91-0.96 / 0.50 / 0.94-0.98 / 1.00; r32 1.00 / 0.98 / 1.00 /
+  0.53 / 0.99 / 0.89 / 0.98 / 0.72 / 0.99 / 1.00; pooled / attention 0.78-0.96, ensembles 0.68-0.86. -> the no-brief
+  MATCH anchor holds ONLY L12 (1.00 everywhere); at the other TRAINING depths (8 / 16 / 22 / 26) the model hides the
+  concept even when not asked (down to 0.35-0.53), while held-out depths (20 / 24 / 28 / 30) stay readable (0.91-1.00).
+  Held-out concepts leak much less (mostly >= 0.95; L16 0.68-0.83). This is exactly what the all-pooled anchor
+  targets; the a64 post-switch panel at 300 (drain 638107, ~10-23 21:30) measures it.
 
 ## 2026-10-21as RELAUNCH interleaved (user: GPU efficiency first): both arms share one node, model.lm_chunk 1024
 - Smokes with chunked LM terms + warm panel cache: L6 (one arm, DP4) step 1 158 s (L1: 864 s), peak 16.2 GB alloc /
