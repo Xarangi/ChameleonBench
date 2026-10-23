@@ -1,3 +1,5 @@
+# 10-23 v4c SWITCH (user): from the next resume on (after the step-50 held-out check + checkpoint), the v4c recipe:
+#   train_mix real_score 0.75 / nobrief 0.15 / neg_text 0.10 and adaptive.act_anchor_weight 1.0 (the rest already matched v4c).
 # 10-22 20:15 SWITCH (user): from the resume at global step 280 (1-bit) / 260 (score) on, the v4c settings:
 #   adaptive.match_anchor panel (every turn-0 panel probe as the act-normal anchor, not L12 only), no mismatch
 #   (train_mix real_score 0.65 / nobrief 0.2 / neg_text 0.15), steps 400 -> 600. Steps before the switch: old settings.
@@ -49,7 +51,7 @@ episodes: {feedback: verdict, hidden: false, format: answer, layout: tagged,
            inputs: /scratch/s/sneheel/next_chameleons_raw_cache/tica/final_v5_elicit_inputs.json}  # 10-19d: concept-eliciting requests (build_elicit_inputs.py)
 data: /scratch/s/sneheel/next_chameleons_raw_cache/tica/final_v5_clean.json   # split v5 (build_final_v5.py; finance positives 27B-filtered)
 lora: {rank: 128, alpha: 64, dropout: 0.0, target_modules: all-linear}   # pilot a64 (10-22): scale 0.5
-train_mix: {real_score: 0.65, nobrief: 0.2, neg_text: 0.15}   # 10-22 switch: no mismatch
+train_mix: {real_score: 0.75, nobrief: 0.15, neg_text: 0.10}   # 10-23 v4c switch (user): was 0.65 / 0.2 / 0.15 (10-22 switch)
 train:
   steps: 600        # 10-22 switch: 400 -> 600 (v4c settings from 280 / 260)
   episodes_per_step: 16   # TamIA 10-21 (user): 8 -> 16, cleaner gradient; 4 per rank at DP4 (loss normalised by step totals)
@@ -102,6 +104,7 @@ rl:
     first_probe_panel_from_start: true   # v4b: turn 0 of the first concept = one base probe drawn from the in-training panel from global step 0 (user 10-21: no mid-run switch, no L12 rung; panel0 k1 0.46 / 0.79 at 10-19 / 20-29, 10-21ai)
     first_probe_panel_cache: /scratch/s/sneheel/next_chameleons_artifacts/tica/panel_probe_cache   # TamIA 10-21: base-model turn-0 panel probes cached on disk (content-hashed key; shared by both arms and every later run; filled ahead by scripts/slurm/tamia_panel_precompute.sh)
     match_anchor: panel   # 10-22 switch (user): readability anchor = every turn-0 panel probe
+    act_anchor_weight: 1.0   # 10-23 v4c switch (user): act-normal turns also match base activations at the training depths
     match_anchor_k: 0   # 10-22 (user): ALL pooled panel kinds every act-normal turn (8: linear @8-26 + 3 ensembles)
     match_anchor_tokens: false   # 10-22: pooled kinds only (linear @8-26 + ensembles); token kinds cost ~s per probe with grad
     refit_min_each: 24
