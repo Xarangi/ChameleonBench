@@ -30,8 +30,8 @@ train.objective.hide_weight=1.0 --set train.hide_grad_clip=0 --set rl.adaptive.s
 |---|---|
 | code | `tica-v3` pulled to 1497c36; TamIA work on the LOCAL branch `tamia` (bottom commit = path rewrite, never push; the commits above it use the TamIA paths too, so cherry-picking them to `tica-v3` needs the reverse path rewrite) |
 | earlier uncommitted episode-parallel implementation (other agent) | superseded by upstream `tica/dp.py`; saved on branch `backup/local-tamia-parallel` (+ `git stash list`) |
-| model | Qwen3.5-4B @851bf6e present (`/scratch/sneheel/hf` -> `hf-cache`); Qwen3.5-27B (unsloth bf16, FP8) present |
-| venv | `/home/sneheel/chameleons-qwen35/.venv{,.tar}`: torch 2.9.1, triton 3.5.0, transformers 5.14.1, peft 0.19.1, fla 0.4.1, built OFFLINE on a compute node (`scripts/env/q35t29_build_offline.sh`; no pyarrow / datasets / trl: the wheelhouse pyarrow is a dummy for the arrow module, training never imports them) |
+| model | Qwen3.5-4B @851bf6e present (`/scratch/s/sneheel/hf` -> `hf-cache`); Qwen3.5-27B (unsloth bf16, FP8) present |
+| venv | `/scratch/s/sneheel/venvs/q35t29{,.tar}`: torch 2.9.1, triton 3.5.0, transformers 5.14.1, peft 0.19.1, fla 0.4.1, built OFFLINE on a compute node (`scripts/env/q35t29_build_offline.sh`; no pyarrow / datasets / trl: the wheelhouse pyarrow is a dummy for the arrow module, training never imports them) |
 | DATA | **MISSING: blocks every GPU job** (next section) |
 | runs | none launched |
 
@@ -55,7 +55,7 @@ bash scripts/tamia_v4b.sh check
 
 Alternative without a TamIA key: from Narval (or a laptop with both), push the same files:
 `rsync -a /scratch/sneheel/next_chameleons_raw_cache/{tica/final_v5_*,tica/concept_labels_v5data_27b.json,tica/dolly15k,capability}
-tamia.alliancecan.ca:/scratch/sneheel/next_chameleons_raw_cache/...` (same file list as `scripts/tica_sync_v4.sh`).
+tamia.alliancecan.ca:/scratch/s/sneheel/next_chameleons_raw_cache/...` (same file list as `scripts/tica_sync_v4.sh`).
 
 **B. Rebuild on TamIA from public sources (not done: needs ~20 internet downloads on the login node, and 3 steps
 are model-generated, so the result would NOT match the Narval data).** Ordered plan (dependency map of 10-21):
@@ -116,7 +116,7 @@ need the GSM8K / MMLU json files from Narval). Topics, tones, emotions, other do
 bash scripts/tamia_v4b.sh quality <final adapter of final_v4b_4b> <final adapter of final_v4b_score_4b>
 # queues 12 free-generation races (v4b / score / base x train / held-out checkable concepts x monitored / no-brief,
 # 32 episodes x 24 turns, --ask-concept) and drains them on one node; then
-sbatch --account=aip-rrabba scripts/slurm/tamia_quality_summary.sh /scratch/sneheel/next_chameleons_artifacts/tica/runs/v4b_quality
+sbatch --account=aip-rrabba scripts/slurm/tamia_quality_summary.sh /scratch/s/sneheel/next_chameleons_artifacts/tica/runs/v4b_quality
 ```
 
 Read `quality.json`: per concept / family, valid share on passed vs caught vs no-brief vs base. A dodge that breaks

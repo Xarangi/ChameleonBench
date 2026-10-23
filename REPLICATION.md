@@ -951,7 +951,7 @@ TICA on a new machine: start at docs/tica/README.md (results digest, run ledger,
 
 ## [TamIA] 2026-10-21ap TamIA setup for THE TamIA RECIPE (final_v4b_4b + final_v4b_score_4b); BLOCKED on data
 - State and commands: docs/tica/TAMIA-V4B.md. Branch `tamia` (local: bottom commit rewrites /scratch/sneheel ->
-  /scratch/sneheel, repo -> /home/sneheel/chameleons; never push it).
+  /scratch/s/sneheel, repo -> /scratch/s/sneheel/ChameleonBench; never push it).
 - venv q35t29 rebuilt OFFLINE on a TamIA compute node (scripts/env/q35t29_build_offline.sh: CVMFS wheelhouse + uv
   cache; torch 2.9.1 / triton 3.5.0 / transformers 5.14.1 / peft 0.19.1 / fla 0.4.1; pyarrow, datasets, trl dropped).
 - BLOCKER: no split-v5 data on TamIA (final_v5_clean, elicit inputs, 27B labels, Dolly, gsm8k_train, base_gens,
