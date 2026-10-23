@@ -35,7 +35,8 @@ PY
 test -n "${CK:-}" || { echo "no checkpoint under $R"; exit 1; }
 # Trend evals, once per 200 global steps (and at the end) on the newest full checkpoint: GSM8K 768 tok (+ math
 # brief), the fixed race (train concepts, 16 turns, no switches) and the full training protocol race (24 turns,
-# switches + budget). Races use final_v4b_4b = the settings of the step 150-500 races (comparable trend).
+# switches + budget), 96 episodes each (48-episode races spread ~0.15 on k2 across seeds). Races use final_v4b_4b =
+# the settings of the step 150-500 races (comparable trend).
 evals() {  # global step, checkpoint
   local g=$1 ck=$2 D=/scratch/sneheel/next_chameleons_artifacts/tica/diag/v4c_trend
   mkdir -p "$D"; grep -qx "$g" "$D/done" 2>/dev/null && return 0
@@ -43,9 +44,9 @@ evals() {  # global step, checkpoint
   sbatch --parsable --time=02:00:00 -J cap_v4c_$g scripts/slurm/tica_capability.sh final_v4c_4b "$D/cap_$g.json" \
     --adapter "$ck" --benches gsm8k --briefs math --gsm-max-new-tokens 768
   sbatch --parsable --time=03:00:00 -J race_v4c_${g}_fixed scripts/slurm/tica_switch_eval.sh final_v4b_4b \
-    "$D/race_${g}_fixed.json" --adapter "$ck" --topics train --episodes 48 --turns 16 --switch-prob 0
+    "$D/race_${g}_fixed.json" --adapter "$ck" --topics train --episodes 96 --turns 16 --switch-prob 0
   sbatch --parsable --time=04:00:00 -J race_v4c_${g}_full scripts/slurm/tica_switch_eval.sh final_v4b_4b \
-    "$D/race_${g}_full.json" --adapter "$ck" --topics train --episodes 48 --turns 24 --switch-prob 1.0 \
+    "$D/race_${g}_full.json" --adapter "$ck" --topics train --episodes 96 --turns 24 --switch-prob 1.0 \
     --min-seg 8 --turn-budget 5,8,8
   echo "$g" >> "$D/done"; echo "trend evals queued for global $g"
 }

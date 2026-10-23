@@ -5,6 +5,23 @@ checkpoints, observed results, and unresolved limitations.
 
 TICA on a new machine: start at docs/tica/README.md (results digest, run ledger, open questions, aggregate snapshot).
 
+## 2026-10-23n v4c from global 600: first 104 steps; switching does not lower first-concept k2 (seed 2)
+- v4c chunk 1 (6859681, 2x A100-40GB, 16 episodes / step): global 704 after 9.2 h; 300-440 s / step; peak memory
+  33.2 GB allocated / 35.9 GB reserved (fits). Training pass by probe index (25-step bins from 600): k1 0.54 / 0.64 /
+  0.62 / 0.67 / 0.76 (n 124, partial bin), k2 0.08 / 0.12 / 0.09 / 0.19 / 0.21, k3 0.19 / 0.03 / 0.05 / 0.21 / 0.08
+  (n 12-52); v4b 500-600 was k1 0.55-0.64, k2 0.08-0.14. KL 0.15-0.23 (v4b 0.12-0.16); in-training GSM 0.86-0.94.
+- Held-out detection detho_turn_* rose from ~0.70 to ~0.92 at the switch, but this is a train_mix artifact: v4c drops
+  the mismatch condition (held-out detection ~0.02 there). Within the real_score condition it is unchanged (tN
+  0.87-0.94 both before and after the switch).
+- Val (held-out concepts, 32 ep, switches): k1 / k2 / k3 0.46 (65) / 0.33 (27) / 0.20 (5) at 600 -> 0.55 (64) /
+  0.45 (31) / 0.33 (12) at 650 (first v4c val); val_score 0.19 -> 0.33.
+- Seed-2 switch-only race at global 500 (96 ep): first-concept k2 0.32 (88) = budget-only seed 2 0.32 (87). Seed 1
+  had 0.24 vs 0.47. Switching does not lower first-concept k2; 10-23k's "noise" verdict holds. Switched-in k1 0.60
+  (139), k2 0.14 (77).
+- Chain trend races (800 / 1000 / 1200) now use 96 episodes (was 48). The queued chunk 2 (6867696) still holds the
+  48-episode script, but it starts at ~global 740, before the step-800 checkpoint exists, so all trend races run at 96.
+- ETA: ~140 steps / 12 h chunk -> global 1200 in ~4 more chunks (~2 days plus queue time).
+
 ## 2026-10-23m Baseline at global 600 (last v4b weights); race seed noise is large
 - Global 600: fixed race k1 0.96 (48), k2 0.41 (46), k3 0.17 (18), pass / turn 0.082; full-protocol race k1 0.64 (97),
   k2 0.24 (55), k3 0.11 (9), pass / turn 0.076; GSM8K 768 tok clean 0.870 / math brief 0.865 (base 0.895 / 0.805).
