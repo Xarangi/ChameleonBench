@@ -5,6 +5,17 @@ checkpoints, observed results, and unresolved limitations.
 
 TICA on a new machine: start at docs/tica/README.md (results digest, run ledger, open questions, aggregate snapshot).
 
+## 2026-10-23k First-concept k2 gap (switch vs no-switch races): no mechanism found, likely noise
+- What switching is (episodes.py): with concept_switch_prob the sampler draws a concept schedule up front
+  (switch_schedule, min segment 8, up to switch_max switches); texts are fresh per turn either way; the switch is
+  announced in the feedback before the first turn of the new segment (MONITOR_SWITCH). Turns BEFORE the switch are
+  drawn exactly as in a no-switch episode, so the model cannot see that a switch is coming.
+- Shared-state check: the race's kind bandit learns across episodes, so switched-in segments could tilt refit kinds
+  for first-concept refits. Not supported: first-concept k2 kind mix is similar (switch race even has more linear,
+  10 vs 7) and the gap is within kinds (linear 0.20 vs 0.57, attnpool 0.25 vs 0.50).
+- Noise: first-concept k2 pass by race batch of 8 episodes ranges 0.00-0.86 (budget race) and 0.00-0.43 (switch
+  race); n ~7 per batch. Reading: likely noise; the seed-2, 96-episode replication (6858892 / 6858893) decides.
+
 ## 2026-10-23j CORRECTION to 10-23i: switching does not make "refits after a switch" the problem; two separate effects
 - 10-23i compared race-level k2 only. Per segment (race turns.jsonl; the logs restart ep numbering every batch of 8,
   so episodes are keyed by batch; global 500, 24 turns, n per cell 13-72):
