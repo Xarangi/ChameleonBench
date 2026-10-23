@@ -10468,3 +10468,12 @@ Corrected 9B seed-17 result (`62340082`):
   638419 to reach 600. Drains replaced so they run the full quality check (TICA_DRAIN_QUALITY): 638417 (after 638106 =
   the pre-v4c check: held-out races at 300 + panel / capability / validity / persistence on step 340 / 320), 638418
   (after 638308), 638420 (after 638419). Old drains 638107 / 638309 cancelled.
+- 10-23 03:08 a64 switch done: both step_60 checkpoints saved (03:05), watcher cancelled 638106; 638308 resumes on v4c,
+  pre-v4c check drain 638417 waiting for a node.
+- 10-23 REFIT LADDER races (user: how much harder does each further refit get, up to ~10, turns per refit?). Our races
+  stop at ~k3-4 (24 turns, <= 8 per probe, a stand ends the episode; n 64 -> 2 by k4). Ladder = one concept, no switches,
+  80 turns, fresh refit after every beat, by_probe_index to k12 (new --max-k). Variants: stop (turn budget 1,8,8: a
+  probe standing 8 judged turns ends the ladder) and stay (1,80,8: a probe judges until beaten). 16 episodes, free
+  answers + --ask-concept, held-out and train topics. Models: production 1-bit s680 / score s660, a64 1-bit s340 /
+  score s320 (pre-v4c step_60), base (stop only). Job 638471 (18 races; runs/ladder_1023/). Note: turns-to-beat counts
+  monitor-off turns too (off_turn_prob 0.15).

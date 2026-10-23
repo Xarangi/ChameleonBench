@@ -37,7 +37,7 @@ from next_chameleons.tica.monitors import MonitorPool
 from next_chameleons.tica.trainers.supervised import beat_summary, probe_index_metrics
 
 
-def pass_fork_summary(trajs, n, m) -> dict:
+def pass_fork_summary(trajs, n, m, max_k: int = 5) -> dict:
     """--pass-forks: share of the re-sampled answers that also pass, per pass event; ROBUST pass =
     >= m of n; by_probe_index recomputed with only robust passes counted as passes."""
 
@@ -55,7 +55,7 @@ def pass_fork_summary(trajs, n, m) -> dict:
             "pass_fork_share_mean": sum(fr) / len(fr) if fr else None,
             "robust_pass_frac": sum(f * n >= m for f in fr) / len(fr) if fr else None,
             "pass_fork_hist": {str(k): sum(round(f * n) == k for f in fr) for k in range(n + 1)},
-            "by_probe_index_robust": probe_index_metrics(robust)}
+            "by_probe_index_robust": probe_index_metrics(robust, max_k)}
 
 
 def main():
@@ -98,6 +98,8 @@ def main():
                     help="override adaptive.first_probe (10-16i: fork = the first probe of every "
                          "concept is fit on the policy's own states at that turn)")
     ap.add_argument("--seed", type=int, default=1)
+    ap.add_argument("--max-k", type=int, default=5,
+                    help="by_probe_index: banks k >= this are pooled (10-23 refit LADDER races: 12)")
     ap.add_argument("--turn-budget", default="",
                     help="R,M,S: turn-budget episodes (final.turn_budget, 10-19): every probe gets "
                          ">= R judged turns of runway and stands <= M; first switch by T - S. "
@@ -334,9 +336,9 @@ def main():
                for k in sorted({r["turns"] for r in tr.deploy_log if not r["beaten"]})},
            "deploy_records": tr.deploy_log,
            # PASS RATE BY PROBE INDEX (10-17u): k-th bank of each concept segment beaten?
-           "by_probe_index": probe_index_metrics(all_trajs),
+           "by_probe_index": probe_index_metrics(all_trajs, a.max_k),
            "always_pass": a.always_pass, "no_refit": a.no_refit,
-           **pass_fork_summary(all_trajs, a.pass_forks, a.pass_min),
+           **pass_fork_summary(all_trajs, a.pass_forks, a.pass_min, a.max_k),
            "persist_pass_rate": mean([x for v in persist.values() for x in v]),
            "persist_n": sum(len(v) for v in persist.values()),
            "persist_by_lag": {str(k): mean(v) for k, v in sorted(persist.items()) if k <= 8},
