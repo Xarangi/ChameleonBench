@@ -187,3 +187,55 @@ def test_panel_precompute_fills_every_key_the_rollout_draws(tmp_path):
     tr.rollout([_spec(base_name, f"e{k}") for k in range(6)])
     recs = [r for r in tr._refit_log if "panel_cache" in r]
     assert recs and all(r["panel_cache"] == "hit" for r in recs)
+
+
+def test_match_anchor_panel_anchors_every_panel_probe(tmp_path):
+    """adaptive.match_anchor "panel" (10-22): no-brief / neg_text / monitor-off MATCH targets are
+    every turn-0 panel probe of the concept (base model, all kinds) instead of the single primary-
+    layer probe; "monitor" (default) keeps the old single target; a training step runs."""
+    from next_chameleons.tica.adaptive import AdaptiveConfig
+    from next_chameleons.tica.episodes import EpisodeSpec
+
+    assert AdaptiveConfig().match_anchor == "monitor"
+    kinds = ["linear@1", "linear@2"]
+
+    def specs(base_name):
+        return [EpisodeSpec("nobrief|cats|a", "nobrief", ["aa", "bb", "cc"], "cats", "cats",
+                            base_name),
+                _spec(base_name, "b")]
+
+    def match_targets(tr, trajs):
+        return [tg for tg in tr._targets(trajs) if tg.role == "match"]
+
+    old, base_name = _trainer(tmp_path / "old", first_probe_panel_from_start=True,
+                              first_probe_panel_kinds=kinds, off_turn_prob=1.0)
+    trajs, _ = old.rollout(specs(base_name))
+    m = match_targets(old, trajs)
+    assert m and {tg.monitor for tg in m} == {base_name}
+
+    tr, base_name = _trainer(tmp_path / "new", first_probe_panel_from_start=True,
+                             first_probe_panel_kinds=kinds, off_turn_prob=1.0,
+                             match_anchor="panel")
+    trajs, _ = tr.rollout(specs(base_name))
+    off_turns = [(k, t) for k, tj in enumerate(trajs) for t, r in enumerate(tj.results)
+                 if r.get("off")]
+    assert off_turns  # monitor-off turns in the real episode (turns >= 1)
+    m = match_targets(tr, trajs)
+    fam = {e.monitor.name: e.family for e in tr.pool.entries}
+    assert m and all(fam[tg.monitor] == "turn0_panel" for tg in m)
+    per_turn = {}
+    for tg in m:
+        per_turn.setdefault((tg.traj, tg.turn), set()).add(tg.monitor)
+    assert all(len(v) == len(kinds) for v in per_turn.values())  # every panel kind, every turn
+    nob = {n for (k, _), v in per_turn.items() if k == 0 for n in v}
+    off = {n for (k, _), v in per_turn.items() if k == 1 for n in v}
+    assert nob and off and nob.isdisjoint(off)  # each condition's own base probes
+    assert set(tr._anchor_names(trajs[0].spec, "cats")) == nob  # cached, same names
+    assert tr.pool.concept_monitor("cats").name == base_name  # selectivity readout unchanged
+    from next_chameleons.tica.episodes import ConceptTexts
+
+    tr.sampler = SimpleNamespace(  # a full training step with the panel anchor
+        concepts=[ConceptTexts("cats", "train", [f"meow {k}" for k in range(8)])],
+        sample=lambda n: specs(base_name))
+    met = tr.step()
+    assert met["n_targets"] > len(m) // 2 and met["train/loss"] == met["train/loss"]

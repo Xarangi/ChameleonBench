@@ -416,6 +416,14 @@ class AdaptiveConfig:
     # the fitting code), so any change is a miss, never a stale probe. Saves the panel fits (most of
     # the first steps' rollout) in every run after the first.
     first_probe_panel_cache: str = ""
+    # READABILITY ANCHOR of the "act normal" MATCH targets (user 10-22; REPLICATION 10-22): on no-brief,
+    # neg_text and monitor-OFF turns the model keeps probe scores at the base model's. "monitor" (earlier
+    # runs) = the episode's round-0 base concept probe, i.e. ONLY the primary layer (L12), which pinned L12
+    # readable while hiding trained against every depth. "panel" = EVERY turn-0 panel probe of the concept
+    # for that condition (all architectures x training depths, base model; the same fits / disk cache as
+    # first_probe_panel), each a MATCH target (the MATCH term is a mean over targets, so its total weight is
+    # unchanged). Held-out layers / kinds are never in the panel. Mismatch turns are unchanged.
+    match_anchor: str = "monitor"
     # [] = the in-training zoo: every single-layer kind of episode_refit_kinds at every kind_layers
     # depth + the multi-layer kinds (ens4 / ensdeep4); held-out kinds / depths are refused.
     first_probe_panel_kinds: list = field(default_factory=list)

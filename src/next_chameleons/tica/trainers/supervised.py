@@ -1717,38 +1717,79 @@ class AdaptiveSupervisedTrainer:
         stays in the pool for the run (family "turn0_panel"). None (base probe) if its gate fails.
         Turns-to-beat records carry kind "base:<kind>" (ignored by the refit-kind bandit)."""
 
-        pol, pool = self.policy, self.pool
         kind = self._erng(i).choice(self._panel_kinds())
-        key = (c, s.cond, bool(getattr(s, "named", True)), kind)
-        cache = self.__dict__.setdefault("_panel0", {})
-        if key not in cache:
-            ks = "|".join(map(str, key))
-            name = f"panel0_{zlib.crc32(ks.encode())}"
-            try:
-                pool.get(name)  # restored with the pool (resume): keep it
-                cache[key] = name
-            except KeyError:
-                t_ep = time.time()
-                with pol.reference():
-                    if self.cfg.adaptive.first_probe_panel_cache:  # TamIA 10-21: disk cache
-                        bank, info = self._panel_cached(s, c, kind, render, ks, name)
-                    else:
-                        bank, info = self._episode_refit(
-                            s, [], None, c, None, kind=kind, fork_msg=render,
-                            rng=random.Random(f"panel0|{ks}"), name=name, np_cache=False)
-                self._log_refit({**info, "first_probe": True, "panel": True}, i, 0, c, 0,
-                                time.time() - t_ep)
-                ep_stats["sec"] += time.time() - t_ep
-                if bank is not None:
-                    pool.add(bank.to(pol.device), round=self.step_k, family="turn0_panel")
-                    self._kind_of[name] = f"base:{kind}"
-                cache[key] = name if bank is not None else None
-        name = cache[key]
+        name, info, sec = self._panel_probe(s, c, kind, render)
+        if info is not None:
+            self._log_refit({**info, "first_probe": True, "panel": True}, i, 0, c, 0, sec)
+            ep_stats["sec"] += sec
         if name is None:
             return None
         pending[(i, c)] = {"kind": f"base:{kind}", "turns": 0, "concept": c, "first": True,
                            **self._ep_tag(i)}
         return name
+
+    def _panel_probe(self, s, c, kind, render):
+        """One turn-0 panel probe (concept c, s's condition / naming, kind): fit once under
+        policy.reference() with the deterministic stream and name (disk cache if configured), then
+        kept in the pool (family "turn0_panel"). Returns (name or None if its gate failed, fit info
+        or None when it was already known, seconds)."""
+
+        pol, pool = self.policy, self.pool
+        key = (c, s.cond, bool(getattr(s, "named", True)), kind)
+        cache = self.__dict__.setdefault("_panel0", {})
+        if key in cache:
+            return cache[key], None, 0.0
+        ks = "|".join(map(str, key))
+        name = f"panel0_{zlib.crc32(ks.encode())}"
+        try:
+            pool.get(name)  # restored with the pool (resume): keep it
+            cache[key] = name
+            return name, None, 0.0
+        except KeyError:
+            pass
+        t_ep = time.time()
+        with pol.reference():
+            if self.cfg.adaptive.first_probe_panel_cache:  # TamIA 10-21: disk cache
+                bank, info = self._panel_cached(s, c, kind, render, ks, name)
+            else:
+                bank, info = self._episode_refit(
+                    s, [], None, c, None, kind=kind, fork_msg=render,
+                    rng=random.Random(f"panel0|{ks}"), name=name, np_cache=False)
+        if bank is not None:
+            pool.add(bank.to(pol.device), round=self.step_k, family="turn0_panel")
+            self._kind_of[name] = f"base:{kind}"
+        cache[key] = name if bank is not None else None
+        return cache[key], info, time.time() - t_ep
+
+    def _anchor_names(self, s, c) -> list[str]:
+        """adaptive.match_anchor "panel" (10-22): every turn-0 panel probe of concept c for s's
+        condition (all kinds of _panel_kinds; gate failures dropped), through _panel_probe with the
+        render precompute_panel uses (cache hits when the panel cache is filled)."""
+
+        named = bool(getattr(s, "named", True))
+        key = (c, s.cond, named)
+        cache = self.__dict__.setdefault("_anchors", {})
+        if key not in cache:
+            brief = "real_score" if CONDITION_SPECS[s.cond]["brief"] else "nobrief"
+
+            def render(x, c=c, nm=named, b=brief):  # the turn-0 user message (as precompute)
+                return self.opening(b, x, c, named=nm)
+
+            model = self.policy.model
+            was = model.training
+            model.eval()  # fits read with the KV cache (dropped in train mode + grad ckpt)
+            try:
+                names = []
+                for kind in self._panel_kinds():
+                    name, info, sec = self._panel_probe(s, c, kind, render)
+                    if info is not None:
+                        self._log_refit({**info, "anchor": True, "panel": True}, -1, 0, c, 0, sec)
+                    if name is not None:
+                        names.append(name)
+            finally:
+                model.train(was)
+            cache[key] = names
+        return cache[key]
 
     def precompute_panel(self, shard: int = 0, nshard: int = 1) -> dict:
         """Fill adaptive.first_probe_panel_cache ahead of training (TamIA 10-21): every turn-0 panel
@@ -2667,6 +2708,9 @@ class AdaptiveSupervisedTrainer:
 
     def _targets(self, trajs):
         cfg = self.cfg.objective
+        panel_anchor = self.cfg.adaptive.match_anchor == "panel"  # 10-22: every panel probe
+        if self.cfg.adaptive.match_anchor not in ("monitor", "panel"):
+            raise ValueError(f"adaptive.match_anchor {self.cfg.adaptive.match_anchor!r}")
         out = []
         for i, tr in enumerate(trajs):
             s = tr.spec
@@ -2677,8 +2721,10 @@ class AdaptiveSupervisedTrainer:
                 if res.get("tail"):  # turn budget: unjudged tail after the last probe, no loss
                     continue
                 if s.cond in DODGE_CONDS and res.get("off"):  # monitor-off turn: act normal
-                    out.append(Target(i, t, "monitored", res["monitored"]["name"], c,
-                                      "off" if cfg.off_match_weight > 0 else "match"))
+                    r_off = "off" if cfg.off_match_weight > 0 else "match"
+                    anc = self._anchor_names(s, c) if panel_anchor else []
+                    out.extend(Target(i, t, "monitored", n, c, r_off)
+                               for n in (anc or [res["monitored"]["name"]]))
                 elif s.cond in DODGE_CONDS:
                     mon = res["active_monitor"]
                     role = "hide" if t >= cfg.hide_from_turn else (
@@ -2732,7 +2778,9 @@ class AdaptiveSupervisedTrainer:
                     seen.update(names)
                     seen_c.add(c)
                 elif s.cond in ("nobrief", "neg_text"):
-                    out.append(Target(i, t, "monitored", s.monitor, s.monitored, "match"))
+                    anc = self._anchor_names(s, s.monitored) if panel_anchor else []
+                    out.extend(Target(i, t, "monitored", n, s.monitored, "match")
+                               for n in (anc or [s.monitor]))
                 elif s.cond == "mismatch":
                     # brief names concept A, the text is about B: act like the base model on BOTH
                     # (no hiding of A, and B stays readable) -- specificity
