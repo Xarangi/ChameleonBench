@@ -216,6 +216,13 @@ TICA on a new machine: start at docs/tica/README.md (results digest, run ledger,
   results[t]["robust_share"]. Test (24 passed, 638109). On in final_v4c (8 / 6); off in production and the pilots.
 - User 10-22: robust pass stays OFF everywhere for now, final_v4c included (pass_robust_n 0; the feature and its
   test stay; 8 / 6 is the planned setting when enabled).
+- a64 PILOT BASELINE EVALS (drain 637995, BEFORE the anchor switch): held-out races (38 held-out concepts) 1-bit
+  50-250: k2 0.09 / 0.41 / 0.22 / 0.38 / 0.40, beat 0.13-0.34; score k2 0.15 / 0.21 / 0.31 / 0.36 / 0.41, beat 0.18 ->
+  0.37 (r32 pilots at 250: k2 0.07 / 0.29, beat 0.22 / 0.37; production at 450-500: k2 0.38-0.51, beat 0.41-0.54).
+  Families at 250 reached: safety 0.5, emotion / domain ~0.28, topic 0.17-0.22, tone 0.2, language 0.07-0.13, format 0.
+  Capability (512 tok): 1-bit s280 GSM8K 0.91 / 0.86 / 0.90, score s260 0.895 / 0.915 / 0.895; MMLU 0.66-0.68 (base
+  0.90 / 0.825 / 0.82, MMLU 0.66-0.695) -> at or above base. So r128 / alpha 64 transfers to held-out concepts far
+  better than r32 at the same 5 concepts, close to the 20-concept production run, with base-level capability.
 
 ## 2026-10-21as RELAUNCH interleaved (user: GPU efficiency first): both arms share one node, model.lm_chunk 1024
 - Smokes with chunked LM terms + warm panel cache: L6 (one arm, DP4) step 1 158 s (L1: 864 s), peak 16.2 GB alloc /
