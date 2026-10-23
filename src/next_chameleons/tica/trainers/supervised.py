@@ -26,6 +26,7 @@ import json
 import math
 import os
 import random
+import threading
 import time
 import zlib
 from collections import defaultdict
@@ -495,12 +496,19 @@ def _rng_eq(a, b) -> bool:
     return a[1] is None or all(torch.equal(x, y) for x, y in zip(a[1], b[1], strict=True))
 
 
-def _iso_fit(job: dict, grad: bool):
+_SIDE = threading.local()  # refit_overlap_stream: one side CUDA stream per worker thread
+
+
+def _iso_fit(job: dict, grad: bool, ready=None):
     """adaptive.refit_overlap's worker: _refit_fit(job) with the caller's grad mode and device,
     the global torch RNG isolated. Fits seed themselves from the probe name (torch.manual_seed +
     module init), so their results do not depend on the state they start from; the state they
     END in does, and the main thread restores the serial one at the join. Returns ((probe, info),
-    RNG end state or None if the fit left the RNG untouched, fit seconds)."""
+    RNG end state or None if the fit left the RNG untouched, fit seconds).
+    ready (adaptive.refit_overlap_stream, 10-23): a CUDA event recorded on the main stream after the
+    job's reads; the fit then runs on this thread's SIDE stream (after the event), so its many small
+    kernels overlap the main thread's next reads instead of queueing behind them on one stream. The
+    side stream is synchronised before returning, so the probe is complete when the future is."""
 
     t0 = time.time()
     dev = job["device"]
@@ -513,11 +521,25 @@ def _iso_fit(job: dict, grad: bool):
     canary = _rng_get()
     try:
         with torch.set_grad_enabled(grad):
-            out = _refit_fit(job)
+            if ready is not None:
+                side = getattr(_SIDE, "s", None)
+                if side is None or side.device != ready_dev(dev):
+                    side = _SIDE.s = torch.cuda.Stream(device=ready_dev(dev))
+                side.wait_event(ready)
+                with torch.cuda.stream(side):
+                    out = _refit_fit(job)
+                side.synchronize()
+            else:
+                out = _refit_fit(job)
         after = _rng_get()
     finally:
         _rng_set(before)
     return out, (None if _rng_eq(after, canary) else after), time.time() - t0
+
+
+def ready_dev(dev) -> torch.device:
+    return dev if isinstance(dev, torch.device) and dev.type == "cuda" else torch.device(
+        "cuda", torch.cuda.current_device())
 
 
 def _probe_tensors(obj, depth: int = 0):
@@ -1081,8 +1103,14 @@ class AdaptiveSupervisedTrainer:
                 self._ovl_pool = ThreadPoolExecutor(max_workers=1,
                                                     thread_name_prefix="tica-refit-fit")
 
+        side = overlap and acfg.refit_overlap_stream and torch.cuda.is_available()
+
         def ovl_fit(job):
-            return self._ovl_pool.submit(_iso_fit, job, torch.is_grad_enabled())
+            ready = None
+            if side:  # the job's reads are queued on the main stream: the fit waits for them
+                ready = torch.cuda.Event()
+                ready.record()
+            return self._ovl_pool.submit(_iso_fit, job, torch.is_grad_enabled(), ready)
 
         def np_snap():  # the no-prompt read cache (refit_np_cache) after a read
             cch = getattr(self, "_np_cache", None)
@@ -1196,10 +1224,8 @@ class AdaptiveSupervisedTrainer:
         def_by: list[dict] = [{} for _ in specs]
         dep_by: list[dict] = [{} for _ in specs]  # deployed probes per concept
         v5 = getattr(self.render_feedback, "v5", False)  # layout tagged_v5 (10-23)
-        if v5 and acfg.refit_overlap:
-            raise ValueError("layout tagged_v5 needs serial refits (refit_overlap off): the "
-                             "new-monitor notice is rendered before overlapped refits finish")
         v5_last: dict = {}  # (episode, concept, probe) -> score shown at its last judged turn
+        v5_fix: list = []  # this turn's v5 messages: "New monitor" re-checked after the refits
 
         def defender(i, s, c):
             if c not in def_by[i]:
@@ -1508,6 +1534,8 @@ class AdaptiveSupervisedTrainer:
                         key = (i, c, res["active_monitor"])
                         kw["prev_score"] = v5_last.get(key)
                         v5_last[key] = shown[0]
+                        v5_fix.append((i, s, c, c_next, res["active_monitor"], shown_cond, shown,
+                                       nxt, kw))
                     fb = self.render_feedback(shown_cond, c, shown, nxt,
                                               feedback=s.feedback, named=s.named, **kw)
                     umsg[i] = (lambda x, sc=shown_cond, cc=c, sh=shown, kw=kw, s=s:
@@ -1516,6 +1544,18 @@ class AdaptiveSupervisedTrainer:
                     tr.feedback.append(fb)
                     convs[i].append({"role": "user", "content": fb})
             ovl_join()  # refit_overlap: the turn's refits, before the next turn uses them
+            for i, s, c, c_next, name_t, sc, sh, nxt, kw in v5_fix:
+                # tagged_v5 + refit_overlap: a refit finished at the join -> the message already
+                # in the conversation gets its "New monitor" notice (umsg[i] shares kw)
+                nd = def_by[i].get(c_next)
+                want = c_next == c and nd is not None and nd.active != name_t
+                if want != kw["new_monitor"]:
+                    kw["new_monitor"] = want
+                    fb = self.render_feedback(sc, c, sh, nxt, feedback=s.feedback, named=s.named,
+                                              **kw)
+                    convs[i][-1] = {"role": "user", "content": fb}
+                    trajs[i].feedback[-1] = fb
+            v5_fix.clear()
             if pf_items:
                 self._pass_forks(pf_items, trajs, t, def_by, free["max_new"], pf_n, pf_temp, rl,
                                  roll_tok)

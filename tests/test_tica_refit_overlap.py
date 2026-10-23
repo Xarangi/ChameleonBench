@@ -15,7 +15,12 @@ sys.path.insert(0, str(Path(__file__).parent))
 DROP = {"sec", "sec_read"}
 
 
-def _run(tmp_path, monkeypatch, overlap: bool, kinds, switch: int):
+class _Req(dict):  # answer-format inputs: every text id maps to a request
+    def __missing__(self, k):
+        return f"request {k}"
+
+
+def _run(tmp_path, monkeypatch, overlap: bool, kinds, switch: int, v5: bool = False):
     from next_chameleons.tica import trainers
     from next_chameleons.tica.adaptive import AdaptiveConfig, AdaptiveDefender
     from next_chameleons.tica.episodes import ConceptTexts, EpisodeSpec
@@ -47,12 +52,16 @@ def _run(tmp_path, monkeypatch, overlap: bool, kinds, switch: int):
             episode_kind_sampling="uniform", episode_rng=True, episode_keep=True,
             refit_np_cache=True, refit_overlap=overlap,
             episode_fork={"pos": 8, "np": 8, "other": 8, "free": 3}))
-    out = tmp_path / ("on" if overlap else "off")
+    out = tmp_path / (("on" if overlap else "off") + ("_v5" if v5 else ""))
     tr = AdaptiveSupervisedTrainer(
         pol, pool, FakeSampler(), cfg, out,
         branch_concepts=[ConceptTexts("cats", "train", [f"meow {k}" for k in range(12)]),
                          ConceptTexts("dogs", "train", [f"woof {k}" for k in range(12)])],
         branch_negatives=["a b", "c d", "e f", "g h"])
+    if v5:  # layout tagged_v5: the "New monitor" notice must not depend on the overlap
+        from next_chameleons.tica.answer_format import tagged_prompts
+
+        tr.opening, tr.render_feedback = tagged_prompts(_Req(), "tagged_v5")
     (out / "bank").mkdir(parents=True, exist_ok=True)
     monkeypatch.setenv("TICA_DUMP_REFITS", str(out / "dump"))  # every refit's tensors (zoo too)
     orig = AdaptiveDefender.score
@@ -74,6 +83,9 @@ def _run(tmp_path, monkeypatch, overlap: bool, kinds, switch: int):
     banks = {f"{d}/{p.name}": torch.load(p, weights_only=False)
              for d in ("bank", "dump") for p in sorted((out / d).glob("*.pt"))}
     res = [[{k: v for k, v in r.items()} for r in t.results] for t in trajs]
+    if v5:
+        res.append([list(t.feedback) for t in trajs])
+        res.append([[x["content"] for x in t.convs[-1]] for t in trajs])
     return recs, banks, res, m, rng_end
 
 
@@ -87,9 +99,9 @@ def _same_state(a, b):
     return a == b
 
 
-def _check(tmp_path, monkeypatch, kinds, switch):
-    off = _run(tmp_path, monkeypatch, False, kinds, switch)
-    on = _run(tmp_path, monkeypatch, True, kinds, switch)
+def _check(tmp_path, monkeypatch, kinds, switch, v5=False):
+    off = _run(tmp_path, monkeypatch, False, kinds, switch, v5)
+    on = _run(tmp_path, monkeypatch, True, kinds, switch, v5)
     assert off[0] == on[0] and len(off[0]) >= 8  # refit records: kinds, kept/why, auroc, order
     assert off[1].keys() == on[1].keys() and any(k.startswith("dump/") for k in off[1])
     for k in off[1]:
@@ -110,3 +122,9 @@ def test_refit_overlap_exact_with_switch_fallback(tmp_path, monkeypatch):
 
 def test_refit_overlap_exact_no_switch(tmp_path, monkeypatch):
     _check(tmp_path, monkeypatch, ["linear", "rlobf_attn"], switch=0)
+
+
+def test_refit_overlap_exact_with_v5_notices(tmp_path, monkeypatch):
+    """tagged_v5 + refit_overlap (10-23): messages (incl. "New monitor") equal the serial path."""
+    m = _check(tmp_path, monkeypatch, ["linear", "rlobf_attn"], switch=0, v5=True)
+    assert m["ep_refits"] > 0

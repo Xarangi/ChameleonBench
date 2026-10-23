@@ -319,6 +319,10 @@ class AdaptiveConfig:
     # state. Needs episode streams (episode_rng / DP); otherwise, and with episode_kind_sampling
     # "prioritized" + refit_switch_max, refits stay serial.
     refit_overlap: bool = False
+    # refit_overlap_stream (10-23; needs refit_overlap): the worker's fits run on a SIDE CUDA stream
+    # so they overlap the main thread's reads on the GPU (the 10-21e test found same-stream overlap
+    # saved ~1 s/step). Same kernels, same inputs, same serial order: results unchanged.
+    refit_overlap_stream: bool = False
     # 10-21k: no-prompt (no-brief) texts as refit fit positives (False: in-context forks only)
     refit_np_in_fit: bool = True
     # 10-21o: gate on out-of-fold IN-CONTEXT TPR at each fold's refit_fpr threshold (0 = off;
