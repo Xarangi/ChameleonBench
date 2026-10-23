@@ -10489,3 +10489,13 @@ Corrected 9B seed-17 result (`62340082`):
   final_v5_tamia_4b (1-bit) = final_v4c + tagged_v5. Needs a panel-cache refill first (the fork conversations are in the
   keys). New eval control tica_switch_eval --scramble-score (true verdict, random score on its side: is the number
   used?), not run. Tests tests/test_tica_v5_layout.py (5) pass; ruff unchanged.
+- 10-23 STEP TIME TRACKS REFITS: both runs began at 120-160 s/step; a64 1-bit refits/step 1.1 -> 7.5 -> 15.7 -> 21.1 ->
+  28.5 (steps 0 / 60 / 120 / 180 / 300) with sec 120 -> 305; production 0.7 -> 18.1 (0 -> 600), sec 162 -> 278. Training
+  update flat (36-50 s). Per refit ~17 s (read 8.5 + fit 8.6). Within one GPU-turn, 49% of a64 refits (production 29%)
+  share it with another refit (mostly pairs), across 7 probe kinds (no stacking into one solve).
+- 10-23 CROSS-EPISODE REFIT CONCURRENCY (user: build it): adaptive.refit_overlap_stream -- the existing exact
+  refit_overlap (fit on one worker thread, serial order, RNG isolated) now runs the fits on a SIDE CUDA stream, so they
+  overlap the next episodes' reads (10-21e same-stream overlap saved ~1 s/step). tagged_v5 now works with refit_overlap
+  (the "New monitor" notice is re-checked after the turn's join). CPU exactness tests incl. v5 pass (20). GPU A/B
+  638530 (zz_ovltest_off vs zz_ovltest_stream, 3 steps from a64 score resume_260/step_60, interleaved): step-1 rows must
+  be identical; then enable in v4c / v5 / the pilots' next chunk.
