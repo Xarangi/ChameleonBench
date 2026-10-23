@@ -214,6 +214,8 @@ TICA on a new machine: start at docs/tica/README.md (results digest, run ledger,
   step) and scored by every deployed probe; < min passing -> the turn is a CATCH shown with the strongest catching
   fork's score (no refit, hide loss as usual). Metrics robust_checks / robust_fail_frac / robust_share_mean;
   results[t]["robust_share"]. Test (24 passed, 638109). On in final_v4c (8 / 6); off in production and the pilots.
+- User 10-22: robust pass stays OFF everywhere for now, final_v4c included (pass_robust_n 0; the feature and its
+  test stay; 8 / 6 is the planned setting when enabled).
 
 ## 2026-10-21as RELAUNCH interleaved (user: GPU efficiency first): both arms share one node, model.lm_chunk 1024
 - Smokes with chunked LM terms + warm panel cache: L6 (one arm, DP4) step 1 158 s (L1: 864 s), peak 16.2 GB alloc /

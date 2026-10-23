@@ -103,7 +103,7 @@ rl:
     match_anchor: panel   # v4c (user 10-22): readability anchor = every turn-0 panel probe, not L12 only
     match_anchor_k: 0   # 10-22 (user): ALL pooled panel kinds every act-normal turn (8: linear @8-26 + 3 ensembles)
     match_anchor_tokens: false   # 10-22: pooled kinds only (linear @8-26 + ensembles); token kinds cost ~s per probe with grad
-    pass_robust_n: 8   # 10-22 (user, next runs): a pass counts only if >= 6 of 8 same-prefix fork reads also pass
+    pass_robust_n: 0   # 10-22 (user): robust pass OFF for now (feature kept; 8 / 6 = the planned setting)
     pass_robust_min: 6
     refit_min_each: 24
     refit_buf_cap: 512
