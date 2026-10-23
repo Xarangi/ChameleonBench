@@ -252,6 +252,11 @@ TICA on a new machine: start at docs/tica/README.md (results digest, run ledger,
 - 10-23 00:00 a64 at global 304 / 286 after 2h41 of 638106 (~305-313 s/step; three aborted restarts cost ~2 h); 296 /
   314 steps to 600 need ~26 h > 21 h left -> extra resume chunk 638308 (afterany 638106) + drain 638309; drain 638107 (after
   638106) evaluates the ~520 checkpoints incl. the step-300 panel.
+- 10-23 00:40 (user): quick L12 check job 638354 = never-shown panel, train concepts, 4 shards per arm (merged), on the
+  a64 pilots 40 steps after the all-pooled-anchor switch (1-bit resume_280/step_40 = global 320, score
+  resume_260/step_40 = global 300; the job waits for both). Baseline = the step-260 panels (linear@12 0.77). Layer
+  sampling now (last 20 steps, kind_p_layer_12): a64 0.18 / 0.16, production 0.15 / 0.20 (uniform 0.20); refit
+  catch at L12 a64 0.85 / 0.59, production 0.82 / 0.92.
 
 ## 2026-10-21as RELAUNCH interleaved (user: GPU efficiency first): both arms share one node, model.lm_chunk 1024
 - Smokes with chunked LM terms + warm panel cache: L6 (one arm, DP4) step 1 158 s (L1: 864 s), peak 16.2 GB alloc /
