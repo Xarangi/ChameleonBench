@@ -1,3 +1,6 @@
+# 10-23 v4c SWITCH (user): from the chunk-3 resume on, the v4c recipe: LoRA alpha 256 -> 64 (resumed checkpoint
+#   rescaled, same function), train_mix 0.75 / 0.15 / 0.10 (no mismatch), all-pooled MATCH anchor, act_anchor 1.0.
+#   Steps before the switch used the v4b settings below as they were (REPLICATION 10-23).
 # TamIA 10-21 (user): final_v4b_score_4b with LoRA rank 128 (alpha 256, scale 2 as every earlier config) and 16 episodes per step (4 per rank on 4 GPUs: same per-rank work, 2x the episodes per update); everything else identical. docs/tica/TAMIA-V4B.md
 # SCORE-FEEDBACK ARM of final_v4b_4b (user 10-21: two TamIA arms, binary + score; REPLICATION 10-21u/ah): identical
 # except episodes.feedback score (each turn shows the judging probe's 0-100 score vs threshold) and the out paths.
@@ -41,8 +44,8 @@ out: /scratch/s/sneheel/next_chameleons_artifacts/tica/runs/final_v4b_score_tami
 episodes: {feedback: score, hidden: false, format: answer, layout: tagged,
            inputs: /scratch/s/sneheel/next_chameleons_raw_cache/tica/final_v5_elicit_inputs.json}  # 10-19d: concept-eliciting requests (build_elicit_inputs.py)
 data: /scratch/s/sneheel/next_chameleons_raw_cache/tica/final_v5_clean.json   # split v5 (build_final_v5.py; finance positives 27B-filtered)
-lora: {rank: 128, alpha: 256, dropout: 0.0, target_modules: all-linear}   # TamIA 10-21 (user): rank 32 -> 128, alpha = 2 x rank as in the r16 -> r32 step
-train_mix: {real_score: 0.5, mismatch: 0.15, nobrief: 0.2, neg_text: 0.15}
+lora: {rank: 128, alpha: 64, dropout: 0.0, target_modules: all-linear}   # 10-23 v4c switch: alpha 256 -> 64 (the resumed checkpoint is RESCALED: A, B x2, same function; scripts/tica_lora_rescale.py); was rank 128 / alpha 256 since 10-21
+train_mix: {real_score: 0.75, nobrief: 0.15, neg_text: 0.10}   # 10-23 v4c switch (user); was 0.5 / mismatch 0.15 / 0.2 / 0.15
 train:
   steps: 1200       # fixed steps, no early stopping, no checkpoint selection: the final checkpoint is the model
   episodes_per_step: 16   # TamIA 10-21 (user): 8 -> 16, cleaner gradient; 4 per rank at DP4 (loss normalised by step totals)
@@ -94,6 +97,10 @@ rl:
     first_probe_panel_from_step: 1   # v4b: (superseded by first_probe_panel_from_start)
     first_probe_panel_from_start: true   # v4b: turn 0 of the first concept = one base probe drawn from the in-training panel from global step 0 (user 10-21: no mid-run switch, no L12 rung; panel0 k1 0.46 / 0.79 at 10-19 / 20-29, 10-21ai)
     first_probe_panel_cache: /scratch/s/sneheel/next_chameleons_artifacts/tica/panel_probe_cache   # TamIA 10-21: base-model turn-0 panel probes cached on disk (content-hashed key; shared by both arms and every later run; filled ahead by scripts/slurm/tamia_panel_precompute.sh)
+    match_anchor: panel   # 10-23 v4c switch (user): readability anchor = every pooled turn-0 panel probe, not L12 only
+    match_anchor_k: 0
+    match_anchor_tokens: false
+    act_anchor_weight: 1.0   # 10-23 v4c switch: act-normal turns also match base activations at the training depths
     refit_min_each: 24
     refit_buf_cap: 512
     refit_C: 1.0

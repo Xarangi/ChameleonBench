@@ -10502,3 +10502,12 @@ Corrected 9B seed-17 result (`62340082`):
 - 10-23 04:35 ladder 638471 FAILED (0 / 18): 2 races per GPU OOMed at long context (~40 + 37 GB per GPU, 80-turn
   episodes, batch 8), then node tg11105's /tmp gave I/O errors (every later task died at setup). Resubmitted as 638531:
   1 race per GPU (PER_GPU=1), --batch 4, 24 h limit, --exclude=tg11105.
+- 10-23 PRODUCTION -> v4c (user). Configs final_v4b_tamia_4b / final_v4b_score_tamia_4b edited in place to the v4c
+  settings: LoRA alpha 256 -> 64, train_mix 0.75 / 0.15 / 0.10 (no mismatch), all-pooled MATCH anchor, act_anchor 1.0
+  (setting-for-setting equal to final_v4c except names / paths). Alpha mid-run without changing the model:
+  scripts/tica_lora_rescale.py multiplies every lora_A and lora_B by sqrt(256/64) = 2 (exact in bf16) and sets alpha 64,
+  so (alpha / r) B A is unchanged (checked: max rel err 0.0); Adam moments m / 2, v / 4 (update unchanged; checked on a
+  copy of step_200: 496 / 496 tensors). Afterwards each step moves B A ~2x less than at alpha 256.
+  Switch: 635097 + drain 635365 HELD; watcher cancels 635095 once the 1-bit arm saves resume_500/step_220 (global 720;
+  the score arm resumes from its step_220 = global 700, losing ~10 steps); conversion job 638559 (afterany 635095)
+  rescales both arms' newest checkpoints (originals -> <out>/a256_backup_<step>) and releases 635097 + 635365.
