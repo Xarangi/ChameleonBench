@@ -62,6 +62,8 @@ def main():
                          "thr| = the probe's running median): is the score used beyond the bit?")
     ap.add_argument("--feedback", choices=["verdict", "score"],
                     help="override episodes.feedback (arms trained with --set episodes.feedback)")
+    ap.add_argument("--set", action="append", default=[], metavar="KEY=VALUE",
+                    help="override a config field by dotted path, as in tica.py (repeatable)")
     ap.add_argument("--model-path")
     ap.add_argument("--data", help="override the config's data file (e.g. concept_eval_v1.json)")
     ap.add_argument("--inputs", help="override the config's answer-format inputs map")
@@ -101,6 +103,10 @@ def main():
     cfg = load_run_config(a.config)
     if a.feedback:
         cfg.episodes.feedback = a.feedback
+    if a.set:
+        from next_chameleons.tica.config import apply_overrides
+
+        apply_overrides(cfg, a.set)
     if a.model_path:
         cfg.model.path = a.model_path
     if a.kind:
@@ -256,7 +262,7 @@ def main():
     mean = lambda v: sum(v) / len(v) if v else None  # noqa: E731
     rep = {"config": a.config, "adapter": a.adapter, "base": a.base, "topics": topics,
            "episodes": a.episodes, "turns": a.turns, "switch_prob": a.switch_prob,
-           "falsify": a.falsify, "score_bit": a.score_bit, "turn_budget": budget,
+           "falsify": a.falsify, "score_bit": a.score_bit, "set": a.set, "turn_budget": budget,
            "cond": a.cond, "answers": a.answers,
            "ask_concept": a.ask_concept,
            "answer_max": a.answer_max if a.answers == "free" else None,

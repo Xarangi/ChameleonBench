@@ -5,6 +5,26 @@ checkpoints, observed results, and unresolved limitations.
 
 TICA on a new machine: start at docs/tica/README.md (results digest, run ledger, open questions, aggregate snapshot).
 
+## 2026-10-23b Why k2 works in math / v3b but not v4b: v4b alone fits refits on in-context states only; swap test queued
+- Resolved-config diff (final_v3b_4b | final_v4_math_v3b_r380_4b | final_v4b_4b): the probe zoo, kind bandit and
+  refit kinds are identical. v4b-only changes: refit_np_in_fit true -> FALSE (10-21k), refit gate tpr_np 0.8 -> tpr_ic
+  0.8 (10-21o), logclip + hide clip, stay_standalone, turn-0 panel from step 1, switch prob 1.0 + turn budget, 24 turns.
+  Shared by math and v4b but not v3b: KL 0.3, rank 32, retry ladder, family negatives.
+- Hypothesis: every k2 success so far (v3b k2 0.37-0.51; math k2 ~1.0) was against refits whose positives were half
+  plain no-prompt concept text. 10-21g measured that direction is far from the in-context one on the trained model
+  (cos 0.53; a plain-math probe scores in-context math at AUROC 0.31), so moving off it was enough to pass. v4b
+  refits are fit on the model's own in-context fork states only and must catch >= 0.8 of held-out in-context
+  positives, a much stronger probe for the turn after a pass. Consistent with 10-23a: deployed refits catch 0.88-0.99 of
+  turns.
+- Swap test, both directions (tica_switch_eval --set, new; 48 ep x 16 turns, no switches):
+  - v4b global 500 with the OLD refit regime (np_in_fit true, tpr_np 0.8, tpr_ic 0): 6844733 -> v4b500_oldrefit.json
+    vs v4b500_real (6844488, v4b regime).
+  - math logclip + stay abs 480 with the NEW regime (np_in_fit false, tpr_np 0, tpr_ic 0.8): 6844734 ->
+    lcstay480_newrefit.json vs lcstay480_real (10-22f: k2 1.00, k3 0.65, old regime).
+  - If v4b k2 jumps under old refits AND math k2 collapses under new ones, the refit regime is the difference, and the
+    math / v3b k2 numbers were against a weaker probe.
+- Built: tica_switch_eval.py --set KEY=VALUE (repeatable, as tica.py; empty default = unchanged; recorded in the report).
+
 ## 2026-10-23a 8 vs 16 episodes/step measured: 1.3x per step; k2 is not budget-limited (passes ~1%/turn); v4b at 561
 - Benchmark (6835952 / 6835953): 6 steps each from global 500 (adapter copied to node-local disk), 2x A100-40GB, DP2,
   no eval / save. Mean s/step over steps 2-6: 8 episodes 238 (rollout 166, train 72), 16 episodes 314 (rollout 251,
