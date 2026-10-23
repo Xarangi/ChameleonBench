@@ -263,3 +263,23 @@ def test_match_anchor_k_draws_a_subset_per_turn(tmp_path):
     assert {n for v in per_turn.values() for n in v} <= full and len(full) == len(kinds)
     again = [tg.monitor for tg in tr._targets(trajs) if tg.role == "match"]
     assert again == [tg.monitor for tg in m]  # deterministic for the same step / episode / turn
+
+
+def test_pass_forks_rescore_every_pass(tmp_path, monkeypatch):
+    """--pass-forks (eval, 10-22): with free answers, every pass is re-sampled n times from the same
+    prefix and scored by the same probe; results carry the passing share."""
+    from next_chameleons.tica.adaptive import AdaptiveDefender
+
+    tr, base_name = _trainer(tmp_path, first_probe_panel_from_start=True,
+                             first_probe_panel_kinds=["linear@1"])
+    orig = AdaptiveDefender.score
+    monkeypatch.setattr(AdaptiveDefender, "score", lambda self, name, pooled, row: {
+        **orig(self, name, pooled, row), "detected": False})
+    tr.free_answers = {"max_new": 3}
+    tr.pass_forks = (3, 0.7)
+    trajs, _ = tr.rollout([_spec(base_name, "pf")])
+    shares = [r["pass_forks"] for r in trajs[0].results if "pass_forks" in r]
+    assert shares and all(x == 1.0 for x in shares)  # every sample passes (score patched)
+    tr.free_answers = None  # training (teacher-forced): never forked
+    trajs, _ = tr.rollout([_spec(base_name, "pf2")])
+    assert not [r for r in trajs[0].results if "pass_forks" in r]

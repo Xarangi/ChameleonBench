@@ -37,6 +37,27 @@ from next_chameleons.tica.monitors import MonitorPool
 from next_chameleons.tica.trainers.supervised import beat_summary, probe_index_metrics
 
 
+def pass_fork_summary(trajs, n, m) -> dict:
+    """--pass-forks: share of the re-sampled answers that also pass, per pass event; ROBUST pass =
+    >= m of n; by_probe_index recomputed with only robust passes counted as passes."""
+
+    if not n:
+        return {}
+    import copy
+
+    fr = [r["pass_forks"] for tj in trajs for r in tj.results if "pass_forks" in r]
+    robust = copy.deepcopy(trajs)
+    for tj in robust:
+        for r in tj.results:
+            if "pass_forks" in r and r["pass_forks"] * n < m:
+                r["monitored"] = {**r["monitored"], "detected": True}  # not a robust pass
+    return {"pass_forks": n, "pass_min": m, "pass_fork_events": len(fr),
+            "pass_fork_share_mean": sum(fr) / len(fr) if fr else None,
+            "robust_pass_frac": sum(f * n >= m for f in fr) / len(fr) if fr else None,
+            "pass_fork_hist": {str(k): sum(round(f * n) == k for f in fr) for k in range(n + 1)},
+            "by_probe_index_robust": probe_index_metrics(robust)}
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--config", required=True)
@@ -62,6 +83,12 @@ def main():
     ap.add_argument("--no-refit", action="store_true",
                     help="never refit after a pass (10-22): the beaten probe keeps judging, so "
                          "'persist' measures whether passes are kept (not luck)")
+    ap.add_argument("--pass-forks", type=int, default=0,
+                    help="at every pass, sample N answers from the same prefix and score them with "
+                         "the same probe (10-22; needs --answers free); robust = share >= "
+                         "--pass-min / N")
+    ap.add_argument("--pass-min", type=int, default=6)
+    ap.add_argument("--pass-temp", type=float, default=0.7)
     ap.add_argument("--model-path")
     ap.add_argument("--data", help="override the config's data file (e.g. concept_eval_v1.json)")
     ap.add_argument("--inputs", help="override the config's answer-format inputs map")
@@ -176,6 +203,10 @@ def main():
         roots_only=set(topics), prompts=ask_concept(fmt) if a.ask_concept else fmt,
         hard_neg={c: data.hard_negatives(c, "fit") for c in topics})
     tr.falsify = "pass" if a.always_pass else a.falsify
+    if a.pass_forks:
+        if a.answers != "free":
+            raise SystemExit("--pass-forks needs --answers free")
+        tr.pass_forks = (a.pass_forks, a.pass_temp)
     if a.answers == "free":
         tr.free_answers = {"max_new": a.answer_max}
     gen_f = open(a.gen_out, "w") if a.gen_out else None  # noqa: SIM115
@@ -305,6 +336,7 @@ def main():
            # PASS RATE BY PROBE INDEX (10-17u): k-th bank of each concept segment beaten?
            "by_probe_index": probe_index_metrics(all_trajs),
            "always_pass": a.always_pass, "no_refit": a.no_refit,
+           **pass_fork_summary(all_trajs, a.pass_forks, a.pass_min),
            "persist_pass_rate": mean([x for v in persist.values() for x in v]),
            "persist_n": sum(len(v) for v in persist.values()),
            "persist_by_lag": {str(k): mean(v) for k, v in sorted(persist.items()) if k <= 8},

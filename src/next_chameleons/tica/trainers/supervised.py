@@ -1266,7 +1266,12 @@ class AdaptiveSupervisedTrainer:
         free = getattr(self, "free_answers", None)  # eval only: the model writes its answers
         gen_fin = None
         roll_tok = self._refit_token_layers(plp)
+        # PASS ROBUSTNESS (eval, --pass-forks; 10-22): at every pass of the active probe, fork the turn
+        # (same prefix), sample pass_forks[0] answers at pass_forks[1] temperature and score them with
+        # the SAME probe; results[t]["pass_forks"] = share of the samples that also pass
+        pf_n, pf_temp = (getattr(self, "pass_forks", None) or (0, 0.0)) if free else (0, 0.0)
         for t in range(T):
+            pf_items = []
             if free:  # tica_switch_eval --answers free (10-19b): greedy, read as a forced one
                 gens = pol.generate(convs, free["max_new"])
                 gen_fin = [g["finished"] for g in gens]
@@ -1338,6 +1343,8 @@ class AdaptiveSupervisedTrainer:
                             read = max(olds, key=lambda r: r["score"] - r["thr"])
                             ep_stats["old_catch"] += 1
                     obs = dfd.observe(read, pooled, i)
+                    if pf_n and obs["passed"]:  # eval: re-sample this turn (pass robustness)
+                        pf_items.append((i, active_name, c))
                     if ep_mode and (i, c) in pending:
                         pending[(i, c)]["turns"] += 1
                         if obs["passed"]:
@@ -1481,6 +1488,9 @@ class AdaptiveSupervisedTrainer:
                     tr.feedback.append(fb)
                     convs[i].append({"role": "user", "content": fb})
             ovl_join()  # refit_overlap: the turn's refits, before the next turn uses them
+            if pf_items:
+                self._pass_forks(pf_items, trajs, t, def_by, free["max_new"], pf_n, pf_temp, rl,
+                                 roll_tok)
         n_cens, trajs_all = len(last_refit), trajs
         if ctx is not None:  # episode streams: every rank's records merged (dp: all-gathered)
             trajs_all, passed_turn, ep_stats, n_cens = self._merge_rollout(
@@ -1795,6 +1805,31 @@ class AdaptiveSupervisedTrainer:
                 model.train(was)
             cache[key] = names
         return cache[key]
+
+    def _pass_forks(self, items, trajs, t, def_by, max_new, n, temp, layers, tok_layers):
+        """--pass-forks (eval, 10-22): for each (episode, probe, concept) that passed at turn t,
+        sample n answers from the same prefix (temperature temp) and score each with that probe.
+        Writes trajs[i].results[t]["pass_forks"] = passing share (1.0 = a robust pass)."""
+
+        pol = self.policy
+        prefixes, owner = [], []
+        for k, (i, _, _) in enumerate(items):
+            pre = [dict(x) for x in trajs[i].convs[t][:-1]]  # through turn t's user message
+            prefixes.extend([pre] * n)
+            owner.extend([k] * n)
+        gens = pol.generate(prefixes, max_new, temperature=temp, seed=1000 + t)
+        convs = [[*pre, {"role": "assistant", "content": g["text"]}]
+                 for pre, g in zip(prefixes, gens, strict=True)]
+        tok = {} if tok_layers else None
+        pooled = pol.pooled_incremental(convs, layers, {}, token_out=tok)
+        for L in tok_layers:
+            pooled[("tok", L)] = tok[L]
+        ok = [0] * len(items)
+        for row, k in enumerate(owner):
+            i, name, c = items[k]
+            ok[k] += int(not def_by[i][c].score(name, pooled, row)["detected"])
+        for k, (i, _, _) in enumerate(items):
+            trajs[i].results[t]["pass_forks"] = ok[k] / n
 
     def precompute_panel(self, shard: int = 0, nshard: int = 1) -> dict:
         """Fill adaptive.first_probe_panel_cache ahead of training (TamIA 10-21): every turn-0 panel
