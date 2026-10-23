@@ -10614,3 +10614,11 @@ Corrected 9B seed-17 result (`62340082`):
     the score arm improved at every depth; 1-bit held-out deeper refits (k2-k3) did not improve (n 8-15, noisy).
 - 10-23 MODEL-WRITTEN TRAIN BUILD (639806, 31 min on 4 x H100): 26,262 Qwen3.5-4B answers (3 per prompt); 27B-FP8
   judge concept-central 0.984, answer reasonable 0.84, finished 0.91. Held-out build 639807: 49,242 generated, judging.
+- 10-23 MODEL-WRITTEN HELD-OUT + FINISH (TamIA): held-out build 639807 judge shard 3 hung (100% GPU, no progress 50
+  min; shards 0-2 13 min; judge is prefill-only) -> cancelled, rejudged split 4 ways (639890, 7 min, 12,309 / 12,309
+  rows; scripts/slurm/tamia_mw_rejudge.sh). Held-out 49,242 answers: concept ~0.94, answers ~0.83. Finish 639833 failed
+  at labels: --skip-labelled read the old label file's data path (a Narval path) -> skip by its label ids instead
+  (631a7cb); rerun 639930. Build (len cap p90, the 10-21 rule): the 4B answers are ~2-2.5x longer than the published
+  texts, so the cap drops many: train file 19 concepts 8,754 -> 6,312 texts, 10 below 80% (astronomy 124/600,
+  chemistry 78/600, literature 7/301, finance 6/181); train+held-out file 53 concepts 25,168 -> 16,929, 27 below 80%.
+  Fix options (length-matched regeneration recommended) sent to the user; nothing changed yet.
