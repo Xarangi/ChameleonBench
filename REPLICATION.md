@@ -10557,3 +10557,14 @@ Corrected 9B seed-17 result (`62340082`):
   runs/ladder_forced_1023/.
   Training-time deep refits (60-step windows, 301 -> 721+): k3 1-bit 0.13 -> 0.27, score 0.05 -> 0.41; k4 ~0 -> ~0.2;
   k5+ seen 0-4 times per window (24-turn episodes leave no room) -> ladder levels >= 5 are untrained.
+- 10-23 FORCED-ANSWER REFIT LADDER (639132, done; dataset answers as in training; 16 ep x 80 turns; production s680 /
+  s660, a64 s340 / s320, base). Base controls: per-turn miss 0.00-0.04; k1 beaten <= 8 turns 0.00 (train) / 0.19
+  (held-out); unlimited turns 0.19 (train) / 0.44 (held-out) = chance misses over up to ~80 turns -> the "stay"
+  variant needs this base subtraction.
+  - <= 8 turns per probe, beaten (n reaching): 1-bit train k1-k5 1.00 (16) / 1.00 (16) / 0.38 (16) / 0.67 (6) / 0.50
+    (4); score train 0.88 / 0.79 / 0.55 / 0.17 / 1.00 (n 16 / 14 / 11 / 6 / 1); 1-bit held-out 0.69 / 0.73 / 0.38 / 0.33
+    (16 / 11 / 8 / 3); score held-out 0.69 / 0.45 / 0.80 / 0.50 (16 / 11 / 5 / 4).
+  - unlimited, mean turns to beat: 1-bit train 3.8 / 5.6 / 20.2 / 21.7 / 15.7; score train 3.6 / 16.8 / 19.5 / 18.8 / 25.0.
+  - Reading: each further refit is clearly harder (beat rate at <= 8 turns ~1.0 -> ~0.4-0.55 at the 2nd refit; ~2-4 of
+    16 episodes pass the 4th probe); given unlimited turns most still get through but turns per probe rise ~4-5x;
+    held-out concepts transfer (k1 0.69 vs base 0.19). a64 pilots (5 train concepts) k1 0.25-0.56. Levels >= 5 n <= 6.
