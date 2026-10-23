@@ -1797,12 +1797,15 @@ class AdaptiveSupervisedTrainer:
                 names = []
                 for kind in self._panel_kinds():
                     name, info, sec = self._panel_probe(s, c, kind, render)
-                    if info is not None:
+                    if info is not None and hasattr(self, "_refit_log"):  # (log exists after a rollout)
                         self._log_refit({**info, "anchor": True, "panel": True}, -1, 0, c, 0, sec)
                     if name is not None:
                         names.append(name)
             finally:
                 model.train(was)
+            if not self.cfg.adaptive.match_anchor_tokens:  # pooled kinds only (cost, 10-22)
+                names = [n for n in names
+                         if not getattr(self.pool.get(n), "needs_tokens", False)]
             cache[key] = names
         return cache[key]
 

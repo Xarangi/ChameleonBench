@@ -283,3 +283,18 @@ def test_pass_forks_rescore_every_pass(tmp_path, monkeypatch):
     tr.free_answers = None  # training (teacher-forced): never forked
     trajs, _ = tr.rollout([_spec(base_name, "pf2")])
     assert not [r for r in trajs[0].results if "pass_forks" in r]
+
+
+def test_match_anchor_tokens_false_keeps_pooled_kinds(tmp_path):
+    """adaptive.match_anchor_tokens False (10-22): anchors are the pooled panel kinds only."""
+    from next_chameleons.tica.adaptive import AdaptiveConfig
+    from next_chameleons.tica.episodes import EpisodeSpec
+
+    assert AdaptiveConfig().match_anchor_tokens is True
+    tr, base_name = _trainer(tmp_path, first_probe_panel_from_start=True,
+                             first_probe_panel_kinds=["linear@1", "maxpool@1", "linear@2"],
+                             match_anchor="panel", match_anchor_tokens=False)
+    spec = EpisodeSpec("nobrief|cats|a", "nobrief", ["aa", "bb", "cc"], "cats", "cats", base_name)
+    names = tr._anchor_names(spec, "cats")
+    assert len(names) == 2
+    assert not any(getattr(tr.pool.get(n), "needs_tokens", False) for n in names)

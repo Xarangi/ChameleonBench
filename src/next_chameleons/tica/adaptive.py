@@ -429,6 +429,11 @@ class AdaptiveConfig:
     # turns) at ~k/23 of the cost (all 23 made the training pass ~25x slower: 15 kinds read per-token states,
     # REPLICATION 10-22). 0 = every probe on every turn.
     match_anchor_k: int = 0
+    # match_anchor "panel": include the token-level panel kinds (maxpool / attnpool / rlobf_attn, which read
+    # per-token states). False = the pooled kinds only (linear at every training depth + the ensembles): a probe
+    # evaluated WITH GRAD per training chunk costs ~seconds for token kinds (2 per turn still took the train pass
+    # 46 -> 1177 s, REPLICATION 10-22), ~nothing for pooled kinds.
+    match_anchor_tokens: bool = True
     # [] = the in-training zoo: every single-layer kind of episode_refit_kinds at every kind_layers
     # depth + the multi-layer kinds (ens4 / ensdeep4); held-out kinds / depths are refused.
     first_probe_panel_kinds: list = field(default_factory=list)

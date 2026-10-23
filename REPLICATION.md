@@ -195,6 +195,16 @@ TICA on a new machine: start at docs/tica/README.md (results digest, run ledger,
   (HF eval processes peak 24-27 GB). New PERSISTENCE races per checkpoint + base (train checkables): tica_switch_eval
   --no-refit (the beaten probe keeps judging; persist_pass_rate / persist_by_lag = are passes KEPT, not luck) and
   --no-refit --always-pass (verdict always PASSED: does the dodge hold without corrective feedback?).
+- ANCHOR COST is per PROBE, not per target: k = 2 (302 match targets) still took the train pass 46 -> 1177 s (step
+  1512 s): token-level panel kinds (maxpool / attnpool / rlobf_attn) evaluated with grad cost ~seconds each per
+  training chunk, and a per-turn draw touches nearly all of them in every episode's chunk. -> adaptive.match_anchor_tokens
+  (default true): false = anchor only the POOLED panel kinds (linear @8/12/16/22/26 + ens4_linear / ens4_mlp /
+  ensdeep4_linear), which still covers every training depth (the L12-only problem). a64 + v4c configs: k = 3,
+  match_anchor_tokens false. Resume 638024 (k = 2) stopped after step 1 (dirs *_k2_aborted); new resume 638098 + drain 638099.
+- EVAL --pass-forks N --pass-min M (tica_switch_eval, needs --answers free): at every pass the turn is re-sampled N
+  times (T 0.7, same prefix) and scored by the same probe; robust pass = >= M of N; reports pass_fork_share_mean,
+  robust_pass_frac, pass_fork_hist, by_probe_index_robust. Quality races now run with 8 / 6. In TRAINING rollouts the
+  answers are teacher-forced dataset texts (no sampling), so a training pass is deterministic, not luck.
 
 ## 2026-10-21as RELAUNCH interleaved (user: GPU efficiency first): both arms share one node, model.lm_chunk 1024
 - Smokes with chunked LM terms + warm panel cache: L6 (one arm, DP4) step 1 158 s (L1: 864 s), peak 16.2 GB alloc /
