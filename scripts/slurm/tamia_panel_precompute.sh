@@ -12,7 +12,8 @@
 # host-bound), shard I of N each. Re-running only fits the missing keys.
 #   sbatch --account=aip-<pi> scripts/slurm/tamia_panel_precompute.sh final_v4b_tamia_4b
 # Any GPU count (10-23, Narval): processes go round-robin over the allocated GPUs, e.g.
-#   sbatch --gres=gpu:a100:2 --cpus-per-task=24 --mem=128G scripts/slurm/tamia_panel_precompute.sh final_v4c_4b
+#   PROCS=2 sbatch --gres=gpu:a100:2 --cpus-per-task=12 --mem=128G scripts/slurm/tamia_panel_precompute.sh final_v4c_4b
+# On 40 GB GPUs set PROCS = number of GPUs: one process peaks ~30 GB (Narval 10-23: 2 per A100-40GB OOM).
 set -uo pipefail
 cd /home/sneheel/chameleons
 CFG=${1:?config}

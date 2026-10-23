@@ -5,6 +5,15 @@ checkpoints, observed results, and unresolved limitations.
 
 TICA on a new machine: start at docs/tica/README.md (results digest, run ledger, open questions, aggregate snapshot).
 
+## 2026-10-23i Concept switching alone explains the race gap; v4b val s600; panel fill: 1 process per 40 GB GPU
+- Bisection at global 500, switches only (prob 1.0, min seg 8, no budget, 24 turns): pass / turn 0.092; k1 0.70 (111),
+  k2 0.26 (76), k3 0.11 (19) = the full protocol (k2 0.27). Budget alone 0.47, neither 0.62. -> switching concepts
+  mid-episode is what makes refits hard (the budget adds nothing once switches are on).
+- Val step 600 (last v4b weights; held-out concepts): k1 0.46 (65), k2 0.33 (27), k3 0.20 (5), pass 0.064.
+- Panel fill 6853952 (2 x A100, 4 processes): 3 of 4 OOMed at startup (one process ~30 GB of 40); only shard 1 runs
+  (160 / 345 keys in 50 min). Shards 0 / 2 / 3: 6856976 (one process per GPU: 0 then 3, and 2). Chain 6852701 waits on
+  both (afterany). Script note: on 40 GB GPUs PROCS = number of GPUs.
+
 ## 2026-10-23h Panel-cache fill moved to 2 GPUs (any GPU count now); Narval-only changes not on tamia
 - tamia_panel_precompute.sh hard-wired 4 GPUs (g = i % 4); now round-robin over the allocated GPUs, default 2 processes
   per GPU (8 on a 4-GPU node, as before). 4-GPU job 6852699 cancelled; 6853952 = 2 x A100, 4 processes. Chain
