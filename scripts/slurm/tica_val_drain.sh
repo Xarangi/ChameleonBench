@@ -70,7 +70,9 @@ for t in "${TASKS[@]}"; do
   BUSY[$g]=$!
   i=$(( i + 1 ))
 done
-wait
+# wait for the TASKS only: a bare `wait` also waits for the nvidia-smi -l logger, which never exits (10-23: every
+# drain since 10-22 hung after its last task until the time limit, skipping the merge + quality steps below)
+for p_ in "${BUSY[@]}"; do wait "$p_"; done
 kill $SMI 2>/dev/null
 # sharded panels (10-22): merge panel_<split>.s*.json -> panel_<split>.json once every shard exists
 R_=/scratch/s/sneheel/next_chameleons_artifacts/tica/runs

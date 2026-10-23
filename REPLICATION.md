@@ -10568,3 +10568,21 @@ Corrected 9B seed-17 result (`62340082`):
   - Reading: each further refit is clearly harder (beat rate at <= 8 turns ~1.0 -> ~0.4-0.55 at the 2nd refit; ~2-4 of
     16 episodes pass the 4th probe); given unlimited turns most still get through but turns per probe rise ~4-5x;
     held-out concepts transfer (k1 0.69 vs base 0.19). a64 pilots (5 train concepts) k1 0.25-0.56. Levels >= 5 n <= 6.
+- 10-23 DRAIN HANG BUG: tica_val_drain.sh ended its task loop with a bare `wait`, which also waits for the background
+  `nvidia-smi -l 60` GPU logger (never exits) -> every drain since 10-22 sat idle after its last task until the time
+  limit and skipped the panel merge + quality.json tail (a64 pre-v4c drain 638417 idle 07:27 -> 14:35; ladder 639132
+  idle ~1 h). Fixed (wait on the task PIDs only); new scripts/slurm/tica_drain_post.sh runs the tail alone. Stuck jobs
+  cancelled; queued drains (old script copies) replaced: pilots 639385 (after 638308) / 639386 (after 638419),
+  production 639387 (after 635097) / 639388 (after 635099); post 639389 for 638417.
+- 10-23 a64 PRE-v4c CHECK (638417; 1-bit s340 / score s320, i.e. 60 steps of all-pooled anchors, before v4c):
+  - Held-out races (forced answers) s250 -> s300: 1-bit k1 0.26 -> 0.36, k2 0.40 / 0.40, k3 0.25 -> 0.60 (n 4-5); score
+    k1 0.37 -> 0.54, k2 0.41 -> 0.21, k3 0.43 -> 0.50 (n 6-7).
+  - Panel s300 (all-pooled anchors 20 / 40 steps in): NO-BRIEF readability 0.97-1.00 at EVERY layer, train and held-out
+    concepts (the leak is gone); hiding detection at training depths 0.63-0.79 (train concepts), held-out depths
+    0.74-1.00; L4 / L28 / L30 0.95-1.00.
+  - Capability (512 tok): 1-bit s340 GSM8K brief 0.83 / 0.875, MMLU 0.67 / 0.67, clean 0.905 (= base). SCORE s320 GSM8K
+    brief 0.635 / 0.625 (base 0.825 / 0.82: -0.19, beyond the production tripwire), MMLU brief 0.65 / 0.64, clean 0.85.
+    (in-training GSM8K-while-hiding for this arm was 0.81-0.84 at the time.)
+  - Validity on passed turns (checkable concepts, most unseen by the 5-concept pilots): 0.33 / 0.38 vs production 0.83
+    -> many pilot passes come with answers that drop the concept; on_all 0.62-0.65 (base 0.60).
+  - Persistence 0.75 / 0.79 (always-pass 0.77 / 0.80) vs production 0.95.
