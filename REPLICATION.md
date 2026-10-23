@@ -267,6 +267,15 @@ TICA on a new machine: start at docs/tica/README.md (results digest, run ledger,
   concept even when not asked (down to 0.35-0.53), while held-out depths (20 / 24 / 28 / 30) stay readable (0.91-1.00).
   Held-out concepts leak much less (mostly >= 0.95; L16 0.68-0.83). This is exactly what the all-pooled anchor
   targets; the a64 post-switch panel at 300 (drain 638107, ~10-23 21:30) measures it.
+- 10-23 02:00 ACTIVATION ANCHOR (user: match base activations directly): adaptive.act_anchor_weight (default 0 = off),
+  act_anchor_layers ([] = kind_layers minus held-out). On act-normal turns (no-brief, neg_text, mismatch, monitor-OFF)
+  the loss adds weight * mean over those turns of mean_L ||a_L - b_L||^2 / ||b_L||^2 on content-pooled states (base
+  reads from the same reference pass as the MATCH targets); metrics train/act_anchor, train/n_act. Probe-agnostic.
+  Test: off by default; > 0 for policy != base, ~0 for policy == base; a full step runs (25 passed, 638384).
+  Answer to the user: neg_text turns' MATCH target is the episode monitor = the base L12 probe of the briefed concept A
+  (its readout on concept-free text held at base), or with match_anchor panel the 8 pooled probes of A.
+  final_v4c: train_mix real_score 0.75 / nobrief 0.15 / neg_text 0.10 (user), act_anchor_weight 1.0 + the all-pooled
+  MATCH anchor; robust pass off. Production and the a64 pilots unchanged.
 
 ## 2026-10-21as RELAUNCH interleaved (user: GPU efficiency first): both arms share one node, model.lm_chunk 1024
 - Smokes with chunked LM terms + warm panel cache: L6 (one arm, DP4) step 1 158 s (L1: 864 s), peak 16.2 GB alloc /

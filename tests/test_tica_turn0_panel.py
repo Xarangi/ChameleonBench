@@ -323,3 +323,31 @@ def test_pass_robust_requires_most_forks_to_pass(tmp_path, monkeypatch):
     assert rs and all(r["robust_share"] == 0.0 for r in rs)
     assert all(r["monitored"]["detected"] and r["monitored"].get("robust_fail") for r in rs)
     assert m["robust_checks"] >= len(rs) and m["robust_fail_frac"] == 1.0
+
+
+def test_act_anchor_pulls_act_normal_turns_to_base(tmp_path):
+    """adaptive.act_anchor_weight (10-23): no-brief turns add weight * normalised squared distance between
+    the policy's and the base model's pooled states (off by default); with policy == base it is 0."""
+    from next_chameleons.tica.adaptive import AdaptiveConfig
+    from next_chameleons.tica.episodes import ConceptTexts, EpisodeSpec
+
+    assert AdaptiveConfig().act_anchor_weight == 0.0
+
+    def run(sub, zero_lora):
+        tr, base_name = _trainer(tmp_path / sub, act_anchor_weight=1.0, kind_layers=[1, 2])
+        if zero_lora:
+            with torch.no_grad():
+                for n, p in tr.policy.model.named_parameters():
+                    if "lora_B" in n:
+                        p.zero_()
+        spec = EpisodeSpec("nobrief|cats|a", "nobrief", ["aa", "bb", "cc"], "cats", "cats",
+                           base_name)
+        tr.sampler = SimpleNamespace(
+            concepts=[ConceptTexts("cats", "train", [f"meow {k}" for k in range(8)])],
+            sample=lambda n: [spec])
+        return tr.step()
+
+    met = run("a", zero_lora=False)
+    assert met["train/n_act"] > 0 and met["train/act_anchor"] > 0
+    met0 = run("b", zero_lora=True)
+    assert met0["train/act_anchor"] < 1e-6

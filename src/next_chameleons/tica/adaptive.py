@@ -441,6 +441,13 @@ class AdaptiveConfig:
     # Teacher-forced rollouts only (free-answer evals use tica_switch_eval --pass-forks).
     pass_robust_n: int = 0
     pass_robust_min: int = 6
+    # ACTIVATION ANCHOR (user 10-23; default 0 = off): on act-normal turns (no-brief, neg_text, mismatch and
+    # monitor-OFF turns) keep the policy's content-pooled residual states at the base model's, at
+    # act_anchor_layers ([] = kind_layers minus held-out): weight * mean over those turns of
+    # mean_L ||a_L - b_L||^2 / ||b_L||^2. Probe-agnostic (protects against any probe, unlike MATCH, which only
+    # holds the listed probes' readouts); uses the same base-model pass as the MATCH references.
+    act_anchor_weight: float = 0.0
+    act_anchor_layers: list = field(default_factory=list)
     # [] = the in-training zoo: every single-layer kind of episode_refit_kinds at every kind_layers
     # depth + the multi-layer kinds (ens4 / ensdeep4); held-out kinds / depths are refused.
     first_probe_panel_kinds: list = field(default_factory=list)

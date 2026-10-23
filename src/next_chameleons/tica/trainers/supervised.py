@@ -2993,6 +2993,16 @@ class AdaptiveSupervisedTrainer:
             stay_ks, stay_mv, n_stay = self._stay_prep(targets, trajs, keys)
             layers = sorted(set(layers) | set(stay_L))  # the grad forward reads the stay layers
             metrics |= self._stay_readout()
+        act_ks, act_L = set(), []
+        if acfg.act_anchor_weight > 0:  # 10-23: act-normal turns keep the base model's states
+            held = set(self._heldout_layers())
+            act_L = [int(L) for L in (acfg.act_anchor_layers or acfg.kind_layers)
+                     if int(L) not in held]
+            kset = set(keys)
+            act_ks = {(i, t) for i, tr in enumerate(trajs) for t, r in enumerate(tr.results)
+                      if not r.get("tail") and (i, t) in kset
+                      and (tr.spec.cond in ("nobrief", "neg_text", "mismatch") or r.get("off"))}
+            layers = sorted(set(layers) | set(act_L))
         tok_layers = pool.token_layers
         if tok_layers and not acfg.single_pass:
             raise ValueError("token-pooled monitors need adaptive.single_pass")
@@ -3001,6 +3011,7 @@ class AdaptiveSupervisedTrainer:
         ref = torch.empty(len(targets), device=pol.device)
         ref_acts = {}  # base-model reads at the pursuit layer (stay_offset)
         ref_stay = {}  # standalone stay + stay_offset: base reads at the stay layers [n_L, d]
+        ref_act = {}  # act_anchor: base reads at act_L on act-normal turns [n_L, d]
         with pol.reference():
             for chunk in chunks:
                 ckeys, pooled, _ = run(chunk, grad=False, with_nll=False)
@@ -3011,6 +3022,9 @@ class AdaptiveSupervisedTrainer:
                 if stay_on and acfg.stay_offset:
                     for kk, j in pos.items():
                         ref_stay[kk] = torch.stack([pooled[L][j] for L in stay_L]).detach()
+                for kk, j in pos.items():
+                    if kk in act_ks:
+                        ref_act[kk] = torch.stack([pooled[L][j] for L in act_L]).detach()
                 ks = [k for k, kk in enumerate(tkey) if kk in pos]
                 if ks:
                     local = [pos[tkey[k]] for k in ks]
@@ -3021,6 +3035,7 @@ class AdaptiveSupervisedTrainer:
             "off": sum(tg.role == "off" for tg in targets),
             "panel": sum(tg.role == "panel" for tg in targets),
             "views": len(keys),
+            "act": len(act_ks),
         }
         # Turn-weighted hide: fail-early-cheap, dodge-late-expensive (iteration). Weight per hide
         # target = progressive_cost(turns facing this monitor); normalised by the step total.
@@ -3134,6 +3149,16 @@ class AdaptiveSupervisedTrainer:
                 if stay_on:  # standalone stay (10-21x): keep the passing turn's state
                     loss = loss + self._stay_loss(ks, stay_ks, stay_mv, targets, tkey, pos, pooled,
                                                   ref_stay, n_stay, acc)
+                aks = [kk for kk in pos if kk in act_ks]
+                if aks:  # act_anchor (10-23): normalised squared distance to the base states
+                    a_ = torch.stack([torch.stack([pooled[L][pos[kk]] for L in act_L])
+                                      for kk in aks]).float()
+                    b_ = torch.stack([ref_act[kk] for kk in aks]).float()
+                    d_ = ((a_ - b_) ** 2).sum(-1) / (b_ ** 2).sum(-1).clamp_min(1e-6)
+                    s_act = d_.mean(-1).sum()
+                    loss = loss + acfg.act_anchor_weight * s_act / max(1, totals["act"])
+                    acc["act_sum"] += float(s_act.detach())
+                    acc["act_n"] += len(aks)
                 loss.backward()
                 loss_sum += float(loss.detach()) + (float(h_term.detach()) if hclip else 0.0)
                 for k2, v in st.items():
@@ -3195,6 +3220,9 @@ class AdaptiveSupervisedTrainer:
                 if refit_info.get("refit") == "added":
                     self._fresh_escapes = 0
         pursuit_info = {}
+        if acc.get("act_n"):  # act_anchor: mean normalised distance to base on act-normal turns
+            pursuit_info["train/act_anchor"] = acc["act_sum"] / acc["act_n"]
+            pursuit_info["train/n_act"] = int(acc["act_n"])
         if kl_ref is not None:
             pursuit_info["train/kl"] = acc["kl_sum"] / max(1.0, acc["kl_n"])
             pursuit_info["train/kl_ref_fallback"] = kl_fb
