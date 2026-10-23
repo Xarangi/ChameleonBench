@@ -170,6 +170,14 @@ TICA on a new machine: start at docs/tica/README.md (results digest, run ledger,
   anchor carries into hiding turns. v3b beat L12 because its fixed turn-0 probe AND pursuit were at L12. Caveat for
   the panel: linear@12 (the bank probe = MATCH anchor direction) is not a fair unseen probe; generalisation claims
   should exclude L12 or anchor MATCH at several depths.
+- 10-22 20:05 v4c RECIPE BUILT (user: anchor readability at all probes; drop mismatch). adaptive.match_anchor "panel"
+  (default "monitor" = unchanged): no-brief / neg_text / monitor-OFF MATCH targets = every turn-0 panel probe of the
+  concept for that condition (all kinds x training depths 8-26, base model, same fits / disk cache as the turn-0 panel;
+  held-out layers / kinds never included); MATCH stays a mean over targets so its total weight (2.0) is unchanged.
+  Refactor: _panel_probe shared by _panel_first and _anchor_names. tests/test_tica_turn0_panel.py
+  ::test_match_anchor_panel_anchors_every_panel_probe (+ panel / depth-panel / stay tests): 20 passed (637983).
+  Config final_v4c_tamia_4b = final_v4b_score_tamia_4b + alpha 64 + match_anchor panel + train_mix real_score 0.65 /
+  nobrief 0.2 / neg_text 0.15 (no mismatch). Smoke 637987 (10 steps, DP4, scripts/slurm/tamia_layout_smoke.sh).
 
 ## 2026-10-21as RELAUNCH interleaved (user: GPU efficiency first): both arms share one node, model.lm_chunk 1024
 - Smokes with chunked LM terms + warm panel cache: L6 (one arm, DP4) step 1 158 s (L1: 864 s), peak 16.2 GB alloc /
