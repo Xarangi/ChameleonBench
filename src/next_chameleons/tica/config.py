@@ -108,14 +108,15 @@ class EpisodeStyle:
     format: str = "repeat"
     inputs: str = "/scratch/s/sneheel/next_chameleons_raw_cache/tica/level1_inputs.json"
     # "legacy" = brief in the first user turn + free-text notices; "tagged" = monitor description
-    # as the system prompt + a status line (ON + concept / OFF) every turn (answer_format, 10-17a)
+    # as the system prompt + a status line (ON + concept / OFF) every turn (answer_format, 10-17a);
+    # "tagged_v5" = tagged + score scale / new-monitor notice / score change (answer_format, 10-23)
     layout: str = "legacy"
 
     def __post_init__(self) -> None:
-        if self.layout not in ("legacy", "tagged"):
+        if self.layout not in ("legacy", "tagged", "tagged_v5"):
             raise ValueError(self.layout)
-        if self.layout == "tagged" and self.format != "answer":
-            raise ValueError("layout 'tagged' needs format 'answer'")
+        if self.layout != "legacy" and self.format != "answer":
+            raise ValueError(f"layout {self.layout!r} needs format 'answer'")
         if self.feedback not in ("score", "verdict"):
             raise ValueError(self.feedback)
         if self.format not in ("repeat", "answer"):

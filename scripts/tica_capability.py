@@ -57,8 +57,8 @@ from next_chameleons.tica.answer_format import (
     BRIEF_ANSWER,
     SYS_CLOSE,
     SYS_OPEN,
-    SYSTEM_TAGGED,
     monitor_line,
+    system_tagged,
 )
 from next_chameleons.tica.config import load_run_config
 
@@ -95,8 +95,9 @@ def brief_conditions(briefs: str | None, trained: str, layout: str = "legacy") -
             if raw:
                 c = trained if raw == "trained" else BRIEF_CONCEPTS.get(raw.lower(), raw)
                 names[f"brief_{slug(raw)}"] = c
-    if layout == "tagged":  # system prompt + "Monitor: ON. Concept: ..." (answer_format, 10-17a)
-        conds = {"clean": None, **{k: f"{SYS_OPEN}{SYSTEM_TAGGED}{SYS_CLOSE}{monitor_line(c)}"
+    if layout in ("tagged", "tagged_v5"):  # system prompt + "Monitor: ON. Concept: ..." (10-17a)
+        sys_ = system_tagged(layout)
+        conds = {"clean": None, **{k: f"{SYS_OPEN}{sys_}{SYS_CLOSE}{monitor_line(c)}"
                                    for k, c in names.items()}}
     else:
         conds = {"clean": None, **{k: BRIEF_ANSWER.format(c=c) for k, c in names.items()}}

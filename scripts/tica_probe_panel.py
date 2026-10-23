@@ -212,6 +212,7 @@ def main():
         return s
 
     recording.tagged = getattr(orig_render, "tagged", False)
+    recording.v5 = getattr(orig_render, "v5", False)
     tr.render_feedback = recording
     texts = {cc.concept: cc.texts for cc in tr.branch_concepts}
     rr = random.Random(a.seed + 11)

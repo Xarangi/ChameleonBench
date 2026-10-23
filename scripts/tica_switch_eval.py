@@ -78,6 +78,9 @@ def main():
     ap.add_argument("--switch-kinds", help="comma list of fallback kinds for --refit-switch")
     ap.add_argument("--falsify", action="store_true",
                     help="show the OPPOSITE verdict each turn (does the model USE the feedback?)")
+    ap.add_argument("--scramble-score", action="store_true",
+                    help="score feedback: TRUE verdict, random score on its side of the threshold "
+                         "(10-23: does the model use the number beyond the verdict?)")
     ap.add_argument("--always-pass", action="store_true",
                     help="show PASSED every turn (10-22): does the dodge hold without feedback?")
     ap.add_argument("--no-refit", action="store_true",
@@ -204,7 +207,7 @@ def main():
         branch_concepts=data.concepts("fit", splits), branch_negatives=data.negatives("fit"),
         roots_only=set(topics), prompts=ask_concept(fmt) if a.ask_concept else fmt,
         hard_neg={c: data.hard_negatives(c, "fit") for c in topics})
-    tr.falsify = "pass" if a.always_pass else a.falsify
+    tr.falsify = "pass" if a.always_pass else ("score_noise" if a.scramble_score else a.falsify)
     if a.pass_forks:
         if a.answers != "free":
             raise SystemExit("--pass-forks needs --answers free")
@@ -337,7 +340,7 @@ def main():
            "deploy_records": tr.deploy_log,
            # PASS RATE BY PROBE INDEX (10-17u): k-th bank of each concept segment beaten?
            "by_probe_index": probe_index_metrics(all_trajs, a.max_k),
-           "always_pass": a.always_pass, "no_refit": a.no_refit,
+           "always_pass": a.always_pass, "no_refit": a.no_refit, "scramble_score": a.scramble_score,
            **pass_fork_summary(all_trajs, a.pass_forks, a.pass_min, a.max_k),
            "persist_pass_rate": mean([x for v in persist.values() for x in v]),
            "persist_n": sum(len(v) for v in persist.values()),

@@ -1195,6 +1195,11 @@ class AdaptiveSupervisedTrainer:
         # deployed probes, so a RETURN to an earlier concept is judged by all of its old probes.
         def_by: list[dict] = [{} for _ in specs]
         dep_by: list[dict] = [{} for _ in specs]  # deployed probes per concept
+        v5 = getattr(self.render_feedback, "v5", False)  # layout tagged_v5 (10-23)
+        if v5 and acfg.refit_overlap:
+            raise ValueError("layout tagged_v5 needs serial refits (refit_overlap off): the "
+                             "new-monitor notice is rendered before overlapped refits finish")
+        v5_last: dict = {}  # (episode, concept, probe) -> score shown at its last judged turn
 
         def defender(i, s, c):
             if c not in def_by[i]:
@@ -1398,6 +1403,10 @@ class AdaptiveSupervisedTrainer:
                         th = read["thr"]
                         if self.falsify == "pass":
                             shown = (th - 1.0, th)
+                        elif self.falsify == "score_noise":  # 10-23: TRUE verdict, random
+                            # score on its side of the threshold (is the NUMBER used?)
+                            u = random.Random(f"noise|{s.id}|{i}|{t}").uniform(1.0, 40.0)
+                            shown = (th + u, th) if read["detected"] else (th - u, th)
                         else:
                             shown = (th - 1.0, th) if read["detected"] else (th + 1.0, th)
                     shown_cond = s.cond
@@ -1489,6 +1498,16 @@ class AdaptiveSupervisedTrainer:
                     kw = ({"next_concept": c_next, "next_off": bool(off[i][t + 1])}
                           if getattr(self.render_feedback, "tagged", False)
                           else ({"notice": note} if note else {}))
+                    if v5 and res.get("active_monitor") and not res.get("off"):
+                        # tagged_v5 (10-23): a different probe judges t + 1 (refit / bank switch,
+                        # same concept; serial refits are final here) -> "New monitor"; the score
+                        # change since the last turn judged by the SAME probe
+                        nd = def_by[i].get(c_next)
+                        kw["new_monitor"] = (c_next == c and nd is not None
+                                             and nd.active != res["active_monitor"])
+                        key = (i, c, res["active_monitor"])
+                        kw["prev_score"] = v5_last.get(key)
+                        v5_last[key] = shown[0]
                     fb = self.render_feedback(shown_cond, c, shown, nxt,
                                               feedback=s.feedback, named=s.named, **kw)
                     umsg[i] = (lambda x, sc=shown_cond, cc=c, sh=shown, kw=kw, s=s:
@@ -2042,7 +2061,9 @@ class AdaptiveSupervisedTrainer:
             [*pre,
              {"role": "user", "content": fork_msg(x) if fork_msg is not None else
               self.render_feedback(s.cond, concept, shown, x, feedback=s.feedback,
-                                   named=s.named)},
+                                   named=s.named,
+                                   **({"new_monitor": True}  # v5: a refit's forks precede it
+                                      if getattr(self.render_feedback, "v5", False) else {}))},
              {"role": "assistant", "content": x}]
             for _, x in picks
         ]
