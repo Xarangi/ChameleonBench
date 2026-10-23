@@ -10458,3 +10458,5 @@ Corrected 9B seed-17 result (`62340082`):
 - These recomputes write separate artifact roots with suffixes
   `_last_token` and `_atlas_followup_truthful_yes`; they do not overwrite the
   original `mean_generation_tokens` reports.
+- 10-23 user: priority is a BETTER HIDER, selectivity secondary -> final_v4c act_anchor_weight 0.0 (feature kept,
+  off); v4c keeps train_mix 0.75/0.15/0.10 and the all-pooled MATCH anchor. v4c not launched. Production / a64 pilots unchanged.

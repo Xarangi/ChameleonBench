@@ -4,7 +4,7 @@
 #   adaptive.match_anchor panel: no-brief / neg_text / monitor-OFF turns keep EVERY turn-0 panel probe (all kinds x
 #     training depths) at the base model's score, not only the primary-layer L12 probe (which pinned L12 readable)
 #   no mismatch episodes; train_mix real_score 0.75, nobrief 0.15, neg_text 0.10 (user 10-23)
-#   adaptive.act_anchor_weight 1.0: act-normal turns also match the base model's ACTIVATIONS at the training depths
+#   adaptive.act_anchor_weight 0.0: activation anchor implemented but OFF (user 10-23, hiding first)
 # TamIA 10-21 (user): final_v4b_score_4b with LoRA rank 128 (alpha 256, scale 2 as every earlier config) and 16 episodes per step (4 per rank on 4 GPUs: same per-rank work, 2x the episodes per update); everything else identical. docs/tica/TAMIA-V4B.md
 # SCORE-FEEDBACK ARM of final_v4b_4b (user 10-21: two TamIA arms, binary + score; REPLICATION 10-21u/ah): identical
 # except episodes.feedback score (each turn shows the judging probe's 0-100 score vs threshold) and the out paths.
@@ -106,7 +106,7 @@ rl:
     match_anchor_tokens: false   # 10-22: pooled kinds only (linear @8-26 + ensembles); token kinds cost ~s per probe with grad
     pass_robust_n: 0   # 10-22 (user): robust pass OFF for now (feature kept; 8 / 6 = the planned setting)
     pass_robust_min: 6
-    act_anchor_weight: 1.0   # v4c (user 10-23): act-normal turns keep base residual states at layers 8/12/16/22/26 (probe-agnostic)
+    act_anchor_weight: 0.0   # user 10-23: priority is a better hider, selectivity secondary -> off (feature kept)
     refit_min_each: 24
     refit_buf_cap: 512
     refit_C: 1.0
