@@ -235,6 +235,14 @@ TICA on a new machine: start at docs/tica/README.md (results digest, run ledger,
   ~40-60 s as without anchors). 1-bit arm still filling (train 1303 / 554 / 432). CORRECTION: the earlier "token-level
   anchors cost seconds per probe" reading came from step-1 timings only and was confounded by the cache misses; all 23
   kinds may well be cheap too -> re-measure after the refill (638200).
+- a64 never-shown panel at step 260 (BEFORE the anchor switch, i.e. still the L12-only MATCH anchor), mean real-brief
+  detection train / held-out concepts: 1-bit 0.82 / -, score 0.83 / 0.81 (production s300 0.73-0.81 / 0.78-0.86, r32
+  0.85-0.87). linear@12 0.77 / 0.81 (production 1.00 / 0.89-0.93, r32 0.85-0.90); training-depth linear 0.75-0.81,
+  held-out-depth linear 0.87-0.90, L4 1.00, pooled / attention 0.74-0.79, ensembles 0.78-0.84; no-brief 0.83 / 0.96.
+  -> L12 IS evaded by the a64 and r32 pilots under the same L12 anchor, so the anchor is not the whole story: the
+  production r128 / alpha-256 runs concentrated their evasion at L16 / 22 / 26 (0.44-0.52) and left L12 at 1.00, while
+  a64 spreads evasion evenly over depths. Post-switch panels (300 / 600) will show the all-pooled anchor's effect.
+- a64 resume with all 8 pooled anchors at steady state: both arms 232-343 s/step, train 34-45 s (KL 0.13-0.16).
 
 ## 2026-10-21as RELAUNCH interleaved (user: GPU efficiency first): both arms share one node, model.lm_chunk 1024
 - Smokes with chunked LM terms + warm panel cache: L6 (one arm, DP4) step 1 158 s (L1: 864 s), peak 16.2 GB alloc /
