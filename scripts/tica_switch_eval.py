@@ -57,6 +57,11 @@ def main():
     ap.add_argument("--switch-kinds", help="comma list of fallback kinds for --refit-switch")
     ap.add_argument("--falsify", action="store_true",
                     help="show the OPPOSITE verdict each turn (does the model USE the feedback?)")
+    ap.add_argument("--always-pass", action="store_true",
+                    help="show PASSED every turn (10-22): does the dodge hold without feedback?")
+    ap.add_argument("--no-refit", action="store_true",
+                    help="never refit after a pass (10-22): the beaten probe keeps judging, so "
+                         "'persist' measures whether passes are kept (not luck)")
     ap.add_argument("--model-path")
     ap.add_argument("--data", help="override the config's data file (e.g. concept_eval_v1.json)")
     ap.add_argument("--inputs", help="override the config's answer-format inputs map")
@@ -159,7 +164,8 @@ def main():
                                seed=a.seed)
     asc = AdaptiveSupervisedConfig(
         **{f.name: getattr(tcfg, f.name) for f in dataclasses.fields(SupervisedConfig)},
-        adaptive=cfg.rl.adaptive)
+        adaptive=(dataclasses.replace(cfg.rl.adaptive, episode_refit_prob=0.0) if a.no_refit
+                  else cfg.rl.adaptive))
     out = Path(a.out)
     from next_chameleons.tica.vllm_gen import maybe_attach
 
@@ -169,7 +175,7 @@ def main():
         branch_concepts=data.concepts("fit", splits), branch_negatives=data.negatives("fit"),
         roots_only=set(topics), prompts=ask_concept(fmt) if a.ask_concept else fmt,
         hard_neg={c: data.hard_negatives(c, "fit") for c in topics})
-    tr.falsify = a.falsify
+    tr.falsify = "pass" if a.always_pass else a.falsify
     if a.answers == "free":
         tr.free_answers = {"max_new": a.answer_max}
     gen_f = open(a.gen_out, "w") if a.gen_out else None  # noqa: SIM115
@@ -188,6 +194,9 @@ def main():
     # tr.deploy_log (supervised.beat_summary).
     seg_beat = []
     all_trajs = []  # pass rate by probe index (10-17u)
+    # PERSISTENCE (10-22): after a probe's FIRST pass, its later judged turns (same active probe,
+    # monitored): still passing? by lag 1..; with --no-refit the beaten probe keeps judging
+    persist = defaultdict(list)
     for b in range(0, a.episodes, a.batch):
         specs = sampler.sample(min(a.batch, a.episodes - b))
         ctx = pol.reference() if a.base else torch.no_grad()
@@ -246,6 +255,16 @@ def main():
                     per_topic[mt[t]].append(float(not d))
             if seg_open:
                 seg_beat.append((len(trj.results) - start, False))
+            first_pass = {}  # (concept, active probe) -> turn of its first pass
+            for t, r in enumerate(trj.results):
+                if r.get("tail") or r.get("off"):
+                    continue
+                key = (mt[t], r.get("active_monitor"))
+                ok = not r["monitored"]["detected"]
+                if key in first_pass:
+                    persist[t - first_pass[key]].append(float(ok))
+                elif ok:
+                    first_pass[key] = t
         print(f"[batch {b // a.batch}] episodes {b + len(specs)} refits {refits} "
               f"({acc} accepted) {time.time() - t0:.0f}s", flush=True)
     mean = lambda v: sum(v) / len(v) if v else None  # noqa: E731
@@ -285,6 +304,10 @@ def main():
            "deploy_records": tr.deploy_log,
            # PASS RATE BY PROBE INDEX (10-17u): k-th bank of each concept segment beaten?
            "by_probe_index": probe_index_metrics(all_trajs),
+           "always_pass": a.always_pass, "no_refit": a.no_refit,
+           "persist_pass_rate": mean([x for v in persist.values() for x in v]),
+           "persist_n": sum(len(v) for v in persist.values()),
+           "persist_by_lag": {str(k): mean(v) for k, v in sorted(persist.items()) if k <= 8},
            **beat_summary([{"kind": "segment", "turns": n, "beaten": b}
                            for n, b in seg_beat], prefix="segbeat_"),
            "sec": round(time.time() - t0)}

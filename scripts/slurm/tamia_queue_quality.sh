@@ -6,6 +6,7 @@
 #                                              concepts (format + language; scripts/tica_quality_check.py)
 #   panel_{train,heldout}.json (every PANEL_EVERY=300 steps) never-shown probe panel (tica_probe_panel.py: fresh base probes of
 #                                              every kind + every refit + linear readability; selectivity mix)
+#   persist_{train,pass_train}.json            races with --no-refit (+ --always-pass): are passes KEPT? (10-22)
 #   capability.json                            tica_capability.py: GSM8K (200) + MMLU (600), clean and under the
 #                                              brief naming a train (mathematical reasoning) / held-out (HTML) concept
 # The base model's references are made once, into runs/v4b_quality_base/. Done checkpoints are skipped; the drain
@@ -17,7 +18,11 @@ TR="German language,Japanese language,Arabic language,Hindi language,all-caps te
 HO="Finnish language,French language,Portuguese language,Turkish language,Russian language,Greek language,Thai language,Tamil language,HTML markup,Python code,Java code"
 RACE="--batch 16 --answers free --ask-concept --episodes 32 --turns 24 --switch-prob 1.0 --turn-budget 5,8,8 --cond real_score"
 PANEL_EVERY=${PANEL_EVERY:-300}
-PANEL="--batch 12 --episodes 24 --turns 24 --mix real_score:0.6,mismatch:0.2,nobrief:0.2"
+PANEL_SHARDS=${PANEL_SHARDS:-4}; PANEL_EPISODES=${PANEL_EPISODES:-24}
+PANEL="--batch 6 --turns 24 --mix real_score:0.6,mismatch:0.2,nobrief:0.2"
+# PERSISTENCE races (10-22, user: is a pass kept, not luck?): no refit after a pass, the beaten probe keeps judging
+# (persist_*); "pass" = verdict always PASSED (does the dodge hold without corrective feedback?). Train concepts.
+PERSIST="--batch 16 --answers free --ask-concept --episodes 32 --turns 16 --switch-prob 0 --cond real_score --no-refit"
 CAP="--benches gsm8k,mmlu --gsm-max-new-tokens 512 --briefs mathematical\ reasoning,HTML\ markup"
 
 newest() {  # newest checkpoint over the first chunk and resume chunks: "<global step> <dir>"
@@ -40,17 +45,26 @@ emit() {  # TAG CFG SEL QDIR
     [ -f "$q/race_$split.json" ] || printf 'bash scripts/slurm/tica_switch_eval.sh %s %q %s --topics %q --gen-out %q %s\n' \
       "$cfg" "$q/race_$split.json" "$sel" "$t" "$q/gens/${1}_$split.jsonl" "$RACE"
   done
+  [ -f "$q/persist_train.json" ] || printf 'bash scripts/slurm/tica_switch_eval.sh %s %q %s --topics %q %s\n' \
+    "$cfg" "$q/persist_train.json" "$sel" "$TR" "$PERSIST"
+  [ -f "$q/persist_pass_train.json" ] || printf 'bash scripts/slurm/tica_switch_eval.sh %s %q %s --topics %q %s --always-pass\n' \
+    "$cfg" "$q/persist_pass_train.json" "$sel" "$TR" "$PERSIST"
   [ -f "$q/capability.json" ] || printf 'bash scripts/slurm/tica_capability.sh %s %q %s %s\n' "$cfg" "$q/capability.json" "$sel" "$CAP"
 }
 
 emit_panel() {  # CFG SEL QDIR: never-shown PROBE PANEL (tica_probe_panel.py, Narval 10-18h / 10-21w): every turn
   # also scored by fresh base probes of every kind (linear @4..30 + zoo kinds), every refit, and per-turn linear
   # readability; mismatch / no-brief episodes give selectivity. Eval only (never during training).
-  local cfg=$1 sel=$2 q=$3
+  # TamIA 10-22: each panel runs as PANEL_SHARDS processes (--seed k, PANEL_EPISODES / PANEL_SHARDS episodes each)
+  # so one 1-2.5 h panel does not leave the node idle; the drain merges them (scripts/tica_panel_merge.py).
+  local cfg=$1 sel=$2 q=$3 k
   mkdir -p "$q"
   for split in train heldout; do
-    [ -f "$q/panel_$split.json" ] || printf 'bash scripts/slurm/tica_probe_panel.sh %s %q %s --topics %s %s\n' \
-      "$cfg" "$q/panel_$split.json" "$sel" "$split" "$PANEL"
+    [ -f "$q/panel_$split.json" ] && continue
+    for (( k = 0; k < PANEL_SHARDS; k++ )); do
+      [ -f "$q/panel_$split.s$k.json" ] || printf 'bash scripts/slurm/tica_probe_panel.sh %s %q %s --topics %s --seed %d --episodes %d %s\n' \
+        "$cfg" "$q/panel_$split.s$k.json" "$sel" "$split" $(( k + 1 )) $(( PANEL_EPISODES / PANEL_SHARDS )) "$PANEL"
+    done
   done
 }
 

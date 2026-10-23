@@ -44,7 +44,15 @@ if [ -n "${TICA_DRAIN_QUALITY:-}" ]; then
     [ -n "$line" ] && TASKS+=("$line")
   done < <(bash scripts/slurm/tamia_queue_quality.sh $TICA_DRAIN_QUALITY)
 fi
+# LONGEST FIRST (TamIA 10-22): panels (shards) ~0.3-1 h, races 10-30 min, capability ~5 min; starting the long
+# ones first keeps every slot busy until the end instead of a tail of 1-2 lone panels
+prio() { case "$1" in *tica_probe_panel*) echo 0 ;; *tica_switch_eval*|*tica_val.sh*) echo 1 ;; *) echo 2 ;; esac; }
+SORTED=(); for p_ in 0 1 2; do for t in "${TASKS[@]}"; do [ "$(prio "$t")" = "$p_" ] && SORTED+=("$t"); done; done
+TASKS=("${SORTED[@]}")
 echo "${#TASKS[@]} tasks on $NG GPUs x $PER_GPU"
+nvidia-smi --query-gpu=timestamp,index,memory.used,utilization.gpu --format=csv -l 60 \
+  > "logs/${SLURM_JOB_NAME:-drain}-${SLURM_JOB_ID:-local}-gpu.csv" 2>/dev/null &
+SMI=$!
 declare -A BUSY
 i=0
 for t in "${TASKS[@]}"; do
@@ -63,6 +71,17 @@ for t in "${TASKS[@]}"; do
   i=$(( i + 1 ))
 done
 wait
+kill $SMI 2>/dev/null
+# sharded panels (10-22): merge panel_<split>.s*.json -> panel_<split>.json once every shard exists
+R_=/scratch/s/sneheel/next_chameleons_artifacts/tica/runs
+for f0 in "$R_"/*/quality/step_*/panel_*.s0.json "$R_"/v4b_quality_base/panel_*.s0.json; do
+  [ -f "$f0" ] || continue
+  out=${f0%.s0.json}.json; [ -f "$out" ] && continue
+  sh_=("${f0%.s0.json}".s*.json)
+  (( ${#sh_[@]} >= ${PANEL_SHARDS:-4} )) || { echo "panel shards incomplete: $f0"; continue; }
+  PYTHONPATH=src /scratch/s/sneheel/venvs/q35t29/bin/python scripts/tica_panel_merge.py --out "$out" "${sh_[@]}" \
+    || echo "panel merge failed: $out"
+done
 # quality aggregates (CPU): every quality dir with free-generation answers
 if [ -n "${TICA_DRAIN_QUALITY:-}" ]; then
   R=/scratch/s/sneheel/next_chameleons_artifacts/tica/runs

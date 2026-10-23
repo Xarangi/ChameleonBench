@@ -1376,9 +1376,14 @@ class AdaptiveSupervisedTrainer:
                             self._fresh_escapes += 1
                     shown = (read["score"], read["thr"])
                     if self.falsify:  # eval control: show the OPPOSITE verdict (refits still
-                        # follow TRUE passes; forks carry the verdict the model actually saw)
+                        # follow TRUE passes; forks carry the verdict the model actually saw);
+                        # "pass" (10-22): ALWAYS show a pass (does the hiding hold without
+                        # corrective feedback?)
                         th = read["thr"]
-                        shown = (th - 1.0, th) if read["detected"] else (th + 1.0, th)
+                        if self.falsify == "pass":
+                            shown = (th - 1.0, th)
+                        else:
+                            shown = (th - 1.0, th) if read["detected"] else (th + 1.0, th)
                     shown_cond = s.cond
                     bact = self._budget_step(s, i, t, off, tail, judged=True,
                                              passed=obs["passed"])
@@ -2711,6 +2716,15 @@ class AdaptiveSupervisedTrainer:
         panel_anchor = self.cfg.adaptive.match_anchor == "panel"  # 10-22: every panel probe
         if self.cfg.adaptive.match_anchor not in ("monitor", "panel"):
             raise ValueError(f"adaptive.match_anchor {self.cfg.adaptive.match_anchor!r}")
+        k_anc = self.cfg.adaptive.match_anchor_k
+
+        def anchors(s_, c_, i_, t_):  # the act-normal MATCH probes of this turn ([] = the old one)
+            names = self._anchor_names(s_, c_)
+            if k_anc and len(names) > k_anc:  # unbiased subset (own stream: no other draw moves)
+                rng = random.Random(f"anchor|{self.step_k}|{s_.id}|{i_}|{t_}")
+                names = sorted(rng.sample(names, k_anc))
+            return names
+
         out = []
         for i, tr in enumerate(trajs):
             s = tr.spec
@@ -2722,7 +2736,7 @@ class AdaptiveSupervisedTrainer:
                     continue
                 if s.cond in DODGE_CONDS and res.get("off"):  # monitor-off turn: act normal
                     r_off = "off" if cfg.off_match_weight > 0 else "match"
-                    anc = self._anchor_names(s, c) if panel_anchor else []
+                    anc = anchors(s, c, i, t) if panel_anchor else []
                     out.extend(Target(i, t, "monitored", n, c, r_off)
                                for n in (anc or [res["monitored"]["name"]]))
                 elif s.cond in DODGE_CONDS:
@@ -2778,7 +2792,7 @@ class AdaptiveSupervisedTrainer:
                     seen.update(names)
                     seen_c.add(c)
                 elif s.cond in ("nobrief", "neg_text"):
-                    anc = self._anchor_names(s, s.monitored) if panel_anchor else []
+                    anc = anchors(s, s.monitored, i, t) if panel_anchor else []
                     out.extend(Target(i, t, "monitored", n, s.monitored, "match")
                                for n in (anc or [s.monitor]))
                 elif s.cond == "mismatch":

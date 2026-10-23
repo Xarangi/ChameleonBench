@@ -239,3 +239,27 @@ def test_match_anchor_panel_anchors_every_panel_probe(tmp_path):
         sample=lambda n: specs(base_name))
     met = tr.step()
     assert met["n_targets"] > len(m) // 2 and met["train/loss"] == met["train/loss"]
+
+
+def test_match_anchor_k_draws_a_subset_per_turn(tmp_path):
+    """adaptive.match_anchor_k (10-22): k anchor probes per act-normal turn, an unbiased subset of
+    the panel (different turns draw different subsets); 0 = all."""
+    from next_chameleons.tica.adaptive import AdaptiveConfig
+    from next_chameleons.tica.episodes import EpisodeSpec
+
+    assert AdaptiveConfig().match_anchor_k == 0
+    kinds = ["linear@1", "linear@2", "maxpool@1"]
+    tr, base_name = _trainer(tmp_path, first_probe_panel_from_start=True,
+                             first_probe_panel_kinds=kinds, match_anchor="panel",
+                             match_anchor_k=1)
+    spec = EpisodeSpec("nobrief|cats|a", "nobrief", ["aa", "bb", "cc"], "cats", "cats", base_name)
+    trajs, _ = tr.rollout([spec])
+    m = [tg for tg in tr._targets(trajs) if tg.role == "match"]
+    per_turn = {}
+    for tg in m:
+        per_turn.setdefault(tg.turn, []).append(tg.monitor)
+    assert per_turn and all(len(v) == 1 for v in per_turn.values())
+    full = set(tr._anchor_names(spec, "cats"))
+    assert {n for v in per_turn.values() for n in v} <= full and len(full) == len(kinds)
+    again = [tg.monitor for tg in tr._targets(trajs) if tg.role == "match"]
+    assert again == [tg.monitor for tg in m]  # deterministic for the same step / episode / turn

@@ -424,6 +424,11 @@ class AdaptiveConfig:
     # first_probe_panel), each a MATCH target (the MATCH term is a mean over targets, so its total weight is
     # unchanged). Held-out layers / kinds are never in the panel. Mismatch turns are unchanged.
     match_anchor: str = "monitor"
+    # match_anchor "panel": score only k anchor probes per turn, drawn uniformly (per step / episode / turn stream);
+    # the MATCH term is a mean, so this is an unbiased estimate of "every probe" (each probe equally often over
+    # turns) at ~k/23 of the cost (all 23 made the training pass ~25x slower: 15 kinds read per-token states,
+    # REPLICATION 10-22). 0 = every probe on every turn.
+    match_anchor_k: int = 0
     # [] = the in-training zoo: every single-layer kind of episode_refit_kinds at every kind_layers
     # depth + the multi-layer kinds (ens4 / ensdeep4); held-out kinds / depths are refused.
     first_probe_panel_kinds: list = field(default_factory=list)
