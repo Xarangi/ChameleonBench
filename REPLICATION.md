@@ -5,6 +5,18 @@ checkpoints, observed results, and unresolved limitations.
 
 TICA on a new machine: start at docs/tica/README.md (results digest, run ledger, open questions, aggregate snapshot).
 
+## 2026-10-23o Chunks no longer lose steps at the 12 h limit (TICA_DEADLINE)
+- Problem: checkpoints with trainer state are written every 20 steps and nothing is saved when Slurm kills a chunk at
+  12 h, so each chunk lost up to 19 steps (~1.5 h of 2 GPUs). Chunk 1 (6859681) will still lose its tail: it ends at
+  19:08 near global ~736, last state at global 720.
+- Fix (default off): env TICA_DEADLINE (unix time) makes AdaptiveSupervisedTrainer.train stop once the time left is
+  under 2x the longest step so far, saving "final" + trainer state (the decision is broadcast from rank 0 under DP).
+  Tests: tests/test_tica_eval_every.py (deadline passed -> stops after 1 step with only "final"; unset -> unchanged).
+- v4c chain sets TICA_DEADLINE = job end - 10 min (from squeue %e). The queued successor 6867696 held the old script,
+  so it was replaced by 6906911 (afterany 6859681). The chain finder already resumes from "final" via train_log.
+- Timeline: ~120-136 steps / chunk -> global 1200 around 10-25 evening if queue waits are short; the Narval outage
+  reservation POWEROUT20261027 starts 10-27 05:00 (a chunk that would overlap it waits until 11-03).
+
 ## 2026-10-23n v4c from global 600: first 104 steps; switching does not lower first-concept k2 (seed 2)
 - v4c chunk 1 (6859681, 2x A100-40GB, 16 episodes / step): global 704 after 9.2 h; 300-440 s / step; peak memory
   33.2 GB allocated / 35.9 GB reserved (fits). Training pass by probe index (25-step bins from 600): k1 0.54 / 0.64 /

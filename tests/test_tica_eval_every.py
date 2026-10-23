@@ -37,3 +37,16 @@ def test_eval_every_global_steps(monkeypatch, tmp_path):
     saves, evals = _run(monkeypatch, tmp_path, 20, 50, 420, 100)
     assert evals == ["step_30", "step_80"]
     assert "step_30" in saves and "step_80" in saves and "step_20" in saves
+
+
+def test_deadline_stops_early_and_saves_final(monkeypatch, tmp_path):
+    import time
+    monkeypatch.setenv("TICA_DEADLINE", str(time.time() - 1))  # already past: stop after step 1
+    saves, _ = _run(monkeypatch, tmp_path, 20, 0, 0, 60)
+    assert saves == ["final"]
+
+
+def test_no_deadline_runs_all_steps(monkeypatch, tmp_path):
+    monkeypatch.delenv("TICA_DEADLINE", raising=False)
+    saves, _ = _run(monkeypatch, tmp_path, 20, 0, 0, 40)
+    assert saves == ["step_20", "step_40", "final"]

@@ -3480,7 +3480,13 @@ class AdaptiveSupervisedTrainer:
     def train(self):
         cfg = self.cfg
         main = self.rank == 0  # data-parallel: rank 0 logs, checkpoints and launches evals
+        # TICA_DEADLINE (unix time; unset / 0 = off): stop early (saving "final" with trainer state)
+        # once the remaining time is under twice the longest step so far, so a job killed at its
+        # wall-clock limit loses no steps since the last save_every checkpoint.
+        deadline = self._deadline()
+        longest = 0.0
         while self.step_k < cfg.steps:
+            t_step = time.time()
             rec = self.step()
             wb = self._wandb() if main else None
             if wb is not None:
@@ -3510,12 +3516,29 @@ class AdaptiveSupervisedTrainer:
                 stop = bool(dp.broadcast(stop))
             if stop:
                 break
+            longest = max(longest, time.time() - t_step)
+            if deadline:
+                late = main and time.time() + 2 * longest > deadline
+                if self.world > 1:
+                    late = bool(dp.broadcast(late))
+                if late:
+                    if main:
+                        print(json.dumps({"deadline_stop": self.step_k}), flush=True)
+                    break
         if main:
             self.policy.save_adapter(self.out / "final")
             self._save_state(self.out / "final")
         dp.barrier()
         if getattr(self, "_wb", None) is not None:
             self._wb.finish()
+
+    @staticmethod
+    def _deadline() -> float:
+        """Wall-clock stop time (unix seconds) from TICA_DEADLINE; 0 = none."""
+        try:
+            return float(os.environ.get("TICA_DEADLINE", "0") or 0)
+        except ValueError:
+            return 0.0
 
     @staticmethod
     def _step_offset() -> int:

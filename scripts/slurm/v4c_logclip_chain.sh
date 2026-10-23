@@ -85,7 +85,9 @@ fi
 echo "$N $TRIES $EPS" > "$ST"
 NEXT=$(sbatch --parsable --dependency=afterany:$SLURM_JOB_ID "$SELF")
 echo "chunk from global $N ($CK): $REM steps -> $R/resume_$N; episodes/step $EPS; successor $NEXT"
-export TICA_DP=2 TICA_STEP_OFFSET=$N
+# Stop 10 min before the job's wall-clock end, saving "final" with trainer state (no steps lost to the limit).
+END=$(date -d "$(squeue -h -j "$SLURM_JOB_ID" -o %e)" +%s)
+export TICA_DP=2 TICA_STEP_OFFSET=$N TICA_DEADLINE=$(( END - 600 ))
 cd /home/sneheel/chameleons
 exec bash scripts/slurm/tica_l3covert.sh final_v4c_4b --adapter "$CK" --out "$R/resume_$N" --steps "$REM" \
   --set "train.episodes_per_step=$EPS" \
