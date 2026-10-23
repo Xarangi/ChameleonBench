@@ -205,6 +205,9 @@ TICA on a new machine: start at docs/tica/README.md (results digest, run ledger,
   times (T 0.7, same prefix) and scored by the same probe; robust pass = >= M of N; reports pass_fork_share_mean,
   robust_pass_frac, pass_fork_hist, by_probe_index_robust. Quality races now run with 8 / 6. In TRAINING rollouts the
   answers are teacher-forced dataset texts (no sampling), so a training pass is deterministic, not luck.
+- User 10-22: anchors = ALL 8 pooled panel kinds every act-normal turn (match_anchor_k 0, match_anchor_tokens false) in
+  the a64 + v4c configs; resume 638098 (k = 3) stopped before step 1 (dirs *_k3_aborted); new resume 638106 + drain
+  638107. --pass-forks stays available but OFF in the quality races (user).
 
 ## 2026-10-21as RELAUNCH interleaved (user: GPU efficiency first): both arms share one node, model.lm_chunk 1024
 - Smokes with chunked LM terms + warm panel cache: L6 (one arm, DP4) step 1 158 s (L1: 864 s), peak 16.2 GB alloc /
