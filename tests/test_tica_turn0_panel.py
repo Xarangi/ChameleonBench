@@ -298,3 +298,28 @@ def test_match_anchor_tokens_false_keeps_pooled_kinds(tmp_path):
     names = tr._anchor_names(spec, "cats")
     assert len(names) == 2
     assert not any(getattr(tr.pool.get(n), "needs_tokens", False) for n in names)
+
+
+def test_pass_robust_requires_most_forks_to_pass(tmp_path, monkeypatch):
+    """adaptive.pass_robust_n (training, 10-22): a raw pass becomes a catch unless >= pass_robust_min
+    of the n same-prefix fork reads (other texts of the concept) also pass; off by default."""
+    from next_chameleons.tica.adaptive import AdaptiveConfig, AdaptiveDefender
+
+    assert AdaptiveConfig().pass_robust_n == 0
+    orig = AdaptiveDefender.score
+    calls = {"n": 0}
+
+    def score(self, name, pooled, row):  # the real turn passes; every fork read is caught
+        r = orig(self, name, pooled, row)
+        n = len(pooled[next(k for k in pooled if isinstance(k, int))])
+        return {**r, "detected": n > 1 and n == 4}  # fork reads come in batches of n = 4
+
+    monkeypatch.setattr(AdaptiveDefender, "score", score)
+    tr, base_name = _trainer(tmp_path, first_probe_panel_from_start=True,
+                             first_probe_panel_kinds=["linear@1"], pass_robust_n=4,
+                             pass_robust_min=3)
+    trajs, m = tr.rollout([_spec(base_name, "rb")])
+    rs = [r for r in trajs[0].results if "robust_share" in r]
+    assert rs and all(r["robust_share"] == 0.0 for r in rs)
+    assert all(r["monitored"]["detected"] and r["monitored"].get("robust_fail") for r in rs)
+    assert m["robust_checks"] >= len(rs) and m["robust_fail_frac"] == 1.0

@@ -434,6 +434,13 @@ class AdaptiveConfig:
     # evaluated WITH GRAD per training chunk costs ~seconds for token kinds (2 per turn still took the train pass
     # 46 -> 1177 s, REPLICATION 10-22), ~nothing for pooled kinds.
     match_anchor_tokens: bool = True
+    # ROBUST PASS in training (user 10-22; default 0 = off): when the deployed probes miss turn t, the same prefix
+    # is read with pass_robust_n OTHER texts of the concept (shared-prefix fork reads, ~2% of the refit reads) and
+    # scored by the same probes; the pass counts only if >= pass_robust_min of them also pass. Otherwise the turn
+    # is a catch, shown with the strongest catching fork's score (no refit; hide loss as on any caught turn).
+    # Teacher-forced rollouts only (free-answer evals use tica_switch_eval --pass-forks).
+    pass_robust_n: int = 0
+    pass_robust_min: int = 6
     # [] = the in-training zoo: every single-layer kind of episode_refit_kinds at every kind_layers
     # depth + the multi-layer kinds (ens4 / ensdeep4); held-out kinds / depths are refused.
     first_probe_panel_kinds: list = field(default_factory=list)

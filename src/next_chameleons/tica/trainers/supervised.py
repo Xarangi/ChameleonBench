@@ -1342,6 +1342,13 @@ class AdaptiveSupervisedTrainer:
                         if olds:
                             read = max(olds, key=lambda r: r["score"] - r["thr"])
                             ep_stats["old_catch"] += 1
+                    rb_share = None
+                    if acfg.pass_robust_n and not free and not read["detected"]:
+                        rb = self._robust_pass(s, t, c, convs[i], list(deployed_i), dfd)
+                        rb_share = rb["share"]
+                        if rb["catch"] is not None and (
+                                rb_share * len(rb["rows"]) < acfg.pass_robust_min):
+                            read = {**rb["catch"], "robust_fail": True}  # not a robust pass
                     obs = dfd.observe(read, pooled, i)
                     if pf_n and obs["passed"]:  # eval: re-sample this turn (pass robustness)
                         pf_items.append((i, active_name, c))
@@ -1376,6 +1383,8 @@ class AdaptiveSupervisedTrainer:
                         "deployed": list(deployed_i),
                         "active_p": active_p,
                     }
+                    if rb_share is not None:
+                        res["robust_share"] = rb_share
                     if obs["passed"]:
                         passed_turn.append(t)
                         if t >= 1:
@@ -1592,6 +1601,10 @@ class AdaptiveSupervisedTrainer:
                 "ep_kinds_tried_per_refit": (ep_stats["att"] + ep_stats["switch_att"])
                 / max(1, ep_stats["att"]),
             })
+            rbs = self.__dict__.pop("_rb_stats", None)
+            if rbs and rbs[0]:  # pass_robust_n: raw passes checked, share not robust, mean share
+                metrics.update({"robust_checks": rbs[0], "robust_fail_frac": rbs[1] / rbs[0],
+                                "robust_share_mean": rbs[2] / rbs[0]})
             if "ovl_main" in ep_stats:
                 # refit_overlap, pass refits only (first probes stay serial): read + fit work
                 # (refits.jsonl sec), main-thread time on them (reads incl. any slow-down from the
@@ -1833,6 +1846,50 @@ class AdaptiveSupervisedTrainer:
             ok[k] += int(not def_by[i][c].score(name, pooled, row)["detected"])
         for k, (i, _, _) in enumerate(items):
             trajs[i].results[t]["pass_forks"] = ok[k] / n
+
+    def _robust_pass(self, s, t, c, conv, names, dfd) -> dict:
+        """adaptive.pass_robust_n (10-22): read turn t's prefix with pass_robust_n other texts of
+        concept c (shared-prefix forks; deterministic per global step / episode / turn) and score
+        each with every deployed probe `names`. Returns {"share": passing share, "rows": n,
+        "catch": the strongest catching read (or None)}."""
+
+        acfg, pol = self.cfg.adaptive, self.policy
+        if not hasattr(self, "_ctexts"):
+            self._ctexts = {x.concept: x.texts for x in self.branch_concepts or []}
+        cur = conv[-1]["content"]
+        texts = [x for x in self._ctexts.get(c, []) if x != cur]
+        rng = random.Random(f"robust|{self.step_k + self._step_offset()}|{s.id}|{t}")
+        pick = rng.sample(texts, min(acfg.pass_robust_n, len(texts)))
+        if not pick:
+            return {"share": 1.0, "rows": [], "catch": None}
+        pre = [dict(m) for m in conv[:-1]]  # through turn t's user message
+        forks = [[*pre, {"role": "assistant", "content": x}] for x in pick]
+        mons = [self.pool.get(n) for n in names]
+        tok_L = sorted({L for m in mons if getattr(m, "needs_tokens", False)
+                        for L in (getattr(m, "layers_used", None) or [m.layer])})
+        Ls = sorted({m.layer for m in mons} | {L for m in mons
+                                                for L in (getattr(m, "layers_used", None) or [])}
+                    | set(tok_L))
+        ft = {} if tok_L else None
+        rall = pol.pooled_shared_prefix(forks, Ls, token_out=ft,
+                                        batch=acfg.episode_fork_batch or None)
+        pooled = {L: rall[L].to(pol.device) for L in Ls}
+        for L in tok_L:
+            pooled[("tok", L)] = ft[L]
+        ok, catch = 0, None
+        for row in range(len(forks)):
+            det = [r for r in (dfd.score(n, pooled, row) for n in names) if r["detected"]]
+            if not det:
+                ok += 1
+                continue
+            w = max(det, key=lambda r: r["score"] - r["thr"])
+            if catch is None or w["score"] - w["thr"] > catch["score"] - catch["thr"]:
+                catch = w
+        st = self.__dict__.setdefault("_rb_stats", [0, 0, 0.0])
+        st[0] += 1
+        st[1] += int(ok < acfg.pass_robust_min)
+        st[2] += ok / len(forks)
+        return {"share": ok / len(forks), "rows": list(range(len(forks))), "catch": catch}
 
     def precompute_panel(self, shard: int = 0, nshard: int = 1) -> dict:
         """Fill adaptive.first_probe_panel_cache ahead of training (TamIA 10-21): every turn-0 panel

@@ -208,6 +208,12 @@ TICA on a new machine: start at docs/tica/README.md (results digest, run ledger,
 - User 10-22: anchors = ALL 8 pooled panel kinds every act-normal turn (match_anchor_k 0, match_anchor_tokens false) in
   the a64 + v4c configs; resume 638098 (k = 3) stopped before step 1 (dirs *_k3_aborted); new resume 638106 + drain
   638107. --pass-forks stays available but OFF in the quality races (user).
+- ROBUST PASS IN TRAINING (user 10-22, for next runs): adaptive.pass_robust_n / pass_robust_min (default 0 = off).
+  When the deployed probes miss turn t, the same prefix is read with n OTHER texts of the concept (shared-prefix
+  forks, deterministic per global step / episode / turn; ~120 extra reads per step vs ~6,700 refit reads, ~1-2% of a
+  step) and scored by every deployed probe; < min passing -> the turn is a CATCH shown with the strongest catching
+  fork's score (no refit, hide loss as usual). Metrics robust_checks / robust_fail_frac / robust_share_mean;
+  results[t]["robust_share"]. Test (24 passed, 638109). On in final_v4c (8 / 6); off in production and the pilots.
 
 ## 2026-10-21as RELAUNCH interleaved (user: GPU efficiency first): both arms share one node, model.lm_chunk 1024
 - Smokes with chunked LM terms + warm panel cache: L6 (one arm, DP4) step 1 158 s (L1: 864 s), peak 16.2 GB alloc /
