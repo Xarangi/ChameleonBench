@@ -53,7 +53,7 @@ wait $CP; [ -f "$L27/.copied" ] || { echo "27B copy failed"; exit 1; }
     PIDS+=($!)
   done
   rc=0; for p in "${PIDS[@]:-}"; do [ -n "$p" ] && { wait "$p" || rc=1; }; done
-  (( rc == 0 )) || { echo "LABELS FAILED"; tail -20 "$W"/labels_s*.log; exit 1; }
+  (( rc == 0 )) || { echo "LABELS FAILED"; tail -n 20 "$W"/labels_s*.log; exit 1; }
 )
 echo "labels done $(( $(date +%s) - t0 ))s"
 

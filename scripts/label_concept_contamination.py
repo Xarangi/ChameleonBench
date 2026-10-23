@@ -139,9 +139,12 @@ def main():
             for t in ts:
                 texts.setdefault(t["id"], t["text"])
     if a.skip_labelled:
-        done = set()
-        meta = json.loads(Path(a.skip_labelled).read_text())["meta"]
+        old = json.loads(Path(a.skip_labelled).read_text())
+        done = set(old.get("labels", {}))  # ids it labelled (the data paths may be another cluster's)
+        meta = old["meta"]
         for f in {f for m in (meta if isinstance(meta, list) else [meta]) for f in m["data"]}:
+            if not Path(f).exists():
+                continue
             d = json.loads(Path(f).read_text())
             done |= {t["id"] for c in d["concepts"] for p in ("fit", "calib", "episode")
                      for t in c[p]}
