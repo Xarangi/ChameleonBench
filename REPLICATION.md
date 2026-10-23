@@ -10547,3 +10547,13 @@ Corrected 9B seed-17 result (`62340082`):
   - One race OOMed (score s700 race_train, 2 evals per GPU) -> requeued; quality races now --batch 8. Drains 635366 /
     635367 used the 10-21 script copy (no panel merge): replaced by 638978 / 638979 (current script). Step-600 shards
     merged by 638980.
+- 10-23 LADDER CORRECTION (user): the 638531 ladder used FREE answers (--answers free --ask-concept) for all concepts.
+  Training, the probes (turn-0 panel + refits) and the held-out races all use the DATASET texts, so free answers mix in a
+  separate question. On held-out concepts the probes miss even the untouched base model's own answers: base per-turn
+  pass after turn 0 0.37 (vs 0.30-0.35 for the trained models; emotions / biology / education beaten at turn 1), plus
+  "beaten" = any miss within <= 8 turns. Training concepts were valid (base 0.03 per turn, trained 0.12-0.15).
+  -> results moved to runs/ladder_freegen_1023/ (free-generation, report separately; redo on checkable concepts only);
+  the main ladder rerun with dataset answers: 639132 (same checkpoints, base control incl. stay; 20 races) ->
+  runs/ladder_forced_1023/.
+  Training-time deep refits (60-step windows, 301 -> 721+): k3 1-bit 0.13 -> 0.27, score 0.05 -> 0.41; k4 ~0 -> ~0.2;
+  k5+ seen 0-4 times per window (24-turn episodes leave no room) -> ladder levels >= 5 are untrained.
