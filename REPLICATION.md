@@ -10526,3 +10526,24 @@ Corrected 9B seed-17 result (`62340082`):
 - 10-23 06:00 production chunk 2 ended at the 1-bit step_220 save (global 720; score 700). Conversion 638575: both
   newest checkpoints rescaled 256 -> 64 (496 LoRA tensors each, max rel err of (alpha/r) B A 0.0, 496 Adam states),
   originals in <out>/a256_backup_720 / a256_backup_700; chunk 3 (635097) started on full v4c; drain 635365 queued.
+- 10-23 PRODUCTION CHUNK-2 DRAIN (635365, the last pure-v4b checkpoints; aggregates only):
+  - Held-out races (held-out concepts, 64 segments): 1-bit k1 / k2 / k3 at 500 / 550 / 600 / 650 / 700 = 0.61 / 0.63 /
+    0.69 / 0.72 / 0.81, 0.51 / 0.51 / 0.62 / 0.71 / 0.52, 0.20 / 0.27 / 0.37 / 0.50 / 0.47 (k3 n 10-22); score 0.41 / 0.51
+    / 0.56 / 0.50 / 0.67, 0.39 / 0.46 / 0.33 / 0.57 / 0.65, 0.20 / 0.36 / 0.56 / 0.50 / 0.52. Transfer to held-out
+    concepts is still rising (val score 0.29 -> 0.44 / 0.15 -> 0.45).
+  - NEVER-SHOWN PANEL step 600 vs 300 (detection on hiding turns): train concepts linear@12 1.00 -> 0.09 (1-bit) /
+    0.99 -> 0.34 (score): the L12 blind spot is gone; training-depth linear mean 0.55 -> 0.06 / 0.61 -> 0.13; held-out
+    depths 0.92 -> 0.81 / 0.95 -> 0.84; attnpool 0.43 -> 0.03 / 0.87 -> 0.23, mck_attnlite 0.67 -> 0.04, ensdeep4
+    0.44 -> 0.08; ens8_linear (incl. held-out depths) 0.85-0.88 and maxpool@24 0.62-0.66 still catch. Held-out concepts:
+    linear@12 0.89 -> 0.12 / 0.93 -> 0.50, training depths 0.78 -> 0.33 / 0.85 -> 0.52, held-out depths 0.89 / 0.95.
+    No-brief: L12 1.00; training-depth mean 0.78 / 0.64 (leak at non-anchored depths persists, as at 300).
+  - Capability (512 tok; base GSM8K brief 0.825 / 0.82, MMLU brief 0.663 / 0.662): 1-bit s720 GSM8K brief 0.77 /
+    0.78, MMLU brief 0.64 / 0.65, clean GSM8K 0.82 (base 0.90); score s700 0.79 / 0.805, 0.64 / 0.66, clean 0.78. Within
+    the 0.10 tripwire.
+  - Validity (quality.json, checkable concepts): train concepts valid on passed turns 0.83 (1-bit s720; s500 0.74;
+    base on_all 0.60); held-out passed 0.52 / 0.55 (base on_all 0.67).
+  - Persistence (train concepts, no refit): a beaten probe stays beaten on later turns 0.95 / 0.95 (n ~395); with the
+    verdict always PASSED 0.89 / 0.88 -> passes are kept, not luck, and mostly hold without corrective feedback.
+  - One race OOMed (score s700 race_train, 2 evals per GPU) -> requeued; quality races now --batch 8. Drains 635366 /
+    635367 used the 10-21 script copy (no panel merge): replaced by 638978 / 638979 (current script). Step-600 shards
+    merged by 638980.

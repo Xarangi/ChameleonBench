@@ -16,7 +16,7 @@ set -uo pipefail
 RUNS=/scratch/s/sneheel/next_chameleons_artifacts/tica/runs
 TR="German language,Japanese language,Arabic language,Hindi language,all-caps text,SQL code,JSON data,JavaScript code"
 HO="Finnish language,French language,Portuguese language,Turkish language,Russian language,Greek language,Thai language,Tamil language,HTML markup,Python code,Java code"
-RACE="--batch 16 --answers free --ask-concept --episodes 32 --turns 24 --switch-prob 1.0 --turn-budget 5,8,8 --cond real_score"  # (--pass-forks 8 --pass-min 6 available, off by default: user 10-22)
+RACE="--batch 8 --answers free --ask-concept --episodes 32 --turns 24 --switch-prob 1.0 --turn-budget 5,8,8 --cond real_score"  # (--pass-forks 8 --pass-min 6 available, off by default: user 10-22)
 PANEL_EVERY=${PANEL_EVERY:-300}
 PANEL_SHARDS=${PANEL_SHARDS:-4}; PANEL_EPISODES=${PANEL_EPISODES:-24}
 PANEL="--batch 6 --turns 24 --mix real_score:0.6,mismatch:0.2,nobrief:0.2"
