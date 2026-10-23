@@ -5,6 +5,15 @@ checkpoints, observed results, and unresolved limitations.
 
 TICA on a new machine: start at docs/tica/README.md (results digest, run ledger, open questions, aggregate snapshot).
 
+## 2026-10-23m Baseline at global 600 (last v4b weights); race seed noise is large
+- Global 600: fixed race k1 0.96 (48), k2 0.41 (46), k3 0.17 (18), pass / turn 0.082; full-protocol race k1 0.64 (97),
+  k2 0.24 (55), k3 0.11 (9), pass / turn 0.076; GSM8K 768 tok clean 0.870 / math brief 0.865 (base 0.895 / 0.805).
+- Seed check, budget-only race at global 500: seed 1 (48 ep) k2 0.47 (43) vs seed 2 (96 ep) k2 0.32 (87). The
+  seed-to-seed spread (~0.15) is about twice the binomial SE, so single 48-episode races are noisier than their n
+  suggests; step 500's fixed-race k2 0.62 was likely a high draw. Fixed-race k2 by checkpoint: 0.29 / 0.20 / 0.34 /
+  0.62 / 0.41 at 150 / 300 / 400 / 500 / 600 -> up from ~0.27 (150-400) to ~0.5 (500-600), with wide error bars.
+- Panel fill: shards 0 / 1 / 2 done; shard 3 running (~90 min); v4c chain head 6859681 waits on it.
+
 ## 2026-10-23l The v4c continuation runs itself: self-perpetuating chain + automatic trend evals
 - scripts/slurm/v4c_logclip_chain.sh (head 6859681, afterany panel fill 6856976; replaces 6852701 / 6852704, whose
   stored scripts could not queue further chunks): each 12 h chunk resumes from the newest checkpoint WITH trainer
