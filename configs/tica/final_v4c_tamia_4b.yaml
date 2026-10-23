@@ -101,7 +101,7 @@ rl:
     first_probe_panel_from_start: true   # v4b: turn 0 of the first concept = one base probe drawn from the in-training panel from global step 0 (user 10-21: no mid-run switch, no L12 rung; panel0 k1 0.46 / 0.79 at 10-19 / 20-29, 10-21ai)
     first_probe_panel_cache: /scratch/s/sneheel/next_chameleons_artifacts/tica/panel_probe_cache   # TamIA 10-21: base-model turn-0 panel probes cached on disk (content-hashed key; shared by both arms and every later run; filled ahead by scripts/slurm/tamia_panel_precompute.sh)
     match_anchor: panel   # v4c (user 10-22): readability anchor = every turn-0 panel probe, not L12 only
-    match_anchor_k: 3   # 10-22: 3 anchor probes per act-normal turn (unbiased subset of the pooled panel kinds)
+    match_anchor_k: 0   # 10-22 (user): ALL pooled panel kinds every act-normal turn (8: linear @8-26 + 3 ensembles)
     match_anchor_tokens: false   # 10-22: pooled kinds only (linear @8-26 + ensembles); token kinds cost ~s per probe with grad
     refit_min_each: 24
     refit_buf_cap: 512
