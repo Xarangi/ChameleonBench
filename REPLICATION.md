@@ -5,6 +5,28 @@ checkpoints, observed results, and unresolved limitations.
 
 TICA on a new machine: start at docs/tica/README.md (results digest, run ledger, open questions, aggregate snapshot).
 
+## 2026-10-23c k2 diagnosis: refit regime NOT the cause; v4b USES the verdict; fixed-protocol race k2 0.62 vs training ~0.08
+- Races (48 ep x 16 turns, train / math concepts, no switches; k = pass by probe index (n) / mean turns to pass):
+  - v4b global 500, real: k1 0.94 (48) / 2.6, k2 0.62 (45) / 6.1, k3 0.42 (26) / 3.5, k4 0.20 (10); pass/turn 0.107.
+  - v4b global 500, falsify: k1 0.71 (48) / 5.1, k2 0.36 (33) / 5.2, k3 0.27 (11); pass/turn 0.056.
+    -> v4b reads the 1-bit verdict (reversing it halves the per-turn pass rate and cuts k2 0.62 -> 0.36).
+  - math lcstay480 with the v4b refit regime (in-context positives only, tpr_ic 0.8): k2 1.00 (48) / 2.0, k3 0.31,
+    k4 0.07 vs its own regime k2 1.00, k3 0.65, k4 0.10. The stronger refits cost math k3, not k2.
+    -> 10-23b hypothesis (refit regime explains math/v3b vs v4b k2) REJECTED for k2. (v4b500 under the OLD regime,
+    6844733, still running.)
+- So the step-500 model beats 62% of second probes in a fixed protocol, while training reports k2 ~0.05-0.12. The
+  training metric is taken against an ADAPTIVE adversary: the Thompson kind bandit puts 42% of refits on ensembles
+  (ens4_linear 0.165, ensdeep4 0.162, ens4_mlp 0.098; last 60 steps), the concept bandit samples the concepts it
+  fails, and the turn budget switches after 8 judged turns. The race samples kinds from a fresh bandit (mostly
+  maxpool / linear / ens4) over all train concepts uniformly. Training k2 being flat is therefore not evidence that
+  the model stopped improving; it can be the curriculum keeping pace.
+- Training margins (turns.jsonl, global 150-569; score - thr on judged turns): base panel (k1) median 1-3 above thr;
+  deployed refits far above: linear 47-60 logits, attnpool 16-23, maxpool 11-18, ensembles / rlobf ~0.8-0.9 in
+  probability units (saturated). Linear / attnpool / maxpool refit margins fell ~10-25% from the first to the last
+  third of steps; ensembles unchanged. k2 margin does NOT fall with turns since deployment (median 0.99 at ages 0-7,
+  caught 0.99): against the refits training deploys, no within-episode progress.
+- Queued: the same fixed race on global 150 / 300 / 400 (6848729-31) -> is the race k2 rising across checkpoints?
+
 ## 2026-10-23b Why k2 works in math / v3b but not v4b: v4b alone fits refits on in-context states only; swap test queued
 - Resolved-config diff (final_v3b_4b | final_v4_math_v3b_r380_4b | final_v4b_4b): the probe zoo, kind bandit and
   refit kinds are identical. v4b-only changes: refit_np_in_fit true -> FALSE (10-21k), refit gate tpr_np 0.8 -> tpr_ic
