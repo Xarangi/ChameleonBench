@@ -10599,3 +10599,18 @@ Corrected 9B seed-17 result (`62340082`):
   never starts. Fix: VLLM_USE_DEEP_GEMM=0 in the script (non-DeepGEMM FP8 kernels); smoke retried as 639788 (judge only,
   generation shards reused). Also noted: tica_free_judge.py SKIP = {"deception", "deception (Apollo RepE)"} misses the
   v5 names "deception: *" -- harmless here (excluded from generation) but wrong if anyone judges deception data.
+- 10-23 V4C REFIT LADDER (639716, 45 min; same protocol as 639132: dataset answers, 16 ep x 80 turns, max-k 12;
+  production 1-bit s800 / score s780 = ~80 v4c steps after the alpha-64 switch; a64 pilots s460 / s420). Format
+  beat frac / mean turns (successes) / n reaching, vs pre-v4c s680 / s660:
+  - Train "stay" (unlimited): 1-bit k1-k4 1.00/1.9/16, 1.00/8.3/16, 0.88/18.9/16, 0.29/22.0/14 (was 1.00/3.8, 0.88/5.6,
+    0.64/20.2, 0.67/21.7 n9); score 1.00/2.1, 1.00/4.4, 0.81/13.8, 0.69/11.6 n13, k5 0.56 n9, k6 n5 (was 1.00/3.6,
+    0.81/16.8, 0.62/19.5, 0.50/18.8 n8, k5 n4, k6 n1). More episodes reach deeper refits; score arm's turns per refit
+    drop ~25-75% at k2-k4.
+  - Held-out "stop" (<= 8 turns): 1-bit k1 0.94 (was 0.69), k2 0.53 (0.73), k3 0.12 n8 (0.38); score k1 0.88 (0.69),
+    k2 0.64 (0.45), k3 0.44 n9 (0.80 n5). Held-out "stay": score k1 5.9 turns (10.2), k2 0.88 / 8.1 (0.56 / 10.0), k3
+    13.9 (19.8), n reaching k4 7 (4); 1-bit k1 0.88 / 7.2 (0.94 / 8.7), k3 0.60 / 8.2 (0.89 / 11.6), k4 n6 (8).
+  - Base (from 639132): k1 <= 8 turns 0.00 train / 0.19 held-out. a64 pilots (5 concepts): flat (k1 0.19-0.56).
+  - Reading: first-probe dodge got faster and transfers better to held-out concepts (k1 <= 8 turns 0.69 -> 0.88-0.94);
+    the score arm improved at every depth; 1-bit held-out deeper refits (k2-k3) did not improve (n 8-15, noisy).
+- 10-23 MODEL-WRITTEN TRAIN BUILD (639806, 31 min on 4 x H100): 26,262 Qwen3.5-4B answers (3 per prompt); 27B-FP8
+  judge concept-central 0.984, answer reasonable 0.84, finished 0.91. Held-out build 639807: 49,242 generated, judging.
