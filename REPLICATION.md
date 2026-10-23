@@ -183,6 +183,18 @@ TICA on a new machine: start at docs/tica/README.md (results digest, run ledger,
   (checkpoints 280 / 260), resume 637254 started on the new settings (before / after on one curve). Baseline drain
   637995 (PANEL_EVERY=260: held-out races + quality + capability on 280 / 260 and a never-shown panel at 260, i.e.
   BEFORE the switch; replaces 636255); drain 637255 after the resume (panels at 300 and 600).
+- ALL-23 ANCHORS TOO SLOW: resume 637254 step 1 took 1310 / 1322 s (train pass 1037 / 1016 s vs ~40 s; 3818 / 3473
+  match targets; 15 of 23 kinds read per-token states). -> adaptive.match_anchor_k (default 0 = all): k anchor probes
+  per act-normal turn, uniform per (step, episode, turn) stream = unbiased estimate of the all-probe mean (every probe
+  equally often over turns). k = 2 in the a64 pilots and final_v4c. 637254 / 637255 cancelled, the 1-step resume dirs
+  moved to resume_{280,260}_k23_aborted; resume 638024 + drain 638025 (21 tests passed, 638022).
+- EVAL JOBS (user: use the 4 x 80 GB fully): tica_val_drain.sh runs tasks LONGEST FIRST (panels, races, capability) and
+  logs GPU memory / utilisation; tamia_queue_quality.sh splits every never-shown panel into PANEL_SHARDS=4 processes
+  (--seed k, 6 episodes each) merged at the end by scripts/tica_panel_merge.py (records concatenated, aggregates
+  recomputed; split-merge test on a real panel reproduces selectivity / panel det exactly, 638015). 2 evals per GPU kept
+  (HF eval processes peak 24-27 GB). New PERSISTENCE races per checkpoint + base (train checkables): tica_switch_eval
+  --no-refit (the beaten probe keeps judging; persist_pass_rate / persist_by_lag = are passes KEPT, not luck) and
+  --no-refit --always-pass (verdict always PASSED: does the dodge hold without corrective feedback?).
 
 ## 2026-10-21as RELAUNCH interleaved (user: GPU efficiency first): both arms share one node, model.lm_chunk 1024
 - Smokes with chunked LM terms + warm panel cache: L6 (one arm, DP4) step 1 158 s (L1: 864 s), peak 16.2 GB alloc /
