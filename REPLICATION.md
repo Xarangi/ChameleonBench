@@ -10511,3 +10511,6 @@ Corrected 9B seed-17 result (`62340082`):
   Switch: 635097 + drain 635365 HELD; watcher cancels 635095 once the 1-bit arm saves resume_500/step_220 (global 720;
   the score arm resumes from its step_220 = global 700, losing ~10 steps); conversion job 638559 (afterany 635095)
   rescales both arms' newest checkpoints (originals -> <out>/a256_backup_<step>) and releases 635097 + 635365.
+- 10-23 (user, minutes later): alpha change dropped -- production keeps alpha 256 and only takes the other v4c settings.
+  Conversion 638559 cancelled (no checkpoint was touched), holds on 635097 / 635365 released (afterany 635095 as
+  before); the watcher still ends chunk 2 at the 1-bit step_220 save. tica_lora_rescale.py kept (tested) for later use.
