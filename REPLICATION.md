@@ -243,6 +243,9 @@ TICA on a new machine: start at docs/tica/README.md (results digest, run ledger,
   production r128 / alpha-256 runs concentrated their evasion at L16 / 22 / 26 (0.44-0.52) and left L12 at 1.00, while
   a64 spreads evasion evenly over depths. Post-switch panels (300 / 600) will show the all-pooled anchor's effect.
 - a64 resume with all 8 pooled anchors at steady state: both arms 232-343 s/step, train 34-45 s (KL 0.13-0.16).
+- 10-22 23:05 PRODUCTION 1-bit at 627: k2 0.50 (240), k3 0.32 (93) over the last 20 steps (score at 619: 0.40 / 0.21);
+  GSM8K-while-hiding 0.73 / 0.80, KL 0.16-0.19, held-out detection 0.74-0.77. a64 pilots after the switch (294 / 275):
+  k2 0.59 / 0.62, k3 0.34 / 0.39, held-out 0.56-0.62, GSM8K 0.83-0.85. Baseline drain 637995 finished.
 
 ## 2026-10-21as RELAUNCH interleaved (user: GPU efficiency first): both arms share one node, model.lm_chunk 1024
 - Smokes with chunked LM terms + warm panel cache: L6 (one arm, DP4) step 1 158 s (L1: 864 s), peak 16.2 GB alloc /
