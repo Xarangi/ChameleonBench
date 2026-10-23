@@ -5,6 +5,22 @@ checkpoints, observed results, and unresolved limitations.
 
 TICA on a new machine: start at docs/tica/README.md (results digest, run ledger, open questions, aggregate snapshot).
 
+## 2026-10-23j CORRECTION to 10-23i: switching does not make "refits after a switch" the problem; two separate effects
+- 10-23i compared race-level k2 only. Per segment (race turns.jsonl; the logs restart ep numbering every batch of 8,
+  so episodes are keyed by batch; global 500, 24 turns, n per cell 13-72):
+  - budget only (no switches), first concept: k1 0.90 (48), k2 0.47 (43), k3+ 0.30.
+  - switches only: first concept k1 0.94 (48), k2 0.24 (45), k3+ 0.23 (13); switched-in concept k1 0.49 (72),
+    k2 0.21 (33), k3+ 0.00 (7).
+  - full protocol: first concept k1 0.98, k2 0.26 (47); switched-in k1 0.42 (48), k2 0.31 (13).
+- Effect 1, the switched-in concept's FIRST probe: it is fork-fit on the model's own states (first_probe
+  switch_fork: "switched concepts still fork"), i.e. a refit-strength probe, while the first concept's first probe
+  is a base-model panel probe. Beaten 0.42-0.49 vs 0.90-0.98. So switched-in "k1" is effectively another k2.
+- Effect 2, refits on the FIRST concept are beaten half as often once switches are on (0.24-0.26 vs 0.47), and NOT
+  because the switch cuts their runway: at a matched horizon the budget race beats 0.42 of first-concept k2 within 6
+  judged turns vs 0.22 in the switch race (unpassed k2 got 6.6 turns before the switch). Nothing differs before the
+  switch that the model can see, so either noise (n ~45 per arm, ~2 SE) or an unidentified protocol difference.
+  Replication with seed 2, 96 episodes: budget 6858892, switch 6858893 (the default race seed is 1 = the first runs).
+
 ## 2026-10-23i Concept switching alone explains the race gap; v4b val s600; panel fill: 1 process per 40 GB GPU
 - Bisection at global 500, switches only (prob 1.0, min seg 8, no budget, 24 turns): pass / turn 0.092; k1 0.70 (111),
   k2 0.26 (76), k3 0.11 (19) = the full protocol (k2 0.27). Budget alone 0.47, neither 0.62. -> switching concepts
