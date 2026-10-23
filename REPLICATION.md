@@ -10520,3 +10520,6 @@ Corrected 9B seed-17 result (`62340082`):
   (cuBLAS / reduction order on a second stream). Speed: rollout 438 / 399 / 410 s serial vs 384 / 396 / 377 s
   (step 1 -12%, steps 2-3 within noise; trajectories diverge after step 1). Fits summed 568 -> 389 s at step 1.
   -> small gain, exactness lost: NOT enabled anywhere (option kept, default off). Production v4c switch unaffected.
+- 10-23 (user, final): production DOES take alpha 64 (rescale as planned). 635097 + 635365 held again; conversion job
+  638575 (afterany 635095) rescales both arms' newest checkpoints (1-bit resume_500/step_220 = 720 after the watcher's
+  cancel, score resume_480/step_220 = 700) and releases them. Configs back to alpha 64 (full v4c).

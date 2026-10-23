@@ -1,5 +1,5 @@
-# 10-23 v4c SWITCH (user): from the chunk-3 resume on, the v4c recipe EXCEPT the LoRA alpha (kept 256): train_mix
-#   0.75 / 0.15 / 0.10 (no mismatch), all-pooled MATCH anchor, act_anchor 1.0.
+# 10-23 v4c SWITCH (user): from the chunk-3 resume on, the full v4c recipe: LoRA alpha 256 -> 64 (resumed checkpoint
+#   rescaled, same function), train_mix 0.75 / 0.15 / 0.10 (no mismatch), all-pooled MATCH anchor, act_anchor 1.0.
 #   Steps before the switch used the v4b settings below as they were (REPLICATION 10-23).
 # TamIA 10-21 (user): final_v4b_4b with LoRA rank 128 (alpha 256, scale 2 as every earlier config) and 16 episodes per step (4 per rank on 4 GPUs: same per-rank work, 2x the episodes per update); everything else identical. docs/tica/TAMIA-V4B.md
 # FINAL v4b (10-21): final_v4_4b + everything the Narval MATH runs settled (docs/tica/README.md "Since 10-19";
@@ -42,7 +42,7 @@ out: /scratch/s/sneheel/next_chameleons_artifacts/tica/runs/final_v4b_tamia_4b
 episodes: {feedback: verdict, hidden: false, format: answer, layout: tagged,
            inputs: /scratch/s/sneheel/next_chameleons_raw_cache/tica/final_v5_elicit_inputs.json}  # 10-19d: concept-eliciting requests (build_elicit_inputs.py)
 data: /scratch/s/sneheel/next_chameleons_raw_cache/tica/final_v5_clean.json   # split v5 (build_final_v5.py; finance positives 27B-filtered)
-lora: {rank: 128, alpha: 256, dropout: 0.0, target_modules: all-linear}   # TamIA 10-21 (user): rank 32 -> 128, alpha = 2 x rank; KEPT at the 10-23 v4c switch (user: alpha change not needed)
+lora: {rank: 128, alpha: 64, dropout: 0.0, target_modules: all-linear}   # 10-23 v4c switch (user, final): alpha 256 -> 64; the resumed checkpoint is RESCALED (A, B x2, same function; scripts/tica_lora_rescale.py); rank 128 / alpha 256 since 10-21
 train_mix: {real_score: 0.75, nobrief: 0.15, neg_text: 0.10}   # 10-23 v4c switch (user); was 0.5 / mismatch 0.15 / 0.2 / 0.15
 train:
   steps: 1200       # fixed steps, no early stopping, no checkpoint selection: the final checkpoint is the model
