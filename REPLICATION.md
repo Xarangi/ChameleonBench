@@ -5,6 +5,22 @@ checkpoints, observed results, and unresolved limitations.
 
 TICA on a new machine: start at docs/tica/README.md (results digest, run ledger, open questions, aggregate snapshot).
 
+## 2026-10-23e Fixed-protocol races rise across checkpoints (k2 0.29 -> 0.62 by global 500); old refits no easier; val s500 best yet
+- Same race (train concepts, 48 ep x 16 turns, no switches, v4b refit regime), by global step; pass / turn, k (n):
+  - 150 (pilot final): 0.050; k1 0.60, k2 0.29 (28), k3 0.25 (8).
+  - 300: 0.064; k1 0.88, k2 0.20 (41), k3 0.12 (8).
+  - 400 (eval-only save): 0.068; k1 0.85, k2 0.34 (41), k3 0.15 (13).
+  - 500: 0.107; k1 0.94, k2 0.62 (45), k3 0.42 (26), k4 0.20 (10).
+  Per-turn pass rate roughly doubles 150 -> 500, most of it 400 -> 500 (k2 +0.28 at n ~45, ~3 SE). One race per
+  checkpoint; 500 may be a good draw -> the next checkpoints will tell.
+- v4b 500 under the OLD refit regime (np in fit, tpr_np gate): k2 0.51 (45), k3 0.38, k4 0.25, pass / turn 0.093, i.e. no
+  easier than its own regime (0.62 / 0.42). With 10-23c (math k2 unchanged under the new regime): the refit regime
+  is ruled out as the v3b / math vs v4b difference.
+- Val step 500 (heldout concepts, rerun 6844447 with 3 h): k1 0.69 (65), k2 0.33 (40), k3 0.62 (8), pass 0.101, the best
+  held-out val of the run (s200-550 pass 0.029-0.076).
+- Training k1 / k2 / k3: 560-579 0.67 / 0.09 (109) / 0 (9); 580-599 0.64 / 0.16 (112) / 0.08 (12): highest training k2
+  window so far. The race-vs-training k2 gap (0.62 vs ~0.1) is still unexplained; bisection 6850622 / 23 / 25 running.
+
 ## 2026-10-23d What training struggles against (global 400-569) + CORRECTION: the adaptive adversary does NOT explain race k2 0.62 vs train ~0.08
 - Per deployed probe (turns.jsonl, real_score, global >= 400; pass = beaten before it stood down):
   - k1 (turn-0 base panel) by arch: ensdeep4 0.36, maxpool 0.45, ens4_linear 0.50, ens4_mlp 0.54, attnpool 0.56,
