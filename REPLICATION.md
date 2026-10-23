@@ -5,6 +5,25 @@ checkpoints, observed results, and unresolved limitations.
 
 TICA on a new machine: start at docs/tica/README.md (results digest, run ledger, open questions, aggregate snapshot).
 
+## 2026-10-23g Race-vs-training k2 gap is mostly the episode protocol (switches + budget); v4c switch queued; merged tests pass
+- Bisection at global 500 (train concepts, 48 ep; pass / turn, k (n)):
+  - 16 turns, no switches, no budget (10-23c): 0.107; k1 0.94 (48), k2 0.62 (45), k3 0.42 (26).
+  - 24 turns, budget 5 / 8 / 8 only: 0.103; k1 0.90 (48), k2 0.47 (43), k3 0.30 (20), k4 0.33 (6).
+  - 24 turns, FULL training protocol (switch prob 1.0, min seg 8, budget 5 / 8 / 8): 0.088; k1 0.70 (96), k2 0.27 (60),
+    k3 0.20 (10).
+  - (switches only, 6850625: pending.) Training at 500-519: k1 0.59, k2 0.12 (97).
+  -> The budget costs k2 ~0.15 and switching another ~0.2: refits on a switched-in concept (and after the budget's
+  switch) are much harder, and the no-switch race over-states what training measures. The remaining race-vs-training
+  gap (0.27 vs ~0.12-0.16) is within window-to-window noise plus the checkpoint-vs-window difference; not chased further.
+  So "k2 flat in training" mostly reflects the harder switch protocol, while the fixed race shows real improvement
+  (10-23e: 0.29 -> 0.62 from 150 to 500).
+- Merge (10-23f) tests: pytest -k tica on CPU, merged tree: all pass (2 skipped), excluding the sklearn-only
+  test_probe_fit_threshold_and_bank (sklearn not in the qwen35 venv; pre-existing). ruff: 5 E501 in TamIA's own lines
+  (same in gh/tamia), none from the conflict resolution.
+- Follow-up commit: TamIA's REPLICATION entries and docs/tica/TAMIA-V4B.md kept verbatim (their TamIA paths are prose).
+- v4c switch queued: panel-cache fill 6852699 (final_v4c_4b, 4 x A100, 1 process per GPU) -> chain 6852701 (resume
+  global 600 -> resume_600) -> 6852704 (afterany). Step-600 val (6851162, v4b weights) running.
+
 ## 2026-10-23f TamIA branch merged into tica-v3 (Narval paths); the Narval logclip run switches to v4c from global 600
 - Merged gh/tamia (79 commits, to 4c85a89) into tica-v3 with the TamIA path rewrite (9721d4a, "local branch, do not
   push") REVERSED: inverse mapping derived from 9721d4a's own diff (/scratch/s -> /scratch; /scratch/s/sneheel/
