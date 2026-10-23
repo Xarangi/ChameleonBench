@@ -5,6 +5,18 @@ checkpoints, observed results, and unresolved limitations.
 
 TICA on a new machine: start at docs/tica/README.md (results digest, run ledger, open questions, aggregate snapshot).
 
+## 2026-10-23l The v4c continuation runs itself: self-perpetuating chain + automatic trend evals
+- scripts/slurm/v4c_logclip_chain.sh (head 6859681, afterany panel fill 6856976; replaces 6852701 / 6852704, whose
+  stored scripts could not queue further chunks): each 12 h chunk resumes from the newest checkpoint WITH trainer
+  state, queues its own successor (afterany) before training, and ends the chain at global 1200. No-progress
+  guard ($R/chain_state): a chunk that starts at the same global step as the previous one retries once with 8
+  episodes per step (OOM fallback; kept for later chunks), then stops the chain.
+- Trend evals queued by the chain for every checkpoint at a multiple of 200 global steps (> 600) and the final:
+  GSM8K 768 tok + math brief (final_v4c_4b), fixed race (train concepts, 48 ep x 16 turns, no switches) and full
+  training-protocol race (24 turns, switches + budget 5 / 8 / 8), races on final_v4b_4b settings = comparable with
+  the step 150-500 races -> diag/v4c_trend/{cap,race_*_fixed,race_*_full}_<g>.json. Baseline at 600 (last v4b
+  weights): 6859694 / 6859695 / 6859697. Held-out val every 50 steps stays automatic (eval_on_save).
+
 ## 2026-10-23k First-concept k2 gap (switch vs no-switch races): no mechanism found, likely noise
 - What switching is (episodes.py): with concept_switch_prob the sampler draws a concept schedule up front
   (switch_schedule, min segment 8, up to switch_max switches); texts are fresh per turn either way; the switch is
