@@ -10586,3 +10586,16 @@ Corrected 9B seed-17 result (`62340082`):
   - Validity on passed turns (checkable concepts, most unseen by the 5-concept pilots): 0.33 / 0.38 vs production 0.83
     -> many pilot passes come with answers that drop the concept; on_all 0.62-0.65 (base 0.60).
   - Persistence 0.75 / 0.79 (always-pass 0.77 / 0.80) vs production 0.95.
+- 10-23 MODEL-WRITTEN DATA on TamIA (user: generate 4B answers for train + heldout, with the judge check).
+  The Narval chain (tica_mw_build.sh etc.) cannot run here: ctb-liyue_* accounts, gpu:a100:2, venvs/vllm-serving.tar
+  (absent), cuda/12.9 + python/3.12 modules, .venv/bin/python (absent). New scripts/slurm/tamia_mw_build.sh: 1 node,
+  4 x H100, generation 4 shards (one 4B per GPU) then judge 4 x 27B-FP8 at tp=1 (27 GB fits in 80 GB, so tp=1 x 4 beats
+  tp=4); shards resume if requeued. Scope: train 19/20 concepts 8,754 source texts (exclude mathematical reasoning),
+  heldout 34/38 concepts 16,414 (exclude the 4 deception sets: they need ground truth), K=3 -> ~75.5k answers.
+  tests/test_tica_mw_data.py 7/7 pass. Smoke 639740: GENERATION OK (4 shards, 204 answers, 10-13 s each after a 107 s
+  load -> extrapolates to ~27 min train / ~51 min heldout at K=3); JUDGE FAILED -- vLLM 0.21 picks
+  FlashInferFp8DeepGEMMDynamicBlockScaledKernel for the FP8 linears and JIT-compiles DeepGEMM with NVCC; TamIA has only
+  cuda/12.2 and 12.6, DeepGEMM needs >= 12.9, PTX fails ("asm operand type size(16) does not match") and the engine
+  never starts. Fix: VLLM_USE_DEEP_GEMM=0 in the script (non-DeepGEMM FP8 kernels); smoke retried as 639788 (judge only,
+  generation shards reused). Also noted: tica_free_judge.py SKIP = {"deception", "deception (Apollo RepE)"} misses the
+  v5 names "deception: *" -- harmless here (excluded from generation) but wrong if anyone judges deception data.
