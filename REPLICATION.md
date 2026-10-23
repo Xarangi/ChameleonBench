@@ -10460,3 +10460,5 @@ Corrected 9B seed-17 result (`62340082`):
   original `mean_generation_tokens` reports.
 - 10-23 user: priority is a BETTER HIDER, selectivity secondary -> final_v4c act_anchor_weight 0.0 (feature kept,
   off); v4c keeps train_mix 0.75/0.15/0.10 and the all-pooled MATCH anchor. v4c not launched. Production / a64 pilots unchanged.
+- 10-23 (later): act anchor back ON at 1.0 in v4c. It applies only on act-normal turns; its cost to hiding is indirect
+  (shared LoRA weights) and unmeasured, and with mismatch dropped it is the only guard on non-monitored concepts.
