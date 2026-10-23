@@ -223,6 +223,13 @@ TICA on a new machine: start at docs/tica/README.md (results digest, run ledger,
   Capability (512 tok): 1-bit s280 GSM8K 0.91 / 0.86 / 0.90, score s260 0.895 / 0.915 / 0.895; MMLU 0.66-0.68 (base
   0.90 / 0.825 / 0.82, MMLU 0.66-0.695) -> at or above base. So r128 / alpha 64 transfers to held-out concepts far
   better than r32 at the same 5 concepts, close to the 20-concept production run, with base-level capability.
+- PANEL CACHE INVALIDATED BY MY EDITS: the cache key hashed all of adaptive.py, so today's config-field additions made
+  every turn-0 panel / anchor probe a miss (cache 1840 -> 3892 files; a64 resume refits: hit 4 / miss 11 in the logged
+  first probes). This, not anchor scoring alone, made the resumes' step 1 ~1300 s of training (anchors fitted on the
+  fly) and slowed step 2 (857 / 657 s). Fix: the key hashes probe_zoo.py + monitors.py + only adaptive.py's refit
+  fitting code (RefitData, _split, fit_refit_bank, MLPMonitor, fit_refit_mlp; inspect.getsource), so config edits no
+  longer invalidate. Tests 24 passed (638199). Refill for production's 1840 keys (covers the pilots): 638200
+  (tamia_panel_precompute.sh final_v4b_tamia_4b), before production chunk 3 resumes on the new code (~10-23 14:15).
 
 ## 2026-10-21as RELAUNCH interleaved (user: GPU efficiency first): both arms share one node, model.lm_chunk 1024
 - Smokes with chunked LM terms + warm panel cache: L6 (one arm, DP4) step 1 158 s (L1: 864 s), peak 16.2 GB alloc /

@@ -1944,8 +1944,16 @@ class AdaptiveSupervisedTrainer:
         plan = self._refit_plan(s, [], None, c, kind, render, random.Random(f"panel0|{ks}"),
                                 False)
         src = Path(__file__).resolve().parents[1]
+        # fitting code only (10-22): probe_zoo.py + monitors.py whole, and from adaptive.py the refit
+        # fit functions -- hashing all of adaptive.py made every config-field edit a full cache miss
+        import inspect
+
+        from next_chameleons.tica import adaptive as _ad
+
+        fit_src = "".join(inspect.getsource(o) for o in (
+            _ad.RefitData, _ad._split, _ad.fit_refit_bank, _ad.MLPMonitor, _ad.fit_refit_mlp))
         code = hashlib.sha256(b"".join((src / f).read_bytes() for f in (
-            "probe_zoo.py", "adaptive.py", "monitors.py"))).hexdigest()[:16]
+            "probe_zoo.py", "monitors.py")) + fit_src.encode()).hexdigest()[:16]
         model = Path(str(getattr(getattr(pol.model, "config", None), "_name_or_path", ""))).name
         key = json.dumps({
             "v": 1, "code": code, "model": model, "name": name, "kind": plan["full_kind"],
