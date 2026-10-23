@@ -230,6 +230,11 @@ TICA on a new machine: start at docs/tica/README.md (results digest, run ledger,
   fitting code (RefitData, _split, fit_refit_bank, MLPMonitor, fit_refit_mlp; inspect.getsource), so config edits no
   longer invalidate. Tests 24 passed (638199). Refill for production's 1840 keys (covers the pilots): 638200
   (tamia_panel_precompute.sh final_v4b_tamia_4b), before production chunk 3 resumes on the new code (~10-23 14:15).
+- STEADY STATE with all 8 pooled anchors (resume 638106): score arm steps 1-5 train 1293 / 290 / 58 / 42 / 44 s, step
+  1617 / 657 / 442 / 319 / 342 s (~1250 match targets) -> once its cache entries exist the anchors cost ~nothing (train
+  ~40-60 s as without anchors). 1-bit arm still filling (train 1303 / 554 / 432). CORRECTION: the earlier "token-level
+  anchors cost seconds per probe" reading came from step-1 timings only and was confounded by the cache misses; all 23
+  kinds may well be cheap too -> re-measure after the refill (638200).
 
 ## 2026-10-21as RELAUNCH interleaved (user: GPU efficiency first): both arms share one node, model.lm_chunk 1024
 - Smokes with chunked LM terms + warm panel cache: L6 (one arm, DP4) step 1 158 s (L1: 864 s), peak 16.2 GB alloc /
