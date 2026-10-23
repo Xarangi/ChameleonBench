@@ -33,6 +33,43 @@ print(*best)
 PY
 )
 test -n "${CK:-}" || { echo "no checkpoint under $R"; exit 1; }
+# Trend evals, once per 200 global steps (and at the end) on the newest full checkpoint: GSM8K 768 tok (+ math
+# brief), the fixed race (train concepts, 16 turns, no switches) and the full training protocol race (24 turns,
+# switches + budget). Races use final_v4b_4b = the settings of the step 150-500 races (comparable trend).
+evals() {  # global step, checkpoint
+  local g=$1 ck=$2 D=/scratch/sneheel/next_chameleons_artifacts/tica/diag/v4c_trend
+  mkdir -p "$D"; grep -qx "$g" "$D/done" 2>/dev/null && return 0
+  cd /home/sneheel/chameleons
+  sbatch --parsable --time=02:00:00 -J cap_v4c_$g scripts/slurm/tica_capability.sh final_v4c_4b "$D/cap_$g.json" \
+    --adapter "$ck" --benches gsm8k --briefs math --gsm-max-new-tokens 768
+  sbatch --parsable --time=03:00:00 -J race_v4c_${g}_fixed scripts/slurm/tica_switch_eval.sh final_v4b_4b \
+    "$D/race_${g}_fixed.json" --adapter "$ck" --topics train --episodes 48 --turns 16 --switch-prob 0
+  sbatch --parsable --time=04:00:00 -J race_v4c_${g}_full scripts/slurm/tica_switch_eval.sh final_v4b_4b \
+    "$D/race_${g}_full.json" --adapter "$ck" --topics train --episodes 48 --turns 24 --switch-prob 1.0 \
+    --min-seg 8 --turn-budget 5,8,8
+  echo "$g" >> "$D/done"; echo "trend evals queued for global $g"
+}
+while read -r g ck; do evals "$g" "$ck"; done < <(python3 - "$R" <<'PY'
+import re, sys
+from pathlib import Path
+out = Path(sys.argv[1])
+for d in sorted(out.glob("resume_*/adaptive/*")):
+    m = re.match(r"resume_(\d+)", d.parent.parent.name)
+    if not m or not (d / "adapter_model.safetensors").exists():
+        continue
+    off = int(m.group(1))
+    if d.name.startswith("step_"):
+        g = off + int(d.name[5:])
+    elif d.name == "final" and (d.parent / "train_log.jsonl").exists():
+        g = off + int((d.parent / "train_log.jsonl").read_text().strip().splitlines()[-1]
+                      .split('"step": ')[1].split(",")[0])
+    else:
+        continue
+    if g > 600 and (g % 200 == 0 or g >= 1200):
+        print(g, d)
+PY
+)
+cd /home/sneheel/chameleons
 REM=$(( 1200 - N )); (( REM > 0 )) || { echo "done at $N: chain ends"; exit 0; }
 ST=$R/chain_state; touch "$ST"
 read -r LASTN TRIES EPS _ < <(cat "$ST" 2>/dev/null; echo "-1 0 16") || true
