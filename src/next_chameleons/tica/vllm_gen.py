@@ -32,6 +32,28 @@ from pathlib import Path
 MODULES = os.environ.get("TICA_VLLM_MODULES",
                          "StdEnv/2023 gcc/12.3 cuda/12.9 python/3.12 opencv/4.13.0 scipy-stack/2026a")
 
+# Per served checkpoint family (config.json model_type; 10-24 Gemma-4 port). Absent (Qwen3.5) =
+# unchanged.
+#   flags:   extra server flags. Gemma-4 12B ("unified": text + image + audio inputs) is served
+#            TEXT-ONLY: --language-model-only sets every modality limit to 0.
+#   buffers: buffers (by name) the merged state carries besides the parameters (Gemma-4's
+#            per-layer layer_scalar is a checkpoint buffer of the decoder layer).
+#   Gemma-4 needs vLLM >= 0.23 (Gemma4UnifiedForConditionalGeneration): the vllm-g4 venv (vLLM
+#   0.25, transformers 5.14.1), TICA_VLLM_MODULES "StdEnv/2023 gcc python/3.11 arrow/24.0.0
+#   cuda/12.6 opencv".
+VLLM_FAMILY = {
+    "gemma4_unified": {"flags": "--language-model-only ", "buffers": ("layer_scalar",)},
+}
+
+
+def model_family(model_path) -> dict:
+    """VLLM_FAMILY entry of the checkpoint at model_path ({} if none / no config.json)."""
+
+    p = Path(model_path) / "config.json"
+    if not p.is_file():
+        return {}
+    return VLLM_FAMILY.get(json.loads(p.read_text()).get("model_type"), {})
+
 
 def convert_adapter(src: Path, dst: Path) -> None:
     """PEFT adapter on the text-only module tree -> the multimodal tree vLLM loads."""
@@ -46,10 +68,11 @@ def convert_adapter(src: Path, dst: Path) -> None:
     shutil.copy(src / "adapter_config.json", dst / "adapter_config.json")
 
 
-def merged_text_state(policy) -> dict:
+def merged_text_state(policy, buffers: tuple[str, ...] = ()) -> dict:
     """The policy's CURRENT weights with the LoRA merged in (W + scale * B @ A, fp32 math, bf16
     out), in the checkpoint's naming (model.language_model.*), as CPU tensors. The training weights
-    are not touched (no merge/unmerge round trip, which is lossy in bf16). Tied lm_head skipped."""
+    are not touched (no merge/unmerge round trip, which is lossy in bf16). Tied lm_head skipped.
+    buffers: also the buffers with these names (VLLM_FAMILY; () = parameters only, as before)."""
 
     import torch
 
@@ -72,7 +95,15 @@ def merged_text_state(policy) -> dict:
             if key.startswith("model.") and not key.startswith("model.language_model."):
                 key = "model.language_model." + key[len("model."):]
             out[key] = t.to("cpu", non_blocking=True)
-    torch.cuda.synchronize()
+        for name, b in (base.named_buffers() if buffers else ()):
+            if name.rsplit(".", 1)[-1] not in buffers:
+                continue
+            key = name
+            if key.startswith("model.") and not key.startswith("model.language_model."):
+                key = "model.language_model." + key[len("model."):]
+            out[key] = b.detach().to("cpu", non_blocking=True)
+    if torch.cuda.is_available():
+        torch.cuda.synchronize()
     return out
 
 
@@ -106,6 +137,8 @@ class VLLMGenerator:
         self.local = Path(local or os.environ.get("SLURM_TMPDIR", "/tmp")) / "vllm_merged"
         lora_flags = f"--enable-lora --max-lora-rank {max_rank} --max-loras 1 " if mode == "lora" \
             else ""
+        self.family = model_family(model_path)  # 10-24: per-model server flags / merged buffers
+        lora_flags += self.family.get("flags", "")
         cmd = (f"module --force purge >/dev/null 2>&1; module load {MODULES} >/dev/null 2>&1; "
                f"exec {self.py} -m vllm.entrypoints.openai.api_server --model {model_path} "
                f"--host 127.0.0.1 --port {self.port} --dtype bfloat16 "
@@ -184,7 +217,8 @@ class VLLMGenerator:
             from safetensors.torch import save_file
 
             self.local.mkdir(parents=True, exist_ok=True)
-            save_file(merged_text_state(policy), str(self.local / "model.safetensors"))
+            save_file(merged_text_state(policy, tuple(self.family.get("buffers", ()))),
+                      str(self.local / "model.safetensors"))
             self._reload(str(self.local))
             self.loaded = ("policy", ver)
             return

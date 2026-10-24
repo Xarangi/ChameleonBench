@@ -32,8 +32,12 @@ def build(cfg):
     held_out = {int(x) for x in cfg.probes.held_out_layers}
     # Load the training (pool) layers AND the held-out layers (eval-only, e.g. L20 for the
     # generalisation metric) -- pool_layers() does not include held_out_layers on its own.
-    layers = list(cfg.pool_layers())
-    layers += [h for h in held_out if h not in layers]
+    # probes.dir "" (answer format only; 10-24 Gemma-4 port): no Level-1 repeat-format bank. The
+    # answer format refits its base probes on the model itself, so the bank was only ever loaded.
+    layers = []
+    if cfg.probes.dir or cfg.episodes.format != "answer":
+        layers = list(cfg.pool_layers())
+        layers += [h for h in held_out if h not in layers]
     for layer in layers:
         bank = ConceptProbeBank.from_level1_npz(Path(cfg.probes.dir) / f"bank_L{layer}.npz")
         if cfg.probes.pair_gate and layer == cfg.primary_layer():
@@ -57,6 +61,13 @@ def build(cfg):
             keep_think_history=cfg.model.keep_think_history,
         )
         pol.lm_chunk = cfg.model.lm_chunk  # 0 = the full-logits path
+        n = len(pol.layers_module)
+        if cfg.model.depth and n != int(cfg.model.depth):
+            raise SystemExit(f"model.depth {cfg.model.depth} but {cfg.model.path} has {n} decoder "
+                             "layers (rescale the config's layers)")
+        if not cfg.model.depth and n != 32:
+            print(f"[warn] {n}-layer model with the 32-layer probe-zoo tables (set model.depth)",
+                  flush=True)
         return pol
 
     return Level1Data(cfg.data), pool, factory

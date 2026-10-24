@@ -93,6 +93,16 @@ def main():
     )
 
     cfg = load_run_config(a.config)
+    if cfg.model.depth and int(cfg.model.depth) != 32:  # 10-24: 32-layer defaults, rescaled
+        from next_chameleons.tica.probe_zoo import scale_kind, scale_layer
+
+        n = int(cfg.model.depth)
+        for arg, default in (("panel_layers", DEFAULT_LAYERS), ("read_layers", "8,12,16,20,24,28"),
+                             ("feat_layers", "8,12,16,20,24")):
+            if getattr(a, arg) == default:
+                setattr(a, arg, ",".join(str(scale_layer(int(x), n)) for x in default.split(",")))
+        if a.panel_kinds == DEFAULT_KINDS:
+            a.panel_kinds = ",".join(scale_kind(k, n) for k in DEFAULT_KINDS.split(","))
     if a.model_path:
         cfg.model.path = a.model_path
     cfg.rl.adaptive.episode_refit_kind = a.kind

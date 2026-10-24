@@ -70,6 +70,39 @@ def split_kind(kind: str) -> tuple[str, int | None]:
     return kind, None
 
 
+ZOO_BASE_DEPTH = 32  # ENS_LAYERS above and TOKENS_ENS_LAYERS below are for 32-layer models
+
+
+def scale_layer(L: int, depth: int, base: int = ZOO_BASE_DEPTH) -> int:
+    """Layer L of a `base`-layer model -> the same relative depth of a `depth`-layer model (round
+    half up, clipped to the last layer). Identity at depth == base. Gemma-4 12B (48 layers):
+    8 / 12 / 16 / 22 / 26 -> 12 / 18 / 24 / 33 / 39; 20 / 24 / 28 / 30 -> 30 / 36 / 42 / 45."""
+
+    return min(depth - 1, math.floor(L * depth / base + 0.5))
+
+
+def scale_kind(kind: str, depth: int) -> str:
+    """"maxpool@24" -> "maxpool@36" at depth 48 (explicitly placed kinds only; others unchanged)."""
+
+    base, L = split_kind(kind)
+    return kind if L is None else f"{base}@{scale_layer(L, depth)}"
+
+
+def set_zoo_depth(depth: int) -> None:
+    """Rescale the multi-layer kinds' fixed layer sets (ENS_LAYERS, TOKENS_ENS_LAYERS) IN PLACE to a
+    `depth`-layer model (run config model.depth; 10-24 Gemma-4 port). Always recomputed from the
+    32-layer originals: idempotent, and depth 32 restores them exactly."""
+
+    ENS_LAYERS.clear()
+    ENS_LAYERS.update({k: sorted({scale_layer(L, depth) for L in v})
+                       for k, v in _ENS_LAYERS_32.items()})
+    TOKENS_ENS_LAYERS.clear()
+    TOKENS_ENS_LAYERS.update({
+        "nc_ens8_tok": ENS_LAYERS["ens8"],
+        "bailey_ens_tok": list(range(depth)),
+        "bailey_ens_tok_max": list(range(scale_layer(4, depth), scale_layer(28, depth) + 1))})
+
+
 def kind_layers(kind: str, layer: int) -> list[int]:
     kind, Lo = split_kind(kind)
     if Lo is not None:
@@ -1016,6 +1049,7 @@ TOKENS_ENS_LAYERS = {"nc_ens8_tok": ENS_LAYERS["ens8"],
 # decide the verdict for reasons unrelated to concept hiding (and the noisiest layer sets the
 # threshold). Held-out eval layers 20 / 24 excluded as for bailey_ens_tok.
 TOKENS_ENS_LAYERS["bailey_ens_tok_max"] = list(range(4, 29))
+_ENS_LAYERS_32 = copy.deepcopy(ENS_LAYERS)  # set_zoo_depth rescales from these (32-layer) sets
 
 
 class _MckNet(torch.nn.Module):

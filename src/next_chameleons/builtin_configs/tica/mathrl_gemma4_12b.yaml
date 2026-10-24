@@ -1,0 +1,16 @@
+# Gemma-4 12B base generations for the v4c Gemma configs' cap_gen_pool (10-24; docs/tica/GEMMA4_12B.md):
+# greedy BASE-model GSM8K-train solutions (+ Dolly answers), exactly as mathrl_4b built runs/mathrl_4b/base_gens.json
+# for Qwen3.5-4B. Only `python scripts/tica_mathrl.py gens --config mathrl_gemma4_12b` is meant to run on it
+# (no math RL run on Gemma is planned); the mathrl block keeps mathrl_4b's generation settings.
+name: mathrl_gemma4_12b
+model:
+  path: /scratch/s/sneheel/hf/hub/models--google--gemma-4-12b-it/snapshots/5926caa4ec0cac5cbfadaf4077420520de1d5205
+  dtype: bfloat16
+  enable_thinking: false
+  keep_think_history: true
+  batch_size: 64
+  grad_ckpt: true
+lora: {rank: 16, alpha: 32, dropout: 0.0, target_modules: all-linear}
+out: /scratch/s/sneheel/next_chameleons_artifacts/tica/runs/mathrl_gemma4_12b
+mathrl:
+  seed: 0

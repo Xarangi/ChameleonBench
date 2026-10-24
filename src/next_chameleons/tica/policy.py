@@ -36,6 +36,14 @@ DECODER_PATHS = (
     "base_model.model.model.language_model.layers",
 )
 
+# TEXT-ONLY loading of multimodal checkpoints (Gemma-4 12B, 10-24): config.json model_type ->
+# checkpoint-key renames onto the text-only causal-LM class of its text_config (no vision / audio
+# modules exist in the loaded model, so LoRA "all-linear", hooks and the LM head only see the text
+# decoder). Qwen3.5 keeps the old path (its AutoModelForCausalLM class is already text-only).
+TEXT_ONLY_KEY_MAPPING = {
+    "gemma4_unified": {r"^model\.language_model\.": "model."},
+}
+
 
 def _keep_tokens(tok: torch.Tensor, keep: int | None) -> torch.Tensor:
     """CPU bf16 copy of a span's token states; with `keep`, an evenly spaced subset of at most
@@ -92,13 +100,14 @@ def _span_extra(extra: dict | None, lp: torch.Tensor, counts: list[int]) -> None
 
 
 def _lm_terms(head, h: torch.Tensor, tok: torch.Tensor, counts: list[int], extra: dict | None,
-              chunk: int) -> torch.Tensor:
+              chunk: int, softcap: float | None = None) -> torch.Tensor:
     """Chunked LM terms (model.lm_chunk > 0; TamIA 10-21): what forward / forward_multi compute from
     the full [n_tok, V] log-probs, without ever holding them. h = post-norm hidden states at the
     predicting positions [n_tok, d] (with grad), tok = their target ids, counts = span sizes (as
     _span_extra). Returns the per-token NLL [n_tok] and fills `extra` exactly as _span_extra does;
     each chunk's logits are recomputed in backward (activation checkpointing), so the peak is one
-    chunk of logits instead of all of them (the 7.5 GB allocations at 24 turns, layout smoke L2)."""
+    chunk of logits instead of all of them (the 7.5 GB allocations at 24 turns, layout smoke L2).
+    softcap: the model's final-logit soft-capping (Gemma-4), applied as its forward does."""
 
     from torch.utils.checkpoint import checkpoint
 
@@ -128,7 +137,10 @@ def _lm_terms(head, h: torch.Tensor, tok: torch.Tensor, counts: list[int], extra
         ki, kv, kt, has = (torch.cat(x) for x in (rows_i, rows_v, rows_t, rows_h))
 
     def part(hc, tc, ic, vc, tl):
-        lp = torch.log_softmax(head(hc).float(), -1)
+        logits = head(hc).float()
+        if softcap:
+            logits = torch.tanh(logits / softcap) * softcap
+        lp = torch.log_softmax(logits, -1)
         nll = -lp.gather(-1, tc[:, None])[:, 0]
         kl = topk_kl(lp, (ic, vc, tl)) if ic is not None else nll * 0.0
         top = topk_targets(lp, extra["topk"]) if want_ref else None
@@ -220,6 +232,48 @@ def configure_linear_attention(model, fla_grad: bool) -> int:
     return n
 
 
+def _text_config_attr(model, name: str, default=None):
+    """A text-decoder config attribute (looks through PEFT wrappers and multimodal text_config)."""
+
+    cfg = getattr(model, "config", None)
+    for c in (cfg, getattr(cfg, "text_config", None)):
+        if c is not None and getattr(c, name, None) is not None:
+            return getattr(c, name)
+    return default
+
+
+def load_causal_lm(path: str, dtype: str = "bfloat16"):
+    """AutoModelForCausalLM.from_pretrained(path), except for checkpoints listed in
+    TEXT_ONLY_KEY_MAPPING (multimodal model_type): there the TEXT-ONLY causal LM of the checkpoint's
+    text_config is built and only the text weights are loaded (renamed); every text weight must
+    load (missing keys raise; the tied LM head is the only allowed one), the vision / audio
+    weights are skipped. The model keeps the snapshot path as its name (probe / panel cache
+    keys)."""
+
+    import json as _json
+
+    from transformers import AutoConfig, AutoModelForCausalLM
+
+    mt = None
+    cj = Path(path) / "config.json"
+    if cj.is_file():
+        mt = _json.loads(cj.read_text()).get("model_type")
+    if mt not in TEXT_ONLY_KEY_MAPPING:
+        return AutoModelForCausalLM.from_pretrained(path, dtype=getattr(torch, dtype),
+                                                    device_map="auto")
+    text_cfg = AutoConfig.from_pretrained(path).get_text_config()
+    model, info = AutoModelForCausalLM.from_pretrained(
+        path, config=text_cfg, dtype=getattr(torch, dtype), device_map="auto",
+        key_mapping=TEXT_ONLY_KEY_MAPPING[mt], output_loading_info=True)
+    tied = {"lm_head.weight"} if getattr(text_cfg, "tie_word_embeddings", False) else set()
+    missing = sorted(set(info.get("missing_keys") or ()) - tied)
+    if missing:
+        raise RuntimeError(f"text-only load of {path}: {len(missing)} weights missing, e.g. "
+                           f"{missing[:5]}")
+    model.config._name_or_path = str(path)
+    return model
+
+
 def find_decoder_layers(model):
     for path in DECODER_PATHS:
         obj = model
@@ -260,6 +314,12 @@ class Policy:
             raise ValueError("keep_think_history needs enable_thinking=False")
         if getattr(tokenizer, "pad_token_id", None) is None:
             tokenizer.pad_token = tokenizer.eos_token
+        # chat format of the keep-think render / multi_view (Qwen ChatML unless the tokenizer's
+        # template is Gemma-4's turn format; tests' char tokenizers stay on ChatML)
+        self.chat_format = chat_format_for(tokenizer)
+        # final-logit soft-capping (Gemma-4: 30): the chunked LM terms call the head themselves, so
+        # they must apply it as the model's own forward does. None (Qwen3.5) = unchanged.
+        self.logit_softcap = _text_config_attr(model, "final_logit_softcapping")
         self.layers_module = find_decoder_layers(model)
         self.eos_ids = self._eos_ids()
         # TRUNCATED READS (REPLICATION 2026-10-16c; default off): no-grad probe reads stop the
@@ -290,12 +350,10 @@ class Policy:
         `adapter` loads a saved one. trainable=True enables gradient checkpointing unless
         grad_ckpt=False (faster, more activation memory)."""
 
-        from transformers import AutoModelForCausalLM, AutoTokenizer
+        from transformers import AutoTokenizer
 
         tok = AutoTokenizer.from_pretrained(path)
-        model = AutoModelForCausalLM.from_pretrained(
-            path, dtype=getattr(torch, dtype), device_map="auto"
-        )
+        model = load_causal_lm(path, dtype)
         if adapter or lora:
             import peft
 
@@ -350,11 +408,11 @@ class Policy:
                 dict(m, reasoning=m.get("reasoning") or "") if m["role"] == "assistant" else m
                 for m in conv
             ]
-            return render_keep_reasoning(conv, add_generation_prompt, self.enable_thinking)
+            return self.chat_format.render(conv, add_generation_prompt, self.enable_thinking)
         if self.history_reasoning and any(
             m["role"] == "assistant" and m.get("reasoning") is not None for m in conv
         ):
-            return render_keep_reasoning(conv, add_generation_prompt, self.enable_thinking)
+            return self.chat_format.render(conv, add_generation_prompt, self.enable_thinking)
         return self.tokenizer.apply_chat_template(
             [{"role": m["role"], "content": m["content"]} for m in conv],
             tokenize=False,
@@ -387,8 +445,8 @@ class Policy:
         if not self.keep_think_history:
             raise ValueError("multi_view needs keep_think_history=True")
         full = self.render(conv, False)
-        head = "<|im_start|>assistant\n<think>\n\n</think>\n\n"
-        end_tok = self.encode("<|im_end|>")[:1]
+        head = self.chat_format.assistant_head
+        end_tok = self.encode(self.chat_format.end_of_turn)[:1]
         ids: list[int] = []
         spans: list[tuple[int, int, int]] = []
         pos = 0
@@ -533,7 +591,8 @@ class Policy:
                 tok = ids[:, 1:][:, n - keep :][tgt_mask]
                 if chunked:  # model.lm_chunk: same terms, chunked (_lm_terms)
                     per_tok = _lm_terms(head, box["h"][:, :-1][tgt_mask], tok,
-                                        tgt_mask.sum(1).tolist(), extra, self.lm_chunk)
+                                        tgt_mask.sum(1).tolist(), extra, self.lm_chunk,
+                                        getattr(self, "logit_softcap", None))
                 else:
                     logits = out.logits[:, :-1]
                     lp = torch.log_softmax(logits[tgt_mask].float(), -1)
@@ -605,7 +664,8 @@ class Policy:
                 if chunked:  # model.lm_chunk: same terms, chunked (_lm_terms)
                     counts = [te - a for m in mvs for a, _, te in m.spans]
                     per_tok = _lm_terms(head, box["h"][rows_t, pos_t - 1 - (n - keep)],
-                                        ids[rows_t, pos_t], counts, extra, self.lm_chunk)
+                                        ids[rows_t, pos_t], counts, extra, self.lm_chunk,
+                                        getattr(self, "logit_softcap", None))
                 else:
                     lp = torch.log_softmax(out.logits[rows_t, pos_t - 1 - (n - keep)].float(),
                                            -1)
@@ -937,3 +997,79 @@ def render_keep_reasoning(conv: list[dict], add_generation_prompt: bool, thinkin
         head = "<think>\n" if thinking else "<think>\n\n</think>\n\n"
         out.append("<|im_start|>assistant\n" + head)
     return "".join(out)
+
+
+GEMMA4_EMPTY_THOUGHT = "<|channel>thought\n<channel|>"  # the thinking-off generation prompt's block
+
+
+def render_keep_reasoning_gemma4(conv: list[dict], add_generation_prompt: bool,
+                                 thinking: bool) -> str:
+    """Gemma-4 analogue of render_keep_reasoning (its chat_template.jinja, text messages only): BOS,
+    an optional system turn ('<|think|>' first when thinking), '<|turn>user\\n...<turn|>\\n' and
+    '<|turn>model\\n...<turn|>\\n' turns. The template DROPS thinking from finished model turns (it
+    keeps it only for tool calls); here an assistant turn with a "reasoning" key keeps it in the
+    template's channel form ('<|channel>thought\\n' + reasoning + '\\n<channel|>' + content), and an
+    EMPTY reasoning renders as the thinking-off generation prompt's empty block
+    ('<|channel>thought\\n<channel|>'), so a keep-think conversation contains each turn exactly as
+    its generation prompt + content (single-pass training). Turns without the key render as the
+    template renders history. Checked against the real template in the Gemma smoke
+    (scripts/tica_gemma_smoke.py) and pinned in tests/test_tica_gemma4.py."""
+
+    out = ["<bos>"]
+    msgs = list(conv)
+    system = None
+    if msgs and msgs[0]["role"] == "system":
+        system = msgs.pop(0)["content"].strip()
+    if thinking or system is not None:
+        out.append("<|turn>system\n" + ("<|think|>\n" if thinking else "") + (system or "")
+                   + "<turn|>\n")
+    for m in msgs:
+        role, content = m["role"], m["content"].strip()
+        if role == "user":
+            out.append(f"<|turn>user\n{content}<turn|>\n")
+        elif role == "assistant":
+            r = m.get("reasoning")
+            if r is None:
+                body = content
+            elif r.strip():
+                body = f"<|channel>thought\n{r.strip()}\n<channel|>{content}"
+            else:
+                body = GEMMA4_EMPTY_THOUGHT + content
+            out.append(f"<|turn>model\n{body}<turn|>\n")
+        elif role == "system":
+            raise ValueError("system message must be first")
+        else:
+            raise ValueError(f"unsupported role {role!r}")
+    if add_generation_prompt:
+        out.append("<|turn>model\n" + ("" if thinking else GEMMA4_EMPTY_THOUGHT))
+    return "".join(out)
+
+
+@dataclass(frozen=True)
+class ChatFormat:
+    """What the keep-think render and multi_view need from a chat template: the render itself, the
+    text before every assistant content (thinking off) and the end-of-turn marker after it."""
+
+    name: str
+    render: object  # (conv, add_generation_prompt, thinking) -> str
+    assistant_head: str
+    end_of_turn: str
+
+
+QWEN_CHATML = ChatFormat("qwen_chatml", render_keep_reasoning,
+                         "<|im_start|>assistant\n<think>\n\n</think>\n\n", "<|im_end|>")
+GEMMA4_TURNS = ChatFormat("gemma4", render_keep_reasoning_gemma4,
+                          "<|turn>model\n" + GEMMA4_EMPTY_THOUGHT, "<turn|>")
+
+
+def chat_format_for(tokenizer) -> ChatFormat:
+    """GEMMA4_TURNS if the tokenizer's chat template is Gemma-4's turn format, else QWEN_CHATML
+    (the only format before 10-24; tokenizers without a template, e.g. the tests' char tokenizer,
+    keep it, so Qwen behaviour is unchanged)."""
+
+    tpl = getattr(tokenizer, "chat_template", None)
+    if isinstance(tpl, dict):
+        tpl = " ".join(str(v) for v in tpl.values())
+    if isinstance(tpl, str) and "<|turn>" in tpl and "<|channel>" in tpl:
+        return GEMMA4_TURNS
+    return QWEN_CHATML
