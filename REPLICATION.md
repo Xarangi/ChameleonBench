@@ -5,6 +5,21 @@ checkpoints, observed results, and unresolved limitations.
 
 TICA on a new machine: start at docs/tica/README.md (results digest, run ledger, open questions, aggregate snapshot).
 
+## 2026-10-24 GEMMA-4 12B port of v4c set up (NOT launched; docs/tica/GEMMA4_12B.md)
+- Model `gemma-4-12b-it` = Gemma4Unified (48 layers, 5:1 sliding / full, k = v, soft-cap 30; no vision tower, text 11.9 B).
+  Training env (transformers 5.14.1) supports it; vllm-latest (0.21) does not -> new venv `venvs/vllm-g4` (vLLM 0.25.0).
+- Code (Qwen unchanged; tests/test_tica_gemma4.py + full tica suite): text-only load (`Gemma4UnifiedForCausalLM`,
+  vision / audio weights skipped), Gemma turn-format keep-think render (empty thought channel), soft-cap in the chunked
+  LM terms, `model.depth` rescales the zoo's multi-layer sets, `probes.dir ""` for the answer format, vLLM
+  `--language-model-only` + layer_scalar in merged weights, rescaled never-shown panel defaults, `tica_mathrl.py gens`.
+- Configs final_v4c_gemma4_12b_tamia / final_v4c_score_gemma4_12b_tamia: depths round(L * 48 / 32) (train 12/18/24/33/39,
+  primary 18, held-out 30/36, held-out kinds @30/36/42/45), 900 steps, Gemma's own cap_gen_pool.
+- Smokes 640267 (sanity + vLLM) / 640273 (DP4 trainer, 3 steps, 1 episode per rank, cold cache): render == template,
+  single-pass / cached / truncated reads agree (cos >= 0.9999), base probes AUROC ~1.0 at L18/30/36, vLLM agreement
+  0.94; peak 64.0 GB alloc (72 reserved) per GPU; 411-456 s/step dominated by cold panel fits. Est. 450-550 s/step
+  steady -> 900 steps ~5-6 days and ~500 GPU-h per arm, one node per arm. Next: `scripts/tamia_gemma12b.sh prep`, the
+  20-step check, then `launch`.
+
 ## 2026-10-21at FAST PILOTS launched: production recipe on 5 concepts, r128 and r32 pairs (user)
 - Why: per concept the 20-concept run gets ~1/7 of the math runs' training (k2 ~0 at step 140; expected ~700-1500 if
   nothing transfers), and v3b's faster k2 leaned on its fixed L12 turn 0 + pursuit (10-17v: beaten L12 0.84 vs
