@@ -10737,3 +10737,8 @@ Corrected 9B seed-17 result (`62340082`):
   0.71-0.75, L20 0.83, L24 0.75-0.76, L28 0.98, L4 / L30 1.00; attnpool 0.58 / 0.75, mck_attnlite 0.50 / 0.63; held-out
   concepts 0.57-0.99. -> 5-concept pilots: capability intact but evasion weak and shallow vs production (20 concepts,
   s900: training depths 0.01-0.04, L24 0.16).
+- 10-24 18:03 PRODUCTION 1-bit arm OOM (chunk 635099, interleaved layout = both arms on the same 4 GPUs): rank 1
+  "Triton Error [CUDA]: out of memory" in _cap_gen_step backward (fla kernel) at ~global 998 (last checkpoint with
+  optimizer state: resume_920/step_60 = global 980); the score arm kept running. Fix: 1-bit resumes SOLO on its own node
+  (641232 -> 641233, 4 GPUs, no sharing), score-only chunk 4 after 635099 (641234), final drain after both (641235);
+  the interleaved chunk 4 / drain (640704 / 640705) cancelled. Drain 639388 (after 635099) unchanged.
