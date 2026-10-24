@@ -10730,3 +10730,10 @@ Corrected 9B seed-17 result (`62340082`):
   the strict gate); 1-bit 32 / 32, 31 / 32; score 32 / 32, 28 / 32. k2 / k3: 1-bit train 0.97 / 0.84, held-out 0.62 /
   0.81; score train 0.97 / 0.77, held-out 0.71 / 0.71. -> base "wins" were the gate's 0.80 floor; trained evasion is
   unchanged on train concepts and ~15-40% lower on held-out concepts with reliable probes.
+- 10-24 PILOTS FINAL (a64, 5 train concepts, s600; drain 639386 29 / 29 OK): capability at base: GSM8K clean 0.895 /
+  0.90, brief 0.865-0.875 / 0.87-0.875, MMLU clean 0.64 / 0.63, brief 0.645 / 0.62-0.635. Races (k1 / k2 / k3): train
+  0.55 / 0.70 / 0.86 and 0.59 / 0.77 / 0.86; held-out 0.41 / 0.58 / 0.82 and 0.51 / 0.55 / 0.73; val held-out k1 0.36 /
+  0.43. Persistence 0.85 / 0.77. Never-shown panel (train concepts, 1-bit / score): training depths L8-L26 0.55-0.76 /
+  0.71-0.75, L20 0.83, L24 0.75-0.76, L28 0.98, L4 / L30 1.00; attnpool 0.58 / 0.75, mck_attnlite 0.50 / 0.63; held-out
+  concepts 0.57-0.99. -> 5-concept pilots: capability intact but evasion weak and shallow vs production (20 concepts,
+  s900: training depths 0.01-0.04, L24 0.16).
