@@ -10698,3 +10698,16 @@ Corrected 9B seed-17 result (`62340082`):
   L28 (never trained) 0.95 -> 0.78, L30 1.00 -> 1.00; attnpool 0.01, ensdeep4 0.03, gdm_rollattn 0.22 -> 0.10,
   nc_ens8_tok 0.41 -> 0.16, ens8_linear 0.85 -> 0.82. Held-out concepts s900: L20 0.53, L24 0.53, L28 0.90, L4 1.00,
   L30 0.97. -> depth generalization grows with training (into L20 / L24, starting at L28); only L4 / L30 untouched.
+- 10-24 PRODUCTION v4c DRAIN 639387 (35 / 35 tasks OK; base GSM8K clean 0.90, brief 0.825, MMLU brief 0.663):
+  - Capability: 1-bit s720 GSM8K clean 0.82, brief 0.77 / 0.78, MMLU clean 0.623, brief 0.642 / 0.647; s920 GSM8K clean
+    0.85, brief 0.74 / 0.75 (-0.075 to -0.085, inside the 0.10 tripwire but trending down), MMLU clean 0.612, brief
+    0.615 / 0.632. Score s700 GSM8K brief 0.79 / 0.805, MMLU brief 0.642 / 0.66; s920 GSM8K clean 0.855, brief 0.865 /
+    0.875, MMLU clean 0.613, brief 0.628 / 0.642.
+  - Races (by probe index frac / turns, n): 1-bit s920 train 1.00 / 0.98 / 0.92, held-out 0.94 / 0.91 / 0.88 (s720 0.83 /
+    0.76 / 0.53 and 0.81 / 0.72 / 0.71); score s920 train 0.98 / 0.86 / 0.73, held-out 0.88 / 0.84 / 0.81. Val held-out
+    k1 750-900: 1-bit 0.69 / 0.72 / 0.83 / 0.85 (val score 0.23 -> 0.55), score 0.75 / 0.78 / 0.77 / 0.84.
+  - Persistence 0.93-0.95 (verdict always PASSED 0.80-0.82). Validity of passed free answers (checkable concepts): train
+    0.78-0.81 (s720 0.79-0.83), held-out 0.48-0.49 (s720 0.52-0.55; base on_all 0.67).
+  - Score-arm never-shown panel s600 -> s900 (train concepts): L4 1.00 -> 1.00, L8 0.21 -> 0.01, L12 0.34 -> 0.21, L16
+    0.03 -> 0.07, L20 0.75 -> 0.23, L22 0.05 -> 0.13, L24 0.47 -> 0.28, maxpool@24 0.66 -> 0.23, L26 0.01 -> 0.08, L28
+    0.97 -> 0.66, L30 1.00 -> 0.89; held-out concepts L20 0.19, L24 0.32, L28 0.67, L30 0.79, L4 1.00.
