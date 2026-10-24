@@ -10723,3 +10723,10 @@ Corrected 9B seed-17 result (`62340082`):
   0.37" per-turn miss was the first-probe window only (biased up: a beaten probe is replaced at once).
   Arm choice for Gemma-12B: score (evasion within ~15-20% of 1-bit; capability intact vs 1-bit GSM8K-hiding -0.08;
   deeper depth spread).
+- 10-24 STRICT-GATE CONTROL (640440; every probe incl. turn-0 panel: AUROC >= 0.99 and tpr_ic >= 0.95; <= 8 turns per
+  probe, 32 eps). Refits survived per episode (strict vs normal gate): base train 0.00 (0.06), held-out 0.12 (0.28-0.41);
+  1-bit s880 train 4.16 (3.53), held-out 2.41 (2.88); score s860 train 3.44 (3.22), held-out 2.00 (3.22). First probe
+  beaten: base 0 / 32 train, 4 / 32 held-out (by first-probe records 1 / 25: other episodes had no turn-0 probe pass
+  the strict gate); 1-bit 32 / 32, 31 / 32; score 32 / 32, 28 / 32. k2 / k3: 1-bit train 0.97 / 0.84, held-out 0.62 /
+  0.81; score train 0.97 / 0.77, held-out 0.71 / 0.71. -> base "wins" were the gate's 0.80 floor; trained evasion is
+  unchanged on train concepts and ~15-40% lower on held-out concepts with reliable probes.
