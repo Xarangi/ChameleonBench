@@ -10678,3 +10678,17 @@ Corrected 9B seed-17 result (`62340082`):
     22/26, SQL 13/21, but Python 3/9, JavaScript 2/9.
   - Ladder per-kind catch base -> s880 / s860: L12 0.98 -> 0.67 / 0.82, L16 0.96 -> 0.69 / 0.58, L8 0.99 -> 0.88 / 0.95,
     L26 0.98 -> 0.88 / 0.91; ens4_linear 0.96 -> 0.69 / 0.76, ensdeep4 0.87 -> 0.77 / 0.48, linear@12 0.99 -> 0.51 / 0.52.
+- 10-24 GATE + BASE-BEAT ARITHMETIC + DEPTH CORRECTION:
+  - Gate (every turn-0 panel probe and refit): AUROC >= 0.95 and tpr_ic >= 0.80 (held-out in-context positives at the
+    1% FPR threshold). Base-run refits: ~60% of fits rejected; kept median tpr_ic 0.97-1.00, but min = the 0.80 floor
+    for linear@16, ens4_linear, ensdeep4 (the kinds with the weakest per-turn base catch: 0.75 / 0.96 / 0.87).
+  - Base "beat within 8 turns" = any single miss: per-turn base miss 0.008 (train) / 0.025-0.034 (held-out) ->
+    1 - (1 - p)^8 = 0.06 / 0.24, matching base k1 0.06 / 0.19-0.25. Per-turn miss trained: s100 0.15 (held-out), s880
+    0.62 / 0.37, s860 0.68 / 0.36 (train / held-out). Strict-gate control queued (640440: --gate-auroc 0.99
+    --gate-tpr-ic 0.95; base vs s880 vs s860, train + held-out, <= 8 turns, 32 eps; new flags f67755d).
+  - CORRECTION (per-layer never-shown panel, step 600, train concepts, base -> 1-bit / score): L4 1.00 -> 1.00 / 1.00,
+    L8 0.09 / 0.21, L12 0.09 / 0.34, L16 0.01 / 0.03, L20 (never trained) 0.62 / 0.75, L22 0.08 / 0.05, L24 (never
+    trained) 0.47 / 0.47 (maxpool@24 0.62 / 0.66), L26 0.03 / 0.01, L28 0.95 / 0.97, L30 1.00 / 1.00; held-out concepts
+    L20 0.74, L24 0.79. -> partial evasion of untrained layers INSIDE the trained band; none outside (4, 28, 30). Caveat:
+    with forced answers L4 is near-lexical and L28/30 next-token specialised, so outside-band robustness may be
+    structural to forced text; to test: pilot with L4/28/30 in the refit pool, and free-answer evals.
