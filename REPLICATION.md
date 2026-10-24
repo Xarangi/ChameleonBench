@@ -10692,3 +10692,9 @@ Corrected 9B seed-17 result (`62340082`):
     L20 0.74, L24 0.79. -> partial evasion of untrained layers INSIDE the trained band; none outside (4, 28, 30). Caveat:
     with forced answers L4 is near-lexical and L28/30 next-token specialised, so outside-band robustness may be
     structural to forced text; to test: pilot with L4/28/30 in the refit pool, and free-answer evals.
+- 10-24 NEVER-SHOWN PANEL step 900 (1-bit production, 4 shards of drain 639387 merged by n; aggregates): train
+  concepts, base -> s600 -> s900: L4 1.00 -> 1.00 -> 1.00, L8 0.09 -> 0.01, L12 0.09 -> 0.01, L16 0.01 -> 0.01, L20 (never
+  trained) 0.62 -> 0.34, L22 0.08 -> 0.04, L24 (never trained) 0.47 -> 0.16, maxpool@24 0.62 -> 0.47, L26 0.03 -> 0.04,
+  L28 (never trained) 0.95 -> 0.78, L30 1.00 -> 1.00; attnpool 0.01, ensdeep4 0.03, gdm_rollattn 0.22 -> 0.10,
+  nc_ens8_tok 0.41 -> 0.16, ens8_linear 0.85 -> 0.82. Held-out concepts s900: L20 0.53, L24 0.53, L28 0.90, L4 1.00,
+  L30 0.97. -> depth generalization grows with training (into L20 / L24, starting at L28); only L4 / L30 untouched.
