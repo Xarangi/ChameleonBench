@@ -64,51 +64,99 @@ Status (2026-10-24): code + configs + launch logistics ready; GPU smoke result b
 Capability tripwires unchanged (KL 0.3 to base on no-brief turns, anchor 0.5 on the base model's own greedy answers,
 cap_gen on GSM8K with the hide term, held-out race every 50 steps, quality queue).
 
-## Memory / throughput estimate (4 x H100, DP4 = one process per GPU)
+## Memory / throughput (4 x H100, DP4 = one process per GPU)
 
-Per process (bf16 weights, fp32 LoRA as PEFT keeps it):
+Static per process (measured, smoke 640267): text weights bf16 **24.1 GB** allocated after load; LoRA r128 all-linear
+= **524.6 M** trainable params (40 sliding layers x 10.9 M + 8 full x 11.0 M), fp32: 2.1 GB weights + 2.1 GB grads +
+**3.9 GB** AdamW moments -> ~32 GB before activations.
 
-| item | GB |
-|---|---|
-| text weights (11.9 B, bf16) | 23.8 |
-| LoRA r128 all-linear (524 M params; 40 sliding layers 10.9 M + 8 full 11.0 M) fp32 | 2.1 |
-| LoRA grads fp32 + AdamW moments | 2.1 + 4.2 |
-| static total | ~32 |
-| activations, 24-turn episode at micro_batch 1 (grad ckpt; ~7-9k tokens) + chunked LM terms | SMOKE |
-| no-grad refit reads (batch 16) / cap_gen KV cache (sliding layers keep 1024 tokens) | transient, SMOKE |
+Measured peaks:
 
-The 4B production process peaks at 37.6 GB (2 processes per GPU). DP4 with one 12B process per GPU fits if the
-activation peak stays < ~40 GB: SMOKE. Fallbacks if not: `model.batch_size` 16 -> 8 (refit reads), `lm_chunk` 512,
-then FSDP / fewer turns (not implemented; not needed per the smoke).
+| what | peak alloc | notes |
+|---|---|---|
+| sanity, reads of two real 24-turn episodes (5.1k / 6.3k tokens) | 38.6 GB | batch of per-turn views + forks, batch 6 |
+| sanity, one optimizer step on a 5.1k-token 24-turn episode (all 7 depths + LM terms, chunked, soft-capped) | 32.9 GB | fwd 0.8 s, bwd 3.2 s |
+| sanity, vLLM awake beside the training process (mem fraction 0.45) | 68 GB device | training side 29 GB alloc |
+| **real trainer, DP4, steps 1-2** (production config, 1 episode / rank) | **51.5 GB** (58 reserved) | |
+| **real trainer, DP4, step 3** | **64.0 GB** (71.6 reserved; nvidia-smi 76 GB) | step with the largest cap_gen train (32.6 s) |
 
-Throughput: the rollout (no generation in the answer format: forced answers, probe reads + refit fits) dominates
-(4B: rollout 294 of 346 s p50). Reads / training passes cost ~3.3x the 4B's FLOPs per token (10.9 B vs ~3.3 B
-non-embedding params), but each 12B process has a whole GPU while the 4B production shares every GPU between both
-arms (2 processes per GPU, ~61% util each). Fits scale with d (3840 vs 2560) and are partly host-bound. Estimate
-1.5-2.5x the 4B per-step time: **~500-900 s/step** (4B production: p10/p50/p90 275/346/484 s). SMOKE calibration below.
+So **DP4 with one 12B copy per GPU fits**, but with only ~8-10 GB headroom at step 3 on 1 episode per rank. The 4B
+process grew 16 -> 33 GB between step 1 and step 500 (bank / refit buffers, 4 episodes per rank), so headroom is THE
+risk: do the 20-step check below before the long chain. Knobs, in order (all config / `--set`, no code): `model.batch_size`
+16 -> 8 (no-grad refit reads), `model.lm_chunk` 1024 -> 512, `adaptive.cap_gen_samples` 4 -> 2 (cap_gen train
+batch), `adaptive.refit_buf_cap` 512 -> 256. Not needed / not implemented: FSDP, fewer turns. The 4B's 2-arms-per-GPU
+layout is impossible for 12B (2 x 64 GB): **one arm per node**.
 
-| steps | s/step 500 | s/step 700 | s/step 900 |
+Throughput (smoke 640273, DP4, 1 episode per rank, EMPTY Gemma panel cache):
+
+| step | sec | rollout | train | of which cold-cache fits | cap_gen + train | anchor |
+|---|---|---|---|---|---|---|
+| 1 | 706 | 81 | 624 | yes (+ 114 s anchor-cache generation) | 11 + 14 | 114 |
+| 2 | 411 | 44 | 367 | yes | 8 + 12 | 2 |
+| 3 | 456 | 31 | 425 | yes | 12 + 33 | 3 |
+
+`sec_train` is dominated by first-use panel fits: with `match_anchor: panel`, `_targets -> _anchor_names` fits EVERY
+panel kind (27 = 7 archs x 5 depths, pooled + ensembles) for each new (concept, condition) through the panel cache,
+inside the train phase. These are what `prep` precomputes. Steady-state estimate from the clean parts: rollout
+31-44 s per episode-rank (4B, solo node, early: 12-22 s per episode-rank -> ~2-2.5x), training ~2x the 4B's 40-55 s,
+cap_gen ~10 s per rank (1 fork per rank, as production). Production (4 episodes per rank):
+
+- early (steps 1-100): ~4 x 35 + 80-110 + 25 ~ **250-300 s/step**
+- late (bank grown; the 4B rollout grew ~2x by step 500): **~450-650 s/step**
+- mean over 900 steps ~ **450-550 s/step**
+
+| steps | at 400 s/step | at 500 s/step | at 650 s/step |
 |---|---|---|---|
-| 600 | 83 h, 333 GPU-h | 117 h, 467 GPU-h | 150 h, 600 GPU-h |
-| 900 | 125 h, 500 GPU-h | 175 h, 700 GPU-h | 225 h, 900 GPU-h |
+| 600 | 67 h, 267 GPU-h | 83 h, 333 GPU-h | 108 h, 433 GPU-h |
+| 900 | 100 h, 400 GPU-h | 125 h, 500 GPU-h | 163 h, 650 GPU-h |
 
-Per arm (one node each); two arms = 2 nodes in parallel, double the GPU-hours. Plus held-out races (eval_every 50:
-18 races per arm, ~1 h each on a drain node) and the prep below.
+Per arm (one 4-GPU node each, 24 h chunks: 900 steps ~ 5-7 chunks); both arms = 2 nodes in parallel and double the
+GPU-hours (~800-1300 GPU-h for 900 steps). Plus held-out races (18 per arm at eval_every 50) on drain nodes, and prep.
+HF generation on Gemma is slow (76 tok/s at batch 16, ~210 ms per decode step: 48 layers, launch-bound); cap_gen
+(1 fork x 4 samples x 400 tokens per rank) costs ~10 s at the observed lengths but up to ~80 s if samples run long.
 
 ## Base probes / caches (keyed by model: everything is rebuilt for Gemma)
 
 - answer-format base probes (`answer_probe_cache`, key includes the model dir name): fit by rank 0 at step 0 for the
-  20 train concepts (~20 x the smoke's per-concept time).
+  20 train concepts, ~76 s each on Gemma (**~25 min** at the start of chunk 1). Smoke: sports / politics / astronomy /
+  war at L18 / L30 / L36 all AUROC >= 0.99998, TPR 1.0 (production gates pass).
 - turn-0 panel cache (`panel_probe_cache`, key includes model + prompt ids): `scripts/slurm/tamia_panel_precompute.sh
-  final_v4c_gemma4_12b_tamia` (8 processes, 2 per GPU). 4B: ~1840 keys in 65 min. Gemma: ~2-3x the read cost and
-  1.5x the fit dimension: **~2.5-3.5 h** on one node (both arms share every key). Without it the first ~100 steps fit
-  panel probes on the fly (slow early steps, same result).
-- `cap_gen_pool`: `scripts/slurm/tamia_gemma12b_gens.sh` (vLLM, ~15 min; HF ~1 h).
-- anchor cache: per run, generated at step 0 (256 greedy base answers).
+  final_v4c_gemma4_12b_tamia` (8 processes, 2 per GPU: 2 x 24 GB weights + reads fit in 80 GB). 4B: ~1840 keys in
+  65 min. Gemma: ~2-2.5x the read cost per key (refit reads 74-97 s vs 4B 68-132 s per 4 episodes) -> **~2.5-3.5 h**
+  on one node; both arms share every key. Without it the first ~50-100 steps pay the fits (step 1-3 above).
+- `cap_gen_pool`: `scripts/slurm/tamia_gemma12b_gens.sh` (Gemma's own greedy GSM8K solutions; vLLM ~15 min).
+- anchor cache: per run, generated at step 0 (256 greedy base answers, 114 s).
 
-## Smoke (job SMOKE_JOB)
+## Smoke results (2026-10-24; aggregates only)
 
-SMOKE
+Job 640267 (sanity, GPU 0, `scripts/tica_gemma_smoke.py`; its parallel DP3 trainer part died on a smoke-only setting:
+2 concepts cannot feed `switch_max: 2` switches -> fixed to 4 concepts) and job 640273 (real trainer, DP4, 3 steps):
+
+- load: `Gemma4UnifiedForCausalLM`, 48 layers (== model.depth), 0 vision / audio modules, chat format gemma4,
+  soft-cap 30, EOS ids {1, 50, 106}, 24 s from node-local disk.
+- render: generation-prompt text AND ids identical to the snapshot's chat template; `<|turn>` 105, `<turn|>` 106,
+  `<|channel>` 100, `<channel|>` 101 single tokens; BOS first.
+- reads on real 24-turn episodes (5.1k / 6.3k tokens; per-layer mean act norms 70-225): one forward over the whole
+  conversation vs per-turn views: cos >= 0.9999997, NLL max |diff| 1e-6; shared-prefix fork reads (KV cache across
+  the 1024-token sliding window) cos >= 0.99992 (rel. err 0.6%, bf16); incremental rollout reads cos >= 0.99995 (8
+  cache hits); truncated reads cos >= 0.9999997.
+- base probes: see above (gates pass).
+- one optimizer step at production length: finite loss, grad norm 1.76, peak 32.9 GB.
+- vLLM 0.25 (vllm-g4, `--language-model-only` confirmed in the server args, Gemma4UnifiedForConditionalGeneration):
+  startup 225 s; merged-weight sync after the optimizer step + 16 x 128 greedy tokens in 28 s; greedy agreement with
+  HF on the first 16 tokens 0.94 (policy, after sync) / 0.88 (base), mean common prefix 104 / 128 and 56 / 64 tokens
+  (bf16 kernel differences; the policy is not worse than the base, so the sync is right). The reload logs "Failed to
+  load weights" for the vision embedder / rotary / tied LM head, which keep their (unchanged) tensors.
+- real trainer DP4: 3 steps, losses finite, grad norm 24 -> 3.9 -> 0.73 (warm-up), cap_gen acc 0.92-1.0, anchor KL
+  ~3e-4, no DP drift error; peaks / times in the tables above.
+
+## Before the long run (recommended)
+
+1. `bash scripts/tamia_gemma12b.sh prep` (gens + panel cache).
+2. A 20-step production-shape check (4 episodes per rank, warm cache) to confirm memory headroom and s/step:
+   `SMOKE_SANITY=0 SMOKE_EPR=4 SMOKE_NC=0 SMOKE_STEPS=20 sbatch --account=aip-rrabba --exclude=tg11105 --time=3:30:00 -J g4-check scripts/slurm/tamia_gemma12b_smoke.sh`
+   (DP4, 16 episodes / step, all 20 concepts, no checkpoints); watch `max_mem_gb` (< ~70) and `sec` in
+   `runs/smoke_gemma4/<job>/train/adaptive/train_log.jsonl`.
 
 ## Launch (not run)
 
@@ -126,11 +174,18 @@ to `runs/g4v4c_val_queue.txt` and run with `scripts/slurm/tica_val_drain.sh` (12
 
 ## Open risks
 
+- MEMORY HEADROOM: 64 GB alloc / 72 GB reserved at step 3 with 1 episode per rank; the 4B grew ~2x over 500 steps.
+  An OOM late in a chunk loses up to 20 steps (save_every 20) and the chain resumes, but repeated OOMs need the knobs
+  in the memory section (batch_size 8, lm_chunk 512, cap_gen_samples 2). Run the 20-step check first.
+- vLLM is NOT used by DP training (refused by scripts/tica.py, as on the 4B): rollouts use forced answers, cap_gen /
+  anchors use HF generate, which is slow on Gemma (~210 ms / decode step). vLLM (vllm-g4) serves single-GPU evals
+  (`TICA_VLLM=1` + `TICA_VLLM_PY=/scratch/s/sneheel/venvs/vllm-g4/bin/python`, `TICA_VLLM_MODULES="StdEnv/2023 gcc
+  python/3.11 arrow/24.0.0 cuda/12.6 opencv"`) and the base-generation job.
 - Step time is extrapolated from a 3-step smoke with 1 episode per rank and empty panel cache; the real per-step time
   is only known after ~20 production steps (watch `sec`, `max_mem_gb`, `dp/sec_rollout_*`).
 - Recipe hyper-parameters (LR 1e-4..3e-4, alpha 64 at r128, hide / KL weights, refit gates) were tuned on the 4B;
   the 12B's activation scale differs (see smoke act norms). Base-probe gates (AUROC 0.95, TPR) may fail for some
-  concepts at the rescaled depths (smoke checks one concept; rank 0 raises at step 0 if a gate fails).
+  of the 20 concepts at the rescaled depths (the smoke passed 4 / 4; rank 0 raises at step 0 if a gate fails).
 - Depth mapping is proportional; Gemma's 5:1 sliding / full pattern puts full-attention layers at 5, 11, 17, 23, 29,
   35, 41, 47 — training depths 12 / 18 / 24 / 33 / 39 sit just after full layers 11 / 17 / 23 and inside sliding
   blocks; not tuned.

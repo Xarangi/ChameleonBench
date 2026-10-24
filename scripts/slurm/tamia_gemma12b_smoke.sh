@@ -11,7 +11,8 @@
 #             production episode length + HF generation + the vLLM side engine (vllm-g4 venv, text-only, merged mode)
 #   GPUs 1-3  the REAL trainer (scripts/tica.py adaptive, data-parallel DP3) for SMOKE_STEPS steps of the production
 #             config with 1 episode per rank (production: 4) on 4 concepts: max_mem_gb / sec per step in train_log.
-# SMOKE_SANITY=0: trainer only, on all 4 GPUs (DP4 = the production layout, 4 episodes per step).
+# SMOKE_SANITY=0: trainer only, on all 4 GPUs (DP4 = the production layout). SMOKE_EPR episodes per rank (default
+# 1; production 4), SMOKE_NC concepts (default 4; 0 = all 20), SMOKE_STEPS steps (default 3).
 # Aggregates only. Outputs: runs/smoke_gemma4/<job>/{sanity/smoke.json, train/adaptive/train_log.jsonl}.
 #   sbatch --account=aip-rrabba --exclude=tg11105 scripts/slurm/tamia_gemma12b_smoke.sh [CFG]
 set -uo pipefail
@@ -33,10 +34,12 @@ export TICA_VLLM_MODULES=${TICA_VLLM_MODULES:-"StdEnv/2023 gcc python/3.11 arrow
 export TICA_VLLM_MEM=${TICA_VLLM_MEM:-0.45}
 CONCEPTS=$(PYTHONPATH=src $PY -c "
 import json; from next_chameleons.tica.config import load_run_config as l
-print(json.dumps(l('$CFG').episode_concepts[:4]))")
+print(json.dumps(l('$CFG').episode_concepts[:int('${SMOKE_NC:-4}') or None]))")
 echo "train smoke concepts: $CONCEPTS"
 
 P1=
+# cap_gen without the Gemma base-solution pool until `prep` built it
+CAPSET=(); [ -f /scratch/s/sneheel/next_chameleons_artifacts/tica/runs/mathrl_gemma4_12b/base_gens.json ] || CAPSET=(--set "rl.adaptive.cap_gen_pool=\"\"")
 TG=1,2,3; NDP=3
 if [ "${SMOKE_SANITY:-1}" = "1" ]; then
   CUDA_VISIBLE_DEVICES=0 SLURM_TMPDIR=$NODE_TMP/sanity PYTHONPATH=src $PY scripts/tica_gemma_smoke.py \
@@ -49,9 +52,9 @@ fi
 # cap_gen problems without the (not yet built) Gemma base-solution pool
 CUDA_VISIBLE_DEVICES=$TG TICA_DP=$NDP MASTER_PORT=29610 SLURM_TMPDIR=$NODE_TMP/train \
   bash scripts/slurm/tica_l3covert.sh "$CFG" --steps "$STEPS" --out "$OUT/train" \
-  --set train.episodes_per_step=$NDP --set train.save_every=0 --set "episode_concepts=$CONCEPTS" \
+  --set train.episodes_per_step=$(( NDP * ${SMOKE_EPR:-1} )) --set train.save_every=0 --set "episode_concepts=$CONCEPTS" \
   --set 'rl.adaptive.eval_on_save=""' --set rl.adaptive.eval_every=0 \
-  --set "rl.adaptive.anchor_cache=$OUT/train/anchor_cache.json" --set 'rl.adaptive.cap_gen_pool=""' \
+  --set "rl.adaptive.anchor_cache=$OUT/train/anchor_cache.json" "${CAPSET[@]}" \
   > "logs/g4-smoke-${SLURM_JOB_ID:-local}-train.out" 2>&1 &
 P2=$!
 nvidia-smi --query-gpu=timestamp,index,memory.used,utilization.gpu --format=csv -l 30 \
