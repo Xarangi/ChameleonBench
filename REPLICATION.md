@@ -10657,3 +10657,9 @@ Corrected 9B seed-17 result (`62340082`):
 - 10-24 PILOT DRAIN 639385: 12 / 19 tasks crashed with Input/output errors on node tg11201's /tmp (triton cache,
   tempdir, venv untar) -> requeued exactly those (640314, --exclude=tg11105,tg11201); pending drains + production chunk
   635099 now exclude both nodes. Pilot chunk 2 (638419) runs on tg11105 (I/O errors 10-23): watched.
+- 10-24 PILOT v4c DRAIN (redo 640314, 65 min, clean node; a64 1-bit s560 / score s520): capability at base level:
+  GSM8K clean 0.895 / 0.905 (base 0.90), GSM8K brief (math, html) 0.82, 0.87 / 0.855, 0.845 (base 0.825), MMLU clean
+  0.658 / 0.64, brief 0.66, 0.648 / 0.658, 0.67 (base 0.663). Races (<= budget, by probe index k1 / k2 / k3): train 0.56 /
+  0.69 / 0.61 and 0.49 / 0.79 / 0.90; held-out 0.48 / 0.54 / 0.43 and 0.31 / 0.44 / 0.75 (n 4-14 at k3). Persistence
+  0.83 / 0.80, with verdict always PASSED 0.72 / 0.90. Production chunk 3 (635099) resumed at global 920 on the
+  Gemma-port shared code; step 1 2.1k s (one-time panel/anchor cache refill after resume, as at 720), KL 0.21-0.24.
