@@ -10622,3 +10622,9 @@ Corrected 9B seed-17 result (`62340082`):
   texts, so the cap drops many: train file 19 concepts 8,754 -> 6,312 texts, 10 below 80% (astronomy 124/600,
   chemistry 78/600, literature 7/301, finance 6/181); train+held-out file 53 concepts 25,168 -> 16,929, 27 below 80%.
   Fix options (length-matched regeneration recommended) sent to the user; nothing changed yet.
+- 10-23 MW FINISH OK (639930, 25 min): 27B labels of 19.7k new texts (4 x tp=1, 14 min), merged into
+  concept_labels_v5mw_27b.json (train file) / concept_labels_v5mwall_27b.json (train + held-out file). Base-probe
+  check (layer 12, 8 train concepts): probes fit on published vs model-written texts are interchangeable: quality
+  AUROC 1.00 / TPR 1.00 both; cross (probe_old on new texts, probe_new on old texts) AUROC 0.997-1.000, TPR 1.00;
+  FPR on other concepts 0.00-0.06, on concept-free texts 0.00-0.08 (same range as old/old). Data ready for
+  final_v5_modelwritten_4b; length-cap shortfall (above) still pending the user's call.
