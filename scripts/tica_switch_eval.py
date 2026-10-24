@@ -92,6 +92,12 @@ def main():
                          "--pass-min / N")
     ap.add_argument("--pass-min", type=int, default=6)
     ap.add_argument("--pass-temp", type=float, default=0.7)
+    ap.add_argument("--gate-auroc", type=float, default=None,
+                    help="override rl.adaptive.refit_min_auroc for every probe incl. the turn-0 "
+                         "panel (10-24: strict-gate eval; panel cache keys on it -> fresh fits)")
+    ap.add_argument("--gate-tpr-ic", type=float, default=None,
+                    help="override rl.adaptive.refit_min_tpr_ic (catch on held-out in-context "
+                         "positives at the 1%% FPR threshold)")
     ap.add_argument("--model-path")
     ap.add_argument("--data", help="override the config's data file (e.g. concept_eval_v1.json)")
     ap.add_argument("--inputs", help="override the config's answer-format inputs map")
@@ -102,7 +108,7 @@ def main():
                          "concept is fit on the policy's own states at that turn)")
     ap.add_argument("--seed", type=int, default=1)
     ap.add_argument("--max-k", type=int, default=5,
-                    help="by_probe_index: banks k >= this are pooled (10-23 refit LADDER races: 12)")
+                    help="by_probe_index: banks k >= this are pooled (10-23 refit LADDER: 12)")
     ap.add_argument("--turn-budget", default="",
                     help="R,M,S: turn-budget episodes (final.turn_budget, 10-19): every probe gets "
                          ">= R judged turns of runway and stands <= M; first switch by T - S. "
@@ -131,6 +137,10 @@ def main():
     )
 
     cfg = load_run_config(a.config)
+    if a.gate_auroc is not None:
+        cfg.rl.adaptive.refit_min_auroc = a.gate_auroc
+    if a.gate_tpr_ic is not None:
+        cfg.rl.adaptive.refit_min_tpr_ic = a.gate_tpr_ic
     if a.model_path:
         cfg.model.path = a.model_path
     if a.kind:
@@ -200,8 +210,8 @@ def main():
                   else cfg.rl.adaptive))
     out = Path(a.out)
     from next_chameleons.tica.vllm_gen import maybe_attach
-
-    maybe_attach(pol, cfg.model.path, out.parent / (out.stem + "_vllm"))  # TICA_VLLM=1: colocated vLLM generation
+    # TICA_VLLM=1: colocated vLLM generation
+    maybe_attach(pol, cfg.model.path, out.parent / (out.stem + "_vllm"))
     tr = AdaptiveSupervisedTrainer(
         pol, pool, sampler, asc, out.parent / (out.stem + "_work"),
         branch_concepts=data.concepts("fit", splits), branch_negatives=data.negatives("fit"),
@@ -325,6 +335,8 @@ def main():
            "episode_fork": cfg.rl.adaptive.episode_fork,
            "first_probe": cfg.rl.adaptive.first_probe,
            "refit_gate": refit_gate,
+           "gate": {"auroc": cfg.rl.adaptive.refit_min_auroc,
+                    "tpr_ic": cfg.rl.adaptive.refit_min_tpr_ic},
            # turns-to-beat: every new probe (refits, by kind) and every new concept segment
            **beat_summary(tr.deploy_log),
            "beat_turns_hist": {str(k): sum(1 for r in tr.deploy_log if r["beaten"]
