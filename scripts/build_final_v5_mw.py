@@ -214,7 +214,9 @@ def verify(old: dict, new: dict, new_inputs: dict, gens: list[dict], scores: dic
     the published one (no length-hint line). Per concept: counts, violations, lengths, judge
     scores of the KEPT texts, share written with a length hint."""
 
-    by_tid = {text_id(g["answer"]): g for g in gens}
+    by_tid: dict[str, list[dict]] = defaultdict(list)  # identical answers can recur (short texts)
+    for g in gens:
+        by_tid[text_id(g["answer"])].append(g)
     oldc = {c["concept"]: c for c in old["concepts"]}
     rep, bad_total = {}, 0
     for c in new["concepts"]:
@@ -227,10 +229,15 @@ def verify(old: dict, new: dict, new_inputs: dict, gens: list[dict], scores: dic
         viol = Counter()
         pc, pa, hint, lens = [], [], 0, []
         for t in texts:
-            g = by_tid.get(t["id"])
-            if g is None:
+            cands = by_tid.get(t["id"])
+            if not cands:
                 viol["not_a_generation"] += 1
                 continue
+            req = new_inputs.get(t["id"], "")
+            # the generation the build kept: same concept + request, finished, passed the judge
+            g = next((g for g in cands if g["concept"] == c["concept"] and g["user"] == req
+                      and g["gid"] in scores and keep(g, scores[g["gid"]], thr_concept,
+                                                      thr_answers)), cands[0])
             s = scores.get(g["gid"], {})
             if not g["finished"]:
                 viol["unfinished"] += 1
@@ -240,7 +247,6 @@ def verify(old: dict, new: dict, new_inputs: dict, gens: list[dict], scores: dic
                 viol["judge_fail"] += 1
             if cap is not None and len(t["text"]) > cap:
                 viol["over_cap"] += 1
-            req = new_inputs.get(t["id"], "")
             if not req or HINT_MARK in req:
                 viol["request_missing_or_hinted"] += 1
             if s.get("p_concept") is not None:

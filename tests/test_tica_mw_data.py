@@ -220,3 +220,18 @@ def test_verify_catches_violations():
     g = next(g for g in gens if text_id(g["answer"]) == t["id"])
     scores[g["gid"]]["p_answers"] = 0.2
     assert verify(d, new, full, gens, scores)["concepts"]["A"]["violations"] == {"judge_fail": 1}
+
+
+def test_verify_duplicate_answer_texts():
+    d = _data()
+    inp = _inputs(d)
+    _, gens, scores = _gens(d, inp)
+    for g in gens:
+        g["answer"] = "s" + g["gid"][-4:]
+    new, new_inp, _ = build(d, inp, gens, scores, len_cap_q=0.9)
+    full = {**inp, **new_inp}
+    t = new["concepts"][0]["fit"][0]
+    g = next(g for g in gens if text_id(g["answer"]) == t["id"])
+    dup = dict(g, gid=g["gid"] + "dup")  # same text, failed judge: the kept copy still passes
+    scores[dup["gid"]] = {"gid": dup["gid"], "p_concept": 0.1, "p_answers": 0.1}
+    assert verify(d, new, full, [*gens, dup], scores)["violations_total"] == 0
