@@ -10711,3 +10711,15 @@ Corrected 9B seed-17 result (`62340082`):
   - Score-arm never-shown panel s600 -> s900 (train concepts): L4 1.00 -> 1.00, L8 0.21 -> 0.01, L12 0.34 -> 0.21, L16
     0.03 -> 0.07, L20 0.75 -> 0.23, L22 0.05 -> 0.13, L24 0.47 -> 0.28, maxpool@24 0.66 -> 0.23, L26 0.01 -> 0.08, L28
     0.97 -> 0.66, L30 1.00 -> 0.89; held-out concepts L20 0.19, L24 0.32, L28 0.67, L30 0.79, L4 1.00.
+- 10-24 TREND LADDER COMPLETE (640178 / 640179; 32 eps; scripts/tica_ladder_metrics.py). Refits survived per episode
+  (train <= 8 | train 80 turns | held-out <= 8 | held-out 80): base 0.06 | 0.81 | 0.28-0.41 | 1.06-1.22; 1-bit s100 0.75 |
+  1.28 | 0.94 | 1.66, s300 1.09 | 1.97 | 0.97 | 1.44, s500 2.03 | 2.94 | 1.47 | 2.16, s680 2.72 | 3.75 | 1.88 | 3.00, s800
+  2.72 | 3.69 | 2.00 | 3.47, s880 3.53 | 6.66 | 2.88 | 4.47; score s100 0.56 | 1.69 | 0.69 | 1.38, s300 1.06 | 2.09 | 0.88
+  | 1.75, s480 1.62 | 2.81 | 0.91 | 1.78, s660 2.09 | 2.94 | 1.75 | 2.22, s780 2.94 | 5.12 | 2.25 | 3.59, s860 3.22 | 5.66 |
+  3.22 | 3.62. Per level (80 turns, pass / mean / median turns): 1-bit s880 train k1-k5 1.00 / 1.7 / 1, 1.00 / 3.8 / 2,
+  0.94 / 4.9 / 2, 0.80 / 8.0 / 4, 0.83 / 9.5 / 6; held-out 1.00 / 3.0 / 2, 0.91 / 9.6 / 3, 0.76 / 10.1 / 3, 0.85 / 8.5 /
+  6, 0.76; s100 train k1 0.75 / 13.3 / 3, k2 0.33 / 23.1 / 17. Whole-episode per-turn miss (80 turns): base 0.012 /
+  0.037-0.040 (train / held-out), 1-bit s880 0.097 / 0.111, score s860 0.083 / 0.103. CORRECTION: the 10-24 "0.62 /
+  0.37" per-turn miss was the first-probe window only (biased up: a beaten probe is replaced at once).
+  Arm choice for Gemma-12B: score (evasion within ~15-20% of 1-bit; capability intact vs 1-bit GSM8K-hiding -0.08;
+  deeper depth spread).
