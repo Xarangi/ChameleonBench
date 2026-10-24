@@ -44,6 +44,17 @@ SNAP = Path("/scratch/s/sneheel/hf/hub/models--google--gemma-4-12b-it/snapshots/
             "5926caa4ec0cac5cbfadaf4077420520de1d5205")
 EOS, PAD, VOCAB = 257, 258, 260
 
+@pytest.fixture(autouse=True)
+def _zoo_tables_back_to_32():
+    """Loading a depth-48 config rescales the module-level zoo tables: restore them after every
+    test, so later test files see the 32-layer originals."""
+
+    yield
+    from next_chameleons.tica.probe_zoo import set_zoo_depth
+
+    set_zoo_depth(32)
+
+
 CONV = [{"role": "system", "content": "S"},
         {"role": "user", "content": " u0 "},
         {"role": "assistant", "content": "a0", "reasoning": ""},
