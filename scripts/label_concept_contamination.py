@@ -140,9 +140,10 @@ def main():
                 texts.setdefault(t["id"], t["text"])
     if a.skip_labelled:
         old = json.loads(Path(a.skip_labelled).read_text())
-        done = set(old.get("labels", {}))  # ids it labelled (the data paths may be another cluster's)
+        done = set(old.get("labels", {}))  # ids it labelled (data paths: maybe Narval)
         meta = old["meta"]
-        for f in {f for m in (meta if isinstance(meta, list) else [meta]) for f in m["data"]}:
+        files = {f for m in (meta if isinstance(meta, list) else [meta]) for f in m.get("data", [])}
+        for f in files:
             if not Path(f).exists():
                 continue
             d = json.loads(Path(f).read_text())

@@ -171,6 +171,98 @@ def build(data: dict, inputs: dict, gens: list[dict], scores: dict[str, dict], *
     return new, new_inputs, rep
 
 
+HINT_MARK = "(Please keep your answer short"  # = tica_mw_generate.length_hint (generation only)
+
+
+def needs_regen(data: dict, gens: list[dict], scores: dict[str, dict], *, thr_concept: float = 0.5,
+                thr_answers: float = 0.5, len_cap_q: float | None = 0.9) -> dict[str, dict]:
+    """Source texts to regenerate WITH a length hint (user 10-24: "only for the examples that are
+    over long"): no eligible answer (judged + finished + <= the cap) AND at least one answer that
+    was too long (over the cap, or cut at max tokens). Sources whose short answers failed the judge
+    are left alone (a length hint would not help). {src_id: {concept, cap, src_len, n_over_cap,
+    n_unfinished}}."""
+
+    by_c: dict[str, list[dict]] = defaultdict(list)
+    for g in gens:
+        by_c[g["concept"]].append(g)
+    out = {}
+    for c in data["concepts"]:
+        rows = by_c.get(c["concept"])
+        if not rows:
+            continue
+        cap = length_cap([len(t["text"]) for sp in SPLITS for t in c[sp]], len_cap_q)
+        per_src: dict[str, list[dict]] = defaultdict(list)
+        for g in rows:
+            per_src[g["src_id"]].append(g)
+        for sid, gs in sorted(per_src.items()):
+            ok = [g for g in gs if g["gid"] in scores
+                  and keep(g, scores[g["gid"]], thr_concept, thr_answers)
+                  and (cap is None or len(g["answer"]) <= cap)]
+            over = sum(cap is not None and len(g["answer"]) > cap for g in gs)
+            unfin = sum(not g["finished"] for g in gs)
+            if not ok and (over or unfin):
+                out[sid] = {"concept": c["concept"], "cap": cap, "src_len": gs[0]["src_len"],
+                            "n_over_cap": over, "n_unfinished": unfin}
+    return out
+
+
+def verify(old: dict, new: dict, new_inputs: dict, gens: list[dict], scores: dict[str, dict], *,
+           thr_concept: float = 0.5, thr_answers: float = 0.5,
+           len_cap_q: float | None = 0.9) -> dict:
+    """Re-check a built file from scratch: every text of a regenerated concept must be a generation
+    that finished, passed the judge (concept + answer) and is <= the cap; its stored request must be
+    the published one (no length-hint line). Per concept: counts, violations, lengths, judge
+    scores of the KEPT texts, share written with a length hint."""
+
+    by_tid = {text_id(g["answer"]): g for g in gens}
+    oldc = {c["concept"]: c for c in old["concepts"]}
+    rep, bad_total = {}, 0
+    for c in new["concepts"]:
+        o = oldc[c["concept"]]
+        old_ids = {t["id"] for sp in SPLITS for t in o[sp]}
+        texts = [t for sp in SPLITS for t in c[sp]]
+        if {t["id"] for t in texts} == old_ids:
+            continue  # untouched concept
+        cap = length_cap([len(t["text"]) for sp in SPLITS for t in o[sp]], len_cap_q)
+        viol = Counter()
+        pc, pa, hint, lens = [], [], 0, []
+        for t in texts:
+            g = by_tid.get(t["id"])
+            if g is None:
+                viol["not_a_generation"] += 1
+                continue
+            s = scores.get(g["gid"], {})
+            if not g["finished"]:
+                viol["unfinished"] += 1
+            if not s:
+                viol["unjudged"] += 1
+            elif not keep(g, s, thr_concept, thr_answers):
+                viol["judge_fail"] += 1
+            if cap is not None and len(t["text"]) > cap:
+                viol["over_cap"] += 1
+            req = new_inputs.get(t["id"], "")
+            if not req or HINT_MARK in req:
+                viol["request_missing_or_hinted"] += 1
+            if s.get("p_concept") is not None:
+                pc.append(s["p_concept"])
+            pa.append(s.get("p_answers", 0.0))
+            hint += bool(g.get("length_hint"))
+            lens.append(len(t["text"]))
+        old_lens = [len(t["text"]) for sp in SPLITS for t in o[sp]]
+        bad_total += sum(viol.values())
+        rep[c["concept"]] = {
+            "old": len(old_ids), "new": len(texts), "violations": dict(viol), "cap": cap,
+            "median_chars_old": statistics.median(old_lens),
+            "median_chars_new": statistics.median(lens) if lens else None,
+            "max_chars_new": max(lens) if lens else None,
+            "kept_min_p_concept": round(min(pc), 3) if pc else None,
+            "kept_mean_p_concept": round(statistics.mean(pc), 3) if pc else None,
+            "kept_min_p_answers": round(min(pa), 3) if pa else None,
+            "kept_mean_p_answers": round(statistics.mean(pa), 3) if pa else None,
+            "length_hinted": hint}
+    return {"concepts": rep, "violations_total": bad_total}
+
+
 def length_cap(lengths: list[int], q: float | None) -> int | None:
     """Nearest-rank q-quantile of the published lengths (None = no cap)."""
 
@@ -232,7 +324,45 @@ def main():
     m.add_argument("--old", required=True)
     m.add_argument("--new", nargs="+", required=True)
     m.add_argument("--out", required=True)
+    for name in ("needs-regen", "verify"):
+        x = sub.add_parser(name)
+        x.add_argument("--data", required=True, help="needs-regen: published; verify: built")
+        x.add_argument("--gens", nargs="+", required=True)
+        x.add_argument("--scores", nargs="+", required=True)
+        x.add_argument("--thr-concept", type=float, default=0.5)
+        x.add_argument("--thr-answers", type=float, default=0.5)
+        x.add_argument("--len-cap-q", type=float, default=0.9)
+        x.add_argument("--out", required=True)
+        if name == "verify":
+            x.add_argument("--old-data", required=True)
+            x.add_argument("--inputs", required=True, help="the built file's request map")
     a = ap.parse_args()
+
+    if a.cmd in ("needs-regen", "verify"):
+        data = json.loads(Path(a.data).read_text())
+        gens = read_jsonl(a.gens)
+        scores = {r["gid"]: r for r in read_jsonl(a.scores) if r.get("gid")}
+        kw = dict(thr_concept=a.thr_concept, thr_answers=a.thr_answers,
+                  len_cap_q=a.len_cap_q if a.len_cap_q > 0 else None)
+        if a.cmd == "needs-regen":
+            out = needs_regen(data, gens, scores, **kw)
+            Path(a.out).write_text(json.dumps(out))
+            print(f"needs-regen: {len(out)} source texts", json.dumps(
+                dict(Counter(v["concept"] for v in out.values()).most_common())))
+            return
+        out = verify(json.loads(Path(a.old_data).read_text()), data,
+                     json.loads(Path(a.inputs).read_text()), gens, scores, **kw)
+        Path(a.out).write_text(json.dumps(out, indent=1))
+        for k, v in out["concepts"].items():
+            print(f"{k[:26]:26s} {v['old']:4d} -> {v['new']:4d}  chars {v['median_chars_old']} -> "
+                  f"{v['median_chars_new']} (max {v['max_chars_new']}, cap {v['cap']})  kept "
+                  f"p_concept min {v['kept_min_p_concept']} mean {v['kept_mean_p_concept']}  "
+                  f"p_answers min {v['kept_min_p_answers']}  hinted {v['length_hinted']}  "
+                  f"violations {v['violations'] or 0}")
+        print("VIOLATIONS TOTAL", out["violations_total"])
+        if out["violations_total"]:
+            raise SystemExit("verify failed")
+        return
 
     if a.cmd == "merge-labels":
         data = json.loads(Path(a.data).read_text())

@@ -10,8 +10,17 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 
-from build_final_v5_mw import build, length_cap, merge_labels, request_splits, text_id
-from tica_mw_generate import render_user, sources
+from build_final_v5_mw import (
+    HINT_MARK,
+    build,
+    length_cap,
+    merge_labels,
+    needs_regen,
+    request_splits,
+    text_id,
+    verify,
+)
+from tica_mw_generate import length_hint, render_user, sources
 
 SPLITS = ("fit", "calib", "episode")
 
@@ -163,3 +172,51 @@ def test_length_cap():
     new, _, rep = build(d, inp, gens, scores, len_cap_q=0.9)
     assert rep["A"]["new_total"] == 0 and rep["A"]["below_80pct"]
     assert rep["A"]["src_no_eligible"] == 5
+
+
+def test_length_hint():
+    h = length_hint("sports", 600, 1336)
+    assert h.startswith(HINT_MARK) and "100 words" in h  # 600 chars / 6
+    assert "at most about 85 words" in length_hint("astronomy", 2000, 600)  # 0.85 * cap = 510
+    assert "characters" in length_hint("Thai language", 300, None)
+    assert "10 words" in length_hint("jokes", 12, 400)  # floor
+
+
+def test_needs_regen_only_over_long():
+    d = _data()
+    inp = _inputs(d)
+    _, gens, scores = _gens(d, inp)
+    a0, a2, a4 = text_id("a0 fit"), text_id("a2 fit"), text_id("a4 ep")
+    for g in gens:
+        if g["src_id"] == a0:  # both answers over the cap (p90 of published = 8 chars)
+            pass
+        elif g["src_id"] == a2:  # one short eligible answer -> no regen
+            g["answer"] = "ok" if g["sample"] == 0 else g["answer"]
+        elif g["src_id"] == a4:  # short answers that FAIL the judge -> no regen (hint can't help)
+            g["answer"] = "x"
+            scores[g["gid"]]["p_concept"] = 0.1
+        else:
+            g["finished"] = False  # cut at max tokens -> regen
+    out = needs_regen(d, gens, scores)
+    assert a0 in out and a2 not in out and a4 not in out
+    assert out[a0]["cap"] == 8 and out[a0]["n_over_cap"] == 2 and out[a0]["concept"] == "A"
+    assert all(v["n_unfinished"] == 2 for k, v in out.items() if k not in (a0,))
+
+
+def test_verify_catches_violations():
+    d = _data()
+    inp = _inputs(d)
+    _, gens, scores = _gens(d, inp)
+    for g in gens:
+        g["answer"] = "s" + g["gid"][-4:]  # <= 8 chars, all eligible
+    new, new_inp, _ = build(d, inp, gens, scores, len_cap_q=0.9)
+    full = {**inp, **new_inp}
+    ok = verify(d, new, full, gens, scores)
+    assert ok["violations_total"] == 0 and ok["concepts"]["A"]["new"] > 0
+    t = new["concepts"][0]["fit"][0]
+    bad = {**full, t["id"]: full[t["id"]] + "\n\n" + HINT_MARK + ": at most about 9 words.)"}
+    assert verify(d, new, bad, gens, scores)["concepts"]["A"]["violations"] == {
+        "request_missing_or_hinted": 1}
+    g = next(g for g in gens if text_id(g["answer"]) == t["id"])
+    scores[g["gid"]]["p_answers"] = 0.2
+    assert verify(d, new, full, gens, scores)["concepts"]["A"]["violations"] == {"judge_fail": 1}
