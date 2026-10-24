@@ -285,7 +285,7 @@ def main() -> None:
                not_loaded_warnings=log.count("not loaded") + log.count("Failed to load"),
                arch_line=next((ln.strip()[-160:] for ln in log.splitlines()
                                if "architecture" in ln.lower()), ""),
-               language_model_only="language_model_only=True" in log
+               language_model_only="'language_model_only': True" in log
                or "language-model-only" in log,
                mem_training_side_while_vllm_sleeps=m_sleep, mem_while_vllm_awake=m_awake)
         gen.close()

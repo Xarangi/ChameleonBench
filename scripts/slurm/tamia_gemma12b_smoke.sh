@@ -10,7 +10,8 @@
 #   GPU 0     scripts/tica_gemma_smoke.py: load + render + read paths + base probes + one optimizer step at the
 #             production episode length + HF generation + the vLLM side engine (vllm-g4 venv, text-only, merged mode)
 #   GPUs 1-3  the REAL trainer (scripts/tica.py adaptive, data-parallel DP3) for SMOKE_STEPS steps of the production
-#             config with 1 episode per rank (production: 4) on 2 concepts: max_mem_gb / sec per step in train_log.
+#             config with 1 episode per rank (production: 4) on 4 concepts: max_mem_gb / sec per step in train_log.
+# SMOKE_SANITY=0: trainer only, on all 4 GPUs (DP4 = the production layout, 4 episodes per step).
 # Aggregates only. Outputs: runs/smoke_gemma4/<job>/{sanity/smoke.json, train/adaptive/train_log.jsonl}.
 #   sbatch --account=aip-rrabba --exclude=tg11105 scripts/slurm/tamia_gemma12b_smoke.sh [CFG]
 set -uo pipefail
@@ -32,17 +33,23 @@ export TICA_VLLM_MODULES=${TICA_VLLM_MODULES:-"StdEnv/2023 gcc python/3.11 arrow
 export TICA_VLLM_MEM=${TICA_VLLM_MEM:-0.45}
 CONCEPTS=$(PYTHONPATH=src $PY -c "
 import json; from next_chameleons.tica.config import load_run_config as l
-print(json.dumps(l('$CFG').episode_concepts[:2]))")
+print(json.dumps(l('$CFG').episode_concepts[:4]))")
 echo "train smoke concepts: $CONCEPTS"
 
-CUDA_VISIBLE_DEVICES=0 SLURM_TMPDIR=$NODE_TMP/sanity PYTHONPATH=src $PY scripts/tica_gemma_smoke.py \
-  --config "$CFG" --model-path "$LOCAL" --out "$OUT/sanity" > "logs/g4-smoke-${SLURM_JOB_ID:-local}-sanity.out" 2>&1 &
-P1=$!
+P1=
+TG=1,2,3; NDP=3
+if [ "${SMOKE_SANITY:-1}" = "1" ]; then
+  CUDA_VISIBLE_DEVICES=0 SLURM_TMPDIR=$NODE_TMP/sanity PYTHONPATH=src $PY scripts/tica_gemma_smoke.py \
+    --config "$CFG" --model-path "$LOCAL" --out "$OUT/sanity" > "logs/g4-smoke-${SLURM_JOB_ID:-local}-sanity.out" 2>&1 &
+  P1=$!
+else
+  TG=0,1,2,3; NDP=4
+fi
 # the real trainer: production config, 1 episode per rank, no checkpoints / evals, smoke-local anchor cache,
 # cap_gen problems without the (not yet built) Gemma base-solution pool
-CUDA_VISIBLE_DEVICES=1,2,3 TICA_DP=3 MASTER_PORT=29610 SLURM_TMPDIR=$NODE_TMP/train \
+CUDA_VISIBLE_DEVICES=$TG TICA_DP=$NDP MASTER_PORT=29610 SLURM_TMPDIR=$NODE_TMP/train \
   bash scripts/slurm/tica_l3covert.sh "$CFG" --steps "$STEPS" --out "$OUT/train" \
-  --set train.episodes_per_step=3 --set train.save_every=0 --set "episode_concepts=$CONCEPTS" \
+  --set train.episodes_per_step=$NDP --set train.save_every=0 --set "episode_concepts=$CONCEPTS" \
   --set 'rl.adaptive.eval_on_save=""' --set rl.adaptive.eval_every=0 \
   --set "rl.adaptive.anchor_cache=$OUT/train/anchor_cache.json" --set 'rl.adaptive.cap_gen_pool=""' \
   > "logs/g4-smoke-${SLURM_JOB_ID:-local}-train.out" 2>&1 &
@@ -51,7 +58,7 @@ nvidia-smi --query-gpu=timestamp,index,memory.used,utilization.gpu --format=csv 
   > "logs/g4-smoke-${SLURM_JOB_ID:-local}-gpu.csv" 2>/dev/null &
 SMI=$!
 rc=0
-wait $P1 || rc=1
+[ -z "$P1" ] || wait $P1 || rc=1
 wait $P2 || rc=1
 kill $SMI 2>/dev/null
 echo "sanity: $OUT/sanity/smoke.json"; echo "train log: $OUT/train/adaptive/train_log.jsonl"
