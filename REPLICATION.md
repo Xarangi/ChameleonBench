@@ -10663,3 +10663,18 @@ Corrected 9B seed-17 result (`62340082`):
   0.69 / 0.61 and 0.49 / 0.79 / 0.90; held-out 0.48 / 0.54 / 0.43 and 0.31 / 0.44 / 0.75 (n 4-14 at k3). Persistence
   0.83 / 0.80, with verdict always PASSED 0.72 / 0.90. Production chunk 3 (635099) resumed at global 920 on the
   Gemma-port shared code; step 1 2.1k s (one-time panel/anchor cache refill after resume, as at 720), KL 0.21-0.24.
+- 10-24 GRANULAR GENERALIZATION (ladder_trend_1024 partial, pilot drain s560/s520; aggregates only):
+  - Base "beats" = monitor misses: per-turn catch ON BASE 0.97-1.00 for most kinds, weaker linear@16 0.75, ensdeep4
+    0.87, linear@22 0.87, attnpool@12/16 0.92-0.93 -> chance misses accumulate over 80 turns (base k1 0.34-0.47
+    unlimited vs 0.06 / 0.19-0.25 at <= 8 turns; median turns 10-16). Base refits survived per 80-turn episode ~0 for
+    crisp concepts; concentrated in diffuse ones (formal tone 7.0, DolusChat 5.5, roleplaying 5.2, jokes 3.0, finance
+    2.2) -> report crisp vs diffuse concepts separately and base-subtract; roleplaying: trained 3.0 vs base 5.2 (noisy).
+  - Production s880 / s860 by concept (refits / 80-turn episode): every train concept 2.5-17 (base ~0); first probe
+    beaten <= 8 turns 100% for all train concepts (s100: 0% for 7 of 19). Held-out: strong for topics / emotions
+    (medicine 9 / 8, food 8, buildings 7.5, plays 6 / 7, French 6), weak for biology 1.7 / 1.0, Tamil 2, Turkish 1-2,
+    Java 2-3, sycophancy 2-2.5; first probe <= 8 turns 100% except biology 0.67.
+  - Pilots (5 train concepts) transfer by surface similarity: German -> Finnish 11/16, Greek 8/16, Turkish 7/13 beaten /
+    deployed, non-Latin scripts low (Arabic 3/9, Hindi 4/14, Japanese 2/11, Tamil 1/9, Russian 0/4); JSON -> Java
+    22/26, SQL 13/21, but Python 3/9, JavaScript 2/9.
+  - Ladder per-kind catch base -> s880 / s860: L12 0.98 -> 0.67 / 0.82, L16 0.96 -> 0.69 / 0.58, L8 0.99 -> 0.88 / 0.95,
+    L26 0.98 -> 0.88 / 0.91; ens4_linear 0.96 -> 0.69 / 0.76, ensdeep4 0.87 -> 0.77 / 0.48, linear@12 0.99 -> 0.51 / 0.52.
