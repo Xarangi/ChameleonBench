@@ -10643,3 +10643,17 @@ Corrected 9B seed-17 result (`62340082`):
   AUROC 1.00 / TPR 1.00 both; cross (probe_old on new texts, probe_new on old texts) AUROC 0.997-1.000, TPR 1.00;
   FPR on other concepts 0.00-0.06, on concept-free texts 0.00-0.08 (same range as old/old). Data ready for
   final_v5_modelwritten_4b; length-cap shortfall (above) still pending the user's call.
+- 10-24 MW LENGTH-HINTED REGEN (user 10-24: length limit in the prompt only for over-long examples; 640183 ->
+  verify false positive on duplicate short Finnish answers fixed (2f1577c) -> 640294 OK, 23 min). needs-regen 12,572
+  source texts (no eligible answer + >= 1 answer over the p90 cap / unfinished); 4 hinted samples each = 50,288 answers
+  (finished 1.00, <= cap 0.89; biology 0.30, physics 0.62, literature 0.64, chemistry 0.71); judge concept 0.93,
+  answers 0.84, mean 620 chars. Rebuild: train file 19 concepts 8,754 published -> 6,312 (no hint) -> 8,725 (hint), below
+  80%: 10 -> 0; train + held-out file 53 concepts 25,168 -> 16,929 -> 24,874, below 80%: 27 -> 1 (Tamil 335 / 600).
+  VERIFY (from scratch, both files): 0 violations (every kept text a finished generation, judge concept and answer
+  >= 0.5, <= cap, published request without the hint line); 12,184 of 24,874 kept texts written with the hint; median
+  length new / published 1.08 (0.5-2.7 by concept). Probe check (L12, 12 concepts incl. astronomy / chemistry /
+  literature / finance): quality AUROC 1.000; cross old->new AUROC 0.995-1.000, new->old 0.978-1.000 (finance lowest,
+  TPR 0.92); FPR others 0.00-0.06. Previous files kept as final_v5_mw{,_all}_nohint.json.
+- 10-24 PILOT DRAIN 639385: 12 / 19 tasks crashed with Input/output errors on node tg11201's /tmp (triton cache,
+  tempdir, venv untar) -> requeued exactly those (640314, --exclude=tg11105,tg11201); pending drains + production chunk
+  635099 now exclude both nodes. Pilot chunk 2 (638419) runs on tg11105 (I/O errors 10-23): watched.
