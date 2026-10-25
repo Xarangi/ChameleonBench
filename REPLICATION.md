@@ -10803,3 +10803,9 @@ Corrected 9B seed-17 result (`62340082`):
   +0.57, L26 -0.17 / +0.40, L28 -0.08 / +0.26, L30 -0.05 / +0.30 (score + held-out same sign; held-out up to +0.94)
   -> feedback-driven global gain on the concept representation. Proposed test: feedback ablation (always PASSED /
   always CAUGHT / random) on s1200.
+- 10-25 FEEDBACK CAUSALITY via existing persistence evals (s920, no refit; next-turn change in the probe margin, z):
+  1-bit real feedback after caught -0.71 ±0.30 (n30) / after passed +0.02; always-"PASSED" shown: after actually caught
+  -0.20 ±0.14 (n113) / passed +0.03; score real -1.27 ±0.37 / +0.05, always-PASSED -0.52 ±0.20 / +0.13. -> escalation on a
+  catch is ~60-70% feedback-caused (rest regression to the mean); NO relaxation after a pass when the same probe judges
+  (stay term holds); the ladder-panel "relax after pass" was a selection effect. CORRECTS the 10-25 gain-control
+  "relax" half. Fake-feedback ablation dropped (user).
