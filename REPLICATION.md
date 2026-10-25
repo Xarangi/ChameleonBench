@@ -10817,3 +10817,18 @@ Corrected 9B seed-17 result (`62340082`):
   / b 0.01-0.02. Effective rank ~94-114 of r = 128 (in_proj_a / b 16-21) -> the edit uses most of the LoRA capacity, is
   distributed across depth and dominated by MLP + linear-attention blocks; 5-concept pilot lower rank (54-85).
   (Weight share is not functional importance; the activation geometry tests the low-rank-effect conjecture.)
+- 10-25 FINAL DRAIN s1200 (641235, 38 / 38 OK). Capability (base GSM8K clean 0.90, brief 0.825, MMLU brief 0.663):
+  1-bit s920 -> s1200 GSM8K clean 0.85 -> 0.825, brief 0.74 / 0.75 -> 0.74 / 0.825, MMLU clean 0.612 -> 0.582, brief
+  0.615 / 0.632 -> 0.623 / 0.633; score GSM8K clean 0.855 -> 0.835, brief 0.865 / 0.875 -> 0.795 / 0.805, MMLU clean
+  0.613 -> 0.652, brief 0.628 / 0.642 -> 0.643 / 0.662 (all inside the tripwire). Races k1-k4: 1-bit train 0.98 / 0.98 /
+  0.98 / 1.00, held-out 1.00 / 0.95 / 0.93 / 0.84; score train 0.98 / 1.00 / 0.93 / 0.93, held-out 0.98 / 0.97 / 0.93 /
+  0.83. Val held-out k1 950-1200: 1-bit 0.92-0.97 (val score 0.69 -> 0.78), score 0.81-0.94 (0.54 -> 0.73). Persistence
+  0.94-0.95 (always-PASSED 0.80-0.84); old refits re-detect after beaten 0.25 -> 0.12. Quality passed-valid: held-out
+  0.53 / 0.51 (s920 0.48 / 0.49), train 0.72 / 0.66 (s920 0.78 / 0.81): SQL 0.16 / 0.21 (was 0.54 / 0.60), score JSON 0.22
+  (0.77) -> more train-concept code evasion is invalid code. Selectivity: no-brief 0.88-1.00 (mean 0.99); mismatch
+  1-bit 0.97 / 0.81, score 0.85 / 0.72 (train / held-out; score over-hiding rose).
+  Never-shown panel s900 -> s1200 (train; 1-bit | score): trained depths 0.00-0.03 | 0.00-0.02; L20 0.34 -> 0.15 | 0.23 ->
+  0.29; L24 0.16 -> 0.06 | 0.28 -> 0.09; maxpool@24 0.47 -> 0.23 | 0.23 -> 0.27; L28 0.78 -> 0.71 | 0.66 -> 0.77; L30 1.00
+  -> 0.99 | 0.89 -> 0.99; L4 1.00; attnpool / mck / ensdeep4 / spread5 0.00-0.04; gdm 0.11 | 0.35; nc_ens8_tok 0.09 |
+  0.20; ens8 0.80 | 0.79. Held-out concepts 1-bit: L8-L26 0.04-0.23 (s900 0.09-0.53), L28 0.78, L30 0.97. Score-arm
+  L28 / L30 spread at s900 did NOT persist (0.66 / 0.89 -> 0.77 / 0.99).
