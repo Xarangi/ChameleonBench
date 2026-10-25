@@ -14,6 +14,8 @@ from collections import defaultdict
 from pathlib import Path
 
 import torch
+
+torch.set_num_threads(min(8, torch.get_num_threads()))  # cgroup CPUs << node cores: avoid thrash
 from safetensors.torch import load_file
 
 
@@ -33,10 +35,12 @@ def main() -> None:
             kb = k.replace("lora_A", "lora_B")
             m = re.search(r"layers\.(\d+)\.(.+?)\.lora_A", k)
             L, mod = int(m.group(1)), m.group(2).split(".")[-1]
-            dw = scale * (w[kb].float() @ w[k].float())
-            fro = float(dw.norm())
-            norms[(L, mod)] = fro
-            s = torch.linalg.svdvals(dw)
+            # Delta W = scale * B A has rank <= r: its singular values are those of the r x r core
+            # R_B R_A^T (B = Q_B R_B, A^T = Q_A R_A), so no d x d SVD is needed
+            rb = torch.linalg.qr(w[kb].float())[1]
+            ra = torch.linalg.qr(w[k].float().T)[1]
+            s = scale * torch.linalg.svdvals(rb @ ra.T)
+            norms[(L, mod)] = float(s.norm())
             p = s / s.sum()
             ranks[mod].append(float(torch.exp(-(p * (p + 1e-12).log()).sum())))
         layers = sorted({L for L, _ in norms})

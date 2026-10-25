@@ -10809,3 +10809,11 @@ Corrected 9B seed-17 result (`62340082`):
   catch is ~60-70% feedback-caused (rest regression to the mean); NO relaxation after a pass when the same probe judges
   (stay term holds); the ladder-panel "relax after pass" was a selection effect. CORRECTS the 10-25 gain-control
   "relax" half. Fake-feedback ablation dropped (user).
+- 10-25 LoRA ANATOMY (scripts/tica_lora_anatomy.py; Delta W = (alpha/r) B A via the r x r core; 30 s CPU after
+  pinning threads -- two earlier jobs stalled on thread oversubscription): share of total ||Delta W||_F per layer is
+  nearly UNIFORM over all 32 layers (1-bit s1200 2.5-3.8%, mild peaks at the trained depths 8 / 12 / 16 / 22 / 26 and
+  at 27-29; L4 2.9%); by module (1-bit / score identical within 0.01): MLP gate 0.20, up 0.18-0.19, down 0.13; linear-
+  attention in_proj_qkv 0.16, in_proj_z 0.11, out_proj 0.08; full attention q 0.05, o 0.02, k / v 0.01-0.02; in_proj_a
+  / b 0.01-0.02. Effective rank ~94-114 of r = 128 (in_proj_a / b 16-21) -> the edit uses most of the LoRA capacity, is
+  distributed across depth and dominated by MLP + linear-attention blocks; 5-concept pilot lower rank (54-85).
+  (Weight share is not functional importance; the activation geometry tests the low-rank-effect conjecture.)
