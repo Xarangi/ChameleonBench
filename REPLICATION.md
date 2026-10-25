@@ -10767,3 +10767,9 @@ Corrected 9B seed-17 result (`62340082`):
   attnpool@8 0-11%, linear@22 1-10%; mid-depth linear / rlobf_attn 0-4%. -> durable escape from ensembles; relapses
   on token-max / attention-pooled probes at the band edges. Held-out-kind races (defender refits with linear@20/24/28/30,
   maxpool@24, gdm_rollattn, mck_attnlite; scripts/slurm/final_eval_suite.sh) not yet run on v4b/v4c: offered to user.
+- 10-25 STILL IMPROVING (in-training rollouts, 24 turns, 60-step bins): 1-bit pass rate 0.13 (s720) -> 0.18 (s840) ->
+  0.27 (s960) -> 0.34 (s1140); k2 / k3 beaten 0.50 / 0.26 -> 1.00 / 0.94; turns to beat k2 3.6 -> 2.3; score 0.13 -> 0.36,
+  k2 / k3 0.61 / 0.42 -> 0.99 / 0.96; probes beaten per step ~25 -> ~60; cap_gen 0.78-0.93. Ceiling: k2 / k3 in training
+  episodes ~0.95-1.0 -> 24-turn episodes are saturating; harder curriculum (longer episodes, strict gate, deeper kinds)
+  needed for more signal (apply from the start in a Gemma run). Refit sequences (80-turn ladder, 1-bit s880): 7.6 probes
+  / episode (max 18); consecutive probes differ in layer 0.82, in type 0.84; held-out kinds never drawn by design.
