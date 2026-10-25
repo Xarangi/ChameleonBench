@@ -17,7 +17,7 @@
 set -uo pipefail
 SMOKE=${1:?smoke task file}; FULL=${2:?full task file}
 cd /scratch/s/sneheel/ChameleonBench
-NG=$(nvidia-smi -L | wc -l); SLOTS=${SLOTS:-$(( NG * 2 ))}
+NG=${NG:-$(nvidia-smi -L | wc -l)}; SLOTS=${SLOTS:-$(( NG * 2 ))}
 NODE_TMP=${SLURM_TMPDIR:-/tmp/mech_$$}; mkdir -p "$NODE_TMP" logs
 JOB=${SLURM_JOB_NAME:-mech}-${SLURM_JOB_ID:-local}
 nvidia-smi --query-gpu=timestamp,index,memory.used,utilization.gpu --format=csv -l 60 > "logs/$JOB-gpu.csv" 2>/dev/null &
@@ -25,7 +25,7 @@ SMI=$!
 declare -A BUSY TAG OUT
 
 run_phase() {  # FILE PHASE [allowed-groups regex]
-  local file=$1 phase=$2 allow=${3:-.} i=0 g p line grp out cmd
+  local file=$1 phase=$2 allow=${3:-.*} i=0 g p line grp out cmd
   mapfile -t LINES < <(grep -v '^\s*#' "$file" | grep -v '^\s*$')
   for line in "${LINES[@]}"; do
     IFS=$'\t' read -r grp out cmd <<< "$line"
