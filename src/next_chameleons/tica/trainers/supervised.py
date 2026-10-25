@@ -2851,6 +2851,10 @@ class AdaptiveSupervisedTrainer:
             acfg.episode_refit_kind]
         if acfg.first_kind:
             kinds.append(acfg.first_kind)
+        if acfg.first_probe_panel_from_start or acfg.first_probe_panel_from_step:
+            # turn-0 panel probes (10-25 fix): with a single non-token refit kind (eval --kind
+            # linear@28) the panel's token kinds were missing from the reads -> KeyError ("tok", L)
+            kinds += self._panel_kinds()
         out = set()
         for k in kinds:
             base, _ = split_kind(k)
