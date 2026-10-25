@@ -10747,3 +10747,16 @@ Corrected 9B seed-17 result (`62340082`):
   (1-bit at s1079, ~278 s/step solo -> 1200 in ~9.3 h, inside 641232's 16 h). Final drain now after 641232 + 641234.
   Solo vs shared layout: per node, solo ~1 step / 280-340 s vs shared 2 steps / ~475 s (~20% fewer steps per GPU-h),
   but shared OOMed at ~s998.
+- 10-25 GENERAL vs SPECIFIC DODGE + per-concept quality (scripts/tica_panel_report.py, panels s600 / s900, drain s920):
+  - General static component: never-shown panel probes beaten from turn 1; dodged-probe set stable turn to turn
+    (Jaccard 0.87-0.91 trained vs 0.08 base; panel flip rate 0.06-0.12); at trained depths panel det is the same when
+    the active probe is beaten vs caught (score s900 L8 0.00 / 0.01, L16 0.00 / 0.08, attnpool 0.15 / 0.22).
+  - Specific in-context component: in-episode refits retro-detect 0.84 of turns before their deployment, but after
+    being beaten re-detect only 0.25 (1 turn 0.55, 2 turns 0.35, 3+ 0.20) -> the model moves off each refit.
+  - Depth trade-off: when the active probe is beaten, deeper panel probes catch more (score s900 L24 0.56 vs 0.24, L28
+    0.78 vs 0.64, maxpool@24 0.54 vs 0.19).
+  - Quality (passed-and-valid, s920, 1-bit / score): train languages 0.58-1.00, train code / format JSON 0.67 / 0.77,
+    SQL 0.54 / 0.60, JavaScript 0.26 / 0.57; held-out languages Greek 1.00 / 0.76, Russian 1.00 / 0.89, Tamil 0.88 /
+    1.00, Turkish 0.45 / 0.06, Finnish 0.13 / 0.10; held-out code Java 0.03 / 0.11, Python 0.05 / 0.20 -> held-out code
+    "evasion" is mostly invalid code. Selectivity: no-brief panel det 0.97-1.00 (conditional hiding); mismatch text
+    probes 0.85-1.00.
