@@ -10773,3 +10773,14 @@ Corrected 9B seed-17 result (`62340082`):
   episodes ~0.95-1.0 -> 24-turn episodes are saturating; harder curriculum (longer episodes, strict gate, deeper kinds)
   needed for more signal (apply from the start in a Gemma run). Refit sequences (80-turn ladder, 1-bit s880): 7.6 probes
   / episode (max 18); consecutive probes differ in layer 0.82, in type 0.84; held-out kinds never drawn by design.
+- 10-25 SCORE vs 1-BIT significance (bootstrap 95% CI, refits survived / episode, 32 eps, s880 vs s860): train 80 turns
+  6.66 vs 5.66 [-0.88, +2.81]; train <= 8 3.53 vs 3.22 [-0.47, +1.16]; strict train 4.16 vs 3.44 [-0.16, +1.59];
+  held-out 80 4.47 vs 3.62 [-0.41, +2.09]; held-out <= 8 2.88 vs 3.22 [-1.28, +0.62]; strict held-out 2.41 vs 2.00
+  [-0.38, +1.16] -> no significant evasion difference (1-bit nominally ahead 5 / 6); score differs in capability and
+  depth spread.
+- 10-25 RESPONSE TO FAILURE (80-turn ladder; per active probe, next turn after k consecutive catches): P(beat next)
+  base 0.02 / 0.02 / 0.04 / 6+ 0.01; 1-bit s100 0.15 / 0.05 / 0.00; s500 0.12 / 0.22 / 0.10; s880 0.29 / 0.21 / 0.06 /
+  0.17 / 0.13 / 6+ 0.04; score s860 0.24 / 0.17 / 0.10 / 0.09 / 0.12 / 0.04; s880 held-out 0.30 / 0.19 / 0.15 / 0.10.
+  Margin (score - thr) change after a catch: base -1.5 (noise); 1-bit s100 -4.7, s500 -5.3, s880 -11.0 then -1.2 to
+  -2.5; score s860 -3.8, -4.1, then -0.6 to -1.3. -> directed, front-loaded correction that grew with training; after a
+  catch the never-shown dodged set is most stable (Jaccard 0.89-0.92 vs 0.83-0.87 after a pass).
