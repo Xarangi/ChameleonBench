@@ -10760,3 +10760,10 @@ Corrected 9B seed-17 result (`62340082`):
     1.00, Turkish 0.45 / 0.06, Finnish 0.13 / 0.10; held-out code Java 0.03 / 0.11, Python 0.05 / 0.20 -> held-out code
     "evasion" is mostly invalid code. Selectivity: no-brief panel det 0.97-1.00 (conditional hiding); mismatch text
     probes 0.85-1.00.
+- 10-25 CUMULATIVE POOL (episode_cumulative on in training and evals; caught = ANY deployed probe fires): 80-turn
+  ladder s880 / s860: >= 3 probes active on 70-93% of turns; 84-91% of catches by the newest probe, 9-16% by an older
+  one (base 2%). Old-probe re-catch rate per turn by type: ensembles 0.4-3% (ens4_linear, ens4_mlp, ensdeep4),
+  single-layer pooling highest: maxpool@8 3-15%, maxpool@12 4-18% (score), maxpool@26 4-13%, attnpool@22 0-17%,
+  attnpool@8 0-11%, linear@22 1-10%; mid-depth linear / rlobf_attn 0-4%. -> durable escape from ensembles; relapses
+  on token-max / attention-pooled probes at the band edges. Held-out-kind races (defender refits with linear@20/24/28/30,
+  maxpool@24, gdm_rollattn, mck_attnlite; scripts/slurm/final_eval_suite.sh) not yet run on v4b/v4c: offered to user.
