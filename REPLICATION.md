@@ -10784,3 +10784,10 @@ Corrected 9B seed-17 result (`62340082`):
   Margin (score - thr) change after a catch: base -1.5 (noise); 1-bit s100 -4.7, s500 -5.3, s880 -11.0 then -1.2 to
   -2.5; score s860 -3.8, -4.1, then -0.6 to -1.3. -> directed, front-loaded correction that grew with training; after a
   catch the never-shown dodged set is most stable (Jaccard 0.89-0.92 vs 0.83-0.87 after a pass).
+- 10-25 PROBE IDENTIFICATION TEST (panel records s900, real-brief turns; turn t caught by the active probe -> t+1, same
+  active): fraction of catching probes released at t+1 / mean z-scored score change: 1-bit active 0.17 / -0.23, older
+  refits 0.24 / -0.10, never-shown panel 0.16 / -0.13; score 0.16 / -0.21, 0.26 / -0.03, 0.17 / -0.15; 1-bit held-out
+  0.17 / -0.31, 0.32 / -0.37, 0.21 / -0.20; base 0.00 / 0.00. LAYER-MATCHED (active single-layer refit at L vs never-shown
+  linear@L, paired): 1-bit -0.06 sd [-0.18, +0.06], score -0.12 [-0.27, +0.02], 1-bit held-out -0.09 [-0.20, +0.01],
+  score held-out +0.03 [-0.13, +0.19]. -> no significant probe-specific response: failure triggers a broad escalation at
+  that depth (feedback-triggered), not identification of the catching probe. CORRECTS the 10-25 "targeted move" reading.
