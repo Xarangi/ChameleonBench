@@ -10742,3 +10742,8 @@ Corrected 9B seed-17 result (`62340082`):
   optimizer state: resume_920/step_60 = global 980); the score arm kept running. Fix: 1-bit resumes SOLO on its own node
   (641232 -> 641233, 4 GPUs, no sharing), score-only chunk 4 after 635099 (641234), final drain after both (641235);
   the interleaved chunk 4 / drain (640704 / 640705) cancelled. Drain 639388 (after 635099) unchanged.
+- 10-25 GPU economy (user): cancelled the intermediate production drain 639388 (would finish ~1 h before the 1-bit
+  arm reaches 1200; the final drain 641235 covers s1200 incl. the queued val races) and the spare 1-bit chunk 641233
+  (1-bit at s1079, ~278 s/step solo -> 1200 in ~9.3 h, inside 641232's 16 h). Final drain now after 641232 + 641234.
+  Solo vs shared layout: per node, solo ~1 step / 280-340 s vs shared 2 steps / ~475 s (~20% fewer steps per GPU-h),
+  but shared OOMed at ~s998.
