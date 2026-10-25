@@ -10791,3 +10791,15 @@ Corrected 9B seed-17 result (`62340082`):
   linear@L, paired): 1-bit -0.06 sd [-0.18, +0.06], score -0.12 [-0.27, +0.02], 1-bit held-out -0.09 [-0.20, +0.01],
   score held-out +0.03 [-0.13, +0.19]. -> no significant probe-specific response: failure triggers a broad escalation at
   that depth (feedback-triggered), not identification of the catching probe. CORRECTS the 10-25 "targeted move" reading.
+- 10-25 VALIDATIONS: (1) cumulative verdict confirmed in code (episode_cumulative: judge = all deployed probes; on in
+  training + evals). (2) No-brief selectivity: s600 leaked at trained depths (linear@16 / 22 / 26 1-bit 0.71 / 0.65 /
+  0.64, score 0.33 / 0.54 / 0.38, ensdeep4 0.90 / 0.68); s900 base-like everywhere (0.97-1.00 train, 0.94-1.00 held-out;
+  nc_ens8_tok 0.88-0.94) -> fixed by the v4c anchors. Mismatch (hide X, text about Y): train 0.95-0.97 (base 0.99),
+  held-out 0.77-0.84 (base 0.97) = some over-hiding on unseen concepts. (3) Depth specificity: after a catch by a
+  single-layer refit at L, never-shown linear change by |L-L'| same / 2-6 / 8-12 / >12: 1-bit -0.08 / -0.07 / -0.12 /
+  -0.05, score -0.11 / -0.13 / -0.16 / -0.18, held-out -0.26 / -0.27 / -0.25 / -0.24 and -0.24 / -0.31 / -0.25 / -0.13
+  -> no depth targeting (corrects "at that depth"). Gain control: next-turn change after catch vs pass (1-bit s900,
+  train) L8 -0.21 / +0.38, L12 -0.16 / +0.21, L16 -0.07 / +0.14, L20 -0.18 / +0.50, L22 -0.19 / +0.54, L24 -0.22 /
+  +0.57, L26 -0.17 / +0.40, L28 -0.08 / +0.26, L30 -0.05 / +0.30 (score + held-out same sign; held-out up to +0.94)
+  -> feedback-driven global gain on the concept representation. Proposed test: feedback ablation (always PASSED /
+  always CAUGHT / random) on s1200.
