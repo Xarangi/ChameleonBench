@@ -10982,3 +10982,11 @@ Corrected 9B seed-17 result (`62340082`):
   concept only, so other-concept mismatch texts also look off-manifold and raise the threshold); offline (multi-concept
   PCA, threshold on the model's own no-brief + mismatch turns) TPR 0.96-0.98 / 0.82. Two pcaressel races cut at the
   1.5 h limit (~10 / 16 episodes); outcome already clear from refits.jsonl.
+- 10-26 GEMMA-4 12B v4d LAUNCH QUEUED (user: 1-bit arm only; "latest configuration + more varied capability
+  preserving"). final_v4d_gemma4_12b_tamia = final_v4c_gemma4_12b_tamia (production 4B v4c, depth-rescaled) + train_mix
+  0.75 / 0.10 / 0.05 / mismatch 0.10 (user: mismatch back, hiding kept at 75%) + adaptive.cap_free_episodes 4 (cap_gen
+  forks of checkable concepts with a NEW calib / episode-split request; KL to base on every sample, NLL + hide on VALID
+  samples only, tica/validity.py; published-answer fallback) + cap_free_nobrief 2 (bare prompts, KL only) + steps 1200
+  (user). Code eed8a57 (tests: cap_free unit test + tica suite; 2 pre-existing pyarrow-env failures). Prep on ONE node
+  (scripts/slurm/tamia_gemma12b_prep.sh: Gemma GSM8K base solutions + panel cache, shared model copy): 643842; chain
+  643843 (afterok prep) + resume 643844-643851; drain 643852 (+24 h, PER_GPU=2, queue runs/g4v4d_val_queue.txt).
