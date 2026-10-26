@@ -11000,3 +11000,22 @@ Corrected 9B seed-17 result (`62340082`):
 - 10-26 GEMMA v4d chunk 1 step 100: ~180-195 s/step steady (steps 2-103), no errors / DP drift; memory peak (running
   max) 49 -> 79.1 GB alloc / 82.7 reserved by step 75, flat since; GSM8K cap_gen acc ~0.91-0.94, cap_free valid
   0.67-0.84 (10-step means), beat_frac ~0.06, pass 0.007. Held-out races step 50 / 100 queued (drain 643852).
+- 10-26 HELD-OUT CODE FAILURES, hand analysis (Sonnet subagent, 15 passed-but-invalid 4B s1200 free-gen answers + 6
+  monitor-off references; aggregates / short fragments only). Systematic, not random: passed answers drop the
+  language tag (```java/python/html in 1/33, 3/21, 0/7 passed vs 14/14, 7/7, 4/4 monitor-off), drop language-marker
+  keywords (Java modifiers / types in 5/33 passed vs 14/14 off) and switch to a JavaScript / pseudo-code dialect
+  (`function`, `var`, brace bodies, even `def f(x) { ... }` for Python: 19/21 Python); plus very short / empty fences
+  (median passed HTML 31 chars). Accidental-looking: truncation / loops (~6/33 Java, 5/21 Python), wrong content.
+  Detected-on answers are valid more often (Java 6/23, Python 4/24, HTML 7/23) -> passing selects the degraded ones.
+  VALIDATOR BUG found: the fence regex swallowed the rest of the opening line as the language tag ("```<table>...",
+  "```SELECT ..." lost their first line). Fixed in tica/validity.py (+ regression test); only 2 / 61 held-out code
+  verdicts flip (0-5% valid stands). The running Gemma v4d chunk 1 loaded the old regex (cap_free gating was slightly
+  strict); resume chunks load the fix.
+- 10-26 REVISIT test (scripts/tica_revisit.py; after a catch, cos of the new configuration to the episode's earlier
+  CAUGHT vs PASSED configurations): 1-bit s1200 a faint tilt toward past passes / away from past failures, +0.03-0.06 at
+  L16-24 (CIs > 0, train + held-out; absolute similarities -0.1..+0.05); score arm none (CIs include 0). -> essentially
+  a blind jump; revisits are deterred mainly by the cumulative pool (older probes make 9-16% of catches).
+- 10-26 CORRECTION: the s600 "shared hide vector" (cos 0.96 at L8, 0.76 L16, 0.44 L22) predates the v4c switch (global
+  step 720: mismatch dropped, act anchor, panel MATCH) and coincides with s600's no-brief leak -> most likely the
+  brief-independent suppression the v4c anchors removed, not a training stage; s600 -> s1200 contrasts confound
+  training time with the recipe change.

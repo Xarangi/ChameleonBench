@@ -12,7 +12,10 @@ import re
 import sqlite3
 from html.parser import HTMLParser
 
-FENCE = re.compile(r"```[ \t]*([A-Za-z0-9_+-]*)[^\n]*\n(.*?)(```|\Z)", re.S)
+# A language tag counts only when it is alone on the fence line ("```python\n"); otherwise the code
+# starts right after the backticks (10-26: "```<table>..." / "```SELECT ..." used to lose their
+# first line to the tag group, rejecting valid answers).
+FENCE = re.compile(r"```(?:[ \t]*([A-Za-z0-9_+-]+)[ \t]*\n|[ \t]*\n?)(.*?)(```|\Z)", re.S)
 VOID = {"area", "base", "br", "col", "embed", "hr", "img", "input", "link", "meta", "param",
         "source", "track", "wbr", "!doctype"}
 IMPLICIT = {"li", "p", "td", "tr", "th", "dt", "dd", "option", "html", "body", "head", "tbody",
@@ -21,7 +24,7 @@ IMPLICIT = {"li", "p", "td", "tr", "th", "dt", "dd", "option", "html", "body", "
 
 def fenced(x: str, langs: tuple[str, ...] = ()) -> list[str]:
     """Code blocks (``` fences; preferred language tags first), else []."""
-    blocks = [(m.group(1).lower(), m.group(2)) for m in FENCE.finditer(x)]
+    blocks = [((m.group(1) or "").lower(), m.group(2)) for m in FENCE.finditer(x)]
     pref = [b for t, b in blocks if t in langs]
     return pref + [b for t, b in blocks if t not in langs]
 
