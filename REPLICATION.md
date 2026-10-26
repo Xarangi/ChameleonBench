@@ -10832,3 +10832,25 @@ Corrected 9B seed-17 result (`62340082`):
   -> 0.99 | 0.89 -> 0.99; L4 1.00; attnpool / mck / ensdeep4 / spread5 0.00-0.04; gdm 0.11 | 0.35; nc_ens8_tok 0.09 |
   0.20; ens8 0.80 | 0.79. Held-out concepts 1-bit: L8-L26 0.04-0.23 (s900 0.09-0.53), L28 0.78, L30 0.97. Score-arm
   L28 / L30 spread at s900 did NOT persist (0.66 / 0.89 -> 0.77 / 0.99).
+- 10-25 HIDE GEOMETRY, TRAIN concepts (tica_hide_geometry.py on mech_1025 panel dumps; paired base vs trained on the
+  same 288 turns, 142 hiding / 69 no-brief, 5 concepts with >= 3 hiding turns: all-caps, casual tone, Arabic, Japanese,
+  astronomy). s300 / s600 / s1200 (1-bit), s1200 (score):
+  - ROTATION, NOT ERASURE (C2 confirmed): base-probe AUROC on trained hiding states at L8-L26 1-bit s1200 0.02-0.31,
+    score 0.21-0.54 (s300 / s600 >= 0.69), while a probe fit on the trained model's own hiding states gets 0.98-1.00;
+    L2-L4 and L28-L31 base AUROC 0.99-1.00.
+  - Signal along the base concept direction left (supp): s300 0.56-0.65, s600 0.30-0.43, 1-bit s1200 NEGATIVE
+    (-0.10 to -0.83 at L8-L26: pushed past the other concepts), score s1200 ~0 (-0.06 to +0.15); L28-L31 0.56-0.95.
+  - Injection depth (C3): hiding edit norm (rel. to state norm) L2-L4 0.07-0.09, jumps at L6 (0.29-0.32), peaks L14-L26
+    (1-bit 0.64-0.90, score 0.36-0.53), falls at L28-L31 (0.21-0.36) -> injected at ~L5-6, carried to L26, fading
+    after (matches the never-shown panel: L4 / L30 readable).
+  - Shared hide vector (C1): s600 strongly SHARED across concepts (mean pairwise cos 0.76-0.96 at L6-L16, PC1 0.41-0.77)
+    -- coincides with the s600 no-brief leak; s1200 concept-specific (cos 0.26-0.46, PC1 0.15-0.41, top-3 PCs
+    0.48-0.74) after the v4c anchors. Shifts partly anti-aligned with the own concept direction (cos(s_c, -u_c)
+    0.38-0.73).
+  - Top-3 hide PCs projected out -> base AUROC recovers partly: 1-bit L12 0.02 -> 0.41, L16 0.03 -> 0.50, L20 0.31 ->
+    0.92, L24 0.20 -> 0.84; score L8 0.34 -> 0.77, L12 0.29 -> 0.71.
+  - Escalation direction (C4): cos(step after caught - after passed, mean hide edit) 1-bit s1200 0.20-0.45 at L6-L26
+    (n 61 / 33 steps), score 0.10-0.37 -> partly along the hide direction (moderate support).
+  - Anomaly (C5): Mahalanobis (top-32 base PCs) excess AUROC mostly <= 0 (-0.44 to +0.26) -> hiding states are NOT more
+    anomalous than the base model's brief-induced shift (C5 not supported at this power).
+  Caveat: 5 concepts / 142 hiding turns, train concepts; held-out pending (score held-out dumps still running).
