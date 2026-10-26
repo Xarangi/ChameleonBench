@@ -2602,7 +2602,13 @@ class AdaptiveSupervisedTrainer:
             "tpr_ic": None if ti is None or ti != ti else round(float(ti), 4),
             "n_pos": info.get("n_pos"), "n_neg": info.get("n_neg"), "sec": round(sec, 2),
             "sec_read": info.get("sec_read"), "first_probe": bool(info.get("first_probe")),
-            **({"panel_cache": info["panel_cache"]} if "panel_cache" in info else {})})
+            **({"panel_cache": info["panel_cache"]} if "panel_cache" in info else {}),
+            # generic detectors (tica/evdet_defender.py): calibration size, held-out fork FPR, the
+            # buffer's concepts, and their own gate reason (they have no no-prompt TPR)
+            **{k: info[k] for k in ("n_cal", "fpr_heldout_forks", "n_buffer_concepts")
+               if k in info},
+            **({"why": info["why"] or None} if (info.get("kind") or "").split("@")[0]
+               in DETECTOR_KINDS else {})})
 
     def _flush_turn_log(self, trajs) -> None:
         """One compact record per episode turn (no text) to <out>/turns.jsonl: condition, concept,
