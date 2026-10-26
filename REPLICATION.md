@@ -10856,7 +10856,7 @@ Corrected 9B seed-17 result (`62340082`):
   Caveat: 5 concepts / 142 hiding turns, train concepts; held-out pending (score held-out dumps still running).
 - 10-25 ADAPTIVE HELD-OUT-KIND RACES (mech_1025/hkind; held-out concepts, 40 turns, 16 eps, --refit-switch 0; k1 =
   turn-0 panel probe, refits = the held-out kind). Refits survived / episode, 1-bit | score (base 0.56, any kind):
-  control linear(@12, trained kind) 10.4 | 11.8; mck_attnlite 10.7 | (pending); maxpool@24 6.1 | 5.7; linear@20 5.9 | 5.4;
+  control linear(@12, trained kind) 10.4 | 11.8; mck_attnlite 10.7 | 13.1; gdm_rollattn 7.7 | 7.8; maxpool@24 6.1 | 5.7; linear@20 5.9 | 5.4;
   linear@24 4.8 | 5.2; linear@28 2.6 | 2.4; linear@30 2.2 | 1.75. First held-out-kind refit (k2) beaten / median turns:
   L20 1.00 / 3, 0.88 / 4; L24 0.88 / 2, 0.88 / 3; maxpool@24 0.93 / 4, 1.00 / 4; L28 0.80 / 4, 0.80 / 4; L30 0.67 / 7,
   0.60 / 5; deeper L30 levels slow (k3 1-bit 0.80 in median 15 turns, score 0.25). Gate acceptance falls with depth
