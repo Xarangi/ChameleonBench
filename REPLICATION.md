@@ -10997,3 +10997,6 @@ Corrected 9B seed-17 result (`62340082`):
   1.0; cap_free 8-16 samples / step, valid 0.50-1.00; beat_frac 0.00-0.04 (warm-up). Memory: peak 49 -> 62 (step 4) ->
   68.5 GB alloc / 73 reserved (step 7), flat to step 10 -> exact knobs for the resume chunks: model.batch_size 16 -> 8,
   lm_chunk 1024 -> 512.
+- 10-26 GEMMA v4d chunk 1 step 100: ~180-195 s/step steady (steps 2-103), no errors / DP drift; memory peak (running
+  max) 49 -> 79.1 GB alloc / 82.7 reserved by step 75, flat since; GSM8K cap_gen acc ~0.91-0.94, cap_free valid
+  0.67-0.84 (10-step means), beat_frac ~0.06, pass 0.007. Held-out races step 50 / 100 queued (drain 643852).
