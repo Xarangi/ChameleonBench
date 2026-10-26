@@ -10879,3 +10879,18 @@ Corrected 9B seed-17 result (`62340082`):
   already hidden": hiding does not carry over to a new concept on its first turn (consistent with concept-specific
   edits at s1200) but is re-established within one turn. Refit ladder across switches k1-k5 1-bit 0.87 / 0.80 / 0.73 /
   0.75 / 0.53, score 0.94 / 0.79 / 0.75 / 0.65 / 0.58.
+- 10-25 HIDE GEOMETRY, HELD-OUT concepts (Java, computer science, Finnish, medicine, Thai, calm; 142 hiding / 69 no-brief
+  paired turns): same injection profile (edit L4 0.09-0.10, L6 0.30-0.31, peak L16-L26 0.59-0.74 1-bit / 0.39-0.42
+  score, L28-L30 0.29-0.37); rotation weaker than on train concepts: base AUROC 1-bit L12 0.22, L16 0.30, L8 0.57, L20 /
+  L24 0.86-0.91, score 0.78-1.00; fresh 1.00 everywhere; signal left 1-bit -0.11 to 0.25, score 0.19-0.33; shared cos
+  1-bit 0.41-0.54, score 0.24-0.40 (s600 0.75-0.97); escalation cos score 0.28-0.51, 1-bit 0.17-0.48 (L4 / L6 0.53-0.62).
+  Anomaly excess: s1200 <= ~0 (-0.31 to +0.24); s600 +0.31 to +0.50 at L8-L16 / L26 (train concepts s600 +0.26 to +0.38)
+  -> the s600 shared-vector stage WAS anomalous; the s1200 concept-specific re-encoding is not.
+- 10-25 SUPERVISED EVASION DETECTOR (scripts/tica_evasion_detector.py on merged train + held-out dumps; concept-agnostic
+  logistic on pooled states: hiding turns vs the same model's honest turns; trained on TRAIN concepts, tested on HELD-OUT
+  concepts). Reference = monitor-off turns inside monitored episodes (brief in context for both classes): base
+  AUROC 0.44-0.68 (TPR@1%FPR <= 0.11); s300 0.89-1.00 at L8-L30; s600 0.98-1.00; s1200 1-bit / score 1.00 at L8-L30
+  (TPR@1%FPR 0.97-1.00), L4 0.98 / 0.99 (TPR 0.87 / 0.95). Reference = no-brief: base up to 0.96 (L16: brief detectable),
+  s1200 1.00. Transfer: 1-bit s1200 detector -> score s1200 1.00; s300 detector -> 1-bit s1200 0.11-0.54 (the hiding
+  signature changes over training). -> "is it hiding now?" is linearly trivial and concept-general at s1200, although
+  unsupervised Mahalanobis does not flag it.
