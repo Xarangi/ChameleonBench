@@ -452,6 +452,12 @@ class AdaptiveConfig:
     # holds the listed probes' readouts); uses the same base-model pass as the MATCH references.
     act_anchor_weight: float = 0.0
     act_anchor_layers: list = field(default_factory=list)
+    # GENERIC HIDING DETECTOR defender (10-25; eval only, refit kind "evdet@L",
+    # tica/evdet_defender.py): comma-separated panel dumps (tica_probe_panel --dump-feats) of the
+    # evaluated checkpoint and of the base model on TRAIN concepts, same seeds; their paired hiding
+    # turns seed the detector's buffer. "" = no seed (the first detector sees only its own forks).
+    evdet_seed_model: str = ""
+    evdet_seed_base: str = ""
     # [] = the in-training zoo: every single-layer kind of episode_refit_kinds at every kind_layers
     # depth + the multi-layer kinds (ens4 / ensdeep4); held-out kinds / depths are refused.
     first_probe_panel_kinds: list = field(default_factory=list)

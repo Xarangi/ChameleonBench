@@ -10901,3 +10901,39 @@ Corrected 9B seed-17 result (`62340082`):
   a threshold at 1% FPR on train negatives gives held-out FPR 0.41-0.99 (held-out scores shift up wholesale; ranking
   perfect). Base control (brief in context, no hiding): held-out AUROC 0.67-0.94. Never in the training probe mix
   (OPEN-QUESTIONS #2 "train against the supervised evasion detector" not implemented).
+- 10-25 FINE LAYER SWEEP (scripts/tica_layer_sweep.py, static base answer probes at L2..31, 40 texts / concept, s1200;
+  hide = late turn after a fixed caught-then-passed history; det = fraction flagged). Train concepts, 1-bit: L2-6
+  0.98-1.00 (forced text near-lexical), L8 0.02, L10-16 0.00-0.01, L18 0.02, L20 0.48, L22 0.01, L24 0.20, L26 0.01, L28
+  0.72, L30-31 1.00; first turn 0.02-0.06 at L8-16 (0.89 / 0.65 at L20 / L24); no-brief 0.99-1.00; base 0.98-1.00. Trained
+  depths = every layer a training probe reads (kind_layers 8/12/16/22/26 + ens4 8/10/12/14 + ensdeep4 16/18/22/26): hiding
+  is near-perfect exactly there and partial in the never-trained gaps (L20 / L24) -> depth-local. Per concept at L28:
+  topics (sports, politics, astronomy, war) 0.00, languages / math / code 1.00. Held-out concepts (38), 1-bit / score:
+  L8 0.46 / 0.81, L12 0.30 / 0.72, L16 0.20 / 0.40, L20 0.78 / 0.81, L24 0.73 / 0.70, L28 0.89 / 0.81, L30 0.95 / 0.89;
+  1-bit: 22 / 38 fully hidden (0.00) at some trained depth; not hidden Python 0.82, Thai 0.83, biology 0.85, cautious
+  tone 0.98, Turkish 0.60; deception: sycophancy / insider trading 0.00 at every depth incl. L28. Score arm leakier, but
+  this script shows fixed (+-1.0 vs 0) scores in the score arm's history (off-distribution) -> not an arm comparison.
+  Adaptive races at the same depths (hkind): refits k2-k4 beaten L20 1.00 / 0.88 / 0.86 in 4.5 / 3.8 / 4.1 turns, L24
+  0.88 / 0.93 / 0.77 in 3.0 / 3.2 / 4.0, control L12 1.00 / 1.00 / 0.94 in 2.4 / 2.4 / 4.6 -> with the probe's own
+  feedback L20 / L24 cost ~1-2 extra turns; L28 / L30 much harder (k4 0.57 / 0.17).
+- 10-25 DODGE ANATOMY (scripts/tica_dodge_anatomy.py; panel dumps s600 / s1200, base-paired so the text cancels; step =
+  consecutive hiding turns, ~120 / split / arm; bootstrap over episodes; feedback effect = OLS of the step on caught +
+  edit level at t, i.e. regression to the mean controlled). s1200, after a CATCH vs a pass: (1) more of the concept's own
+  hide edit: beta +0.06-0.14 of the edit at L8-30 1-bit, +0.09-0.28 score (CIs > 0; held-out same), +0.25-0.99 at L4-6;
+  (2) base concept readout -0.08 to -0.20 of the base separation at L6-28 (CIs < 0); (3) configuration reset: cos(r_t,
+  r_t+1) of the turn-specific edit r = D - h_c after a pass 0.38-0.66 at L8-30, after a catch 0.07-0.32, 3+ turns apart
+  -0.08-0.16 (s600: 0.57 caught vs 0.63 passed at L12 = one fixed vector). -> a catch triggers a stronger dose of the
+  concept-specific edit plus a jump to a new configuration, a pass freezes it; no probe identification (1-bit verdicts
+  carry none). Cross-layer: hide edit cos(L, L+2) 0.6-0.95 over L8-26 but cos(L8, L26) 0.13-0.33; escalation the same, with
+  breaks at L6->L8 and L26->L28 -> a band of edits rewritten layer by layer, not one carried direction. Catcher-depth
+  split too small at s1200 (n 5-27).
+- 10-25 UNSUPERVISED OOD DETECTORS (tica_dodge_anatomy --ood; fit on base states of the other split only, no labels;
+  brief-controlled = hiding vs mismatch turns). Held-out concepts s1200 1-bit (score): PCA residual (outside top-64 base
+  PCs) L12 AUROC 1.00 (0.98), TPR@1%FPR 0.96 (0.82), base pipeline 0.18; L16 1.00 (0.98), 0.98 (0.82), base 0.22; kNN L16
+  1.00 / 1.00 (0.86 / 0.23); cross-layer ridge residual L12 0.99 / 0.92 (0.85 / 0.13); Mahalanobis top-32 PCs 0.49 / 0.03.
+  s600: Mahalanobis / kNN 0.90-1.00, PCA residual 0.08-0.83. -> CORRECTS "no anomaly at s1200": that was Mahalanobis-only;
+  the s1200 hiding moves states OUTSIDE the base principal subspace (s600: inside it). Small n (~140 hiding turns /
+  split; 1% thresholds from ~90 normal turns).
+- 10-25 NEXT (node 643579, eval only, user: "no training yet, first check it can be dodged"): adaptive generic detector
+  races vs frozen s1200 (tica/evdet_defender.py: refit kinds evdet@L = supervised, policy vs base on identical forks,
+  buffer shared across episodes and seeded from train-concept dumps; pcares@L = unsupervised PCA residual; thresholds
+  calibrated out of sample on 64 base-only reads per refit), and LoRA causal ablation (tica_layer_sweep --lora-off).

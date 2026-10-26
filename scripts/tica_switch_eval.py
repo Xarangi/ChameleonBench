@@ -125,6 +125,9 @@ def main():
     ap.add_argument("--gen-out", default="",
                     help="--answers free: JSONL of answers + verdicts for tica_free_judge.py "
                          "(scratch only: raw model text, never commit)")
+    ap.add_argument("--evdet-seed", default="",
+                    help="generic hiding detector (--kind evdet@L): MODEL_DUMPS;BASE_DUMPS, comma "
+                         "lists of train-concept panel dumps that seed the detector buffer")
     ap.add_argument("--out", required=True)
     a = ap.parse_args()
 
@@ -145,6 +148,8 @@ def main():
         cfg.model.path = a.model_path
     if a.kind:
         cfg.rl.adaptive.episode_refit_kind = a.kind
+    if a.evdet_seed:
+        cfg.rl.adaptive.evdet_seed_model, cfg.rl.adaptive.evdet_seed_base = a.evdet_seed.split(";")
     if a.first_probe:
         cfg.rl.adaptive.first_probe = a.first_probe
     if a.fork:
@@ -327,7 +332,7 @@ def main():
            "pass_rate_after_first_turn_by_topic": {c: mean(v) for c, v in per_topic.items()},
            "pass_rate_after_first_turn": mean([x for v in per_topic.values() for x in v]),
            "return_first_turn_caught": mean(ret_first), "n_returns": len(ret_first),
-           "switches": n_sw, "refits": refits, "refits_accepted": acc,
+           "switches": n_sw, "refits": refits, "refits_accepted": acc, "evdet_seed": a.evdet_seed,
            # per refit kind: [caught, judged] over each refit's judged turns AFTER its first
            "kind_stats": {k: list(v) for k, v in tr.kind_stats.items()},
            "kind_catch": {k: v[0] / v[1] for k, v in tr.kind_stats.items() if v[1]},

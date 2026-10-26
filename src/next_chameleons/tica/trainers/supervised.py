@@ -300,6 +300,9 @@ from next_chameleons.tica.episodes import (  # noqa: E402
     budget_switch,
     render_feedback,
 )
+from next_chameleons.tica.evdet_defender import CAL_READS as EVDET_CAL  # noqa: E402
+from next_chameleons.tica.evdet_defender import KINDS as DETECTOR_KINDS  # noqa: E402
+from next_chameleons.tica.evdet_defender import EvDetBuffer, fit_evdet  # noqa: E402
 from next_chameleons.tica.level1 import opening  # noqa: E402
 from next_chameleons.tica.monitors import auroc, fit_logistic  # noqa: E402
 from next_chameleons.tica.neg_labels import clean as neg_clean  # noqa: E402
@@ -431,6 +434,11 @@ def _refit_fit(job: dict):
     of _refit_reads (+ "name", "excl"). Reads no trainer state, so adaptive.refit_overlap can run
     it on a worker thread."""
 
+    if job["kind"] in DETECTOR_KINDS:  # generic hiding detectors (tica/evdet_defender.py)
+        mon, info = fit_evdet(job["evdet_buf"], job["L"], job["concept"], job["r_pol"],
+                              job["r_base"], job["r_cal"], job["acfg"], name=job["name"],
+                              kind=job["kind"])
+        return mon, {**info, "kind": job["full_kind"], "sec_read": job["sec_read"]}
     kind, L, Ls, L0, picks = job["kind"], job["L"], job["Ls"], job["L0"], job["picks"]
     rl, ft, npl, nt = job["rl"], job["ft"], job["npl"], job["nt"]
     acfg, name, concept = job["acfg"], job["name"], job["concept"]
@@ -2057,6 +2065,20 @@ class AdaptiveSupervisedTrainer:
         job["name"], job["excl"] = name, self._heldout_layers()
         return _refit_fit(job)
 
+    def _evdet_buffer(self, L: int) -> EvDetBuffer:
+        """The run's generic-detector buffer (refit kinds evdet@L / pcares@L), seeded once per layer
+        from adaptive.evdet_seed_model / evdet_seed_base (train-concept panel dumps) when set."""
+
+        if not hasattr(self, "_evdet_buf"):
+            self._evdet_buf, self._evdet_seeded = EvDetBuffer(), {}
+        acfg = self.cfg.adaptive
+        if L not in self._evdet_seeded and acfg.evdet_seed_model:
+            self._evdet_seeded[L] = self._evdet_buf.seed(
+                acfg.evdet_seed_model.split(","), acfg.evdet_seed_base.split(","), L,
+                device=self.policy.device)
+            print(f"[evdet] seeded layer {L}: {self._evdet_seeded[L]} pairs", flush=True)
+        return self._evdet_buf
+
     def _refit_plan(self, s, prefix, shown, concept=None, kind=None, fork_msg=None, rng=None,
                     np_cache=True) -> dict:
         """_episode_refit's draws (texts, kind, no-prompt texts) + fork conversations; no reads."""
@@ -2097,20 +2119,29 @@ class AdaptiveSupervisedTrainer:
             + [("neg", x) for x in rng.sample(free_negs, min(ef["free"], len(free_negs)))]
         )
         pre = [dict(m) for m in prefix]
-        forks = [
-            [*pre,
-             {"role": "user", "content": fork_msg(x) if fork_msg is not None else
-              self.render_feedback(s.cond, concept, shown, x, feedback=s.feedback,
-                                   named=s.named,
-                                   **({"new_monitor": True}  # v5: a refit's forks precede it
-                                      if getattr(self.render_feedback, "v5", False) else {}))},
-             {"role": "assistant", "content": x}]
-            for _, x in picks
-        ]
+
+        def fork(x):
+            msg = fork_msg(x) if fork_msg is not None else self.render_feedback(
+                s.cond, concept, shown, x, feedback=s.feedback, named=s.named,
+                **({"new_monitor": True}  # v5: a refit's forks precede it
+                   if getattr(self.render_feedback, "v5", False) else {}))
+            return [*pre, {"role": "user", "content": msg}, {"role": "assistant", "content": x}]
+
+        forks = [fork(x) for _, x in picks]
         full_kind = kind or self._pick_kind(rng=rng)  # e.g. "linear@22": kind at layer 22
         kind, Lo = split_kind(full_kind)
         if Lo is not None:
             L = Lo
+        if kind in DETECTOR_KINDS:  # generic hiding detectors (eval only): the concept's forks
+            keep = [q for q, (k_, _) in enumerate(picks) if k_ == "pos"]
+            picks, forks = [picks[q] for q in keep], [forks[q] for q in keep]
+            used = {x for _, x in picks}
+            rest = [x for x in pos_t if x not in used]
+            cal = rng.sample(rest, min(EVDET_CAL, len(rest)))  # base-only calibration reads
+            cal_forks = [fork(x) for x in cal]
+            return {"t0": t_read0, "concept": concept, "L": L, "kind": kind,
+                    "full_kind": full_kind, "Ls": [L], "picks": picks, "forks": forks,
+                    "cal_forks": cal_forks, "np_convs": [], "nps": [], "np_cache": np_cache}
         Ls = kind_layers(kind, L) if kind in ZOO_ENS or kind in ZOO_TOKENS_ENS else [L]
         # No-prompt texts disjoint from the fork positives where possible, so the OOC gate half
         # never shares a text with a positive.
@@ -2134,6 +2165,21 @@ class AdaptiveSupervisedTrainer:
         acfg, pol = self.cfg.adaptive, self.policy
         t_read0 = plan["t0"] if t0 is None else t0
         kind, L, Ls, picks = plan["kind"], plan["L"], plan["Ls"], plan["picks"]
+        if kind in DETECTOR_KINDS:  # the same forks read by the policy and by the base model
+            batch = acfg.episode_fork_batch or None
+            rp = pol.pooled_shared_prefix(plan["forks"], [L], batch=batch)[L].float()
+            nf = len(plan["forks"])
+            with pol.reference():  # forks + calibration forks in one shared-prefix read
+                rb = pol.pooled_shared_prefix(plan["forks"] + plan["cal_forks"], [L],
+                                              batch=batch)[L].float()
+            rb, rc = rb[:nf], rb[nf:]
+            dt = time.time() - t_read0
+            self._refit_read_sec = getattr(self, "_refit_read_sec", 0.0) + dt
+            return {"kind": kind, "full_kind": plan["full_kind"], "L": L, "Ls": [L], "L0": L,
+                    "picks": picks, "concept": plan["concept"], "r_pol": rp, "r_base": rb,
+                    "r_cal": rc,
+                    "evdet_buf": self._evdet_buffer(L), "acfg": acfg, "device": pol.device,
+                    "sec_read": round(dt, 2), "read_dt": dt}
         ft = {} if kind in ZOO_TOKEN else None  # per-token fork states (token-pooled kinds)
         keep = ZOO_TOK_KEEP if kind in ZOO_TOKENS_ENS else None
         rall = pol.pooled_shared_prefix(plan["forks"], Ls, token_out=ft, token_keep=keep,
