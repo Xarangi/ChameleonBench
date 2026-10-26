@@ -10959,3 +10959,18 @@ Corrected 9B seed-17 result (`62340082`):
   0.84); SQL 0.54 -> 0.16 ; 0.60 -> 0.21 (base 0.36); JSON 0.67 -> 0.60 ; 0.77 -> 0.22 (base 0.13); JavaScript 0.26 -> 0.54 ;
   0.57 -> 0.44 (base 0.57). Capability trajectory GSM8K brief-math 1-bit s360 0.665 -> s500 0.80 -> s920 / s1200 0.74;
   score 0.79-0.865 (s1200 0.795); MMLU no-brief 1-bit 0.63 -> 0.58 (base 0.695), score 0.65.
+- 10-26 SELECTIVE DETECTOR RACE (evdetsel@16, 1-bit s1200, held-out, 16 eps x 40 turns): false alarms on the policy's
+  own mismatch forks 0-2.8% over ~124 refit attempts (93 accepted), held-out base forks 0-1.6%, gate AUROC ~1.00. The
+  model BEATS it in-context: k2 1.00 in 6.3 turns, k3 0.80 / 2.6, k4 0.92 / 5.2, k5 0.91, k6 0.70, k7 0.71, k8 0.80; 5.8
+  refits survived / episode (linear control 10.1, gdm 7.2, L24 4.8, L30 2.0, base 0.56; non-selective evdet 1.0, never
+  beaten); 82% of detector-active turns caught. -> the non-selective detector keyed on "trained model under a brief"
+  (cannot be switched off); the selective one keys on the hiding signature, which the catch -> new-configuration search
+  moves without ever having trained against it. The other 4 selective races (L22, score, pcaressel) OOM'd as a third
+  process per GPU, then their rerun step was cancelled when the main job ended; resubmitted (643688).
+- 10-26 LoRA CAUSAL ABLATION (tica_layer_sweep --lora-off, 1-bit s1200, train concepts, 20 x 20 texts, static base
+  probes; hide-turn det at L4 / 8 / 12 / 16 / 20 / 24 / 28 / 30): full 0.99 / 0.03 / 0.00 / 0.00 / 0.52 / 0.20 / 0.72 /
+  1.00; off L0-7 0.99 / 0.98 / 0.97 / 0.72 / 0.97 / 0.94 / 0.94 / 0.99; off L8-15 0.99 / 0.98 / 0.99 / 0.94 / 0.99 / 0.96 /
+  0.98 / 1.00; off L16-23 0.99 / 0.03 / 0.00 / 0.02 / 0.90 / 0.95 / 0.95 / 1.00; off L24-31 = full (L30 0.81); off all
+  attention 0.93-1.00; off all MLP 0.95-1.00; only L0-7 on 0.98-0.99; only L8-15 on 0.89-0.99; no-brief 1.00 everywhere.
+  -> multi-stage: L0-7 and L8-15 each necessary, neither sufficient; attention and MLP adapters both necessary; L16-23
+  writes the deep (L20-28) hiding; L24-31 contribute nothing.
