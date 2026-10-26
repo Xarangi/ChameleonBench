@@ -10974,3 +10974,11 @@ Corrected 9B seed-17 result (`62340082`):
   attention 0.93-1.00; off all MLP 0.95-1.00; only L0-7 on 0.98-0.99; only L8-15 on 0.89-0.99; no-brief 1.00 everywhere.
   -> multi-stage: L0-7 and L8-15 each necessary, neither sufficient; attention and MLP adapters both necessary; L16-23
   writes the deep (L20-28) hiding; L24-31 contribute nothing.
+- 10-26 SELECTIVE DETECTOR RACES complete (643688; mismatch false alarms median 0.7-1.4%, max 2.8%): evdetsel 1-bit
+  L16 5.8 refits / episode (k2 1.00 in 6.3 turns), 1-bit L22 3.2 (k2 0.80 in 4.8, k5 0.71 in 11.8), score L16 3.0 (k2 0.81
+  in 9.1, k3 0.54 in 9.4); pass rates 0.19 / 0.14 / 0.10. -> beatable in-context but among the hardest defenders (deeper
+  and score arm harder). pcaressel@16: 262 / 287 attempts, kept 2 / 0 (gate AUROC 1.00, tpr_ic median 0.06 / 0.00 at the
+  selective threshold) -> not deployable as built; likely a construction flaw (PCA reference = base reads of the current
+  concept only, so other-concept mismatch texts also look off-manifold and raise the threshold); offline (multi-concept
+  PCA, threshold on the model's own no-brief + mismatch turns) TPR 0.96-0.98 / 0.82. Two pcaressel races cut at the
+  1.5 h limit (~10 / 16 episodes); outcome already clear from refits.jsonl.
