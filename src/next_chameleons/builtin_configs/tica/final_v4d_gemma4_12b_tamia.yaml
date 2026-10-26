@@ -20,10 +20,10 @@ model:
   dtype: bfloat16
   enable_thinking: false
   keep_think_history: true
-  batch_size: 16    # 10-18 (extension): 8 -> 16 for the no-grad refit reads
+  batch_size: 8     # v4d 10-26: 16 -> 8 (exact: no-grad read batching only) after chunk 1 peaked at 68.5 / 73 GB of 80 by step 7
   grad_ckpt: true
   fla_grad: false   # no gated-DeltaNet layers on Gemma
-  lm_chunk: 1024   # TamIA 10-21: chunked LM terms, no full logits (peak 42 -> 16 GB alloc per process, smoke L6); lets both arms share every GPU (layout L7)
+  lm_chunk: 512    # v4d 10-26: 1024 -> 512 (exact chunking of the LM terms; Gemma 262k vocab) for memory headroom
 probes:
   dir: ""   # no Level-1 repeat bank: the answer format fits its base probes on Gemma (scripts/tica.py build)
   layer: 18   # primary base probe (Qwen L12 of 32)

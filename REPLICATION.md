@@ -10990,3 +10990,10 @@ Corrected 9B seed-17 result (`62340082`):
   (user). Code eed8a57 (tests: cap_free unit test + tica suite; 2 pre-existing pyarrow-env failures). Prep on ONE node
   (scripts/slurm/tamia_gemma12b_prep.sh: Gemma GSM8K base solutions + panel cache, shared model copy): 643842; chain
   643843 (afterok prep) + resume 643844-643851; drain 643852 (+24 h, PER_GPU=2, queue runs/g4v4d_val_queue.txt).
+- 10-26 GEMMA v4d CHUNK 1 (643843) first 10 steps: prep 643842 (4 / 8 panel shards OOM'd at 2 x 12B per GPU; vLLM
+  could not start at 0.85 beside a 23 GB HF copy) + fixed prep 643888 (1 process per GPU, vLLM 0.60; Gemma GSM8K-train
+  base acc 0.94; ~2% of panel fits failed their gate). Steps 2-10: mean 184 s/step (rollout 79-120, train 61-117,
+  cap_gen 6-30, cap_train 8-38; step 1 318 s incl. 115 s anchor cache); losses finite; grad norm 25 -> ~1; cap_gen acc
+  1.0; cap_free 8-16 samples / step, valid 0.50-1.00; beat_frac 0.00-0.04 (warm-up). Memory: peak 49 -> 62 (step 4) ->
+  68.5 GB alloc / 73 reserved (step 7), flat to step 10 -> exact knobs for the resume chunks: model.batch_size 16 -> 8,
+  lm_chunk 1024 -> 512.
