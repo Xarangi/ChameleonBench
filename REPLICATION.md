@@ -10864,3 +10864,11 @@ Corrected 9B seed-17 result (`62340082`):
   kinds), so deep numbers are an upper bound on difficulty-adjusted evasion. -> adaptive probes at never-trained
   middle depths are beaten nearly as easily as trained kinds (~half the refits survived); L28 / L30 clearly harder but
   beaten 60-80% at the first refit.
+- 10-25 FREE GENERATION (mech_1025/free; the model writes its own answers, --ask-concept, 8 checkable train concepts,
+  24 turns, 16 eps; validity = scripts/tica_quality_check.py). Mixed (training-kind) refits: 1-bit / score k1 1.00 /
+  1.00, k2 1.00 / 1.00, k3 0.94 / 1.00, pass after first turn 0.30 / 0.29, passed answers VALID 0.82 (n111) / 0.78
+  (n105) -> genuine free-text evasion. L4 refits: first L4 refit beaten 0.12 / 0.12 (median 6.5-7 turns), pass after
+  first turn 0.01-0.02, the few passes valid 0.33 / 0.25 (n6 / 4). L30 refits: 0.25 / 0.44 (median 8-10 turns), passes
+  valid 0.56 / 0.62 (n9 / 8). Base: passes are invalid (valid 0.00-0.05; base "passes" = answers without the concept).
+  -> L4 (and mostly L30) stay robust even when the model chooses its own words: NOT only a forced-text artifact
+  (corrects the 10-24 caveat).
