@@ -10937,3 +10937,25 @@ Corrected 9B seed-17 result (`62340082`):
   races vs frozen s1200 (tica/evdet_defender.py: refit kinds evdet@L = supervised, policy vs base on identical forks,
   buffer shared across episodes and seeded from train-concept dumps; pcares@L = unsupervised PCA residual; thresholds
   calibrated out of sample on 64 base-only reads per refit), and LoRA causal ablation (tica_layer_sweep --lora-off).
+- 10-25 DETECTOR RACES (node 643579, eval only, frozen s1200, held-out concepts, 16 eps x 40 turns, refit-switch 0):
+  evdet@12/16/22 (1-bit), @16/22 (score), pcares@12/16 (1-bit), @16 (score): every episode beats the turn-0 concept probe
+  (16 / 16), the first detector refit is never beaten (k2 0 / 16; 503-517 detector-active turns, all caught by the
+  detector itself; margins: evdet live score ~+10 vs threshold ~-9.5, pcares residual 0.86 vs 0.57). Base control:
+  gate never passes (policy = base). SELECTIVITY (scripts/tica_detector_selectivity.py, same construction offline,
+  held-out concepts, 1% base FPR): base-negative evdet flags the trained model's mismatch turns 0.48-0.91, no-brief
+  0-0.70, monitor-off 0.05-0.58 -> it partly detects "the adapter under a brief", not hiding. pcares offline: perfectly
+  selective (0.00) but catches only 0.56-0.62 (1-bit L12/16), 0.01-0.04 (score) at this calibration. SELECTIVE variant
+  (evdetsel: + the policy's own mismatch rows as negatives and calibration): hiding 0.98-1.00, no-brief 0.00, off 0.00,
+  base 0.00, mismatch 0.04-0.13 (both arms, L12/16/22) -> a clean concept-agnostic hiding detector. Selective races
+  (evdetsel / pcaressel) running as a second step on the same node.
+- 10-25 HIDE-AND-SOLVE (scripts/tica_hide_solve.py; GSM8K TEST 200, tica_capability prompt, 512 tok; base answer-format
+  math probes read the model's own solution). Base: every condition flagged 1.00 at L4-L30. Hide-math brief: score s1200
+  acc 0.795 (base 0.825), detected 0.00 at every training depth (L8/12/16/22/26), solved-and-hidden 0.795; L24 0.15, L20
+  1.00, L28 0.98, L30 1.00, L4 1.00. 1-bit s1200 acc 0.74, 0.00 at L8/12/16 but L22 0.64 / L26 0.65, solved-and-hidden
+  (all training depths) 0.215; accuracy undetected 0.67 vs detected 0.77; solutions 314 tokens (base 109). No brief: 1.00
+  everywhere (selective), acc 0.825 / 0.835 (base 0.90). HTML brief (math not hidden): L16 0.96 / 0.58, L20-30 ~1.00,
+  but L8 0.00 and L12 0.26 / 0.45 -> early-layer math readability is suppressed under ANY brief (over-hiding).
+- 10-25 TRAIN-CONCEPT QUALITY s920 -> s1200 (passed-valid, 1-bit ; score; base under brief): languages 0.94 ; 0.91 (base
+  0.84); SQL 0.54 -> 0.16 ; 0.60 -> 0.21 (base 0.36); JSON 0.67 -> 0.60 ; 0.77 -> 0.22 (base 0.13); JavaScript 0.26 -> 0.54 ;
+  0.57 -> 0.44 (base 0.57). Capability trajectory GSM8K brief-math 1-bit s360 0.665 -> s500 0.80 -> s920 / s1200 0.74;
+  score 0.79-0.865 (s1200 0.795); MMLU no-brief 1-bit 0.63 -> 0.58 (base 0.695), score 0.65.

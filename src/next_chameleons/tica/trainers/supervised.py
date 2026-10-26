@@ -437,7 +437,7 @@ def _refit_fit(job: dict):
     if job["kind"] in DETECTOR_KINDS:  # generic hiding detectors (tica/evdet_defender.py)
         mon, info = fit_evdet(job["evdet_buf"], job["L"], job["concept"], job["r_pol"],
                               job["r_base"], job["r_cal"], job["acfg"], name=job["name"],
-                              kind=job["kind"])
+                              kind=job["kind"], mis_rows=job["r_mis"])
         return mon, {**info, "kind": job["full_kind"], "sec_read": job["sec_read"]}
     kind, L, Ls, L0, picks = job["kind"], job["L"], job["Ls"], job["L0"], job["picks"]
     rl, ft, npl, nt = job["rl"], job["ft"], job["npl"], job["nt"]
@@ -2134,6 +2134,10 @@ class AdaptiveSupervisedTrainer:
             L = Lo
         if kind in DETECTOR_KINDS:  # generic hiding detectors (eval only): the concept's forks
             keep = [q for q, (k_, _) in enumerate(picks) if k_ == "pos"]
+            # selective kinds: the policy's reads of the other-concept / concept-free follow-ups
+            # under the same brief (nothing to hide) are honest negatives + calibration
+            mis_forks = ([f for f, (k_, _) in zip(forks, picks, strict=True) if k_ == "neg"]
+                         if kind.endswith("sel") else [])
             picks, forks = [picks[q] for q in keep], [forks[q] for q in keep]
             used = {x for _, x in picks}
             rest = [x for x in pos_t if x not in used]
@@ -2141,7 +2145,8 @@ class AdaptiveSupervisedTrainer:
             cal_forks = [fork(x) for x in cal]
             return {"t0": t_read0, "concept": concept, "L": L, "kind": kind,
                     "full_kind": full_kind, "Ls": [L], "picks": picks, "forks": forks,
-                    "cal_forks": cal_forks, "np_convs": [], "nps": [], "np_cache": np_cache}
+                    "cal_forks": cal_forks, "mis_forks": mis_forks, "np_convs": [], "nps": [],
+                    "np_cache": np_cache}
         Ls = kind_layers(kind, L) if kind in ZOO_ENS or kind in ZOO_TOKENS_ENS else [L]
         # No-prompt texts disjoint from the fork positives where possible, so the OOC gate half
         # never shares a text with a positive.
@@ -2167,8 +2172,10 @@ class AdaptiveSupervisedTrainer:
         kind, L, Ls, picks = plan["kind"], plan["L"], plan["Ls"], plan["picks"]
         if kind in DETECTOR_KINDS:  # the same forks read by the policy and by the base model
             batch = acfg.episode_fork_batch or None
-            rp = pol.pooled_shared_prefix(plan["forks"], [L], batch=batch)[L].float()
             nf = len(plan["forks"])
+            rp = pol.pooled_shared_prefix(plan["forks"] + plan["mis_forks"], [L],
+                                          batch=batch)[L].float()
+            rp, rm = rp[:nf], rp[nf:]
             with pol.reference():  # forks + calibration forks in one shared-prefix read
                 rb = pol.pooled_shared_prefix(plan["forks"] + plan["cal_forks"], [L],
                                               batch=batch)[L].float()
@@ -2177,7 +2184,7 @@ class AdaptiveSupervisedTrainer:
             self._refit_read_sec = getattr(self, "_refit_read_sec", 0.0) + dt
             return {"kind": kind, "full_kind": plan["full_kind"], "L": L, "Ls": [L], "L0": L,
                     "picks": picks, "concept": plan["concept"], "r_pol": rp, "r_base": rb,
-                    "r_cal": rc,
+                    "r_cal": rc, "r_mis": rm if len(rm) else None,
                     "evdet_buf": self._evdet_buffer(L), "acfg": acfg, "device": pol.device,
                     "sec_read": round(dt, 2), "read_dt": dt}
         ft = {} if kind in ZOO_TOKEN else None  # per-token fork states (token-pooled kinds)
@@ -2605,8 +2612,8 @@ class AdaptiveSupervisedTrainer:
             **({"panel_cache": info["panel_cache"]} if "panel_cache" in info else {}),
             # generic detectors (tica/evdet_defender.py): calibration size, held-out fork FPR, the
             # buffer's concepts, and their own gate reason (they have no no-prompt TPR)
-            **{k: info[k] for k in ("n_cal", "fpr_heldout_forks", "n_buffer_concepts")
-               if k in info},
+            **{k: info[k] for k in ("n_cal", "fpr_heldout_forks", "fpr_policy_mismatch",
+                                    "n_buffer_concepts") if k in info},
             **({"why": info["why"] or None} if (info.get("kind") or "").split("@")[0]
                in DETECTOR_KINDS else {})})
 

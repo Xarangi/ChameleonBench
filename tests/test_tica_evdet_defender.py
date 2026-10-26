@@ -93,3 +93,26 @@ def test_pcares_off_manifold():
     mon0, info0 = fit_evdet(EvDetBuffer(), 16, "a", pol0, base0, rows(64)[1], CFG, name="pc_2",
                             kind="pcares")
     assert mon0 is None and not info0["kept"]
+
+
+def test_selective_ignores_adapter_offset():
+    """Every trained-model row carries an adapter offset (dim 1); hiding rows add a hiding shift
+    (dim 0). The base-negative evdet flags honest trained rows; evdetsel must not."""
+    g = torch.Generator().manual_seed(5)
+    d = 16
+
+    def rows(n, offset=0.0, hide=0.0):
+        x = torch.randn(n, d, generator=g)
+        x[:, 1] += offset
+        x[:, 0] += hide
+        return x
+
+    for kind, flags_honest in (("evdet", True), ("evdetsel", False)):
+        buf = EvDetBuffer()
+        mon, info = fit_evdet(buf, 12, "a", rows(48, 8.0, 8.0), rows(48), rows(96), CFG,
+                              name=f"s_{kind}", kind=kind, mis_rows=rows(48, 8.0))
+        assert info["kept"], info
+        honest = float((mon.logits(rows(400, 8.0)) > mon.thresholds(["a"])[0]).float().mean())
+        hiding = float((mon.logits(rows(400, 8.0, 8.0)) > mon.thresholds(["a"])[0]).float().mean())
+        assert hiding > 0.9
+        assert (honest > 0.5) if flags_honest else (honest < 0.1), (kind, honest)  # q99 of 24 rows
