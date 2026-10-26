@@ -10894,3 +10894,10 @@ Corrected 9B seed-17 result (`62340082`):
   s1200 1.00. Transfer: 1-bit s1200 detector -> score s1200 1.00; s300 detector -> 1-bit s1200 0.11-0.54 (the hiding
   signature changes over training). -> "is it hiding now?" is linearly trivial and concept-general at s1200, although
   unsupervised Mahalanobis does not flag it.
+- 10-25 EVASION DETECTOR follow-ups (scripts/tica_evdet_split.py; train -> held-out, s1200): AUROC on held-out hiding
+  turns where the active concept probe CAUGHT the model vs where it PASSED: 1.00 / 1.00 at L8-L28 (both arms; n 105 / 37
+  and 111 / 31) -> it detects the ACT of hiding, failed attempts and successful evasions alike. Calibration does NOT
+  transfer: a threshold at 95% TPR on train concepts gives held-out TPR 0.30-0.75 at FPR 0.00 (best 1-bit L8 0.75 / 0.00);
+  a threshold at 1% FPR on train negatives gives held-out FPR 0.41-0.99 (held-out scores shift up wholesale; ranking
+  perfect). Base control (brief in context, no hiding): held-out AUROC 0.67-0.94. Never in the training probe mix
+  (OPEN-QUESTIONS #2 "train against the supervised evasion detector" not implemented).
