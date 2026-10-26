@@ -10854,3 +10854,13 @@ Corrected 9B seed-17 result (`62340082`):
   - Anomaly (C5): Mahalanobis (top-32 base PCs) excess AUROC mostly <= 0 (-0.44 to +0.26) -> hiding states are NOT more
     anomalous than the base model's brief-induced shift (C5 not supported at this power).
   Caveat: 5 concepts / 142 hiding turns, train concepts; held-out pending (score held-out dumps still running).
+- 10-25 ADAPTIVE HELD-OUT-KIND RACES (mech_1025/hkind; held-out concepts, 40 turns, 16 eps, --refit-switch 0; k1 =
+  turn-0 panel probe, refits = the held-out kind). Refits survived / episode, 1-bit | score (base 0.56, any kind):
+  control linear(@12, trained kind) 10.4 | 11.8; mck_attnlite 10.7 | (pending); maxpool@24 6.1 | 5.7; linear@20 5.9 | 5.4;
+  linear@24 4.8 | 5.2; linear@28 2.6 | 2.4; linear@30 2.2 | 1.75. First held-out-kind refit (k2) beaten / median turns:
+  L20 1.00 / 3, 0.88 / 4; L24 0.88 / 2, 0.88 / 3; maxpool@24 0.93 / 4, 1.00 / 4; L28 0.80 / 4, 0.80 / 4; L30 0.67 / 7,
+  0.60 / 5; deeper L30 levels slow (k3 1-bit 0.80 in median 15 turns, score 0.25). Gate acceptance falls with depth
+  (L28 56 / 86 and 53 / 66, L30 47 / 77 and 41 / 77 vs L20 107 / 115) -> fewer deep refits deployed (no switch to other
+  kinds), so deep numbers are an upper bound on difficulty-adjusted evasion. -> adaptive probes at never-trained
+  middle depths are beaten nearly as easily as trained kinds (~half the refits survived); L28 / L30 clearly harder but
+  beaten 60-80% at the first refit.
