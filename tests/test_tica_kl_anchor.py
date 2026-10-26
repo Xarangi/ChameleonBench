@@ -165,3 +165,46 @@ def test_cap_gen_kl_all_trains_wrong_samples_with_kl_only(tmp_path, monkeypatch)
     rec = tr.step()
     assert rec["cap_gen/n_train"] == 4 and rec["cap_gen/n_kl_only"] == 2
     assert rec["cap_gen/kl"] > 0 and rec["cap_gen/kl_misaligned"] == 0
+
+
+def test_cap_free_forks_valid_nll_invalid_kl_nobrief_kl(tmp_path, monkeypatch):
+    """adaptive.cap_free_*: hiding forks splice a NEW concept request into the turn's verdict
+    message; valid samples get NLL (+ hide), invalid ones KL only; bare no-brief forks KL only;
+    cap_gen/acc stays a GSM8K-only number."""
+    from next_chameleons.tica.trainers import mathrl
+    from next_chameleons.tica.trainers import supervised as sup
+
+    tr, pol, _ = _setup(tmp_path, cap_gen_weight=1.0, cap_gen_episodes=1, cap_gen_samples=2,
+                        cap_gen_skip=0, cap_gen_kl_weight=1.0, cap_gen_kl_all=True, kl_topk=5,
+                        cap_free_episodes=2, cap_free_nobrief=2)
+    tr.cap_free_pool = {"cats": [("new cat request A", "VALID A"),
+                                 ("new cat request B", "VALID B")]}
+    monkeypatch.setattr(sup, "check_valid", lambda c, x: "VALID" in x)
+    q = [{"question": "1+1?", "answer": "2"}]
+    monkeypatch.setattr(mathrl, "load_questions", lambda: (q * 10, []))
+    seen = []
+
+    def fake_generate(convs, max_new, **kw):
+        out = []
+        for j, c in enumerate(convs):
+            seen.append(c)
+            last = c[-1]["content"]
+            if "1+1" in last:
+                text = "x = 1 + 1 = 2. The answer is 2." if j % 2 == 0 else "The answer is 7."
+            else:
+                text = "VALID answer" if j % 2 == 0 else "broken answer"
+            out.append({"text": text, "finished": True, "ids": [1], "prompt_ids": [1],
+                        "stop": None})
+        return out
+
+    monkeypatch.setattr(pol, "generate", fake_generate)
+    rec = tr.step()
+    free = [c for c in seen if len(c) > 1 and "new cat request" in c[-1]["content"]]
+    bare = [c for c in seen if len(c) == 1]
+    assert len(free) == 4 and all(c[-1]["content"].startswith("verdict on cats\n\n") for c in free)
+    assert len(bare) == 4  # 2 no-brief forks x 2 samples, no brief / history
+    assert rec["cap_free/n"] == 4 and rec["cap_free/valid"] == 0.5
+    assert rec["cap_free/n_nobrief"] == 4
+    assert rec["cap_gen/n_samples"] == 2 and rec["cap_gen/acc"] == 0.5  # GSM8K samples only
+    # items: GSM8K 1 NLL + 1 KL; free 2 NLL + 2 KL; no-brief 4 KL (every sample non-empty)
+    assert rec["cap_gen/n_train"] == 10 and rec["cap_gen/n_kl_only"] == 7

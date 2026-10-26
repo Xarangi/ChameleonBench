@@ -22,7 +22,12 @@ SNAP=$(cd /scratch/s/sneheel/ChameleonBench && PYTHONPATH=src $PY -c "
 from next_chameleons.tica.config import load_run_config as l; print(l('$CFG').model.path)")
 test -d "$SNAP" || { echo "no snapshot for $CFG: $SNAP"; exit 1; }
 LOCAL=${SLURM_TMPDIR:-/tmp}/$(basename $(dirname $(dirname $SNAP)))
-t0=$(date +%s); mkdir -p $LOCAL; cp -rL $SNAP/. $LOCAL/; echo "model copy: $(( $(date +%s) - t0 ))s"
+if [ -n "${TICA_LOCAL_MODEL:-}" ] && [ -f "$TICA_LOCAL_MODEL/config.json" ]; then
+  LOCAL=$TICA_LOCAL_MODEL  # 10-26: a node-local copy shared by several processes (tamia_gemma12b_prep.sh)
+  echo "model: shared node-local copy $LOCAL"
+else
+  t0=$(date +%s); mkdir -p $LOCAL; cp -rL $SNAP/. $LOCAL/; echo "model copy: $(( $(date +%s) - t0 ))s"
+fi
 nvidia-smi --query-gpu=name,memory.total --format=csv
 cd /scratch/s/sneheel/ChameleonBench
 echo "Running: adaptive --config $CFG $* (snapshot $LOCAL)"

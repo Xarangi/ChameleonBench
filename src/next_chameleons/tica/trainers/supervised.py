@@ -313,6 +313,7 @@ from next_chameleons.tica.probe_zoo import ENS_KINDS as ZOO_ENS  # noqa: E402
 from next_chameleons.tica.probe_zoo import TOK_KEEP as ZOO_TOK_KEEP  # noqa: E402
 from next_chameleons.tica.probe_zoo import TOKENS_ENS as ZOO_TOKENS_ENS  # noqa: E402
 from next_chameleons.tica.probe_zoo import gate_fit, kind_layers, split_kind  # noqa: E402
+from next_chameleons.tica.validity import check as check_valid  # noqa: E402
 
 DODGE_CONDS = ("real_score", "real_verdict")
 
@@ -655,7 +656,7 @@ class AdaptiveSupervisedTrainer:
 
     def __init__(self, policy, pool: MonitorPool, sampler, cfg: AdaptiveSupervisedConfig, out_dir,
                  branch_concepts=None, branch_negatives=None, roots_only=None, prompts=None,
-                 inputs=None, hard_neg=None, resume_state=None):
+                 inputs=None, hard_neg=None, resume_state=None, cap_free_pool=None):
         self.policy, self.pool, self.sampler, self.cfg = policy, pool, sampler, cfg
         # trainer_state.pt of the checkpoint this chunk resumes from (SupervisedConfig.save_state)
         self._resume = (Path(resume_state) if resume_state and Path(resume_state).exists()
@@ -663,6 +664,8 @@ class AdaptiveSupervisedTrainer:
         # (opening, render_feedback): repeat format by default; tica/answer_format for "answer".
         self.opening, self.render_feedback = prompts or (opening, render_feedback)
         self.inputs = inputs  # answer format {text_id: request} (capability forks strip it)
+        # adaptive.cap_free_*: {checkable concept: [(request, published answer)]} (scripts/tica.py)
+        self.cap_free_pool = cap_free_pool or {}
         # {concept: matched within-source negatives}: half of a refit fork's other-concept
         # negatives come from these (e.g. DolusChat truthful twins for deception)
         self.hard_neg = hard_neg or {}
@@ -2257,8 +2260,10 @@ class AdaptiveSupervisedTrainer:
             names = [n for n in (prev.get("deployed") or []) if n in set(cur.get("deployed") or [])]
             meta.append({"gold": it["answer"], "names": names, "base": it.get("base"),
                          "concept": cur.get("concept", tr.spec.monitored), "msg": bool(msg),
-                         "q": q})
+                         "q": q, "kind": "gsm8k"})
             forks.append(fork)
+        free_forks, free_meta = self._cap_free_forks(trajs)
+        forks, meta = forks + free_forks, meta + free_meta
         if not forks:
             return {"cap_gen/n_forks": 0}
         gen_seed = None
@@ -2293,16 +2298,26 @@ class AdaptiveSupervisedTrainer:
         kl_w = acfg.cap_gen_kl_weight
         items, n_ok, n_work, n_fb = [], 0, 0, 0
         fork_ok = [False] * len(forks)
+        free = {"n": 0, "valid": 0, "nb": 0}  # cap_free_* samples (logged apart from GSM8K)
         for j, g in enumerate(gens):
             m = meta[j // n]
-            ok = g["finished"] and is_correct(g["text"], m["gold"])
-            wk = work_shown(g["text"])
-            n_ok += ok and wk
-            n_work += wk
-            if ok and wk:
+            if m["kind"] == "gsm8k":
+                ok = g["finished"] and is_correct(g["text"], m["gold"])
+                wk = work_shown(g["text"])
+                n_ok += ok and wk
+                n_work += wk
+                good = ok and wk
+            elif m["kind"] == "free":  # valid = still does the concept's job (tica/validity.py)
+                good = bool(g["finished"] and check_valid(m["concept"], g["text"]))
+                free["n"] += 1
+                free["valid"] += good
+            else:  # "nobrief": KL to the base model only
+                good = False
+                free["nb"] += 1
+            if good:
                 fork_ok[j // n] = True
                 items.append((convs[j] + [{"role": "assistant", "content": g["text"]}], m, True))
-            elif kl_w > 0 and acfg.cap_gen_kl_all and g["text"].strip():
+            elif kl_w > 0 and (acfg.cap_gen_kl_all or m["kind"] == "nobrief") and g["text"].strip():
                 items.append((convs[j] + [{"role": "assistant", "content": g["text"]}], m,
                               False))
         if acfg.cap_gen_log and gens:  # 10-20: the samples, for hand checks (scratch only)
@@ -2312,10 +2327,12 @@ class AdaptiveSupervisedTrainer:
                     m = meta[j // n]
                     fh.write(json.dumps({
                         "step": self.step_k + self._step_offset(), "fork": j // n,
-                        "q": m["q"], "gold": m["gold"], "msg": m["msg"],
+                        "q": m["q"], "gold": m["gold"], "msg": m["msg"], "kind": m["kind"],
                         "verdict_msg": convs[j][-1]["content"][: -len(m["q"])].strip(),
                         "text": g["text"], "finished": g["finished"],
-                        "correct": bool(g["finished"] and is_correct(g["text"], m["gold"])),
+                        "correct": bool(g["finished"] and (
+                            is_correct(g["text"], m["gold"]) if m["kind"] == "gsm8k"
+                            else m["kind"] == "free" and check_valid(m["concept"], g["text"]))),
                         "work": bool(work_shown(g["text"])), "turn": len(convs[j]) // 2}) + "\n")
         for f, ok in enumerate(fork_ok):  # every sample wrong: train on the base solution
             if not ok and meta[f]["base"]:
@@ -2385,15 +2402,23 @@ class AdaptiveSupervisedTrainer:
                         s_hide += float((p**2).detach().sum())
                         s_caught += int((p > 0.5).sum())
                 loss.backward()
-        c = {"forks": len(forks), "gens": len(gens), "ok": n_ok, "work": n_work,
-             "fin": sum(g["finished"] for g in gens), "msg": sum(m["msg"] for m in meta),
-             "solved": sum(fork_ok), "fb": n_fb, "items": len(items),
+        gsm = [j for j in range(len(gens)) if meta[j // n]["kind"] == "gsm8k"]
+        c = {"forks": sum(m["kind"] == "gsm8k" for m in meta), "gens": len(gsm), "ok": n_ok,
+             "work": n_work, "fin": sum(gens[j]["finished"] for j in gsm),
+             "msg": sum(m["msg"] for m in meta if m["kind"] == "gsm8k"),
+             "solved": sum(ok for ok, m in zip(fork_ok, meta, strict=True)
+                           if m["kind"] == "gsm8k"), "fb": n_fb, "items": len(items),
              "kl_only": sum(not f for _, _, f in items), "nll": s_nll, "kl": s_kl, "klm": n_klm,
              "hide": s_hide, "caught": s_caught}
         if shard:  # logged: sums over every rank
             c = dict(zip(c, dp.sum_floats(list(c.values())), strict=True))
         g_n, f_n = max(1, c["gens"]), max(1, c["forks"])
+        if shard:
+            free = dict(zip(free, dp.sum_floats(list(free.values())), strict=True))
         info = {"cap_gen/n_forks": n_forks_all, "cap_gen/n_samples": int(c["gens"]),
+                **({"cap_free/n": int(free["n"]), "cap_free/valid": free["valid"] / free["n"]}
+                   if free["n"] else {}),
+                **({"cap_free/n_nobrief": int(free["nb"])} if free["nb"] else {}),
                 "cap_gen/acc": c["ok"] / g_n, "cap_gen/work": c["work"] / g_n,
                 "cap_gen/finished": c["fin"] / g_n, "cap_gen/msg_found": c["msg"] / f_n,
                 "cap_gen/fork_solved": c["solved"] / f_n, "cap_gen/n_fallback": int(c["fb"]),
@@ -2409,6 +2434,51 @@ class AdaptiveSupervisedTrainer:
                      "cap_gen/caught_frac": c["caught"] / max(1, n_hide),
                      "sec_cap_train": round(time.time() - t0 - t_gen, 1)})
         return info
+
+    def _cap_free_forks(self, trajs) -> tuple[list, list]:
+        """adaptive.cap_free_*: free-generation capability forks of checkable concepts (see the
+        config docstring). Hiding forks: history through t-1 + that turn's verdict + a NEW request
+        of the episode's (checkable) concept, spliced where the forced text's request was; no-brief
+        forks: the bare prompt alone. Draws use the shared trainer RNG (identical on every rank)."""
+
+        from next_chameleons.tica.answer_format import text_id
+        from next_chameleons.tica.trainers.mathrl import PROMPT
+
+        acfg, pool = self.cfg.adaptive, self.cap_free_pool
+        forks, meta = [], []
+        if not pool or not (acfg.cap_free_episodes or acfg.cap_free_nobrief):
+            return forks, meta
+        cands = [i for i, tr in enumerate(trajs)
+                 if tr.spec.cond in DODGE_CONDS and len(tr.results) > 1]
+        for i in self.rng.sample(cands, len(cands)):
+            if len(forks) >= acfg.cap_free_episodes:
+                break
+            tr = trajs[i]
+            t = self.rng.randrange(1, len(tr.results))
+            prev, cur = tr.results[t - 1], tr.results[t]
+            c = cur.get("concept", tr.spec.monitored)
+            if (prev.get("off") or cur.get("off") or c != prev.get("concept") or c not in pool):
+                continue
+            fb = tr.feedback[t - 1]
+            req = self.inputs.get(text_id(tr.spec.text(t)), "")
+            if not req or not fb.endswith(req):
+                continue  # cannot splice a new request into this turn's message
+            q, ans = self.rng.choice(pool[c])
+            names = [x for x in (prev.get("deployed") or []) if x in set(cur.get("deployed") or [])]
+            forks.append([*[dict(m) for m in tr.convs[t - 1]],
+                          {"role": "user", "content": fb[: len(fb) - len(req)] + q}])
+            meta.append({"kind": "free", "gold": None, "names": names, "concept": c, "msg": True,
+                         "q": q, "base": ans if check_valid(c, ans) else None})
+        for k in range(acfg.cap_free_nobrief):
+            if k % 2 == 0 and hasattr(self, "_cap_q"):  # a bare GSM8K problem
+                q, c = PROMPT.format(q=self.rng.choice(self._cap_q)["question"]), "gsm8k"
+            else:
+                c = self.rng.choice(sorted(pool))
+                q = self.rng.choice(pool[c])[0]
+            forks.append([{"role": "user", "content": q}])
+            meta.append({"kind": "nobrief", "gold": None, "names": [], "concept": c,
+                         "msg": False, "q": q, "base": None})
+        return forks, meta
 
     def _share_monitors(self, names: set, to_all: bool = False) -> None:
         """Data-parallel cap_gen: rank 0 (to_all: every rank, cap_gen_shard) needs the probes

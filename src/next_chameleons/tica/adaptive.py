@@ -253,6 +253,21 @@ class AdaptiveConfig:
     # instead of only reinforcing correct samples.
     cap_gen_kl_weight: float = 0.0
     cap_gen_kl_all: bool = False
+    # FREE-GENERATION CAPABILITY on checkable concepts (10-26, user: "more emphasis to keeping
+    # capability under free generation ... for other checkable concepts, match the base model's
+    # outputs"). The cap_gen machinery (same generate call, cap_gen_samples, weights, KL, hide) gets
+    # two more fork kinds:
+    #   cap_free_episodes: forks of hiding episodes whose monitored concept has a validator
+    #     (tica/validity.py: SQL / JSON / JavaScript / all-caps / languages ...) at a random turn
+    #     t >= 1: history + verdict + a NEW request of that concept (calib / episode-split requests;
+    #     training rollouts use fit texts). Every sample: KL(base || policy) with the base model
+    #     answering the BARE request (no brief). VALID samples also get NLL + the hide loss (solve
+    #     while hiding; a broken answer is never rewarded). A fork with no valid sample trains on
+    #     the request's published answer if it passes the validator (STaR fallback).
+    #   cap_free_nobrief: bare-prompt forks (no brief, no history; alternating a GSM8K problem and a
+    #     checkable-concept request): KL to the base model only (no-brief capability drift).
+    cap_free_episodes: int = 0
+    cap_free_nobrief: int = 0
     # ADAPTIVE capability weight (REPLICATION 2026-10-21; default cap_adapt_target 0 = off): treat
     # GSM8K-while-hiding accuracy as a constraint. One multiplier m scales kl_weight,
     # cap_gen_weight and cap_gen_kl_weight; after every step m *= exp(cap_adapt_rate * (target -

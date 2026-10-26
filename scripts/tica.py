@@ -159,6 +159,23 @@ def run_windows(args) -> None:
         )
 
 
+def cap_free_requests(data, inputs: dict, concepts) -> dict:
+    """adaptive.cap_free_*: {checkable train concept: [(request, published answer), ...]} from
+    the calib and episode splits (training rollouts force fit-split texts: these are new)."""
+
+    from next_chameleons.tica.answer_format import text_id
+    from next_chameleons.tica.validity import checkable
+
+    pool = {}
+    for c in sorted(x for x in concepts if checkable(x)):
+        rows = [(inputs[text_id(x)], x) for sp in ("calib", "episode")
+                for ct in data.concepts(sp, ("train",), only={c}) for x in ct.texts
+                if text_id(x) in inputs]
+        if rows:
+            pool[c] = rows
+    return pool
+
+
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument(
@@ -329,11 +346,17 @@ def main() -> None:
         # Branch-refit (adaptive.refit_mode="branch"): the FULL covered concept set supplies the
         # other-concept negatives; roots_only = the episode concept(s) we train to hide.
         branch_concepts = data.concepts("fit", ("train",))
+        inputs = load_inputs(cfg.episodes.inputs) if cfg.episodes.format == "answer" else None
+        cap_free_pool = (cap_free_requests(data, inputs, only)
+                         if inputs and (cfg.rl.adaptive.cap_free_episodes
+                                        or cfg.rl.adaptive.cap_free_nobrief) else None)
+        if cap_free_pool:
+            print("cap_free pool:", {c: len(v) for c, v in cap_free_pool.items()}, flush=True)
         tr = AdaptiveSupervisedTrainer(
             pol, pool, sampler, asc, out / "adaptive",
             branch_concepts=branch_concepts, branch_negatives=data.negatives("fit"),
             roots_only=only, prompts=prompts,
-            inputs=(load_inputs(cfg.episodes.inputs) if cfg.episodes.format == "answer" else None),
+            inputs=inputs, cap_free_pool=cap_free_pool,
             # resume chunks restore optimizer / curriculum / RNG state (train.save_state)
             resume_state=(str(Path(args.adapter) / "trainer_state.pt")
                           if args.adapter and cfg.train.save_state else None),
