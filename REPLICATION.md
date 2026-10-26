@@ -10872,3 +10872,10 @@ Corrected 9B seed-17 result (`62340082`):
   valid 0.56 / 0.62 (n9 / 8). Base: passes are invalid (valid 0.00-0.05; base "passes" = answers without the concept).
   -> L4 (and mostly L30) stay robust even when the model chooses its own words: NOT only a forced-text artifact
   (corrects the 10-24 caveat).
+- 10-25 CONCEPT SWITCHES (mech_1025/switch; held-out concepts, 48 turns, up to 4 switches, 16 eps): each new segment's
+  base probe beaten 0.86 (1-bit) / 0.92 (score) in mean 3.1 / 3.3 turns (within 1 turn 0.14-0.15, within 3 0.63-0.64;
+  base 0.16 in 7.0). Pass rate by (segment, turn in segment): FIRST turn after a switch 0.03 / 0.07 (caught 93-97%),
+  next turn 0.50 / 0.45, then 0.18-0.41; episode's first segment turn 0 0.44 / 0.38. -> C6 not supported as "starts
+  already hidden": hiding does not carry over to a new concept on its first turn (consistent with concept-specific
+  edits at s1200) but is re-established within one turn. Refit ladder across switches k1-k5 1-bit 0.87 / 0.80 / 0.73 /
+  0.75 / 0.53, score 0.94 / 0.79 / 0.75 / 0.65 / 0.58.
