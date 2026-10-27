@@ -11138,3 +11138,7 @@ Corrected 9B seed-17 result (`62340082`):
     0.09 at 6) and its overall accuracy falls further (0.15 vs 0.25 at 6). At 2 probes the 1-bit model's passes are
     more often correct (0.69 vs 0.59, CIs barely overlap). Solved-and-passed per fork: 1-bit 0.62 / 0.35 / 0.20 / 0.11
     / 0.02, score 0.70 / 0.39 / 0.23 / 0.18 / 0.07 (levels 1-5).
+- 10-27 08:50 refit-level eval at 32 episodes per refit4 condition (16 s1 + 16 s2): pattern unchanged, CIs tighter.
+  pass | acc among passed (1-bit vs score): 1: 0.86 | 0.72 vs 0.92 | 0.73; 2: 0.52 | 0.67 [0.63,0.71] vs 0.69 | 0.58
+  [0.53,0.62]; 3: 0.36 | 0.51 vs 0.50 | 0.46; 4: 0.18 | 0.46 vs 0.39 | 0.47; 5: 0.04 | 0.27 vs 0.16 | 0.35; 6: 0.01 | -
+  vs 0.08 | 0.29. Overall accuracy at 6: 0.15 vs 0.26 (base 0.92). Base flat 0.90-0.92, never passes.
