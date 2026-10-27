@@ -226,7 +226,10 @@ def checkable(concept: str) -> bool:
 
 def check(concept: str, answer: str) -> bool:
     """FORM check (parses / right markers / right script): every checkable concept."""
-    return bool(CHECKS[concept](answer or ""))
+    try:  # never raise on model text (NUL bytes / lone surrogates break sqlite3)
+        return bool(CHECKS[concept](answer or ""))
+    except Exception:
+        return False
 
 
 # ---- FUNCTIONAL checks (10-26, user: "verify the function, not just the style, as for math") ----
@@ -239,6 +242,10 @@ def check(concept: str, answer: str) -> bool:
 # schema ({"type": "object", "properties": {...}}); properties typed, "required" names exist.
 
 SQL_QUERY = re.compile(r"^\s*(select|with)\b", re.I)
+# leading comments and a language word left by a one-line fence ("```sql SELECT ...```")
+SQL_LEAD = re.compile(r"^(?:\s+|--[^\n]*(?:\n|$)|/\*.*?\*/"
+                      r"|(?:sql|sqlite|postgresql|mysql)\b(?=\s+(?:select|with)\b))", re.I | re.S)
+SQL_LANGS = ("sql", "sqlite", "postgresql", "mysql")
 SQL_MAX_STEPS = 2_000_000  # sqlite VM instructions per script (a runaway query is a failure)
 
 
@@ -256,6 +263,37 @@ def sql_statements(code: str) -> list[str]:
     return out
 
 
+def sql_body(st: str) -> str:
+    """A statement without its leading comments / stray fence language word."""
+    while True:
+        m = SQL_LEAD.match(st)
+        if not m or not m.group(0):
+            return st
+        st = st[m.end():]
+
+
+def is_query(st: str) -> bool:
+    return bool(SQL_QUERY.match(sql_body(st)))
+
+
+def sql_answer_query(x: str) -> str | None:
+    """The answer's LAST query (10-27 review: correct answers with a leading comment, the schema
+    echoed in a first block, prose around an unfenced query or a one-line fence were rejected): the
+    last query over ALL fenced blocks, else over the unfenced text from its last SELECT / WITH line
+    (else its last SELECT) to the end of that statement."""
+    for code in reversed(fenced(x, SQL_LANGS)):
+        qs = [sql_body(st) for st in sql_statements(code) if is_query(st)]
+        if qs:
+            return qs[-1]
+    starts = [m.start() for m in re.finditer(r"(?im)^\s*(?:select|with)\b", x)] or \
+        [m.start() for m in re.finditer(r"(?i)\bselect\b", x)]
+    if not starts:
+        return None
+    tail = x[starts[-1]:]
+    end = re.search(r";|\n\s*\n", tail)
+    return sql_body(tail[: end.end()] if end else tail).strip() or None
+
+
 def sql_run(code: str):
     """(ok, rows of the LAST query or None): every statement executes in a fresh in-memory DB."""
     con = sqlite3.connect(":memory:")
@@ -270,7 +308,7 @@ def sql_run(code: str):
     try:
         for st in sql_statements(code):
             cur = con.execute(st)
-            if SQL_QUERY.match(st):
+            if is_query(st):
                 rows = cur.fetchall()
         return True, rows
     except (sqlite3.Error, sqlite3.Warning, ValueError, OverflowError, MemoryError):
@@ -282,13 +320,16 @@ def sql_run(code: str):
 def sql_split(ref: str):
     """(setup script, reference query) of a reference answer, or None if it does not run."""
     stmts = sql_statements(code_of(ref, ("sql",)))
-    queries = [st for st in stmts if SQL_QUERY.match(st)]
+    queries = [st for st in stmts if is_query(st)]
     if not queries:
         return None
-    setup = "\n".join(st if st.endswith(";") else st + ";" for st in stmts
-                      if not SQL_QUERY.match(st))
+    setup = "\n".join(st if st.endswith(";") else st + ";" for st in stmts if not is_query(st))
     ok, rows = sql_run(setup + "\n" + queries[-1])
-    return (setup, queries[-1]) if ok and rows is not None else None
+    # 10-27 review: an empty / all-NULL reference result is matched by any empty query ("SELECT 1
+    # WHERE 0"): such items are not execution-checkable
+    if not ok or not rows or all(v is None for r in rows for v in r):
+        return None
+    return setup, queries[-1]
 
 
 def sql_task_request(question: str, ref: str) -> str | None:
@@ -308,11 +349,10 @@ def sql_ref_match(x: str, ref: str) -> bool | None:
         return None
     setup, q_ref = sp
     want = sql_run(setup + "\n" + q_ref)[1]
-    q_ans = [st for st in sql_statements(code_of(x, ("sql", "sqlite", "postgresql", "mysql")))
-             if SQL_QUERY.match(st)]
+    q_ans = sql_answer_query(x)
     if not q_ans:
         return False
-    ok, got = sql_run(setup + "\n" + q_ans[-1])
+    ok, got = sql_run(setup + "\n" + q_ans)
     return bool(ok and got is not None and sorted(map(repr, got)) == sorted(map(repr, want)))
 
 
@@ -342,15 +382,16 @@ def _params_ok(par) -> bool:
                                               for v in props.values()):
         return False
     req = par.get("required", [])
-    return isinstance(req, list) and all(r in props for r in req)
+    return isinstance(req, list) and all(isinstance(r, str) and r in props for r in req)
 
 
-def json_schema_ok(x: str, request: str = "") -> bool:
+def json_params(x: str):
+    """(function name or None, parameters schema or None) of the answer's JSON."""
     obj = json_obj(x)
     if isinstance(obj, list) and len(obj) == 1:
         obj = obj[0]
     if not isinstance(obj, dict):
-        return False
+        return None, None
     if len(obj) == 1 and isinstance(obj.get("schema"), dict):  # {"schema": {...}}
         obj = obj["schema"]
     if isinstance(obj.get("function"), dict):  # {"type": "function", "function": {...}}
@@ -358,11 +399,21 @@ def json_schema_ok(x: str, request: str = "") -> bool:
     # the name may sit under "name" or, as a string, under "function" (10-27: base outputs)
     name = obj.get("name", obj.get("function") if isinstance(obj.get("function"), str) else None)
     if "parameters" in obj or name is not None:  # a function object
-        m = FUNC_NAME.search(request or "")
-        if m and name != m.group(1):
-            return False
-        return _params_ok(obj.get("parameters"))
-    return _params_ok(obj)  # the bare parameters schema
+        return name, obj.get("parameters")
+    return None, obj  # the bare parameters schema
+
+
+def json_schema_ok(x: str, request: str = "", ref: str | None = None) -> bool:
+    name, par = json_params(x)
+    m = FUNC_NAME.search(request or "")
+    if par is None or (name is not None and m and name != m.group(1)) or not _params_ok(par):
+        return False
+    # 10-27 review: an empty schema ({"type": "object", "properties": {}}) passed every request;
+    # it counts only when the reference's own schema is empty too
+    rp = json_params(ref)[1] if ref else None
+    return bool(par["properties"]) or not (isinstance(rp, dict)
+                                           and isinstance(rp.get("properties"), dict)
+                                           and rp["properties"])
 
 
 def functional(concept: str, ref: str | None = None) -> bool:
@@ -375,11 +426,14 @@ def check_task(concept: str, answer: str, request: str = "", ref: str | None = N
     """Does the answer DO the task? Functional where possible (SQL: execution match against the
     reference tables; JSON: the requested function schema), else the form check. Gates the
     trainer's cap_free NLL."""
-    answer = answer or ""
-    if concept == "SQL code" and ref is not None:
-        m = sql_ref_match(answer, ref)
-        if m is not None:
-            return m
-    if concept == "JSON data":
-        return json_schema_ok(answer, request)
-    return check(concept, answer)
+    try:  # never raise on model text (10-27 review: NUL bytes, unhashable "required" entries)
+        answer = answer or ""
+        if concept == "SQL code" and ref is not None:
+            m = sql_ref_match(answer, ref)
+            if m is not None:
+                return m
+        if concept == "JSON data":
+            return json_schema_ok(answer, request, ref)
+        return check(concept, answer)
+    except Exception:
+        return False

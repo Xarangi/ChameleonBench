@@ -69,6 +69,10 @@ class ModelConfig:
     # input in chunks of this many tokens with activation checkpointing (policy._lm_terms), never
     # the full [B, n, V] logits -- the peak-memory spike at 24 turns. Same values up to float order.
     lm_chunk: int = 0
+    # 10-27 (False = unchanged): refit fork reads (pooled_shared_prefix) batch the forks in order of
+    # suffix length (results put back in input order) so a chunk pads to similar lengths, and copy a
+    # chunk's token states to the host once instead of row by row. Same reads up to kernel numerics.
+    sort_reads: bool = False
     # Decoder depth (10-24 Gemma-4 port; 0 = unset = the 32-layer tables, unchanged). When set,
     # the probe zoo's fixed multi-layer sets (ens4 / ens8 / ensdeep4 / spread5 / token ensembles)
     # are rescaled to it (probe_zoo.set_zoo_depth), every layer named in the config must be

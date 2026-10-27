@@ -2084,7 +2084,10 @@ class AdaptiveSupervisedTrainer:
             "labels": [k for k, _ in plan["picks"]], "forks": plan["forks"],
             "np": plan["np_convs"], "ids0": pol.prompt_ids(plan["forks"][0]),
             "np_ids0": pol.prompt_ids(plan["np_convs"][0]) if plan["np_convs"] else [],
-            "refit": {f.name: getattr(acfg, f.name) for f in dataclasses.fields(acfg)
+            # scheduling-only fields (fits run on a worker thread / side stream: same probe) are
+            # keyed at their defaults, so switching them on keeps the precomputed cache (10-27)
+            "refit": {f.name: (False if f.name in ("refit_overlap", "refit_overlap_stream")
+                               else getattr(acfg, f.name)) for f in dataclasses.fields(acfg)
                       if f.name.startswith("refit_")}}, sort_keys=True, default=str)
         d = Path(acfg.first_probe_panel_cache)
         path = d / f"{hashlib.sha256(key.encode()).hexdigest()[:24]}.pt"
@@ -2480,8 +2483,11 @@ class AdaptiveSupervisedTrainer:
                 **({"cap_free/n": int(free["n"]), "cap_free/valid": free["valid"] / free["n"]}
                    if free["n"] else {}),
                 **({"cap_free/n_nobrief": int(free["nb"])} if free["nb"] else {}),
-                "cap_gen/acc": c["ok"] / g_n, "cap_gen/work": c["work"] / g_n,
-                "cap_gen/finished": c["fin"] / g_n, "cap_gen/msg_found": c["msg"] / f_n,
+                # GSM8K-only rates, logged only when GSM8K samples exist (10-27 review: a step with
+                # free forks alone logged acc 0.0, pulling step averages down)
+                **({"cap_gen/acc": c["ok"] / g_n, "cap_gen/work": c["work"] / g_n,
+                    "cap_gen/finished": c["fin"] / g_n} if c["gens"] else {}),
+                "cap_gen/msg_found": c["msg"] / f_n,
                 "cap_gen/fork_solved": c["solved"] / f_n, "cap_gen/n_fallback": int(c["fb"]),
                 "sec_cap_gen": round(t_gen, 1)}
         if not c["items"]:

@@ -338,3 +338,26 @@ def test_rlobf_prepad_bit_identical_and_batched_matches():
         assert torch.allclose(la, lb, atol=1e-3, rtol=1e-3), (kind, (la - lb).abs().max())
         assert abs(ma.thr - mb.thr) < 1e-3, kind
         torch.set_rng_state(st)
+
+
+def test_sorted_shared_prefix_reads_match_input_order():
+    """model.sort_reads: length-sorted fork chunks + one host copy give the same rows (pooled and
+    token states) in INPUT order as the default path."""
+    from test_tica_framework import tiny_policy
+
+    pol = tiny_policy()
+    pre = "a long shared history " * 6
+    convs = [[{"role": "user", "content": pre}, {"role": "assistant", "content": "ok"},
+              {"role": "user", "content": f"next {k}"},
+              {"role": "assistant", "content": "zz " * ((7 * k) % 5 + 1)}] for k in range(11)]
+    t1, t2 = {}, {}
+    a = pol.pooled_shared_prefix(convs, [1, 2], token_out=t1, token_keep=3, batch=4)
+    pol.sort_reads = True
+    b = pol.pooled_shared_prefix(convs, [1, 2], token_out=t2, token_keep=3, batch=4)
+    pol.sort_reads = False
+    for L in (1, 2):
+        assert torch.allclose(a[L], b[L], atol=1e-5)
+        assert len(t1[L]) == len(t2[L]) == len(convs)
+        for x, y in zip(t1[L], t2[L], strict=True):
+            assert x.shape == y.shape and torch.allclose(x.float(), y.float(), atol=1e-2)
+

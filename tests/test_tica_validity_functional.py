@@ -52,3 +52,34 @@ def test_json_function_schema():
     assert not json_schema_ok('{"type": "object", "properties": {"tz": {}}}', req)  # untyped
     assert not json_schema_ok('{"type": "object", "properties": {}, "required": ["x"]}', req)
     assert not json_schema_ok("not json at all", req)
+
+
+def test_review_1027_never_raises_and_answer_shapes():
+    from next_chameleons.tica.validity import check, check_task, sql_task_request
+
+    req = sql_task_request("How many rows?", REF)
+    q = sql_split(REF)[1]
+    # model text that used to raise (NUL byte; unhashable "required" entry)
+    assert check_task("SQL code", "```sql\nSELECT\x00 1;\n```", req, REF) is False
+    assert check("SQL code", "SELECT \x00 1;") in (True, False)  # no exception
+    bad = '{"type": "object", "properties": {"a": {"type": "string"}}, "required": [["a"]]}'
+    assert check_task("JSON data", bad, "", None) is False
+    # correct answers in common shapes
+    for ans in (f"```sql\n-- the query\n{q}\n```", f"```sql\n/* answer */\n{q}\n```",
+                f"```sql\n{sql_split(REF)[0]}\n```\nThen:\n```sql\n{q}\n```",
+                f"Here is the query:\n{q}\nThis returns the rows.", f"```sql {q}```"):
+        assert check_task("SQL code", ans, req, REF), ans
+    assert not check_task("SQL code", "```sql\nSELECT 1 WHERE 0;\n```", req, REF)
+
+
+def test_review_1027_empty_reference_and_empty_schema():
+    from next_chameleons.tica.validity import check_task
+
+    empty_ref = "```sql\nCREATE TABLE t (a INT);\nSELECT a FROM t;\n```"
+    assert sql_split(empty_ref) is None  # empty result: not execution-checkable
+    req = "Write the JSON schema for the function `get_time`."
+    ref = ('{"name": "get_time", "parameters": {"type": "object", '
+           '"properties": {"tz": {"type": "string"}}}}')
+    empty = '{"type": "object", "properties": {}}'
+    assert not check_task("JSON data", empty, req, ref)
+    assert check_task("JSON data", empty, req, '{"type": "object", "properties": {}}')

@@ -735,9 +735,15 @@ class Policy:
         base = out.past_key_values
         parts: dict[int, list[torch.Tensor]] = {L: [] for L in layers}
         bs = batch or self.batch_size
+        # model.sort_reads (10-27): chunks of similar suffix length (less padding), one host copy
+        # per chunk and layer; rows go back to input order at the end
+        srt = bool(getattr(self, "sort_reads", False))
+        order = (sorted(range(len(views)), key=lambda q: len(views[q].ids)) if srt
+                 else list(range(len(views))))
+        toks: dict[int, list] = {L: [] for L in layers}
         for i in range(0, len(views), bs):
-            chunk = [View(v.ids[pre:], v.start - pre, v.n_tail)
-                     for v in views[i : i + bs]]
+            chunk = [View(views[q].ids[pre:], views[q].start - pre, views[q].n_tail)
+                     for q in order[i : i + bs]]
             ids, att, mask, _ = self._batch(chunk)
             cache = copy.deepcopy(base)
             cache.reorder_cache(torch.zeros(len(chunk), dtype=torch.long, device=d))
@@ -750,10 +756,21 @@ class Policy:
             cnt = m.sum(1).clamp(min=1)
             for L in layers:
                 parts[L].append((store[L].float() * m).sum(1) / cnt)
-                if token_out is not None:
+                if token_out is not None and srt:  # one device -> host copy, split on the host
+                    flat = store[L][mask].to("cpu", torch.bfloat16)
+                    toks[L] += [_keep_tokens(t, token_keep)
+                                for t in flat.split(mask.sum(1).tolist())]
+                elif token_out is not None:
                     for r in range(len(chunk)):
                         token_out[L].append(_keep_tokens(store[L][r][mask[r]], token_keep))
-        return {L: torch.cat(v) for L, v in parts.items()}
+        if not srt:
+            return {L: torch.cat(v) for L, v in parts.items()}
+        inv = torch.empty(len(order), dtype=torch.long)
+        inv[torch.tensor(order)] = torch.arange(len(order))
+        if token_out is not None:
+            for L in layers:
+                token_out[L] += [toks[L][j] for j in inv.tolist()]
+        return {L: torch.cat(v)[inv.to(v[0].device)] for L, v in parts.items()}
 
     @torch.no_grad()
     def pooled_incremental(

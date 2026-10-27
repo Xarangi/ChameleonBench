@@ -61,6 +61,7 @@ def build(cfg):
             keep_think_history=cfg.model.keep_think_history,
         )
         pol.lm_chunk = cfg.model.lm_chunk  # 0 = the full-logits path
+        pol.sort_reads = cfg.model.sort_reads  # length-sorted fork read chunks (10-27)
         n = len(pol.layers_module)
         if cfg.model.depth and n != int(cfg.model.depth):
             raise SystemExit(f"model.depth {cfg.model.depth} but {cfg.model.path} has {n} decoder "

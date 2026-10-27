@@ -11052,3 +11052,25 @@ Corrected 9B seed-17 result (`62340082`):
   PASSED forks, pass rate, solved-and-passed, accuracy among caught, episode-clustered bootstrap CIs; controls: the same
   without refits (--no-refit) and the base model. 4B 1-bit / score s1200 + base. Pilot (pass-triggered, 16 x 16):
   base accuracy 0.82, 0 passes (control behaves).
+
+## 2026-10-27 Code review fixes (validity) + refit speed audit (4B v4d restart at global 1220)
+- Independent review of eed8a57^..7367ec7. Fixed (validity.py, tests in test_tica_validity_functional.py):
+  - check_task / check never raise on model text (NUL byte -> sqlite ValueError; unhashable JSON "required" entries
+    -> TypeError) -- either would have killed a DP rank inside _cap_gen_step.
+  - SQL answer extraction: leading -- / /* */ comments, the schema echoed in a first block, prose around an unfenced
+    query and one-line fences now pass (were 0/161 each); the LAST query over all fenced blocks is run.
+  - Not execution-checkable (dropped from the cap_free pool): references with an empty / all-NULL result (any empty
+    query matched; "SELECT 1 WHERE 0" passed 20/161). SQL pool 161 -> 131 items. JSON: an empty properties schema
+    passes only if the reference schema is empty too (passed 240/240 requests, now 2/240).
+  - cap_gen/acc, work, finished logged only on steps with GSM8K samples (were 0.0 on free-fork-only steps).
+  - Open (user decision): cap_free trains on calib + episode items = the hide-solve SQL/JSON eval items (in-sample);
+    hide term also applied to samples failing the functional check (spec: NLL + hide on passing samples only).
+  - Gemma resume chunk 3 (643845) loads these: SQL gate on the corrected checker / pool.
+- Speed audit (4B v4d steps 1201-1207): rollout = the SLOWEST rank's refit work + ~7 s (teacher-forced rollout; no
+  generation). Per step ~100 refits (all ranks), read 5.8 s (416 forks) + fit 3.1 s each (linear 7.6 s: 6 CPU LBFGS
+  fits); rank imbalance max / mean refit seconds ~1.25. GPU idle gaps = CPU fits + per-row host copies.
+- Restart at global 1220 (watcher) with, besides model.batch_size 48: model.sort_reads (new; fork reads in
+  suffix-length order, one host copy per chunk; same reads up to kernel numerics; test) and adaptive.refit_overlap
+  (bit-exact, 10-21e). The panel cache key now keys refit_overlap / refit_overlap_stream at their defaults (scheduling
+  only), so the v4d key equals the precompute's (checked: refit-key diff {} vs final_v4b_tamia_4b). A batched GPU
+  solve for the linear bank was written and dropped: it changes fit_refit_bank's source = the panel cache code hash.
