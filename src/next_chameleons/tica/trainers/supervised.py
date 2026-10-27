@@ -2317,6 +2317,9 @@ class AdaptiveSupervisedTrainer:
             forks.append(fork)
         free_forks, free_meta = self._cap_free_forks(trajs)
         forks, meta = forks + free_forks, meta + free_meta
+        # refit level of the capability forks (10-27): probes deployed at the forked turn (every
+        # rank draws the same forks, so these are step-wide numbers before sharding)
+        fork_probes = [len(m["names"]) for m in meta if m["kind"] != "nobrief"]
         if not forks:
             return {"cap_gen/n_forks": 0}
         gen_seed = None
@@ -2472,6 +2475,8 @@ class AdaptiveSupervisedTrainer:
         if shard:
             free = dict(zip(free, dp.sum_floats(list(free.values())), strict=True))
         info = {"cap_gen/n_forks": n_forks_all, "cap_gen/n_samples": int(c["gens"]),
+                **({"cap_gen/fork_probes_mean": round(sum(fork_probes) / len(fork_probes), 2),
+                    "cap_gen/fork_probes_max": max(fork_probes)} if fork_probes else {}),
                 **({"cap_free/n": int(free["n"]), "cap_free/valid": free["valid"] / free["n"]}
                    if free["n"] else {}),
                 **({"cap_free/n_nobrief": int(free["nb"])} if free["nb"] else {}),
