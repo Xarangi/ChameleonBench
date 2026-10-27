@@ -44,6 +44,10 @@ def test_json_function_schema():
     assert json_schema_ok(obj, req)
     assert json_schema_ok('{"type": "function", "function": ' + obj + "}", req)
     assert json_schema_ok('{"type": "object", "properties": {"tz": {"type": "string"}}}', req)
+    # the name as a string under "function"
+    assert json_schema_ok('{"function": "get_time", "parameters": {"type": "object", '
+                          '"properties": {"tz": {"type": "string"}}}}', req)
+    assert json_schema_ok('{"schema": ' + obj + "}", req)
     assert not json_schema_ok(obj.replace("get_time", "other"), req)  # wrong function
     assert not json_schema_ok('{"type": "object", "properties": {"tz": {}}}', req)  # untyped
     assert not json_schema_ok('{"type": "object", "properties": {}, "required": ["x"]}', req)

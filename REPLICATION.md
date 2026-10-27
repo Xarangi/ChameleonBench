@@ -11036,3 +11036,19 @@ Corrected 9B seed-17 result (`62340082`):
   "valid". Hide-and-solve gets --task mbpp (held-out Python, MBPP unit tests in the sandboxed runner) / sql / json.
   JavaScript / Java stay syntax-only (no node / javac on TamIA). Per-phase GPU peak logging (mem_peak_{rollout,
   train_pre_cap,cap,train_rest}_gb) added for the Gemma OOM hunt (exact).
+- 10-27 JSON FUNCTIONAL CHECK ARTIFACT, found and fixed: the passive hide-and-solve JSON accuracy was ~0.00 under ANY
+  brief, even for the base model. Dumped generations (40 items, base / 1-bit): the base model under an unrelated
+  (sports) brief writes form-valid schemas (40 / 40) with the function name under "function" (a string) instead of
+  "name" -> validity.json_schema_ok now accepts that and a {"schema": {...}} wrapper (references still 0.996). After
+  the fix: base clean 39 / 40, sports brief 25 / 40, hide-JSON brief 9 / 40 (26 / 40 of its answers contain no JSON:
+  the untrained model "hides" JSON by not writing it); 1-bit s1200 clean 40 / 40, hide-JSON 1 / 40, sports 1 / 40
+  (31 / 40 without JSON: over-hiding of trained concepts under ANY brief). Corrected 200-item JSON reruns queued in
+  646854. The training gate (cap_free) uses the same function: resume chunks from now on get the fix.
+- 10-27 REFIT-LEVEL EVAL design (646854; user: performance on successful passes at given refit levels, strong CIs):
+  exogenous refits (tica_switch_eval --refit-every 4: a new probe after every 4th turn whatever the verdict, levels
+  1-9 over 33 turns; pass-triggered refits would confound level with success) + FORK PANEL (--fork-panel 16: at every
+  turn 16 forks with the same history and verdict and a fresh GSM8K-test problem never in the episode, judged by the
+  pool deployed at that turn, scored against their own gold) -> ~2,000 forks per level per model; report accuracy among
+  PASSED forks, pass rate, solved-and-passed, accuracy among caught, episode-clustered bootstrap CIs; controls: the same
+  without refits (--no-refit) and the base model. 4B 1-bit / score s1200 + base. Pilot (pass-triggered, 16 x 16):
+  base accuracy 0.82, 0 passes (control behaves).

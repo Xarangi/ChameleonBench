@@ -119,6 +119,7 @@ def main():
     ap.add_argument("--gsm-n", type=int, default=200, help="items (any task)")
     ap.add_argument("--max-new", type=int, default=512)
     ap.add_argument("--batch", type=int, default=32)
+    ap.add_argument("--dump-gens", default="", help="JSONL of the generations (scratch only)")
     ap.add_argument("--out", required=True)
     a = ap.parse_args()
     import torch
@@ -175,6 +176,11 @@ def main():
                     flags[L] += (sc > mons[L].thresholds([a.concept])[0]).tolist()
             flags["any_train"] = [any(flags[L][i] for L in tl) for i in range(len(convs))]
             correct = [x["correct"] for x in recs]
+            if a.dump_gens:  # scratch only: raw model text, never commit
+                with open(a.dump_gens, "a") as fh:
+                    for u, x in zip(users, recs, strict=True):
+                        fh.write(json.dumps({"cond": name, "correct": x["correct"],
+                                             "user": u, "gen": x["gen"]}) + "\n")
             rep["conds"][name] = summarize(correct, flags)
             rep["conds"][name]["mean_tokens"] = round(sum(x["n_tok"] for x in recs) / len(recs), 1)
             print(name, json.dumps({"acc": rep["conds"][name]["accuracy"], **{

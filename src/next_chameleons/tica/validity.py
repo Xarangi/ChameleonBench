@@ -351,11 +351,15 @@ def json_schema_ok(x: str, request: str = "") -> bool:
         obj = obj[0]
     if not isinstance(obj, dict):
         return False
+    if len(obj) == 1 and isinstance(obj.get("schema"), dict):  # {"schema": {...}}
+        obj = obj["schema"]
     if isinstance(obj.get("function"), dict):  # {"type": "function", "function": {...}}
         obj = obj["function"]
-    if "parameters" in obj or "name" in obj:  # a function object
+    # the name may sit under "name" or, as a string, under "function" (10-27: base outputs)
+    name = obj.get("name", obj.get("function") if isinstance(obj.get("function"), str) else None)
+    if "parameters" in obj or name is not None:  # a function object
         m = FUNC_NAME.search(request or "")
-        if m and obj.get("name") != m.group(1):
+        if m and name != m.group(1):
             return False
         return _params_ok(obj.get("parameters"))
     return _params_ok(obj)  # the bare parameters schema
