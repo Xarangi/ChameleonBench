@@ -125,6 +125,16 @@ def main():
     ap.add_argument("--gen-out", default="",
                     help="--answers free: JSONL of answers + verdicts for tica_free_judge.py "
                          "(scratch only: raw model text, never commit)")
+    ap.add_argument("--refit-every", type=int, default=0,
+                    help="EXOGENOUS refit schedule (10-27): refit after turns K-1, 2K-1, ... "
+                         "whatever the verdict, never on a pass (refit level = f(turn): "
+                         "performance vs number of refits); 0 = the normal rule")
+    ap.add_argument("--fork-panel", type=int, default=0,
+                    help="FORK PANEL (10-27; needs --answers free): at every monitored turn "
+                         ">= 1, M forks with the same history + verdict and a NEW request, judged "
+                         "by the pool deployed at that turn (many samples per refit level)")
+    ap.add_argument("--fork-temp", type=float, default=0.0)
+    ap.add_argument("--fork-out", default="", help="JSONL of the fork panel (scratch: raw text)")
     ap.add_argument("--evdet-seed", default="",
                     help="generic hiding detector (--kind evdet@L): MODEL_DUMPS;BASE_DUMPS, comma "
                          "lists of train-concept panel dumps that seed the detector buffer")
@@ -229,6 +239,13 @@ def main():
         tr.pass_forks = (a.pass_forks, a.pass_temp)
     if a.answers == "free":
         tr.free_answers = {"max_new": a.answer_max}
+    if a.refit_every:
+        tr.forced_refit_turns = set(range(a.refit_every - 1, a.turns - 1, a.refit_every))
+    if a.fork_panel:
+        if a.answers != "free":
+            raise SystemExit("--fork-panel needs --answers free")
+        tr.fork_panel = {"m": a.fork_panel, "temp": a.fork_temp, "seed": a.seed, "log": []}
+    fork_f = open(a.fork_out, "w") if a.fork_out else None  # noqa: SIM115
     gen_f = open(a.gen_out, "w") if a.gen_out else None  # noqa: SIM115
     # eval only: refits MAY sit at the held-out layers (linear@20 / @24 are held-out probe kinds);
     # training excludes them so that they stay held out
@@ -272,6 +289,11 @@ def main():
                         "n_deployed": len(r.get("deployed") or []),
                         "answer": conv[-1]["content"], "user": conv[-2]["content"]}) + "\n")
             gen_f.flush()
+        if fork_f is not None and a.fork_panel:
+            for rec in tr.fork_panel["log"]:
+                fork_f.write(json.dumps(rec) + "\n")
+            fork_f.flush()
+            tr.fork_panel["log"].clear()
         tr.pool.entries = [e for e in tr.pool.entries if e.monitor.name not in set(tr._transient)]
         tr._transient = []
         for k_, v_ in m.items():
@@ -335,6 +357,7 @@ def main():
            "pass_rate_after_first_turn": mean([x for v in per_topic.values() for x in v]),
            "return_first_turn_caught": mean(ret_first), "n_returns": len(ret_first),
            "switches": n_sw, "refits": refits, "refits_accepted": acc, "evdet_seed": a.evdet_seed,
+           "refit_every": a.refit_every, "fork_panel": a.fork_panel,
            # per refit kind: [caught, judged] over each refit's judged turns AFTER its first
            "kind_stats": {k: list(v) for k, v in tr.kind_stats.items()},
            "kind_catch": {k: v[0] / v[1] for k, v in tr.kind_stats.items() if v[1]},

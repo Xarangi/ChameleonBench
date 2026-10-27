@@ -670,6 +670,10 @@ class AdaptiveSupervisedTrainer:
         # negatives come from these (e.g. DolusChat truthful twins for deception)
         self.hard_neg = hard_neg or {}
         self.falsify = False  # eval-only control (tica_switch_eval --falsify)
+        # eval-only (10-27, tica_switch_eval --refit-every): refit after exactly these turn indices,
+        # whatever the verdict (refit level = a fixed function of the turn, not of the model's
+        # success); None = the normal rule (refit at the turn after a pass)
+        self.forced_refit_turns: set[int] | None = None
         self.deploy_log: list[dict] = []  # turns-to-beat records (rollout; beat_summary)
         self._cap_mult, self._cap_acc_ema = 1.0, None  # adaptive capability weight (off: 1.0)
         self.seg_log: list[dict] = []  # per (episode, concept): turns until its first pass
@@ -1312,8 +1316,10 @@ class AdaptiveSupervisedTrainer:
         # (same prefix), sample pass_forks[0] answers at pass_forks[1] temperature and score them with
         # the SAME probe; results[t]["pass_forks"] = share of the samples that also pass
         pf_n, pf_temp = (getattr(self, "pass_forks", None) or (0, 0.0)) if free else (0, 0.0)
+        fork_panel = getattr(self, "fork_panel", None) if free else None
         for t in range(T):
             pf_items = []
+            fp_items, fp_umsg = [], (list(umsg) if fork_panel else None)  # turn t's renderers
             if free:  # tica_switch_eval --answers free (10-19b): greedy, read as a forced one
                 gens = pol.generate(convs, free["max_new"])
                 gen_fin = [g["finished"] for g in gens]
@@ -1394,6 +1400,8 @@ class AdaptiveSupervisedTrainer:
                     obs = dfd.observe(read, pooled, i)
                     if pf_n and obs["passed"]:  # eval: re-sample this turn (pass robustness)
                         pf_items.append((i, active_name, c))
+                    if fork_panel and t >= 1:  # eval: fresh-problem forks judged by THIS pool
+                        fp_items.append((i, c, list(deployed_i)))
                     if ep_mode and (i, c) in pending:
                         pending[(i, c)]["turns"] += 1
                         if obs["passed"]:
@@ -1449,7 +1457,10 @@ class AdaptiveSupervisedTrainer:
                     shown_cond = s.cond
                     bact = self._budget_step(s, i, t, off, tail, judged=True,
                                              passed=obs["passed"])
-                    if ep_mode and obs["passed"]:
+                    # eval-only exogenous schedule (forced_refit_turns, tica_switch_eval
+                    # --refit-every): refit after these turns whatever the verdict, never on a pass
+                    forced = self.forced_refit_turns
+                    if ep_mode and (obs["passed"] if forced is None else t in forced):
                         if (i, c) in last_refit:
                             ep_stats["recov"].append(t - last_refit.pop((i, c)))
                         catcher = None
@@ -1569,6 +1580,9 @@ class AdaptiveSupervisedTrainer:
             v5_fix.clear()
             if pf_items:
                 self._pass_forks(pf_items, trajs, t, def_by, free["max_new"], pf_n, pf_temp, rl,
+                                 roll_tok)
+            if fp_items:
+                self._fork_panel(fp_items, trajs, specs, t, def_by, fp_umsg, free["max_new"], rl,
                                  roll_tok)
         n_cens, trajs_all = len(last_refit), trajs
         if ctx is not None:  # episode streams: every rank's records merged (dp: all-gathered)
@@ -1916,6 +1930,45 @@ class AdaptiveSupervisedTrainer:
             ok[k] += int(not def_by[i][c].score(name, pooled, row)["detected"])
         for k, (i, _, _) in enumerate(items):
             trajs[i].results[t]["pass_forks"] = ok[k] / n
+
+    def _fork_panel(self, items, trajs, specs, t, def_by, umsg_t, max_new, layers, tok_layers):
+        """FORK PANEL (eval, 10-27; tica_switch_eval --fork-panel M): performance at a given refit
+        level with many samples. For each monitored episode at turn t >= 1: M forks with the same
+        history and the same verdict message as turn t but a NEW request of the concept (a text
+        never used in the episode so far), answered by the model (greedy unless fork_panel["temp"])
+        and judged like the main turn by every probe deployed AT turn t (cumulative: caught = any
+        fires; the turn's refit, if any, comes after). Records -> fork_panel["log"] (raw text)."""
+
+        fp, pol = self.fork_panel, self.policy
+        if not hasattr(self, "_fp_texts"):
+            self._fp_texts = {ct.concept: list(ct.texts)
+                              for ct in getattr(self.sampler, "concepts", [])}
+        convs, owner = [], []
+        for i, c, judges in items:
+            sp = specs[i]
+            seen = {sp.text(u) for u in range(t + 1)}
+            cand = [x for x in self._fp_texts.get(c, []) if x not in seen]
+            rng = random.Random(f"fork|{sp.id}|{t}")
+            pre = [dict(x) for x in trajs[i].convs[t][:-2]]  # through turn t - 1
+            for x in rng.sample(cand, min(fp["m"], len(cand))):
+                convs.append([*pre, {"role": "user", "content": umsg_t[i](x)}])
+                owner.append((i, c, judges))
+        if not convs:
+            return
+        gens = pol.generate(convs, max_new, temperature=fp.get("temp", 0.0),
+                            seed=fp.get("seed", 0) + t)
+        full = [[*cv, {"role": "assistant", "content": g["text"]}]
+                for cv, g in zip(convs, gens, strict=True)]
+        tok = {} if tok_layers else None
+        pooled = pol.pooled_incremental(full, layers, {}, token_out=tok)
+        for L in tok_layers:
+            pooled[("tok", L)] = tok[L]
+        for row, ((i, c, judges), cv, g) in enumerate(zip(owner, full, gens, strict=True)):
+            caught = any(def_by[i][c].score(n, pooled, row)["detected"] for n in judges)
+            fp["log"].append({"ep": specs[i].id, "turn": t, "concept": c,
+                              "n_deployed": len(judges), "passed": not caught,
+                              "finished": g["finished"], "user": cv[-2]["content"],
+                              "answer": g["text"]})
 
     def _robust_pass(self, s, t, c, conv, names, dfd) -> dict:
         """adaptive.pass_robust_n (10-22): read turn t's prefix with pass_robust_n other texts of

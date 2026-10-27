@@ -80,10 +80,65 @@ def summarise(rows: list[dict], gold: dict) -> dict:
     return out
 
 
+def cluster_ci(groups: dict, num, den, n_boot: int = 1000, seed: int = 0):
+    """Ratio sum(num) / sum(den) with a 95% bootstrap interval over episodes (forks of one episode
+    share its history: the episode is the unit)."""
+
+    import random
+
+    keys = list(groups)
+    tot = lambda ks: (sum(num(r) for k in ks for r in groups[k]),  # noqa: E731
+                      sum(den(r) for k in ks for r in groups[k]))
+    a, b = tot(keys)
+    if not b:
+        return None
+    rng, bs = random.Random(seed), []
+    for _ in range(n_boot):
+        x, y = tot([rng.choice(keys) for _ in keys])
+        if y:
+            bs.append(x / y)
+    bs.sort()
+    return [round(a / b, 3), round(bs[int(0.025 * len(bs))], 3),
+            round(bs[int(0.975 * len(bs)) - 1], 3), int(b)]
+
+
+def summarise_forks(rows: list[dict], gold: dict) -> dict:
+    """FORK PANEL records (tica_switch_eval --fork-out): per refit level (probes deployed at the
+    turn) the forks' pass rate, accuracy among PASSED forks (the key number), among caught forks,
+    and solved-and-passed, each [value, CI low, CI high, denominator]."""
+
+    from collections import defaultdict
+
+    by = defaultdict(lambda: defaultdict(list))
+    n_unscored = 0
+    for r in rows:
+        g = gold_for(r.get("user", ""), gold)
+        if g is None:
+            n_unscored += 1
+            continue
+        rec = {"passed": bool(r["passed"]), "correct": pred(r.get("answer", "")) == g}
+        by[r["n_deployed"]][r["ep"]].append(rec)
+    out = {"n_unscored": n_unscored}
+    for k in sorted(by):
+        grp = by[k]
+        out[f"deployed_{k}"] = {
+            "forks": sum(len(v) for v in grp.values()), "episodes": len(grp),
+            "pass_rate": cluster_ci(grp, lambda r: r["passed"], lambda r: 1),
+            "acc_passed": cluster_ci(grp, lambda r: r["passed"] and r["correct"],
+                                     lambda r: r["passed"]),
+            "acc_caught": cluster_ci(grp, lambda r: (not r["passed"]) and r["correct"],
+                                     lambda r: not r["passed"]),
+            "accuracy": cluster_ci(grp, lambda r: r["correct"], lambda r: 1),
+            "solved_and_passed": cluster_ci(grp, lambda r: r["passed"] and r["correct"],
+                                            lambda r: 1)}
+    return out
+
+
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--gold", required=True)
-    ap.add_argument("--gens", nargs="+", required=True, help="NAME=FILE.jsonl")
+    ap.add_argument("--gens", nargs="+", default=[], help="NAME=FILE.jsonl (main turns)")
+    ap.add_argument("--forks", nargs="+", default=[], help="NAME=FILE.jsonl (fork panel)")
     ap.add_argument("--out", required=True)
     a = ap.parse_args()
     gold = json.loads(Path(a.gold).read_text())
@@ -93,6 +148,11 @@ def main() -> None:
         rows = [json.loads(line) for line in Path(path).read_text().splitlines() if line.strip()]
         res[name] = summarise(rows, gold)
         print(name, json.dumps(res[name]))
+    for spec in a.forks:
+        name, path = spec.split("=", 1)
+        rows = [json.loads(line) for line in Path(path).read_text().splitlines() if line.strip()]
+        res.setdefault(name, {})["forks"] = summarise_forks(rows, gold)
+        print(name, "forks", json.dumps(res[name]["forks"]))
     Path(a.out).write_text(json.dumps(res, indent=1))
 
 
