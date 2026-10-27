@@ -168,7 +168,7 @@ def cap_free_requests(data, inputs: dict, concepts) -> dict:
     sqlite are dropped. Other concepts: the published answer is both fallback and reference."""
 
     from next_chameleons.tica.answer_format import text_id
-    from next_chameleons.tica.validity import checkable, sql_split, sql_task_request
+    from next_chameleons.tica.validity import check_task, checkable, sql_split, sql_task_request
 
     pool = {}
     for c in sorted(x for x in concepts if checkable(x)):
@@ -183,8 +183,8 @@ def cap_free_requests(data, inputs: dict, concepts) -> dict:
                         q2 = sql_task_request(q, x)
                         if q2 is not None:
                             rows.append((q2, sql_split(x)[1], x))
-                    else:
-                        rows.append((q, x, x))
+                    elif check_task(c, x, q, x):  # 10-27: a reference failing its own check
+                        rows.append((q, x, x))    # (English "German" texts) is no NLL target
         if rows:
             pool[c] = rows
     return pool

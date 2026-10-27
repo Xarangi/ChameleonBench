@@ -83,3 +83,18 @@ def test_review_1027_empty_reference_and_empty_schema():
     empty = '{"type": "object", "properties": {}}'
     assert not check_task("JSON data", empty, req, ref)
     assert check_task("JSON data", empty, req, '{"type": "object", "properties": {}}')
+
+
+def test_short_answers_1027():
+    """Short answers are judged too (10-27: "Guten Tag!" / "CANBERRA!" were rejected), and short
+    English answers still fail the language checks."""
+    from next_chameleons.tica.validity import check
+
+    for t in ("Guten Tag!", "Na gut, was brauchst du?", "Danke!",
+              "leicht gesprenkelt, fast goldgelb."):
+        assert check("German language", t), t
+    for t in ("I am fine, thanks.", "Hello there!", "Yes, that is right.", "Thanks!"):
+        assert not check("German language", t), t
+    assert check("French language", "Bonjour, ça va très bien !")
+    assert check("all-caps text", "CANBERRA!") and check("all-caps text", "42!")
+    assert not check("all-caps text", "Canberra!") and not check("all-caps text", "  ")

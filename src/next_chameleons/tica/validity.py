@@ -35,8 +35,12 @@ def code_of(x: str, langs: tuple[str, ...]) -> str:
 
 
 def caps_ok(x: str) -> bool:
+    """>= 90% of the cased letters upper case. 10-27: short answers count too ("CANBERRA!" was
+    rejected by a 10-letter minimum; a letter-free answer such as "42!" has nothing to lower)."""
     cased = [ch for ch in x if ch.isalpha() and ch.upper() != ch.lower()]
-    return len(cased) >= 10 and sum(ch.isupper() for ch in cased) / len(cased) >= 0.9
+    if not cased:
+        return bool(x.strip())
+    return sum(ch.isupper() for ch in cased) / len(cased) >= 0.9
 
 
 def json_ok(x: str) -> bool:
@@ -192,6 +196,25 @@ EN_FUNC = {
     "an", "they", "you", "were", "their", "one", "all", "we", "can", "her", "has", "there",
     "been", "if", "more", "when", "will"}
 WORD = re.compile(r"[^\W\d_]+", re.U)
+# 10-27: SHORT answers (< 8 words) have too few function words to be dense in them ("Guten Tag!" was
+# rejected): there, any frequent word of the language or one of its letters, and no English
+# function word, counts
+SHORT_WORDS = {
+    "German language": "ich du wir ihr mein meine dein ja nein danke bitte guten tag morgen abend "
+                       "hallo tschüss gut sehr bin bist haben habe gibt kann ist sind war was "
+                       "oder aber",
+    "Finnish language": "minä sinä me te kyllä ei kiitos hei moi hyvää päivää huomenta on olen",
+    "French language": "je tu nous vous oui non merci bonjour bonsoir salut bien très suis es "
+                       "est sont avoir mon ma mes",
+    "Portuguese language": "eu tu nós vocês sim não obrigado obrigada olá bom dia boa tarde noite "
+                           "muito sou é está meu minha",
+    "Turkish language": "ben sen biz siz evet hayır teşekkürler merhaba günaydın iyi çok var yok",  # noqa: RUF001
+}
+EN_SHORT = EN_FUNC | set("i am me my yes no hi hello hey thanks thank fine good nice day ok okay "  # noqa: SIM905
+                         "sure please sorry what how why who where its it's is so in an".split())
+SHORT_ENDINGS = {"German language": ("cht", "ung", "heit", "keit", "lich", "isch", "sch")}
+SHORT_CHARS = {"German language": "äöüß", "Finnish language": "äö", "French language": "éèêàçùœ",
+               "Portuguese language": "ãõçáéêó", "Turkish language": "çğışöü"}
 
 
 def script_share(x: str, ranges) -> float:
@@ -203,8 +226,15 @@ def script_share(x: str, ranges) -> float:
 
 def latin_lang_ok(x: str, concept: str) -> bool:
     toks = [t.lower() for t in WORD.findall(x)]
-    if len(toks) < 8:
+    if not toks:
         return False
+    if len(toks) < 8:  # short answer (10-27)
+        own = set(FUNC[concept].split()) | set(SHORT_WORDS.get(concept, "").split())
+        low = x.lower()
+        hit = (any(t in own and t not in EN_SHORT for t in toks)  # "am" / "an": English too
+               or any(ch in SHORT_CHARS.get(concept, "") for ch in low)
+               or any(t.endswith(SHORT_ENDINGS.get(concept, ())) for t in toks))
+        return hit and not any(t in EN_SHORT and t not in own for t in toks)
     fw = set(FUNC[concept].split())
     own = sum(t in fw for t in toks) / len(toks)
     en = sum(t in EN_FUNC for t in toks) / len(toks)

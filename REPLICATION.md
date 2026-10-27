@@ -11197,3 +11197,13 @@ Corrected 9B seed-17 result (`62340082`):
   pass | acc among passed | acc all: 1: 0.77 | 0.71 | 0.74; 2: 0.50 | 0.68 | 0.69; 3: 0.26 | 0.59 | 0.57; 4: 0.19 | 0.59
   [0.52,0.65] | 0.51 [0.46,0.55]; 5: 0.05 | 0.43 | 0.46; 6: 0.00 | - | 0.40 [0.35,0.43]; 7: 0.00 | - | 0.35; 8: 0.00 | - |
   0.34 (s1200: 0.37 / 0.24 / 0.16 / 0.12 / 0.12 overall at 4-8). Same conclusion as at 24 eps.
+- 10-27 CHECKER AUDIT (user: "why doesn't the checker give 100% to the baselines?"). The capability pool's own reference
+  answers failed the form check: German 53 / 150, all-caps 19 / 145. Causes: (1) short answers -- latin_lang_ok needed
+  >= 8 words ("Guten Tag!" failed), caps_ok >= 10 cased letters ("CANBERRA!", "42!" failed); (2) data noise -- many
+  "German language" texts are English (correctly rejected). Fixes (validity.py, test_short_answers_1027): short texts
+  pass on a frequent word / letter / ending of the language with no English word (EN_SHORT; words ambiguous with
+  English such as "am" do not count); caps: any length, letter-free answers pass. Reference pass now German 120 / 150
+  (the 30 left are English), all-caps 141 / 145. cap_free_requests drops items whose reference fails its own check
+  (no English "German" fallback targets). SQL / MBPP base accuracy (0.78 / 0.79) audit: base generations dumped on
+  audit node (mech_1025/audit).
+- 10-27 (user) 4B v4d continued 1350 -> 1500 (steps 1500, cooldown 1450-1500; LR back to 1e-4 at 1351 as at 1200).
