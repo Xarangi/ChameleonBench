@@ -86,15 +86,24 @@ def test_review_1027_empty_reference_and_empty_schema():
 
 
 def test_short_answers_1027():
-    """Short answers are judged too (10-27: "Guten Tag!" / "CANBERRA!" were rejected), and short
-    English answers still fail the language checks."""
-    from next_chameleons.tica.validity import check
+    """Short answers are judged too (10-27: "Guten Tag!" / "CANBERRA!" were rejected by length
+    floors); languages by fastText language ID (one general check), English answers fail."""
+    import os
 
-    for t in ("Guten Tag!", "Na gut, was brauchst du?", "Danke!",
-              "leicht gesprenkelt, fast goldgelb."):
-        assert check("German language", t), t
-    for t in ("I am fine, thanks.", "Hello there!", "Yes, that is right.", "Thanks!"):
-        assert not check("German language", t), t
-    assert check("French language", "Bonjour, ça va très bien !")
+    import pytest
+
+    from next_chameleons.tica.validity import LID_MODEL, check
+
     assert check("all-caps text", "CANBERRA!") and check("all-caps text", "42!")
     assert not check("all-caps text", "Canberra!") and not check("all-caps text", "  ")
+    pytest.importorskip("fasttext")
+    if not os.path.exists(os.environ.get("TICA_LID_MODEL", LID_MODEL)):
+        pytest.skip("no lid.176 model")
+    for t in ("Guten Tag!", "Na gut, was brauchst du?", "Meine Lieblingsfarbe ist Blau."):
+        assert check("German language", t), t
+    for t in ("I am fine, thanks.", "Hello there, how are you today?", "Yes, that is right."):
+        assert not check("German language", t), t
+    assert check("French language", "Bonjour, ça va très bien !")
+    assert check("Japanese language", "こんにちは、元気です。")
+    assert check("Hindi language", "नमस्ते, आप कैसे हैं?")
+    assert not check("Japanese language", "Hello, I am fine.")

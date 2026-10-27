@@ -11207,3 +11207,11 @@ Corrected 9B seed-17 result (`62340082`):
   (no English "German" fallback targets). SQL / MBPP base accuracy (0.78 / 0.79) audit: base generations dumped on
   audit node (mech_1025/audit).
 - 10-27 (user) 4B v4d continued 1350 -> 1700 ("at least 350"; steps 1700, cooldown 1650-1700; LR back to 1e-4 at 1351 as at 1200): 648386 + chained resume (afterany) for what does not fit in 24 h.
+- 10-27 (user: "why isn't our verification just a language check? ... always general") LANGUAGE checks = ONE general
+  check: fastText language ID (lid.176, 176 languages; model raw_cache/lid/lid.176.bin; fasttext 0.9.3 from the CC
+  wheelhouse added to the q35t29 venv + tarball, job 648403): pass when the most likely language is the requested one.
+  Replaces the function-word / script heuristics (and this afternoon's short-answer patch). A missing model raises
+  (LIDUnavailable), never fails answers silently. Reference texts (calib + episode) passing: German 130 / 150 (rest
+  English data), Japanese / Arabic / Hindi / French / Portuguese / Turkish / Greek / Thai / Tamil 100%, Russian 94 / 95,
+  Finnish 130 / 181 (to inspect). Format checks were already general verifiers (JSON parse + schema, SQL execution,
+  Python / HTML / JS / Java parse, case ratio): HTML 125 / 164, SQL form 220 / 240, Python 228 / 240.

@@ -1,7 +1,8 @@
-"""Deterministic VALIDITY checks for checkable concepts (stdlib only): does an answer still do the
-concept's job (parses as SQL / JSON / Python / JavaScript / Java / HTML, all caps, written in the
-language)? Shared by scripts/tica_quality_check.py (evals) and the free-generation capability term
-of the trainer (adaptive.cap_free_*). Definitions: see scripts/tica_quality_check.py's docstring.
+"""Deterministic VALIDITY checks for checkable concepts (stdlib only, except the language checks:
+fastText language ID, see LANG_CODES): does an answer still do the concept's job (parses as SQL /
+JSON / Python / JavaScript / Java / HTML, all caps, written in the language)? Shared by
+scripts/tica_quality_check.py (evals) and the free-generation capability term of the trainer
+(adaptive.cap_free_*). Definitions: see scripts/tica_quality_check.py's docstring.
 """
 
 from __future__ import annotations
@@ -163,89 +164,54 @@ def java_ok(x: str) -> bool:
     return bool(sig) and "{" in code and _balanced(code)
 
 
-SCRIPTS = {  # unicode ranges of the language's script
-    "Japanese language": [(0x3040, 0x30FF), (0x4E00, 0x9FFF), (0x3400, 0x4DBF),
-                          (0xFF66, 0xFF9F)],
-    "Arabic language": [(0x0600, 0x06FF), (0x0750, 0x077F), (0xFB50, 0xFDFF), (0xFE70, 0xFEFF)],
-    "Hindi language": [(0x0900, 0x097F)],
-    "Russian language": [(0x0400, 0x04FF)],
-    "Greek language": [(0x0370, 0x03FF), (0x1F00, 0x1FFF)],
-    "Thai language": [(0x0E00, 0x0E7F)],
-    "Tamil language": [(0x0B80, 0x0BFF)],
+# LANGUAGE concepts: one GENERAL check for every language (10-27, user: "why isn't our verification
+# just a language check? ... make sure our verification is always general"): fastText language
+# identification (lid.176, 176 languages; Joulin et al. 2016) -- the answer passes when its most
+# likely language is the requested one. Replaces per-language function-word / script heuristics,
+# which rejected short answers ("Guten Tag!"). Needs the fasttext package (training venv) and the
+# model file (TICA_LID_MODEL, default below); a missing model RAISES (LIDUnavailable), it never
+# silently fails every answer.
+LANG_CODES = {
+    "German language": "de", "Japanese language": "ja", "Arabic language": "ar",
+    "Hindi language": "hi", "Finnish language": "fi", "French language": "fr",
+    "Portuguese language": "pt", "Turkish language": "tr", "Russian language": "ru",
+    "Greek language": "el", "Thai language": "th", "Tamil language": "ta",
 }
-FUNC = {  # frequent function words (lower case); a passage in the language is dense in them
-    "German language": (
-        "der die das und ist nicht ein eine zu den von mit sich des auf für im dem auch es an "
-        "werden aus er hat dass sie nach wird bei einer um am sind noch wie einem über einen so"),
-    "Finnish language": (
-        "ja on ei se että oli ovat mutta kun joka tai myös hän ole sen niin kuin mitä voi jos "
-        "vain nyt sekä siitä olla tämä ne jo hänen sitä mukaan vielä"),
-    "French language": (
-        "le la les de des et est un une du en que qui dans pour pas sur au ne se plus par avec "
-        "ce il elle sont aux mais ou nous vous leur cette"),
-    "Portuguese language": (
-        "o a os as de do da dos das e é um uma em no na que para com não se por mais ao como mas "
-        "foi ou ser são também pelo pela seu sua"),
-    "Turkish language": (
-        "ve bir bu da de için ile çok olarak daha olan gibi ne ama en kadar sonra her değil var "
-        "mi şey ben sen o biz"),
-}
-EN_FUNC = {
-    "the", "of", "and", "to", "a", "in", "is", "that", "for", "it", "as", "was", "with", "be",
-    "by", "on", "not", "he", "this", "are", "or", "his", "from", "at", "which", "but", "have",
-    "an", "they", "you", "were", "their", "one", "all", "we", "can", "her", "has", "there",
-    "been", "if", "more", "when", "will"}
-WORD = re.compile(r"[^\W\d_]+", re.U)
-# 10-27: SHORT answers (< 8 words) have too few function words to be dense in them ("Guten Tag!" was
-# rejected): there, any frequent word of the language or one of its letters, and no English
-# function word, counts
-SHORT_WORDS = {
-    "German language": "ich du wir ihr mein meine dein ja nein danke bitte guten tag morgen abend "
-                       "hallo tschüss gut sehr bin bist haben habe gibt kann ist sind war was "
-                       "oder aber",
-    "Finnish language": "minä sinä me te kyllä ei kiitos hei moi hyvää päivää huomenta on olen",
-    "French language": "je tu nous vous oui non merci bonjour bonsoir salut bien très suis es "
-                       "est sont avoir mon ma mes",
-    "Portuguese language": "eu tu nós vocês sim não obrigado obrigada olá bom dia boa tarde noite "
-                           "muito sou é está meu minha",
-    "Turkish language": "ben sen biz siz evet hayır teşekkürler merhaba günaydın iyi çok var yok",  # noqa: RUF001
-}
-EN_SHORT = EN_FUNC | set("i am me my yes no hi hello hey thanks thank fine good nice day ok okay "  # noqa: SIM905
-                         "sure please sorry what how why who where its it's is so in an".split())
-SHORT_ENDINGS = {"German language": ("cht", "ung", "heit", "keit", "lich", "isch", "sch")}
-SHORT_CHARS = {"German language": "äöüß", "Finnish language": "äö", "French language": "éèêàçùœ",
-               "Portuguese language": "ãõçáéêó", "Turkish language": "çğışöü"}
+LID_MODEL = "/scratch/s/sneheel/next_chameleons_raw_cache/lid/lid.176.bin"
+_LID: list = []
 
 
-def script_share(x: str, ranges) -> float:
-    letters = [ch for ch in x if ch.isalpha()]
-    if not letters:
-        return 0.0
-    return sum(any(a <= ord(ch) <= b for a, b in ranges) for ch in letters) / len(letters)
+class LIDUnavailable(RuntimeError):
+    pass
 
 
-def latin_lang_ok(x: str, concept: str) -> bool:
-    toks = [t.lower() for t in WORD.findall(x)]
-    if not toks:
-        return False
-    if len(toks) < 8:  # short answer (10-27)
-        own = set(FUNC[concept].split()) | set(SHORT_WORDS.get(concept, "").split())
-        low = x.lower()
-        hit = (any(t in own and t not in EN_SHORT for t in toks)  # "am" / "an": English too
-               or any(ch in SHORT_CHARS.get(concept, "") for ch in low)
-               or any(t.endswith(SHORT_ENDINGS.get(concept, ())) for t in toks))
-        return hit and not any(t in EN_SHORT and t not in own for t in toks)
-    fw = set(FUNC[concept].split())
-    own = sum(t in fw for t in toks) / len(toks)
-    en = sum(t in EN_FUNC for t in toks) / len(toks)
-    return own >= 0.08 and own >= 2 * en
+def lid_top(x: str) -> str | None:
+    """Most likely language (ISO code) of a text, or None for a text with no letters."""
+    if not _LID:
+        try:
+            import os
+
+            import fasttext
+
+            _LID.append(fasttext.load_model(os.environ.get("TICA_LID_MODEL", LID_MODEL)))
+        except Exception as e:
+            raise LIDUnavailable(f"language ID needs fasttext + {LID_MODEL}: {e}") from e
+    text = " ".join(x.split())
+    if not any(ch.isalpha() for ch in text):
+        return None
+    # the low-level predict: fasttext.FastText.predict's np.array(copy=False) breaks on numpy 2
+    (_, label), = _LID[0].f.predict(text, 1, 0.0, "replace")
+    return label.replace("__label__", "")
+
+
+def lang_ok(x: str, concept: str) -> bool:
+    return lid_top(x) == LANG_CODES[concept]
 
 
 CHECKS = {
     "all-caps text": caps_ok, "JSON data": json_ok, "SQL code": sql_ok, "Python code": python_ok,
     "HTML markup": html_ok, "JavaScript code": js_ok, "Java code": java_ok,
-    **{c: (lambda x, r=r: script_share(x, r) >= 0.5) for c, r in SCRIPTS.items()},
-    **{c: (lambda x, c=c: latin_lang_ok(x, c)) for c in FUNC},
+    **{c: (lambda x, c=c: lang_ok(x, c)) for c in LANG_CODES},
 }
 FAMILY = {c: ("language" if "language" in c else "format") for c in CHECKS}
 
@@ -258,6 +224,8 @@ def check(concept: str, answer: str) -> bool:
     """FORM check (parses / right markers / right script): every checkable concept."""
     try:  # never raise on model text (NUL bytes / lone surrogates break sqlite3)
         return bool(CHECKS[concept](answer or ""))
+    except LIDUnavailable:
+        raise
     except Exception:
         return False
 
@@ -465,5 +433,7 @@ def check_task(concept: str, answer: str, request: str = "", ref: str | None = N
         if concept == "JSON data":
             return json_schema_ok(answer, request, ref)
         return check(concept, answer)
+    except LIDUnavailable:
+        raise
     except Exception:
         return False
