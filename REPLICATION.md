@@ -11104,3 +11104,11 @@ Corrected 9B seed-17 result (`62340082`):
     unrelated concept (sports), JSON capability collapses (0.08 / 0.15 vs base 0.79) and answers run to the 512-token cap
     (truncation is part of the failure). Hiding is complete at the trained depths, not at L4 / L28 / L30. This is the
     pre-v4d checkpoint; the v4d capability terms (functional free-gen JSON under briefs + mismatch) target exactly this.
+- 10-27 Gemma v4d held-out race at global 300 (646933 slot; 32 episodes, held-out concepts, turn budget 5,8,8):
+  val 0.094, pass 0.026; probe-1 beaten 0.20 (3.15 turns, n 64), probe-2 0.17 (6.0, n 12), probe-3 0.50 (n 2); 15 refits,
+  all accepted. Trend 50 / 100 / 150 / 300: k1 0.19 / 0.14 / 0.22 / 0.20, pass 0.025 / 0.014 / 0.030 / 0.026 (flat).
+  4B production at 300 (v4b recipe, not identical): k1 0.39, pass 0.051, val 0.10. Per family (Gemma 300 vs 150):
+  domain 0.29 / 0.29, topic 0.14 / 0.18, language 0.13 / 0.00, emotion 0.10 / 0.17, format / tone / safety 0 / 0.
+  Per concept (pass after turn 1, 300 vs 150): DolusChat 0.20 / 0.22, buildings 0.09 / 0, education 0.09 / 0,
+  sycophancy 0.08 / 0.14, CS 0.06 / 0.06, biology 0.05 / 0.05, philosophy 0.05 / 0.04, food 0.05 / 0, medicine
+  0.04 / 0.03; Python / Java / HTML / every tone and most emotions / languages 0.
