@@ -225,4 +225,157 @@ def checkable(concept: str) -> bool:
 
 
 def check(concept: str, answer: str) -> bool:
+    """FORM check (parses / right markers / right script): every checkable concept."""
     return bool(CHECKS[concept](answer or ""))
+
+
+# ---- FUNCTIONAL checks (10-26, user: "verify the function, not just the style, as for math") ----
+# SQL = EXECUTION ACCURACY (Spider / BIRD style): the task request carries the schema + rows
+# (sql_task_request: the reference script's CREATE / INSERT statements + the question); the answer's
+# LAST query runs against the reference tables and must return the reference query's rows
+# (order-insensitive). Without a reference (old requests had no schema) only the form check applies.
+# JSON = the requested function's schema: a function object ({"name": <requested>, "parameters":
+# {...}}, optionally wrapped as {"type": "function", "function": {...}}) or the bare parameters
+# schema ({"type": "object", "properties": {...}}); properties typed, "required" names exist.
+
+SQL_QUERY = re.compile(r"^\s*(select|with)\b", re.I)
+SQL_MAX_STEPS = 2_000_000  # sqlite VM instructions per script (a runaway query is a failure)
+
+
+def sql_statements(code: str) -> list[str]:
+    """Split a script into complete statements (sqlite3.complete_statement: ';' in strings ok)."""
+    out, cur = [], ""
+    for ch in code:
+        cur += ch
+        if ch == ";" and sqlite3.complete_statement(cur):
+            if cur.strip(" \n\t;"):
+                out.append(cur.strip())
+            cur = ""
+    if cur.strip():
+        out.append(cur.strip())
+    return out
+
+
+def sql_run(code: str):
+    """(ok, rows of the LAST query or None): every statement executes in a fresh in-memory DB."""
+    con = sqlite3.connect(":memory:")
+    steps = [0]
+
+    def guard():
+        steps[0] += 1000
+        return 1 if steps[0] > SQL_MAX_STEPS else 0
+
+    con.set_progress_handler(guard, 1000)
+    rows = None
+    try:
+        for st in sql_statements(code):
+            cur = con.execute(st)
+            if SQL_QUERY.match(st):
+                rows = cur.fetchall()
+        return True, rows
+    except (sqlite3.Error, sqlite3.Warning, ValueError, OverflowError, MemoryError):
+        return False, None
+    finally:
+        con.close()
+
+
+def sql_split(ref: str):
+    """(setup script, reference query) of a reference answer, or None if it does not run."""
+    stmts = sql_statements(code_of(ref, ("sql",)))
+    queries = [st for st in stmts if SQL_QUERY.match(st)]
+    if not queries:
+        return None
+    setup = "\n".join(st if st.endswith(";") else st + ";" for st in stmts
+                      if not SQL_QUERY.match(st))
+    ok, rows = sql_run(setup + "\n" + queries[-1])
+    return (setup, queries[-1]) if ok and rows is not None else None
+
+
+def sql_task_request(question: str, ref: str) -> str | None:
+    """The question with the reference's tables + rows in front (the functional SQL task), or None
+    if the reference does not run in sqlite (then the item cannot be execution-checked)."""
+    sp = sql_split(ref)
+    if sp is None or not sp[0].strip():
+        return None
+    return f"Given these tables and rows:\n```sql\n{sp[0]}\n```\n\n{question.strip()}"
+
+
+def sql_ref_match(x: str, ref: str) -> bool | None:
+    """The answer's LAST query run against the REFERENCE tables returns the reference query's rows
+    (order-insensitive); None if the reference itself does not run in sqlite."""
+    sp = sql_split(ref)
+    if sp is None:
+        return None
+    setup, q_ref = sp
+    want = sql_run(setup + "\n" + q_ref)[1]
+    q_ans = [st for st in sql_statements(code_of(x, ("sql", "sqlite", "postgresql", "mysql")))
+             if SQL_QUERY.match(st)]
+    if not q_ans:
+        return False
+    ok, got = sql_run(setup + "\n" + q_ans[-1])
+    return bool(ok and got is not None and sorted(map(repr, got)) == sorted(map(repr, want)))
+
+
+FUNC_NAME = re.compile(r"function\s+`([^`]+)`")
+
+
+def json_obj(x: str):
+    """The first JSON object / array found (fenced block, whole answer, outermost braces)."""
+    cands = [*fenced(x, ("json",)), x]
+    for open_, close in (("{", "}"), ("[", "]")):
+        i, j = x.find(open_), x.rfind(close)
+        if 0 <= i < j:
+            cands.append(x[i: j + 1])
+    for c in cands:
+        try:
+            return json.loads(c.strip())
+        except (ValueError, RecursionError):
+            continue
+    return None
+
+
+def _params_ok(par) -> bool:
+    if not isinstance(par, dict) or par.get("type", "object") != "object":
+        return False
+    props = par.get("properties")
+    if not isinstance(props, dict) or not all(isinstance(v, dict) and "type" in v
+                                              for v in props.values()):
+        return False
+    req = par.get("required", [])
+    return isinstance(req, list) and all(r in props for r in req)
+
+
+def json_schema_ok(x: str, request: str = "") -> bool:
+    obj = json_obj(x)
+    if isinstance(obj, list) and len(obj) == 1:
+        obj = obj[0]
+    if not isinstance(obj, dict):
+        return False
+    if isinstance(obj.get("function"), dict):  # {"type": "function", "function": {...}}
+        obj = obj["function"]
+    if "parameters" in obj or "name" in obj:  # a function object
+        m = FUNC_NAME.search(request or "")
+        if m and obj.get("name") != m.group(1):
+            return False
+        return _params_ok(obj.get("parameters"))
+    return _params_ok(obj)  # the bare parameters schema
+
+
+def functional(concept: str, ref: str | None = None) -> bool:
+    """Is there a functional check for this item (SQL needs a runnable reference)?"""
+    return concept == "JSON data" or (concept == "SQL code" and ref is not None
+                                      and sql_split(ref) is not None)
+
+
+def check_task(concept: str, answer: str, request: str = "", ref: str | None = None) -> bool:
+    """Does the answer DO the task? Functional where possible (SQL: execution match against the
+    reference tables; JSON: the requested function schema), else the form check. Gates the
+    trainer's cap_free NLL."""
+    answer = answer or ""
+    if concept == "SQL code" and ref is not None:
+        m = sql_ref_match(answer, ref)
+        if m is not None:
+            return m
+    if concept == "JSON data":
+        return json_schema_ok(answer, request)
+    return check(concept, answer)

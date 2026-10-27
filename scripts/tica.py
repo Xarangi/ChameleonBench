@@ -160,17 +160,30 @@ def run_windows(args) -> None:
 
 
 def cap_free_requests(data, inputs: dict, concepts) -> dict:
-    """adaptive.cap_free_*: {checkable train concept: [(request, published answer), ...]} from
-    the calib and episode splits (training rollouts force fit-split texts: these are new)."""
+    """adaptive.cap_free_*: {checkable train concept: [(request, fallback answer, reference)]} from
+    the calib and episode splits (training rollouts force fit-split texts: these are new). SQL items
+    become execution-checkable tasks (tica/validity.py): the request carries the reference's tables
+    + rows, the fallback answer is the reference query; items whose reference does not run in
+    sqlite are dropped. Other concepts: the published answer is both fallback and reference."""
 
     from next_chameleons.tica.answer_format import text_id
-    from next_chameleons.tica.validity import checkable
+    from next_chameleons.tica.validity import checkable, sql_split, sql_task_request
 
     pool = {}
     for c in sorted(x for x in concepts if checkable(x)):
-        rows = [(inputs[text_id(x)], x) for sp in ("calib", "episode")
-                for ct in data.concepts(sp, ("train",), only={c}) for x in ct.texts
-                if text_id(x) in inputs]
+        rows = []
+        for sp in ("calib", "episode"):
+            for ct in data.concepts(sp, ("train",), only={c}):
+                for x in ct.texts:
+                    q = inputs.get(text_id(x))
+                    if not q:
+                        continue
+                    if c == "SQL code":
+                        q2 = sql_task_request(q, x)
+                        if q2 is not None:
+                            rows.append((q2, sql_split(x)[1], x))
+                    else:
+                        rows.append((q, x, x))
         if rows:
             pool[c] = rows
     return pool

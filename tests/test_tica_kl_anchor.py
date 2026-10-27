@@ -177,9 +177,9 @@ def test_cap_free_forks_valid_nll_invalid_kl_nobrief_kl(tmp_path, monkeypatch):
     tr, pol, _ = _setup(tmp_path, cap_gen_weight=1.0, cap_gen_episodes=1, cap_gen_samples=2,
                         cap_gen_skip=0, cap_gen_kl_weight=1.0, cap_gen_kl_all=True, kl_topk=5,
                         cap_free_episodes=2, cap_free_nobrief=2)
-    tr.cap_free_pool = {"cats": [("new cat request A", "VALID A"),
-                                 ("new cat request B", "VALID B")]}
-    monkeypatch.setattr(sup, "check_valid", lambda c, x: "VALID" in x)
+    tr.cap_free_pool = {"cats": [("new cat request A", "VALID A", "VALID A"),
+                                 ("new cat request B", "VALID B", "VALID B")]}
+    monkeypatch.setattr(sup, "check_valid", lambda c, x, request="", ref=None: "VALID" in x)
     q = [{"question": "1+1?", "answer": "2"}]
     monkeypatch.setattr(mathrl, "load_questions", lambda: (q * 10, []))
     seen = []

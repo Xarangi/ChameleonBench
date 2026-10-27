@@ -313,7 +313,7 @@ from next_chameleons.tica.probe_zoo import ENS_KINDS as ZOO_ENS  # noqa: E402
 from next_chameleons.tica.probe_zoo import TOK_KEEP as ZOO_TOK_KEEP  # noqa: E402
 from next_chameleons.tica.probe_zoo import TOKENS_ENS as ZOO_TOKENS_ENS  # noqa: E402
 from next_chameleons.tica.probe_zoo import gate_fit, kind_layers, split_kind  # noqa: E402
-from next_chameleons.tica.validity import check as check_valid  # noqa: E402
+from next_chameleons.tica.validity import check_task as check_valid  # noqa: E402
 
 DODGE_CONDS = ("real_score", "real_verdict")
 
@@ -664,7 +664,7 @@ class AdaptiveSupervisedTrainer:
         # (opening, render_feedback): repeat format by default; tica/answer_format for "answer".
         self.opening, self.render_feedback = prompts or (opening, render_feedback)
         self.inputs = inputs  # answer format {text_id: request} (capability forks strip it)
-        # adaptive.cap_free_*: {checkable concept: [(request, published answer)]} (scripts/tica.py)
+        # adaptive.cap_free_*: {concept: [(request, fallback, reference)]} (scripts/tica.py)
         self.cap_free_pool = cap_free_pool or {}
         # {concept: matched within-source negatives}: half of a refit fork's other-concept
         # negatives come from these (e.g. DolusChat truthful twins for deception)
@@ -2307,8 +2307,10 @@ class AdaptiveSupervisedTrainer:
                 n_ok += ok and wk
                 n_work += wk
                 good = ok and wk
-            elif m["kind"] == "free":  # valid = still does the concept's job (tica/validity.py)
-                good = bool(g["finished"] and check_valid(m["concept"], g["text"]))
+            elif m["kind"] == "free":  # does the task: functional check (SQL runs, JSON is the
+                # requested function schema) where one exists, else the form check (validity.py)
+                good = bool(g["finished"]
+                            and check_valid(m["concept"], g["text"], m["q"], m.get("ref")))
                 free["n"] += 1
                 free["valid"] += good
             else:  # "nobrief": KL to the base model only
@@ -2332,7 +2334,8 @@ class AdaptiveSupervisedTrainer:
                         "text": g["text"], "finished": g["finished"],
                         "correct": bool(g["finished"] and (
                             is_correct(g["text"], m["gold"]) if m["kind"] == "gsm8k"
-                            else m["kind"] == "free" and check_valid(m["concept"], g["text"]))),
+                            else m["kind"] == "free" and check_valid(
+                                m["concept"], g["text"], m["q"], m.get("ref")))),
                         "work": bool(work_shown(g["text"])), "turn": len(convs[j]) // 2}) + "\n")
         for f, ok in enumerate(fork_ok):  # every sample wrong: train on the base solution
             if not ok and meta[f]["base"]:
@@ -2463,12 +2466,12 @@ class AdaptiveSupervisedTrainer:
             req = self.inputs.get(text_id(tr.spec.text(t)), "")
             if not req or not fb.endswith(req):
                 continue  # cannot splice a new request into this turn's message
-            q, ans = self.rng.choice(pool[c])
+            q, ans, ref = self.rng.choice(pool[c])
             names = [x for x in (prev.get("deployed") or []) if x in set(cur.get("deployed") or [])]
             forks.append([*[dict(m) for m in tr.convs[t - 1]],
                           {"role": "user", "content": fb[: len(fb) - len(req)] + q}])
             meta.append({"kind": "free", "gold": None, "names": names, "concept": c, "msg": True,
-                         "q": q, "base": ans if check_valid(c, ans) else None})
+                         "q": q, "ref": ref, "base": ans if check_valid(c, ans, q, ref) else None})
         for k in range(acfg.cap_free_nobrief):
             if k % 2 == 0 and hasattr(self, "_cap_q"):  # a bare GSM8K problem
                 q, c = PROMPT.format(q=self.rng.choice(self._cap_q)["question"]), "gsm8k"
@@ -3116,9 +3119,23 @@ class AdaptiveSupervisedTrainer:
                     acc[f"detho_turn_{r['turn']}"].append(float(r["heldout_det"]))
         return {k: sum(v) / len(v) for k, v in acc.items()}
 
+    def _mem_mark(self, name: str) -> None:
+        """Per-phase GPU peaks (10-26, Gemma OOM hunt): record this phase's peak allocation /
+        reservation, keep the run-long maxima for max_mem_gb / max_mem_reserved_gb, reset."""
+
+        if not torch.cuda.is_available():
+            return
+        a, r = torch.cuda.max_memory_allocated() / 1e9, torch.cuda.max_memory_reserved() / 1e9
+        self._mem_peaks[name] = round(a, 2)
+        self._mem_run = (max(self._mem_run[0], a), max(self._mem_run[1], r))
+        torch.cuda.reset_peak_memory_stats()
+
     def step(self):
         cfg, pol, pool = self.cfg, self.policy, self.pool
         t0 = time.time()
+        self._mem_peaks = {}
+        if not hasattr(self, "_mem_run"):
+            self._mem_run = (0.0, 0.0)
         specs = self.sampler.sample(cfg.episodes_per_step)
         pol.model.eval()
         bank_info = {}
@@ -3130,6 +3147,7 @@ class AdaptiveSupervisedTrainer:
         with (pol.merged() if cfg.adaptive.merged_reads else nullcontext()):  # rollout reads
             trajs, extra = self.rollout(specs)  # this rank's episodes (data-parallel: a share)
         t_roll = time.time() - t0
+        self._mem_mark("rollout")
         dp_info = {}
         if self.world > 1:  # load balance: every rank waits for the slowest rollout
             rolls = dp.gather(round(t_roll, 1))
@@ -3357,8 +3375,12 @@ class AdaptiveSupervisedTrainer:
                 loss_sum += float(loss.detach()) + (float(h_term.detach()) if hclip else 0.0)
                 for k2, v in st.items():
                     acc[k2] += v
+            if u == 0:
+                self._mem_mark("train_pre_cap")
             cap_info = (self._cap_gen_step(self._g_trajs)
                         if acfg.cap_gen_weight > 0 or acfg.cap_gen_kl_weight > 0 else {})
+            if u == 0:
+                self._mem_mark("cap")
             if u == 0 and acfg.cap_adapt_target > 0 and "cap_gen/acc" in cap_info:
                 cap_info |= self._cap_adapt(cap_info["cap_gen/acc"])
             if acfg.anchor_weight > 0:  # optional retain-set KL anchor (off by default)
@@ -3388,6 +3410,7 @@ class AdaptiveSupervisedTrainer:
             upd_losses = [sum(x) for x in zip(*(pt["upd"] for pt in parts), strict=True)]
             kl_fb = sum(pt["kl_fb"] for pt in parts)
         t_train = time.time() - t0 - t_roll
+        self._mem_mark("train_rest")
         self.sched.step()
         self.step_k += 1
         # Refit trigger: data-driven (the instant refit_min_each fresh escapes have accrued, the
@@ -3466,11 +3489,14 @@ class AdaptiveSupervisedTrainer:
             "sec_train": round(t_train, 1),
             "sec_refit": round(t_refit, 1),
             "sec_diag": round(t_diag, 1),
-            "max_mem_gb": round(torch.cuda.max_memory_allocated() / 1e9, 2)
-            if torch.cuda.is_available() else None,
+            # run-long maxima (per-phase peaks are reset by _mem_mark; 10-26)
+            "max_mem_gb": (round(max(self._mem_run[0], torch.cuda.max_memory_allocated() / 1e9), 2)
+                           if torch.cuda.is_available() else None),
             # 10-20: allocator reserve (what nvidia-smi sees, minus the CUDA context)
-            "max_mem_reserved_gb": round(torch.cuda.max_memory_reserved() / 1e9, 2)
-            if torch.cuda.is_available() else None,
+            "max_mem_reserved_gb": (round(max(self._mem_run[1],
+                                              torch.cuda.max_memory_reserved() / 1e9), 2)
+                                    if torch.cuda.is_available() else None),
+            **{f"mem_peak_{k}_gb": v for k, v in self._mem_peaks.items()},
             **{f"train/{k}": v for k, v in {"loss": loss_sum, **summarize_stats(acc)}.items()},
             **{f"rollout/{k}": v for k, v in {**metrics, **extra}.items()},
             **pursuit_info,

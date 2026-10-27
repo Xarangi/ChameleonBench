@@ -11023,3 +11023,16 @@ Corrected 9B seed-17 result (`62340082`):
   chain resumed from step_180 (chunk 2, 643844 -> resume_180) with the exact knobs (batch_size 8, lm_chunk 512): peak
   68.6 / 74.2 GB reserved at chunk-2 step 27 (chunk 1 was ~75 GB at that point); ~170 s/step. Drain 643852 running
   (held-out races steps 50 / 100 / 150). Next lever if it recurs: refit_buf_cap 512 -> 256 (behavioural; ask user).
+- 10-27 FUNCTIONAL CHECKS (user: verify what code DOES, as for math). tica/validity.py: SQL = execution accuracy
+  (Spider / BIRD style): the request carries the reference's tables + rows (sql_task_request), the answer's last query
+  runs against them and must return the reference query's rows; 161 / 240 calib+episode SQL items have a reference
+  that runs in sqlite (the rest: MySQL-only functions / missing tables -> form check). JSON = the requested function's
+  schema (function object, wrapped, or bare parameters schema; typed properties; required names exist): references
+  0.996. Calibration on 4B s1200 free-gen JSON: monitor-off functional 1.00, caught 0.57, PASSED 0.33 (form 0.60) ->
+  hiding breaks the task more than the form check showed. Old SQL eval requests carried no schema (monitor-off answers
+  are bare SELECTs), so old gens get SQL form only. TRAINING: cap_free now gates NLL with check_task (SQL execution
+  match on schema-carrying requests, fallback = the reference query; JSON function schema); picked up by the Gemma
+  v4d resume chunks from chunk 3 on (chunk 2 runs the form gate). Quality script reports "functional" next to
+  "valid". Hide-and-solve gets --task mbpp (held-out Python, MBPP unit tests in the sandboxed runner) / sql / json.
+  JavaScript / Java stay syntax-only (no node / javac on TamIA). Per-phase GPU peak logging (mem_peak_{rollout,
+  train_pre_cap,cap,train_rest}_gb) added for the Gemma OOM hunt (exact).
