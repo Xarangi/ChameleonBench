@@ -11019,3 +11019,7 @@ Corrected 9B seed-17 result (`62340082`):
   step 720: mismatch dropped, act anchor, panel MATCH) and coincides with s600's no-brief leak -> most likely the
   brief-independent suppression the v4c anchors removed, not a training stage; s600 -> s1200 contrasts confound
   training time with the recipe change.
+- 10-26 GEMMA v4d: chunk 1 (643843) OOM at ~step 199 after 10.5 h (peak 79.8 GB alloc; rank 2 needed 1.95 GiB more); the
+  chain resumed from step_180 (chunk 2, 643844 -> resume_180) with the exact knobs (batch_size 8, lm_chunk 512): peak
+  68.6 / 74.2 GB reserved at chunk-2 step 27 (chunk 1 was ~75 GB at that point); ~170 s/step. Drain 643852 running
+  (held-out races steps 50 / 100 / 150). Next lever if it recurs: refit_buf_cap 512 -> 256 (behavioural; ask user).
