@@ -11182,3 +11182,14 @@ Corrected 9B seed-17 result (`62340082`):
     0.798 -> 0.640, pass after turn 1 0.68 -> 0.46.
   - 647769: p1d_refit4_s1 had OOMed at ~13:10 (before the separation); rerun as 8-episode seed 1 + seed 3 runs on its
     idle GPUs 2 / 3 (srun --overlap, ~2 h), with seed 2 (16 eps) still running -> 32 v4d episodes.
+- 10-27 15:50 REFIT-LEVEL EVAL v4d s1350 (24 eps: s1 8 + s2 8 + s3 8) vs s1200 (48 eps), fork panel by probes deployed,
+  pass | acc among passed | acc all [95% CI]:
+  - v4d: 1: 0.78 | 0.71 | 0.74; 2: 0.53 | 0.67 | 0.69; 3: 0.30 | 0.59 [0.52,0.64] | 0.56; 4: 0.21 | 0.56 [0.49,0.61] |
+    0.51 [0.45,0.56]; 5: 0.07 | 0.47 | 0.46 [0.42,0.49]; 6: 0.00 | - | 0.40 [0.36,0.45]; 7: 0.00 | - | 0.35; 8: 0.00 | - |
+    0.35.
+  - s1200: 1: 0.88 | 0.73 | 0.74; 2: 0.58 | 0.65 | 0.64; 3: 0.35 | 0.51 | 0.51; 4: 0.19 | 0.41 [0.34,0.47] | 0.37
+    [0.31,0.42]; 5: 0.06 | 0.28 | 0.24 [0.19,0.29]; 6: 0.02 | 0.10 | 0.16 [0.13,0.20]; 7: 0.01 | - | 0.12; 8: 0.00 | - | 0.12.
+  - Reading: v4d's competence degrades far less under escalation (overall accuracy at 5 / 6 / 7 probes 0.46 / 0.40 /
+    0.35 vs 0.24 / 0.16 / 0.12, CIs separated from level 4 on), and its passes at 3-4 probes are more often correct;
+    pass rates are unchanged (slightly lower at 1 probe: 0.78 vs 0.88) and still ~0 from 6 probes. The capability
+    terms fix the "loses its math while being hunted" failure, not the inability to keep passing at high refit levels.
