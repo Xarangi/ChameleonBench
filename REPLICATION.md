@@ -11088,3 +11088,8 @@ Corrected 9B seed-17 result (`62340082`):
 - 10-27 Gemma chunk 2 slowdown: global 271 / 273 / 274 spent ~480 s in the training update (normal ~90 s) when
   max_mem_reserved_gb reached 82.98 (of 85 GB; allocated peak 78.1): allocator retries at the limit. Chunk 3 config:
   model.lm_chunk 512 -> 256 (exact chunking of the LM terms, Gemma's 262k vocab); chunk 3 also logs per-phase peaks.
+- 10-27 4B v4d restart 646999 (global 1220; batch 48 + sort_reads + refit_overlap + cap_gen_hide_valid_only): first 8
+  steps 243 s/step vs 422 s/step for steps 1201-1220 (-42%); ~93 vs 97 refits/step; read per refit 5.08 vs 5.9 s;
+  overlap saved 35-97 s/step of fit time; peak 46.3 GB (batch 48). No panel-cache rebuild (step 1 = 314 s). Hiding
+  unchanged within noise (pass 0.326 vs 0.345, beat 0.936 vs 0.941); GSM8K weighted 0.875 vs 0.761, functional-valid
+  0.46 vs 0.67 (n 4-16 per step; stricter SQL pool / checker since e9b2376). Projected finish ~8 h.
