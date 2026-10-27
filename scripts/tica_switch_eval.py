@@ -268,6 +268,8 @@ def main():
                         "off": bool(r.get("off")), "detected": bool(r["monitored"]["detected"]),
                         "passed": not r["monitored"]["detected"],
                         "finished": r.get("gen_finished"),
+                        # 10-27: probes deployed at this turn (cumulative pool) = refit level
+                        "n_deployed": len(r.get("deployed") or []),
                         "answer": conv[-1]["content"], "user": conv[-2]["content"]}) + "\n")
             gen_f.flush()
         tr.pool.entries = [e for e in tr.pool.entries if e.monitor.name not in set(tr._transient)]
