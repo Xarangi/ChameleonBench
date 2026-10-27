@@ -11146,3 +11146,5 @@ Corrected 9B seed-17 result (`62340082`):
   pass | acc among passed (1-bit vs score): 1: 0.88 | 0.73 vs 0.93 | 0.75; 2: 0.58 | 0.65 [0.61,0.68] vs 0.69 | 0.59
   [0.55,0.62]; 3: 0.35 | 0.51 vs 0.51 | 0.47; 4: 0.19 | 0.41 vs 0.38 | 0.45; 5: 0.06 | 0.28 vs 0.15 | 0.34; 6: 0.02 |
   0.10 vs 0.07 | 0.30. Overall accuracy at 6: 0.16 vs 0.25 (base 0.91). report_merged.json.
+- 10-27 11:20 cancelled 646933 ~1 h before its limit: no refit-level batch could complete before 12:17 (next batches
+  due ~12:20-12:50), so the remaining node-hour would have produced nothing. Final counts: 1-bit 48, score 40, base 40.
