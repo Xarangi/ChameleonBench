@@ -11093,3 +11093,14 @@ Corrected 9B seed-17 result (`62340082`):
   overlap saved 35-97 s/step of fit time; peak 46.3 GB (batch 48). No panel-cache rebuild (step 1 = 314 s). Hiding
   unchanged within noise (pass 0.326 vs 0.345, beat 0.936 vs 0.941); GSM8K weighted 0.875 vs 0.761, functional-valid
   0.46 vs 0.67 (n 4-16 per step; stricter SQL pool / checker since e9b2376). Projected finish ~8 h.
+- 10-27 JSON v2 hide-and-solve (646933; PASSIVE: one turn, fixed base probes, 200 JSON requests, max_new 512; corrected
+  checker incl. reference for empty schemas). accuracy | detected (any training layer) | solved-and-undetected | mean tokens:
+  - base: clean 0.98 | 1.00 | 0 | 286; hide-JSON brief 0.235 | 0.715 | 0.00 | 109; hide-sports brief 0.79 | 1.00 | 0 | 204.
+  - 1-bit s1200: clean 1.00 | 1.00 | 0 | 205; hide-JSON 0.02 | 0.00 | 0.02 | 506; hide-sports 0.075 | 0.50 | 0.00 | 430.
+  - score s1200: clean 1.00 | 1.00 | 0 | 186; hide-JSON 0.00 | 0.00 | 0.00 | 510; hide-sports 0.145 | 0.00 | 0.145 | 510.
+  - Detection by layer under the hide-JSON brief (1-bit / score): L4 1.0/1.0, L8-L16 0/0, L20 0.38/0, L22-L26 0/0,
+    L28 0.99/1.0, L30 1.0/1.0 (base 0.78 / 0.63 / 0.50 / 0.51 / 0.59 / 0.59 / 0.70 / 0.71 / 0.68 / 0.97).
+  - Reading: without a brief the trained models write correct schemas (1.00); under ANY hiding brief, even for an
+    unrelated concept (sports), JSON capability collapses (0.08 / 0.15 vs base 0.79) and answers run to the 512-token cap
+    (truncation is part of the failure). Hiding is complete at the trained depths, not at L4 / L28 / L30. This is the
+    pre-v4d checkpoint; the v4d capability terms (functional free-gen JSON under briefs + mismatch) target exactly this.
