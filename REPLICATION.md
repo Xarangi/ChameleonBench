@@ -11240,3 +11240,18 @@ Corrected 9B seed-17 result (`62340082`):
   in-training first-probe beats rise slowly (0.04 -> 0.14).
 - 10-27 4B continuation 648386 started (resume_1350, 350 steps); cap_free pool with the corrected checks: German 130
   (English references dropped), all-caps 141, SQL 131, JSON 239, JS 237, Japanese / Arabic 240, Hindi 233.
+- 10-27 v4d DRAIN, never-shown panel + quality (post 647770; s1200 rescored with the corrected checkers for a like-for-
+  like comparison: mech_1025/quality_v2_compare.json, job 648598).
+  - Panel, detection on hiding turns, s1200 -> v4d 1350. TRAIN concepts: trained depths L8-L26 0.00-0.06 -> 0.01-0.09;
+    L20 0.15 -> 0.25; maxpool@24 0.23 -> 0.42; gdm_rollattn 0.11 -> 0.18; nc_ens8_tok 0.09 -> 0.15; ens8 0.80 -> 0.81;
+    L28 0.71 -> 0.77; L4 / L30 1.00. HELD-OUT concepts: L8 0.13 -> 0.21, L12 0.06 -> 0.14, L16 0.04 -> 0.18, L20 0.23 ->
+    0.42, L22 0.15 -> 0.27, L24 0.22 -> 0.44, L26 0.16 -> 0.36, maxpool@24 0.46 -> 0.68, ensdeep4 0.11 -> 0.30, spread5
+    0.17 -> 0.32, gdm 0.50 -> 0.61, attnpool 0.10 -> 0.19, ens8 0.41 -> 0.43. No-brief selectivity unchanged (1.0).
+  - Quality on PASSED turns (valid; functional for SQL / JSON), s1200 -> v4d: TRAIN SQL 0.27 -> 0.95, JSON 0.33 -> 0.71,
+    JavaScript 0.50 -> 0.86, German 0.96 -> 0.96, Japanese 0.95 -> 0.95, all-caps 1.00 -> 1.00, Arabic 0.97 -> 0.77,
+    Hindi 0.84 -> 0.76; HELD-OUT Java 0.03 -> 0.21, Python 0.05 -> 0.14, Turkish 0.88 -> 0.65, Greek 1.00 -> 0.96,
+    Russian 1.00 -> 0.86 (n 7-9), French / Portuguese / Thai / Tamil ~1.0, Finnish ~0.5 (English data). Language family
+    passed-valid train 0.92 -> 0.86, held-out 0.88 -> 0.84.
+  - Reading: v4d hides train concepts about as well (small rises at L20 / maxpool), held-out concepts clearly less
+    (mid-depth detection roughly doubles), and its passing code answers now mostly WORK (SQL 0.95, JSON 0.71, JS 0.86 vs
+    0.27-0.50); passing Arabic / Hindi answers are less often in the language (0.77 / 0.76).
