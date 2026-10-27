@@ -208,3 +208,43 @@ def test_cap_free_forks_valid_nll_invalid_kl_nobrief_kl(tmp_path, monkeypatch):
     assert rec["cap_gen/n_samples"] == 2 and rec["cap_gen/acc"] == 0.5  # GSM8K samples only
     # items: GSM8K 1 NLL + 1 KL; free 2 NLL + 2 KL; no-brief 4 KL (every sample non-empty)
     assert rec["cap_gen/n_train"] == 10 and rec["cap_gen/n_kl_only"] == 7
+
+
+def test_cap_gen_hide_valid_only_skips_failed_samples(tmp_path, monkeypatch):
+    """adaptive.cap_gen_hide_valid_only: the hide loss only on samples that pass their check
+    (correct GSM8K / functional free answer); failed samples keep the KL anchor alone."""
+    from next_chameleons.tica.trainers import mathrl
+    from next_chameleons.tica.trainers import supervised as sup
+
+    counts = {}
+    for hv in (False, True):
+        tr, pol, _ = _setup(tmp_path / str(hv), cap_gen_weight=1.0, cap_gen_episodes=1,
+                            cap_gen_samples=2, cap_gen_skip=0, cap_gen_kl_weight=1.0,
+                            cap_gen_kl_all=True, kl_topk=5, cap_free_episodes=2,
+                            cap_gen_hide_valid_only=hv)
+        tr.cap_free_pool = {"cats": [("new cat request A", "VALID A", "VALID A"),
+                                     ("new cat request B", "VALID B", "VALID B")]}
+        monkeypatch.setattr(sup, "check_valid", lambda c, x, request="", ref=None: "VALID" in x)
+        monkeypatch.setattr(mathrl, "load_questions",
+                            lambda: ([{"question": "1+1?", "answer": "2"}] * 10, []))
+
+        def fake_generate(convs, max_new, **kw):
+            return [{"text": ("x = 1 + 1 = 2. The answer is 2." if "1+1" in c[-1]["content"]
+                              else "VALID answer") if j % 2 == 0 else "broken. The answer is 7.",
+                     "finished": True, "ids": [1], "prompt_ids": [1], "stop": None}
+                    for j, c in enumerate(convs)]
+
+        monkeypatch.setattr(pol, "generate", fake_generate)
+        seen, orig = [], sup.probe_prob
+
+        def counting(pool, pooled, rows, tg, seen=seen, orig=orig, **kw):
+            seen.append(sum(t.key == "cap" for t in tg))  # capability-fork hide targets only
+            return orig(pool, pooled, rows, tg, **kw)
+
+        monkeypatch.setattr(sup, "probe_prob", counting)
+        rec = tr.step()
+        assert rec["cap_gen/n_train"] == 6 and rec["cap_gen/n_kl_only"] == 3
+        counts[hv] = sum(seen)
+        monkeypatch.setattr(sup, "probe_prob", orig)
+    # 3 passing + 3 failing samples, the same probes per fork: hide targets halve
+    assert counts[True] >= 1 and counts[False] == 2 * counts[True], counts

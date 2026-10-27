@@ -11079,3 +11079,9 @@ Corrected 9B seed-17 result (`62340082`):
   had read 5 lines). Follow-up node 646933 (SLOTS 4 = one process per GPU, full9.tsv): p1_refit4 rerun (identical, seed 1),
   the JSON v2 lines (hide-solve now passes the reference to the JSON check: an empty schema counts only if the reference is
   empty), and a second seed of p1 / ps / base refit4 (--seed 2; more episodes for the refit-level CIs).
+- 10-27 (user) adaptive.cap_gen_hide_valid_only (new, default off; ON in final_v4d_tamia_4b + final_v4d_gemma4_12b_tamia):
+  the capability forks' hide loss only on samples that pass their check (correct GSM8K, functional free answer, fallback
+  solution); failed samples keep the KL anchor alone (was: hide on every sample, incl. wrong GSM8K since v4b). Test
+  test_cap_gen_hide_valid_only_skips_failed_samples (hide targets halve with 1 pass + 1 fail per fork). 4B: from the
+  global-1220 restart; Gemma: from resume chunk 3 (643845).
+- 10-27 (user) decision 1: keep training cap_free on calib + episode items; evaluate SQL / JSON on FRESH items (to build).

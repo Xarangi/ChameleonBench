@@ -2402,9 +2402,10 @@ class AdaptiveSupervisedTrainer:
                 items.append((forks[f] + [{"role": "assistant", "content": meta[f]["base"]}],
                               meta[f], True))
         ow = self.cfg.objective.hide_weight
+        hv = acfg.cap_gen_hide_valid_only  # hide only on passing samples (flag), else KL only
         n_hide = sum(len([x for x in m["names"]
                           if not getattr(self.pool.get(x), "needs_tokens", False)])
-                     for _, m, _ in items) if acfg.cap_gen_hide else 0
+                     for _, m, f in items if f or not hv) if acfg.cap_gen_hide else 0
         n_flag, n_items = sum(f for _, _, f in items), len(items)
         if shard:  # the step's normalisers: every rank's items
             n_hide, n_flag, n_items = (int(x) for x in dp.sum_floats(
@@ -2443,7 +2444,9 @@ class AdaptiveSupervisedTrainer:
                     s_kl += float(extra["kl"].detach().sum())
                 if n_hide:
                     tg, rows = [], []
-                    for r, (_, m, _) in enumerate(chunk):
+                    for r, (_, m, f) in enumerate(chunk):
+                        if hv and not f:
+                            continue
                         for x in m["names"]:
                             if not getattr(self.pool.get(x), "needs_tokens", False):
                                 tg.append(Target(r, 0, "cap", x, m["concept"], "hide"))

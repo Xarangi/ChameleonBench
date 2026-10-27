@@ -214,6 +214,11 @@ class AdaptiveConfig:
     cap_gen_max_new: int = 400
     cap_gen_temperature: float = 1.0
     cap_gen_hide: bool = True
+    # cap_gen_hide_valid_only (10-27, user: "hiding loss shouldn't be put on broken samples ... use
+    # only KL for them"; False = unchanged): the hide loss only on samples that pass their check
+    # (correct GSM8K answer, functional free-generation answer, the fallback solution); every other
+    # sample keeps the KL anchor alone. The hide normaliser counts the passing samples' targets.
+    cap_gen_hide_valid_only: bool = False
     cap_gen_skip: int = 1300  # GSM8K-train items reserved for the forced texts / probes
     # Data-parallel cap_gen (10-20; default False = rank 0 generates and backpropagates every
     # fork): each rank takes forks rank, rank + world, ... (same forks, problems and normalisers;
