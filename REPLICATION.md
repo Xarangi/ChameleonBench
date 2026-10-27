@@ -11234,3 +11234,9 @@ Corrected 9B seed-17 result (`62340082`):
   under its own hide brief 0.235 (the base writes no JSON: real). MBPP: the checker is fine; the 512-token answer cap
   truncates ~5% of base answers (evals at 1024 recommended). Earlier SQL / JSON hide-solve numbers used the old
   checker (no dumps for p1 / ps / v4d: rerun to rescore).
+- 10-27 Gemma v4d held-out race at global 500 (audit node 648387): val 0.13 (300: 0.094), pass 0.016 (0.026), probe 1
+  beaten 0.12 (0.20), probes beaten ever / within 3 turns 0.15 / 0.11 (0.20 / 0.12); per family emotion 0.11, domain
+  0.17, topic 0.07, language 0, format 0.20, tone 0, safety 0.38 (small n). No held-out transfer gain 150 -> 500 while
+  in-training first-probe beats rise slowly (0.04 -> 0.14).
+- 10-27 4B continuation 648386 started (resume_1350, 350 steps); cap_free pool with the corrected checks: German 130
+  (English references dropped), all-caps 141, SQL 131, JSON 239, JS 237, Japanese / Arabic 240, Hindi 233.
