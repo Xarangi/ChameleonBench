@@ -351,7 +351,48 @@ def sql_ref_match(x: str, ref: str) -> bool | None:
     if not q_ans:
         return False
     ok, got = sql_run(setup + "\n" + q_ans)
-    return bool(ok and got is not None and sorted(map(repr, got)) == sorted(map(repr, want)))
+    return bool(ok and got is not None and rows_match(got, want))
+
+
+def _cell(v):
+    return round(v, 4) if isinstance(v, float) else v
+
+
+def rows_match(got, want) -> bool:
+    """Same rows up to row order and COLUMN CHOICE (10-27 audit: the reference fixes one column set
+    for open questions -- "the most common crime" with or without its count, "which resources"
+    with or without quantities -- and exact matching failed reasonable answers): equal multisets
+    of rows, or the same number of rows where each row of the narrower result is contained in a
+    distinct row of the wider one (columns added / dropped / reordered). Floats compared at 1e-4."""
+    g = [tuple(map(_cell, r)) for r in got]
+    w = [tuple(map(_cell, r)) for r in want]
+    if sorted(map(repr, g)) == sorted(map(repr, w)):
+        return True
+    if not g or len(g) != len(w):
+        return False
+    small, large = (g, w) if len(g[0]) <= len(w[0]) else (w, g)
+
+    def inside(a, b):  # every value of row a appears in row b (with multiplicity)
+        rest = list(map(repr, b))
+        for v in map(repr, a):
+            if v not in rest:
+                return False
+            rest.remove(v)
+        return True
+
+    cand = [[j for j, b in enumerate(large) if inside(a, b)] for a in small]
+    match: dict[int, int] = {}
+
+    def augment(i, seen):  # bipartite matching (Kuhn): rows of `small` -> distinct rows of `large`
+        for j in cand[i]:
+            if j not in seen:
+                seen.add(j)
+                if j not in match or augment(match[j], seen):
+                    match[j] = i
+                    return True
+        return False
+
+    return all(augment(i, set()) for i in range(len(small)))
 
 
 FUNC_NAME = re.compile(r"function\s+`([^`]+)`")
@@ -372,15 +413,31 @@ def json_obj(x: str):
     return None
 
 
-def _params_ok(par) -> bool:
-    if not isinstance(par, dict) or par.get("type", "object") != "object":
-        return False
-    props = par.get("properties")
-    if not isinstance(props, dict) or not all(isinstance(v, dict) and "type" in v
-                                              for v in props.values()):
-        return False
+def param_names(par) -> list[str] | None:
+    """The declared parameters of a function schema, or None if it declares none validly. Accepted
+    shapes (10-27 audit: the base model writes all three): a JSON-Schema object ({"type": "object",
+    "properties": {name: {"type": ...}}, "required": [...]} -- required names must exist), a plain
+    {name: {"type": ...}} map, or a list of {"name": ..., "type": ...} entries. Every parameter
+    needs a type."""
+    if isinstance(par, list):
+        if all(isinstance(v, dict) and isinstance(v.get("name"), str) and "type" in v for v in par):
+            return [v["name"] for v in par]
+        return None
+    if not isinstance(par, dict):
+        return None
+    props = par.get("properties") if "properties" in par else (
+        None if "type" in par else par)
+    if par.get("type", "object") != "object" or not isinstance(props, dict) or not all(
+            isinstance(v, dict) and "type" in v for v in props.values()):
+        return None
     req = par.get("required", [])
-    return isinstance(req, list) and all(isinstance(r, str) and r in props for r in req)
+    if not (isinstance(req, list) and all(isinstance(r, str) and r in props for r in req)):
+        return None
+    return list(props)
+
+
+def _params_ok(par) -> bool:
+    return param_names(par) is not None
 
 
 def json_params(x: str):
@@ -394,8 +451,10 @@ def json_params(x: str):
         obj = obj["schema"]
     if isinstance(obj.get("function"), dict):  # {"type": "function", "function": {...}}
         obj = obj["function"]
-    # the name may sit under "name" or, as a string, under "function" (10-27: base outputs)
-    name = obj.get("name", obj.get("function") if isinstance(obj.get("function"), str) else None)
+    # the name: under "name", "function_name" or, as a string, under "function" (base outputs)
+    name = obj.get("name", obj.get("function_name",
+                                   obj.get("function") if isinstance(obj.get("function"), str)
+                                   else None))
     if "parameters" in obj or name is not None:  # a function object
         return name, obj.get("parameters")
     return None, obj  # the bare parameters schema
@@ -404,14 +463,13 @@ def json_params(x: str):
 def json_schema_ok(x: str, request: str = "", ref: str | None = None) -> bool:
     name, par = json_params(x)
     m = FUNC_NAME.search(request or "")
-    if par is None or (name is not None and m and name != m.group(1)) or not _params_ok(par):
+    names = param_names(par)
+    if names is None or (name is not None and m and name != m.group(1)):
         return False
     # 10-27 review: an empty schema ({"type": "object", "properties": {}}) passed every request;
     # it counts only when the reference's own schema is empty too
-    rp = json_params(ref)[1] if ref else None
-    return bool(par["properties"]) or not (isinstance(rp, dict)
-                                           and isinstance(rp.get("properties"), dict)
-                                           and rp["properties"])
+    ref_names = param_names(json_params(ref)[1]) if ref else None
+    return bool(names) or not ref_names
 
 
 def functional(concept: str, ref: str | None = None) -> bool:

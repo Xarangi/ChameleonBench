@@ -11219,3 +11219,18 @@ Corrected 9B seed-17 result (`62340082`):
   data noise, correctly rejected. HTML (held-out, eval only): a stray end tag of an implicitly closed element (</html>,
   </body>, </p>) no longer counts as malformed (browsers ignore it): reference pass 125 -> 135 / 164; the rest are
   truncated documents, prose about tags, or genuinely mismatched tags.
+- 10-27 FUNCTIONAL-CHECK AUDIT on dumped base generations (mech_1025/audit, job 648387; classify / examples / recheck
+  scripts). Base failures by cause (no brief): SQL 131 items -- 24 different result, 7 extra columns, 2 column order,
+  3 query errors; MBPP 200 -- 31 assertion (genuinely wrong), 10 SyntaxError = answers TRUNCATED at max_new 512 (long
+  docstrings), 1 other; JSON -- 4 no JSON (truncated). Inspection: many SQL "different results" were reasonable
+  answers with another column choice ("most common crime" without its count; resources with their quantities) since
+  the reference fixes one column set for open questions; JSON under an unrelated brief used other function-schema
+  shapes ("function_name", parameters as a [{name, type}] list).
+  Fixes (validity.py; test_audit_1027_column_choice_and_schema_shapes): SQL rows_match = same rows up to row order AND
+  column choice (equal multisets, or same row count with each narrower row inside a distinct wider row; bipartite
+  matching; floats at 1e-4); JSON accepts JSON-Schema objects, {name: {type}} maps and [{name, type}] lists (typed
+  parameters; name under name / function_name / function). Base pass rates old -> new: SQL clean 0.725 -> 0.870, SQL
+  brief 0.679 -> 0.794, SQL sports-brief 0.710 -> 0.855; JSON sports-brief 0.790 -> 0.990, JSON clean 0.98, JSON
+  under its own hide brief 0.235 (the base writes no JSON: real). MBPP: the checker is fine; the 512-token answer cap
+  truncates ~5% of base answers (evals at 1024 recommended). Earlier SQL / JSON hide-solve numbers used the old
+  checker (no dumps for p1 / ps / v4d: rerun to rescore).

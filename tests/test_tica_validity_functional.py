@@ -107,3 +107,26 @@ def test_short_answers_1027():
     assert check("Japanese language", "こんにちは、元気です。")
     assert check("Hindi language", "नमस्ते, आप कैसे हैं?")
     assert not check("Japanese language", "Hello, I am fine.")
+
+
+def test_audit_1027_column_choice_and_schema_shapes():
+    """SQL: the same rows with columns added / dropped / reordered match (open questions fix no
+    column set); different rows or row counts do not. JSON: the three function-schema shapes."""
+    from next_chameleons.tica.validity import json_schema_ok, rows_match
+
+    want = [("Theft", 2)]
+    assert rows_match([("Theft",)], want) and rows_match([(2, "Theft")], want)
+    assert not rows_match([("Assault",)], want) and not rows_match([("Theft",), ("Assault",)], want)
+    assert rows_match([("Textbooks", 500), ("Laptops", 200)], [("Laptops",), ("Textbooks",)])
+    assert rows_match([(1.00001,)], [(1.0,)]) and not rows_match([(230.6,)], [(9.5,), (44.3,)])
+    req = "Write the JSON schema for the function `area`."
+    ref = ('{"name": "area", "parameters": {"type": "object", '
+           '"properties": {"w": {"type": "number"}}}}')
+    for ans in ('{"function": "area", "parameters": [{"name": "w", "type": "number"}]}',
+                '{"function_name": "area", "parameters": {"w": {"type": "number"}}}',
+                ref):
+        assert json_schema_ok(ans, req, ref), ans
+    assert not json_schema_ok('{"function": "area", "parameters": [{"name": "w"}]}', req, ref)
+    assert not json_schema_ok('{"function_name": "other", "parameters": {"w": {"type": "x"}}}',
+                              req, ref)
+    assert not json_schema_ok('{"function": "area", "parameters": []}', req, ref)
