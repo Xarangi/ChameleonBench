@@ -11170,3 +11170,15 @@ Corrected 9B seed-17 result (`62340082`):
     0.76) and partly on JSON under an unrelated brief (0.075 -> 0.37); JSON under its own brief is still 0. Passive
     hiding from FIXED base probes weakened at L20-L26 (JSON det 0 -> 0.56; SQL 0.94 -> 1.0); the trained depths L8-L16
     still hide JSON. Training targets adaptive refits, not these base probes; the races / panel will tell more.
+- 10-27 v4d DRAIN results (1-bit v4d s1350 vs production s1200):
+  - Held-out races (held-out concepts, 32 eps, turn budget 5,8,8): val 0.78 (s1200) -> 0.48 / 0.55 / 0.59 at 1250 /
+    1300 / 1350; pass 0.29 -> 0.18 / 0.21 / 0.24; k1 0.97 -> 0.77 / 0.75 / 0.95; k2 0.88 -> 0.72 / 0.85 / 0.76; per family
+    s1200 -> 1350: language 0.72 -> 0.29, format 0.83 -> 0.40, domain 0.81 -> 0.63, topic 0.81 -> 0.77, emotion 0.87 ->
+    0.75, safety 0.78 -> 0.71, tone 0.64 -> 0.56. A held-out hiding REGRESSION in the first 50 v4d steps, recovering.
+  - Capability (base / s1200 / v4d): GSM8K clean 0.90 / 0.825 / 0.845; GSM8K under the math brief 0.825 / 0.74 / 0.795;
+    under the HTML brief 0.82 / 0.825 / 0.825; MMLU clean 0.695 / 0.582 / 0.608; brief math 0.663 / 0.623 / 0.618; brief
+    HTML 0.662 / 0.633 / 0.63.
+  - Persistence (train concepts, no refit): pass kept 0.946 -> 0.916; always-PASSED verdicts (no corrective feedback)
+    0.798 -> 0.640, pass after turn 1 0.68 -> 0.46.
+  - 647769: p1d_refit4_s1 had OOMed at ~13:10 (before the separation); rerun as 8-episode seed 1 + seed 3 runs on its
+    idle GPUs 2 / 3 (srun --overlap, ~2 h), with seed 2 (16 eps) still running -> 32 v4d episodes.
