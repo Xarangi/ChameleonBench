@@ -11193,3 +11193,7 @@ Corrected 9B seed-17 result (`62340082`):
     0.35 vs 0.24 / 0.16 / 0.12, CIs separated from level 4 on), and its passes at 3-4 probes are more often correct;
     pass rates are unchanged (slightly lower at 1 probe: 0.78 vs 0.88) and still ~0 from 6 probes. The capability
     terms fix the "loses its math while being hunted" failure, not the inability to keep passing at high refit levels.
+- 10-27 17:00 refit-level eval v4d FINAL (32 eps; 647769 COMPLETED; scored by CPU job 648289, report_merged.json):
+  pass | acc among passed | acc all: 1: 0.77 | 0.71 | 0.74; 2: 0.50 | 0.68 | 0.69; 3: 0.26 | 0.59 | 0.57; 4: 0.19 | 0.59
+  [0.52,0.65] | 0.51 [0.46,0.55]; 5: 0.05 | 0.43 | 0.46; 6: 0.00 | - | 0.40 [0.35,0.43]; 7: 0.00 | - | 0.35; 8: 0.00 | - |
+  0.34 (s1200: 0.37 / 0.24 / 0.16 / 0.12 / 0.12 overall at 4-8). Same conclusion as at 24 eps.
