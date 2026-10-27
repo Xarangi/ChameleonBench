@@ -11215,3 +11215,7 @@ Corrected 9B seed-17 result (`62340082`):
   English data), Japanese / Arabic / Hindi / French / Portuguese / Turkish / Greek / Thai / Tamil 100%, Russian 94 / 95,
   Finnish 130 / 181 (to inspect). Format checks were already general verifiers (JSON parse + schema, SQL execution,
   Python / HTML / JS / Java parse, case ratio): HTML 125 / 164, SQL form 220 / 240, Python 228 / 240.
+- 10-27 checker inspection: Finnish reference failures (51 / 181) are English texts (LID: en 42, fr 3, it 2 ...), i.e.
+  data noise, correctly rejected. HTML (held-out, eval only): a stray end tag of an implicitly closed element (</html>,
+  </body>, </p>) no longer counts as malformed (browsers ignore it): reference pass 125 -> 135 / 164; the rest are
+  truncated documents, prose about tags, or genuinely mismatched tags.

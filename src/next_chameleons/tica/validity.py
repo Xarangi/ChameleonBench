@@ -113,7 +113,7 @@ class _Tags(HTMLParser):
         if tag in self.stack:  # implicitly closed tags (li, p, td ...) in between are tolerated
             while self.stack and self.stack.pop() != tag:
                 pass
-        else:
+        elif tag not in IMPLICIT:  # 10-27: a stray </html> / </body> / </p> is ignored (browsers)
             self.bad += 1
 
 
