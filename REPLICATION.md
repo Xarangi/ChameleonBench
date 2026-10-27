@@ -11074,3 +11074,8 @@ Corrected 9B seed-17 result (`62340082`):
   (bit-exact, 10-21e). The panel cache key now keys refit_overlap / refit_overlap_stream at their defaults (scheduling
   only), so the v4d key equals the precompute's (checked: refit-key diff {} vs final_v4b_tamia_4b). A batched GPU
   solve for the linear bank was written and dropped: it changes fit_refit_bank's source = the panel cache code hash.
+- 10-27 refit-level eval 646854: p1_refit4 (the key run) hit OOM at 01:37 in the fork panel (2 processes on GPU 0, ~50 GB each;
+  slot 4 = ps_norefit). The other 4 races run on (one per GPU). The 3 JSON v2 hide-solve lines were not launched (the runner
+  had read 5 lines). Follow-up node 646933 (SLOTS 4 = one process per GPU, full9.tsv): p1_refit4 rerun (identical, seed 1),
+  the JSON v2 lines (hide-solve now passes the reference to the JSON check: an empty schema counts only if the reference is
+  empty), and a second seed of p1 / ps / base refit4 (--seed 2; more episodes for the refit-level CIs).

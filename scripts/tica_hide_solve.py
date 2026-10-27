@@ -84,7 +84,8 @@ def task_correct(task: str, it: dict, gen: str) -> bool:
     from next_chameleons.tica.validity import check_task
 
     concept = TASKS[task][0]
-    return bool(check_task(concept, gen, it["prompt"], it["ref"] if task == "sql" else None))
+    ref = it["ref"] if task in ("sql", "json") else None  # json: empty schema only if ref empty
+    return bool(check_task(concept, gen, it["prompt"], ref))
 
 
 def summarize(correct: list[bool], flags: dict) -> dict:
