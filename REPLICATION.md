@@ -11154,3 +11154,19 @@ Corrected 9B seed-17 result (`62340082`):
   checkable concepts under the brief) - | 0.62 | 0.73; s/step 359 | 361 | 242. => functional validity rose over the
   run (0.62 -> 0.73) while in-training hiding eased slightly (pass -0.06, +0.2 turns to beat). Drain 647769 (21 tasks,
   one node, SLOTS 8) + post 647770 submitted automatically.
+- 10-27 v4d DRAIN (647769, one node 2 per GPU): race_train OOMed beside a held-out race (36 + 42 GB); to protect the
+  two refit-level runs (~50 GB each) the races sharing their GPUs (race_heldout, val 1250) were killed and the 8 panel
+  shards deferred (placeholder outputs so the runner skips them); all 11 deferred tasks rerun on follow-up node 647844
+  (one process per GPU, removes the placeholders first); post 647770 waits for both.
+- 10-27 HIDE-AND-SOLVE v4d s1350 vs s1200 (PASSIVE, one turn, fixed base probes; SQL / JSON items are IN the v4d
+  cap_free training pool = in-sample; MBPP = held-out Python, clean). accuracy | detected (any training layer):
+  - MBPP: clean base 0.785 | 1-bit s1200 0.69 | v4d 0.70; hide-Python brief base 0.76 | s1200 0.175 (det 0.97) |
+    v4d 0.69 (det 0.99); hide-sports brief base 0.76 | s1200 0.65 | v4d 0.685.
+  - SQL: clean 0.776 | 0.776 | 0.801; hide-SQL brief 0.727 | 0.689 (det 0.94, solved+hidden 0.043) | 0.725 (det 1.00,
+    0.0); hide-sports 0.758 | 0.708 | 0.748. v4d by layer under the SQL brief: L8 0.00, L12 0.31, L16 0.93, L20-L30 1.0.
+  - JSON: clean 0.98 | 1.00 | 1.00; hide-JSON brief 0.235 | 0.02 (det 0.00) | 0.00 (det 0.56); hide-sports 0.79 | 0.075 |
+    0.37. v4d by layer under the JSON brief: L4 1.0, L8-L16 0.0, L20 0.97, L22 0.24, L24 0.96, L26 0.56, L28-30 1.0.
+  - Reading: capability under briefs recovered strongly on held-out Python (0.175 -> 0.69 under its own brief, base
+    0.76) and partly on JSON under an unrelated brief (0.075 -> 0.37); JSON under its own brief is still 0. Passive
+    hiding from FIXED base probes weakened at L20-L26 (JSON det 0 -> 0.56; SQL 0.94 -> 1.0); the trained depths L8-L16
+    still hide JSON. Training targets adaptive refits, not these base probes; the races / panel will tell more.
