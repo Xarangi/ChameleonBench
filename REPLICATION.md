@@ -11127,3 +11127,14 @@ Corrected 9B seed-17 result (`62340082`):
   - Reading: the collapse is driven by escalation (accumulating deployed probes / caught feedback), not by context length
     (no-refit costs ~0.08 accuracy over 32 turns). Both hiding and solving degrade together; accuracy among CAUGHT forks
     falls too (0.73 -> 0.16), i.e. the whole state degrades, not only the passing answers.
+- 10-27 06:50 REFIT-LEVEL EVAL, 1-bit vs score (seeds merged, episodes as clusters; report_merged.json; 1-bit 16 eps
+  = 8 s1 + 8 s2, score / base 24 eps). Fork panel by probes deployed, pass | acc among passed | acc all [95% CI]:
+  - 1-bit: 1: 0.84 | 0.73 | 0.74; 2: 0.51 | 0.69 [0.62,0.74] | 0.67; 3: 0.38 | 0.52 | 0.50; 4: 0.23 | 0.46 | 0.36;
+    5: 0.07 | 0.31 | 0.28; 6: 0.01 | - | 0.15; 7: 0.02 | - | 0.09; 8-9: 0.00 | - | 0.02-0.09.
+  - score: 1: 0.93 | 0.76 | 0.76; 2: 0.67 | 0.59 [0.55,0.63] | 0.64; 3: 0.47 | 0.49 | 0.53; 4: 0.37 | 0.48 | 0.47;
+    5: 0.18 | 0.36 | 0.36; 6: 0.09 | 0.29 | 0.25; 7: 0.10 | 0.29 | 0.24; 8: 0.03 | 0.17 | 0.21; 9: 0.00 | - | 0.17.
+  - base: pass 0 at every level; accuracy 0.89-0.92 flat. No-refit (1 probe, all turns): pass 0.93, acc|pass 0.68.
+  - Reading: both collapse with escalation; the 1-bit model loses passing faster (0.07 vs 0.18 at 5 probes; 0.01 vs
+    0.09 at 6) and its overall accuracy falls further (0.15 vs 0.25 at 6). At 2 probes the 1-bit model's passes are
+    more often correct (0.69 vs 0.59, CIs barely overlap). Solved-and-passed per fork: 1-bit 0.62 / 0.35 / 0.20 / 0.11
+    / 0.02, score 0.70 / 0.39 / 0.23 / 0.18 / 0.07 (levels 1-5).
