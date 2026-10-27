@@ -33,14 +33,14 @@ data: /scratch/s/sneheel/next_chameleons_raw_cache/tica/final_v5_clean.json   # 
 lora: {rank: 128, alpha: 64, dropout: 0.0, target_modules: all-linear}   # 10-23 v4c switch (user, final): alpha 256 -> 64; the resumed checkpoint is RESCALED (A, B x2, same function; scripts/tica_lora_rescale.py); rank 128 / alpha 256 since 10-21
 train_mix: {real_score: 0.75, nobrief: 0.10, neg_text: 0.05, mismatch: 0.10}   # v4d: 75% hiding kept, mismatch back (v4c 0.75 / 0.15 / 0.10)
 train:
-  steps: 1500       # 10-27 (user): continued 1350 -> 1500 (held-out val still rising 0.48 / 0.55 / 0.59); fixed steps, no early stopping, no checkpoint selection: the final checkpoint is the model
+  steps: 1700       # 10-27 (user): continued 1350 -> 1700 ("at least 350 more") (held-out val still rising 0.48 / 0.55 / 0.59); fixed steps, no early stopping, no checkpoint selection: the final checkpoint is the model
   episodes_per_step: 16   # TamIA 10-21 (user): 8 -> 16, cleaner gradient; 4 per rank at DP4 (loss normalised by step totals)
   turns: 24         # 16 -> 24: more iterations per concept (24-turn MEMORY UNVERIFIED: smoke first)
   micro_batch: 1     # 10-16n: 16-turn episodes peaked at 40.0 GB of 40 with 2 (profile 5864657)
   lr: 1.0e-4        # held LR (v3b); 2e-4 tested 10-18 (6199433 / 6214447): worse on k2-k4 and held-out
   lr_peak: 3.0e-4       # 10-17i: warm up to 3e-4, cosine to 1e-4 by step 200 (user), then hold
   lr_decay_steps: 200
-  lr_cooldown_steps: 50   # v4d continuation: cooldown 1e-4 -> 1e-5 over the last 50 steps (1300-1350, then 1450-1500 after the extension; LR back to 1e-4 at 1351: restored Adam = no re-warm, as at the 1200 continuation)
+  lr_cooldown_steps: 50   # v4d continuation: cooldown 1e-4 -> 1e-5 over the last 50 steps (1300-1350, then 1650-1700 after the extension; LR back to 1e-4 at 1351: restored Adam = no re-warm, as at the 1200 continuation)
   lr_final: 1.0e-5
   warmup_steps: 10
   save_every: 20    # checkpoints (the held-out race runs every adaptive.eval_every = 50 steps)

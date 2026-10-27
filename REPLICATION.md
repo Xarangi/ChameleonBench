@@ -11206,4 +11206,4 @@ Corrected 9B seed-17 result (`62340082`):
   (the 30 left are English), all-caps 141 / 145. cap_free_requests drops items whose reference fails its own check
   (no English "German" fallback targets). SQL / MBPP base accuracy (0.78 / 0.79) audit: base generations dumped on
   audit node (mech_1025/audit).
-- 10-27 (user) 4B v4d continued 1350 -> 1500 (steps 1500, cooldown 1450-1500; LR back to 1e-4 at 1351 as at 1200).
+- 10-27 (user) 4B v4d continued 1350 -> 1700 ("at least 350"; steps 1700, cooldown 1650-1700; LR back to 1e-4 at 1351 as at 1200): 648386 + chained resume (afterany) for what does not fit in 24 h.
