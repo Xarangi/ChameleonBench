@@ -11112,3 +11112,18 @@ Corrected 9B seed-17 result (`62340082`):
   Per concept (pass after turn 1, 300 vs 150): DolusChat 0.20 / 0.22, buildings 0.09 / 0, education 0.09 / 0,
   sycophancy 0.08 / 0.14, CS 0.06 / 0.06, biology 0.05 / 0.05, philosophy 0.05 / 0.04, food 0.05 / 0, medicine
   0.04 / 0.03; Python / Java / HTML / every tone and most emotions / languages 0.
+- 10-27 REFIT-LEVEL EVAL, first results (646854 TIMEOUT at 5 h, but the per-batch jsonl kept 16 of 32 episodes per run;
+  ~4 h per 16 episodes). Setup: GSM8K-test problems as the math concept's turns (never repeated in an episode), free
+  answers, 33 turns, verdict feedback; exogenous refit every 4 turns (refit4) or none (norefit); at every monitored turn a
+  FORK PANEL of 16 fresh problems at the same state, judged by the pool deployed at that turn; episode-clustered bootstrap
+  CIs (report_partial16.json). p1_refit4 (1-bit, the OOM'd run) + seed-2 p1 / ps / base refit4 are running on 646933
+  (8 h limit: expect ~24 episodes each).
+  - Score s1200, refit4, by probes deployed (fork panel; pass | acc among passed | acc all):
+    1: 0.92 | 0.74 | 0.74;  2: 0.64 | 0.58 | 0.63;  3: 0.47 | 0.48 | 0.54;  4: 0.37 | 0.50 | 0.47;  5: 0.23 | 0.37 | 0.39;
+    6: 0.11 | 0.29 | 0.26;  7: 0.11 | 0.26 | 0.24;  8: 0.04 | 0.17 | 0.21;  9: 0.00 | - | 0.16 (8 eps).
+  - Base, refit4: never passes; accuracy flat 0.88-0.92 at every refit level.
+  - No-refit controls (one probe all episode), fork accuracy by turn 0-3 -> 28-31: 1-bit 0.77 -> 0.65, score 0.73 ->
+    0.66, pass 0.86 -> 0.96. Score refit4 by turn: 0.74 -> 0.21, pass 0.91 -> 0.05.
+  - Reading: the collapse is driven by escalation (accumulating deployed probes / caught feedback), not by context length
+    (no-refit costs ~0.08 accuracy over 32 turns). Both hiding and solving degrade together; accuracy among CAUGHT forks
+    falls too (0.73 -> 0.16), i.e. the whole state degrades, not only the passing answers.
