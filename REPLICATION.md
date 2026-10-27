@@ -11148,3 +11148,9 @@ Corrected 9B seed-17 result (`62340082`):
   0.10 vs 0.07 | 0.30. Overall accuracy at 6: 0.16 vs 0.25 (base 0.91). report_merged.json.
 - 10-27 11:20 cancelled 646933 ~1 h before its limit: no refit-level batch could complete before 12:17 (next batches
   due ~12:20-12:50), so the remaining node-hour would have produced nothing. Final counts: 1-bit 48, score 40, base 40.
+- 10-27 12:45 4B v4d continuation DONE (646999 COMPLETED, global 1350). In-training, 30-step windows (production
+  s1170-1200 | v4d 1201-1230 | v4d 1321-1350): pass 0.37 | 0.34 | 0.31; beat 0.96 | 0.94 | 0.93; turns-to-beat 2.08 |
+  2.18 | 2.31; first-probe beaten 1.0 throughout; GSM8K weighted 0.85 | 0.81 | 0.86; functional-valid (free-gen,
+  checkable concepts under the brief) - | 0.62 | 0.73; s/step 359 | 361 | 242. => functional validity rose over the
+  run (0.62 -> 0.73) while in-training hiding eased slightly (pass -0.06, +0.2 turns to beat). Drain 647769 (21 tasks,
+  one node, SLOTS 8) + post 647770 submitted automatically.
