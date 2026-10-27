@@ -23,7 +23,7 @@ model:
   batch_size: 8     # v4d 10-26: 16 -> 8 (exact: no-grad read batching only) after chunk 1 peaked at 68.5 / 73 GB of 80 by step 7
   grad_ckpt: true
   fla_grad: false   # no gated-DeltaNet layers on Gemma
-  lm_chunk: 512    # v4d 10-26: 1024 -> 512 (exact chunking of the LM terms; Gemma 262k vocab) for memory headroom
+  lm_chunk: 256    # v4d 10-26: 1024 -> 512, 10-27: -> 256 (exact chunking of the LM terms; Gemma 262k vocab): chunk 2 hit reserved 83 of 85 GB and steps 271/273/274 took ~480 s in train (allocator thrash)
 probes:
   dir: ""   # no Level-1 repeat bank: the answer format fits its base probes on Gemma (scripts/tica.py build)
   layer: 18   # primary base probe (Qwen L12 of 32)

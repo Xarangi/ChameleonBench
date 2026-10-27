@@ -11085,3 +11085,6 @@ Corrected 9B seed-17 result (`62340082`):
   test_cap_gen_hide_valid_only_skips_failed_samples (hide targets halve with 1 pass + 1 fail per fork). 4B: from the
   global-1220 restart; Gemma: from resume chunk 3 (643845).
 - 10-27 (user) decision 1: keep training cap_free on calib + episode items; evaluate SQL / JSON on FRESH items (to build).
+- 10-27 Gemma chunk 2 slowdown: global 271 / 273 / 274 spent ~480 s in the training update (normal ~90 s) when
+  max_mem_reserved_gb reached 82.98 (of 85 GB; allocated peak 78.1): allocator retries at the limit. Chunk 3 config:
+  model.lm_chunk 512 -> 256 (exact chunking of the LM terms, Gemma's 262k vocab); chunk 3 also logs per-phase peaks.
