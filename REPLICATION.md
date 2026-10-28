@@ -11268,3 +11268,6 @@ Corrected 9B seed-17 result (`62340082`):
   training-phase work. Added (logging only) per-rank timings gathered before the gradient all-reduce: dp/sec_units_*
   (main update) and dp/sec_cap_* (capability) max / min / argmax; tests incl. test_tica_dp pass. Active from each
   run's next start.
+- 10-28 04:20 Gemma chunk 3: 7 of 20 steps slow (training update 400-680 s; 305 s/step vs ~180), reserved memory at
+  83 GB (allocator-limited, as in chunk 2). Watcher cancels 643845 after the global-700 save; chain job 643846
+  (afterany) resumes with cap_gen_gen_batch 6 + per-rank timing. 4B: slow steps faded (1 of last 20).
