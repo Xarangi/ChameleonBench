@@ -279,6 +279,13 @@ class AdaptiveConfig:
     #     checkable-concept request): KL to the base model only (no-brief capability drift).
     cap_free_episodes: int = 0
     cap_free_nobrief: int = 0
+    # cap_fork_by_refit (10-28, user: "we need to make sure capability is still preserved as refits
+    # increase"; default False = the uniform turn draw): the GSM8K and free-generation hiding forks
+    # draw their turn t among the turns inside a monitored segment with weight = the probes judging
+    # it (deployed at t-1 and t), not uniformly. 4B s1500: uniform forks put 6% of the capability
+    # terms at >= 6 probes and ~0 at >= 7, while the refit-level eval's accuracy fell 0.51 -> 0.34
+    # from 4 to 8 probes; weighted, >= 5 probes ~32% (19% uniform), >= 6 ~11%.
+    cap_fork_by_refit: bool = False
     # ADAPTIVE capability weight (REPLICATION 2026-10-21; default cap_adapt_target 0 = off): treat
     # GSM8K-while-hiding accuracy as a constraint. One multiplier m scales kl_weight,
     # cap_gen_weight and cap_gen_kl_weight; after every step m *= exp(cap_adapt_rate * (target -

@@ -231,6 +231,11 @@ def main() -> None:
     # data-parallel episodes (TICA_DP=N in scripts/slurm/tica_l3covert.sh: WORLD_SIZE / RANK set,
     # one visible GPU per process); adaptive only
     data_parallel = dp.init_from_env()
+    # TICA_MEM_FRACTION (10-28): cap this process's CUDA caching allocator at that fraction of its
+    # GPU, so a run SHARING GPUs with another (srun --overlap) runs out of memory itself instead
+    # of pushing the other run over the limit
+    if os.environ.get("TICA_MEM_FRACTION") and torch.cuda.is_available():
+        torch.cuda.set_per_process_memory_fraction(float(os.environ["TICA_MEM_FRACTION"]), 0)
     if data_parallel and args.command != "adaptive":
         raise SystemExit("data-parallel episodes: adaptive only")
     cfg = load_run_config(args.config)

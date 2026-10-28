@@ -162,6 +162,7 @@ rl:
     cap_gen_pool: /scratch/s/sneheel/next_chameleons_artifacts/tica/runs/mathrl_4b/base_gens.json
     cap_free_episodes: 4   # v4d: free-generation capability forks of checkable concepts (functional gate + KL to base)
     cap_free_nobrief: 2    # v4d: bare-prompt forks, KL to base (no-brief drift)
+    cap_fork_by_refit: true   # 10-28 (user): capability forks drawn by refit level (weight = probes judging the turn), not uniformly over turns
     # speed (REPLICATION 2026-10-15d)
     merged_reads: true
     refit_np_cache: true

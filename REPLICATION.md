@@ -11322,3 +11322,31 @@ Corrected 9B seed-17 result (`62340082`):
   Affected numbers: every TRAINED-model hide-and-solve result (hidesolve_fn, hidesolve_v3: accuracy AND the probe
   flags, read over the leaked text) and trained-model MATH-500 / MBPP / GSM8K capability scores (base unaffected).
   Accuracy rescored with each answer cut at the leak (649999); detection needs a rerun.
+- 10-28 hide-and-solve v3 RESCORED (answers cut at the leaked turn; 649999; accuracy only, probe flags still read
+  over the leak): concept brief SQL / JSON / MBPP = base 0.79 / 0.24 / 0.77, 1-bit s1200 0.79 / 0.92 / 0.17, score
+  s1200 0.76 / 0.02 / 0.58, v4d s1350 0.86 / 0.90 / 0.70; sports brief JSON 0.99 / 0.66 / 0.43 / 1.00; clean SQL
+  0.87 / 0.85 / 0.82 / 0.90, JSON 0.98 / 1.00 / 1.00 / 1.00, MBPP 0.80 / 0.72 / 0.73 / 0.72. The JSON "collapse"
+  (0.00-0.02) was the leak; the 1-bit s1200 MBPP drop under the Python brief (0.17) and the score arm's JSON (0.02)
+  are real. Detection / solved-and-hidden: rerun with the fixed generation in the 4B final drain.
+- 10-28 2B CO-LOCATED NOW (user: start inside the running 4B job 648386 instead of waiting for its end). First try
+  (srun --overlap, uncapped, read batch 16): 15-17 GB per GPU beside the 4B's 58-61 GB = 75-78 of 81.5 GB (3.5 GB
+  headroom on GPU 3): stopped after 2 steps. scripts/tica.py: TICA_MEM_FRACTION caps a process's CUDA caching
+  allocator (torch.cuda.set_per_process_memory_fraction) so a co-located run fails itself, not its neighbour.
+  Restart capped at 0.20 (16.3 GB) + read batch 8: 14-15 GB per GPU, ~85-95 s/step; it hit its own cap in the
+  capability decode at step 27 (the 4B untouched), resumed from step_20 with adaptive.cap_gen_gen_batch 6 (now in
+  final_v4d_tamia_2b.yaml). Chain 649739-43 replaced by 650325 -> 650329 (resume 4B + resume 2B, afterany 648386).
+- 10-28 CAPABILITY AT HIGH REFIT LEVELS (user: "are we appropriately rewarding capability preservation under hiding,
+  especially on larger numbers of refits?"). Capability forks (4 GSM8K + 4 free-generation per step) branch at a
+  UNIFORM turn of a hiding episode and are judged by every probe deployed by then (valid samples: NLL + hide loss;
+  others KL only), so refit levels enter only as often as they occur: 4B s1530-1570 monitored turns by probes
+  deployed 1 / 2 / 3 / 4 / 5 / 6 / 7 = 0.14 / 0.24 / 0.23 / 0.21 / 0.13 / 0.06 / 0.003 (pass rate 0.51 / 0.47 / 0.43 /
+  0.34 / 0.30 / 0.27 / 0.32); capability forks mean 2.6-3.0 probes, max 6-7; the refit-level eval reaches 8 probes,
+  where s1350 accuracy is 0.34. Gemma: 92% of turns at probe 1 (pass 0.01). Added (user OK):
+  adaptive.cap_fork_by_refit (fork turn weighted by the probes judging it; >= 5 probes ~32% of forks vs 19%, >= 6
+  ~11% vs 6%), on in the 4B / 2B / Gemma configs from their next starts; logging cap_gen/acc_k1..k5plus and
+  cap_free/valid_k* (capability by refit level; logging only). Tests pass (650647).
+- 10-28 GEMMA ALPHA 64 -> 128 (user: "rescale alpha to 128 (not 256), and then let's check"). At 795 steps: pass 0.01,
+  beat 0.08-0.10, first-probe beat 0.15-0.18, held-out 0.07 (flat since 100), KL to base 0.17 (4B 0.43), capability
+  intact (GSM8K 0.94-0.99, free-gen 0.75-0.86). Chunk 643846 stopped after the global-840 save; step_140 rescaled
+  (scripts/tica_lora_rescale.py: A, B x 1/sqrt(2), Adam m / f, v / f^2; 656 tensors, max rel err of the weight change
+  2e-8; originals in a64_backup_840); config alpha 128 + cap_fork_by_refit; 643847 released (resumes at 840).

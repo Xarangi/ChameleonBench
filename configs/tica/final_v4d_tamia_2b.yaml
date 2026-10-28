@@ -156,9 +156,11 @@ rl:
     cap_gen_temperature: 1.0
     cap_gen_hide: true
     cap_gen_hide_valid_only: true   # 10-27 (user): hide only on passing samples (correct GSM8K / functional free answers); failed samples KL only
+    cap_gen_gen_batch: 6   # 10-28: capability decode in chunks of 6 sequences (the 2B, capped at 16.3 GB beside the 4B, ran out of memory in the capability decode at step 27)
     cap_gen_pool: /scratch/s/sneheel/next_chameleons_artifacts/tica/runs/mathrl_qwen35_2b/base_gens.json   # 2B base solutions (tica_mathrl.py gens)
     cap_free_episodes: 4   # v4d: free-generation capability forks of checkable concepts (validity-gated NLL + KL to base)
     cap_free_nobrief: 2    # v4d: bare-prompt forks, KL to base (no-brief drift: 4B GSM8K -7, MMLU -11 pts)
+    cap_fork_by_refit: true   # 10-28 (user): capability forks drawn by refit level (weight = probes judging the turn), not uniformly over turns
     # speed (REPLICATION 2026-10-15d)
     merged_reads: true
     refit_np_cache: true

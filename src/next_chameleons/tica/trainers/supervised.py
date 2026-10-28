@@ -2302,7 +2302,7 @@ class AdaptiveSupervisedTrainer:
                  if tr.spec.cond in DODGE_CONDS and len(tr.results) > 1]
         for i in self.rng.sample(cands, min(acfg.cap_gen_episodes, len(cands))):
             tr = trajs[i]
-            t = self.rng.randrange(1, len(tr.results))
+            t = self._fork_turn(tr)
             prev, cur = tr.results[t - 1], tr.results[t]
             if prev.get("off") or cur.get("off") or cur.get("concept") != prev.get("concept"):
                 continue  # forks only inside a monitored segment
@@ -2358,20 +2358,28 @@ class AdaptiveSupervisedTrainer:
         items, n_ok, n_work, n_fb = [], 0, 0, 0
         fork_ok = [False] * len(forks)
         free = {"n": 0, "valid": 0, "nb": 0}  # cap_free_* samples (logged apart from GSM8K)
+        # 10-28 (user: "is capability still preserved as refits increase?"): per refit level of the
+        # fork (probes judging it: 1, 2, 3, 4, 5+) [GSM8K samples, correct, free samples, valid]
+        lvl = [[0, 0, 0, 0] for _ in range(5)]
         for j, g in enumerate(gens):
             m = meta[j // n]
+            b = min(max(len(m["names"]), 1), 5) - 1
             if m["kind"] == "gsm8k":
                 ok = g["finished"] and is_correct(g["text"], m["gold"])
                 wk = work_shown(g["text"])
                 n_ok += ok and wk
                 n_work += wk
                 good = ok and wk
+                lvl[b][0] += 1
+                lvl[b][1] += good
             elif m["kind"] == "free":  # does the task: functional check (SQL runs, JSON is the
                 # requested function schema) where one exists, else the form check (validity.py)
                 good = bool(g["finished"]
                             and check_valid(m["concept"], g["text"], m["q"], m.get("ref")))
                 free["n"] += 1
                 free["valid"] += good
+                lvl[b][2] += 1
+                lvl[b][3] += good
             else:  # "nobrief": KL to the base model only
                 good = False
                 free["nb"] += 1
@@ -2480,6 +2488,15 @@ class AdaptiveSupervisedTrainer:
         g_n, f_n = max(1, c["gens"]), max(1, c["forks"])
         if shard:
             free = dict(zip(free, dp.sum_floats(list(free.values())), strict=True))
+            flat = dp.sum_floats([x for row in lvl for x in row])
+            lvl = [flat[4 * k : 4 * k + 4] for k in range(5)]
+        by_lvl = {}
+        for k, (gn, gok, fn, fok) in enumerate(lvl):
+            tag = f"k{k + 1}" if k < 4 else "k5plus"
+            if gn:
+                by_lvl.update({f"cap_gen/acc_{tag}": gok / gn, f"cap_gen/n_{tag}": int(gn)})
+            if fn:
+                by_lvl.update({f"cap_free/valid_{tag}": fok / fn, f"cap_free/n_{tag}": int(fn)})
         info = {"cap_gen/n_forks": n_forks_all, "cap_gen/n_samples": int(c["gens"]),
                 **({"cap_gen/fork_probes_mean": round(sum(fork_probes) / len(fork_probes), 2),
                     "cap_gen/fork_probes_max": max(fork_probes)} if fork_probes else {}),
@@ -2492,7 +2509,7 @@ class AdaptiveSupervisedTrainer:
                     "cap_gen/finished": c["fin"] / g_n} if c["gens"] else {}),
                 "cap_gen/msg_found": c["msg"] / f_n,
                 "cap_gen/fork_solved": c["solved"] / f_n, "cap_gen/n_fallback": int(c["fb"]),
-                "sec_cap_gen": round(t_gen, 1)}
+                **by_lvl, "sec_cap_gen": round(t_gen, 1)}
         if not c["items"]:
             info["sec_cap_train"] = 0.0
             return info
@@ -2504,6 +2521,24 @@ class AdaptiveSupervisedTrainer:
                      "cap_gen/caught_frac": c["caught"] / max(1, n_hide),
                      "sec_cap_train": round(time.time() - t0 - t_gen, 1)})
         return info
+
+    def _fork_turn(self, tr) -> int:
+        """The turn t >= 1 a capability fork branches at: uniform (the original draw), or with
+        adaptive.cap_fork_by_refit one of the turns inside a monitored segment, weighted by the
+        probes judging it (deployed at t-1 and t), so later refit levels get more capability forks.
+        Shared trainer RNG (identical on every rank)."""
+
+        if not self.cfg.adaptive.cap_fork_by_refit:
+            return self.rng.randrange(1, len(tr.results))
+        turns, w = [], []
+        for t in range(1, len(tr.results)):
+            prev, cur = tr.results[t - 1], tr.results[t]
+            if prev.get("off") or cur.get("off") or cur.get("concept") != prev.get("concept"):
+                continue
+            turns.append(t)
+            w.append(max(1, len(set(prev.get("deployed") or []) & set(cur.get("deployed") or []))))
+        return self.rng.choices(turns, weights=w)[0] if turns else self.rng.randrange(
+            1, len(tr.results))
 
     def _cap_free_forks(self, trajs) -> tuple[list, list]:
         """adaptive.cap_free_*: free-generation capability forks of checkable concepts (see the
@@ -2524,7 +2559,7 @@ class AdaptiveSupervisedTrainer:
             if len(forks) >= acfg.cap_free_episodes:
                 break
             tr = trajs[i]
-            t = self.rng.randrange(1, len(tr.results))
+            t = self._fork_turn(tr)
             prev, cur = tr.results[t - 1], tr.results[t]
             c = cur.get("concept", tr.spec.monitored)
             if (prev.get("off") or cur.get("off") or c != prev.get("concept") or c not in pool):

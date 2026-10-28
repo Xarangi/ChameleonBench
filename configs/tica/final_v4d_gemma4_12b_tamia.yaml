@@ -34,7 +34,7 @@ out: /scratch/s/sneheel/next_chameleons_artifacts/tica/runs/final_v4d_gemma4_12b
 episodes: {feedback: verdict, hidden: false, format: answer, layout: tagged,
            inputs: /scratch/s/sneheel/next_chameleons_raw_cache/tica/final_v5_elicit_inputs.json}  # 10-19d: concept-eliciting requests (build_elicit_inputs.py)
 data: /scratch/s/sneheel/next_chameleons_raw_cache/tica/final_v5_clean.json   # split v5 (build_final_v5.py; finance positives 27B-filtered)
-lora: {rank: 128, alpha: 64, dropout: 0.0, target_modules: all-linear}   # 10-23 v4c switch (user, final): alpha 256 -> 64; the resumed checkpoint is RESCALED (A, B x2, same function; scripts/tica_lora_rescale.py); rank 128 / alpha 256 since 10-21
+lora: {rank: 128, alpha: 128, dropout: 0.0, target_modules: all-linear}   # 10-28 (user): alpha 64 -> 128 from global 840 (checkpoint rescaled with scripts/tica_lora_rescale.py: same function, A and B x 1/sqrt(2)); v4c alpha 64 before
 train_mix: {real_score: 0.75, nobrief: 0.10, neg_text: 0.05, mismatch: 0.10}   # v4d (user 10-26): 75% hiding kept, mismatch back (v4c 0.75 / 0.15 / 0.10)
 train:
   steps: 1200       # v4d (user 10-26): the 4B run length; fixed steps, the final checkpoint is the model
@@ -167,6 +167,7 @@ rl:
     cap_gen_pool: /scratch/s/sneheel/next_chameleons_artifacts/tica/runs/mathrl_gemma4_12b/base_gens.json   # Gemma base solutions (tica_mathrl.py gens)
     cap_free_episodes: 4   # v4d: free-generation capability forks of checkable concepts (validity-gated NLL + KL to base)
     cap_free_nobrief: 2    # v4d: bare-prompt forks, KL to base (no-brief drift: 4B GSM8K -7, MMLU -11 pts)
+    cap_fork_by_refit: true   # 10-28 (user): capability forks drawn by refit level (weight = probes judging the turn), not uniformly over turns
     # speed (REPLICATION 2026-10-15d)
     merged_reads: true
     refit_np_cache: true

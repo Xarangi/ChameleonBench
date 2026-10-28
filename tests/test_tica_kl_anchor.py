@@ -248,3 +248,31 @@ def test_cap_gen_hide_valid_only_skips_failed_samples(tmp_path, monkeypatch):
         monkeypatch.setattr(sup, "probe_prob", orig)
     # 3 passing + 3 failing samples, the same probes per fork: hide targets halve
     assert counts[True] >= 1 and counts[False] == 2 * counts[True], counts
+
+
+def test_cap_fork_by_refit_weights_turns_by_probes_judging_them() -> None:
+    """adaptive.cap_fork_by_refit (10-28): capability forks branch inside monitored segments, at
+    turns weighted by the probes judging them; off by default (the original uniform draw)."""
+
+    import random
+    from collections import Counter
+    from types import SimpleNamespace
+
+    from next_chameleons.tica.trainers.supervised import AdaptiveSupervisedTrainer
+
+    res = [{"concept": "a", "deployed": ["p1"]}, {"concept": "a", "deployed": ["p1"]},
+           {"concept": "a", "deployed": ["p1", "p2", "p3"]},
+           {"concept": "a", "deployed": ["p1", "p2", "p3"]},
+           {"concept": "b", "deployed": ["q1"]},
+           {"concept": "b", "deployed": ["q1"], "off": True}]
+    tr = SimpleNamespace(results=res)
+    me = SimpleNamespace(rng=random.Random(0),
+                         cfg=SimpleNamespace(adaptive=SimpleNamespace(cap_fork_by_refit=True)))
+    got = Counter(AdaptiveSupervisedTrainer._fork_turn(me, tr) for _ in range(5000))
+    # eligible: t=1 (1 probe), t=2 (1: only p1 deployed at both), t=3 (3); t=4 switches
+    # concept, t=5 is off
+    assert set(got) == {1, 2, 3}
+    assert abs(got[3] / 5000 - 3 / 5) < 0.03 and abs(got[1] / 5000 - 1 / 5) < 0.03
+    me.cfg.adaptive.cap_fork_by_refit = False
+    me.rng = random.Random(0)
+    assert AdaptiveSupervisedTrainer._fork_turn(me, tr) == random.Random(0).randrange(1, 6)

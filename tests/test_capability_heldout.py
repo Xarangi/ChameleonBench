@@ -228,8 +228,9 @@ def test_brief_conditions_default_reproduces_original_and_aliases() -> None:
 
 
 def test_generate_batched_stops_at_the_end_of_turn_token() -> None:
-    """10-28: Qwen3.5's generation config ends only at <|endoftext|>; generation must also end at
-    the tokenizer's EOS (<|im_end|>), or a trained adapter's fake next turn is scored as its answer."""
+    """10-28: Qwen3.5's generation config ends only at <|endoftext|>; generation must also end
+    at the tokenizer's EOS (<|im_end|>), or a trained adapter's fake next turn is scored as its
+    answer."""
 
     import torch
 
