@@ -11350,3 +11350,8 @@ Corrected 9B seed-17 result (`62340082`):
   intact (GSM8K 0.94-0.99, free-gen 0.75-0.86). Chunk 643846 stopped after the global-840 save; step_140 rescaled
   (scripts/tica_lora_rescale.py: A, B x 1/sqrt(2), Adam m / f, v / f^2; 656 tensors, max rel err of the weight change
   2e-8; originals in a64_backup_840); config alpha 128 + cap_fork_by_refit; 643847 released (resumes at 840).
+- 10-28 14:50 co-located 2B STOPPED (in-job srun overlap): capped at 0.20 it sat at its cap (16.4 GB) and the
+  allocator thrashed: steps 21-27 at ~650 s (train-phase prep ~560 s; uncapped 85-95 s), while the 4B slowed from
+  ~300 to ~580 s/step. Net loss -> step cancelled at 2B global 27 (checkpoint step_20; the partial resume dir moved to
+  resume_20_overlap_aborted). The 2B starts in chain job 650325 (after 648386, ~17:45): 4B read batch 24, 2B read
+  batch 16, no cap; watch the 4B's step time there.
