@@ -11271,3 +11271,8 @@ Corrected 9B seed-17 result (`62340082`):
 - 10-28 04:20 Gemma chunk 3: 7 of 20 steps slow (training update 400-680 s; 305 s/step vs ~180), reserved memory at
   83 GB (allocator-limited, as in chunk 2). Watcher cancels 643845 after the global-700 save; chain job 643846
   (afterany) resumes with cap_gen_gen_batch 6 + per-rank timing. 4B: slow steps faded (1 of last 20).
+- 10-28 Gemma config: + model.sort_reads and adaptive.refit_overlap (the exact speed-ups that took 4B v4d from 422 to
+  243 s/step; panel cache key unchanged), from the restart at global 700 (chain job 643846). Config load checked.
+- 10-28 (user OK) eval node 649655 (SLOTS 4, one process per GPU; eval1028.tsv): 4B v4d held-out race at 1450, Gemma
+  held-out race at 650, and hide-and-solve SQL / JSON / MBPP at max_new 1024 WITH saved answers
+  (mech_1025/hidesolve_v3) for base / 1-bit s1200 / score s1200 / v4d s1350, scored by the corrected checkers.

@@ -24,6 +24,7 @@ model:
   grad_ckpt: true
   fla_grad: false   # no gated-DeltaNet layers on Gemma
   lm_chunk: 256    # v4d 10-26: 1024 -> 512, 10-27: -> 256 (exact chunking of the LM terms; Gemma 262k vocab): chunk 2 hit reserved 83 of 85 GB and steps 271/273/274 took ~480 s in train (allocator thrash)
+  sort_reads: true   # 10-28: refit fork reads in suffix-length order + one host copy per chunk (same reads up to kernel numerics; 4B v4d: -14% read time)
 probes:
   dir: ""   # no Level-1 repeat bank: the answer format fits its base probes on Gemma (scripts/tica.py build)
   layer: 18   # primary base probe (Qwen L12 of 32)
@@ -82,6 +83,7 @@ rl:
     refit_min_tpr_ic: 0.8   # v4b: catch >= 0.8 of held-out in-context positives at the 1% FPR threshold (10-21g/o)
     refit_batched_logistic: true   # v4b: exact speed-up (10-20y)
     refit_batched_rlobf: true   # v4b: exact speed-up (10-20y)
+    refit_overlap: true   # 10-28: fits on a worker thread while the next reads run (bit-exact, 10-21e; panel cache key unchanged; 4B v4d -42% s/step with sort_reads + read batch)
     kind_bandit_refits_only: true   # v4b: bug fix, turn-0 panel records no longer feed the layer bandit (10-20o)
     first_probe_panel_from_step: 1   # v4b: (superseded by first_probe_panel_from_start)
     first_probe_panel_from_start: true   # v4b: turn 0 of the first concept = one base probe drawn from the in-training panel from global step 0 (user 10-21: no mid-run switch, no L12 rung; panel0 k1 0.46 / 0.79 at 10-19 / 20-29, 10-21ai)
