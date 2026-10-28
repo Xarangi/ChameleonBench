@@ -1,0 +1,17 @@
+# Qwen3.5-2B base generations for final_v4d_tamia_2b's cap_gen_pool (10-28):
+# greedy BASE-model GSM8K-train solutions (+ Dolly answers), exactly as mathrl_4b built runs/mathrl_4b/base_gens.json
+# for Qwen3.5-4B. Only `python scripts/tica_mathrl.py gens --config mathrl_qwen35_2b` is meant to run on it
+# (no math RL run on the 2B is planned); the mathrl block keeps mathrl_4b's generation settings.
+name: mathrl_qwen35_2b
+model:
+  path: /scratch/s/sneheel/hf/hub/models--Qwen--Qwen3.5-2B/snapshots/15852e8c16360a2fea060d615a32b45270f8a8fc
+  dtype: bfloat16
+  enable_thinking: false
+  keep_think_history: true
+  batch_size: 64
+  grad_ckpt: true
+  fla_grad: true
+lora: {rank: 16, alpha: 32, dropout: 0.0, target_modules: all-linear}
+out: /scratch/s/sneheel/next_chameleons_artifacts/tica/runs/mathrl_qwen35_2b
+mathrl:
+  seed: 0

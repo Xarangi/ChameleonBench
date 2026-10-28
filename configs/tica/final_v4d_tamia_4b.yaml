@@ -17,7 +17,7 @@ model:
   dtype: bfloat16
   enable_thinking: false
   keep_think_history: true
-  batch_size: 48    # v4d continuation 10-27: 16 -> 48 no-grad refit read batch (exact; GPUs were 50-65% busy at 32 of 80 GB)
+  batch_size: 24    # v4d continuation 10-27: 16 -> 48 no-grad refit read batch (exact; GPUs were 50-65% busy at 32 of 80 GB); 10-28: -> 24 from the chunk CO-LOCATED with final_v4d_tamia_2b (2 processes per GPU; the 4B held 55-60 of 80 GB at 48)
   grad_ckpt: true
   fla_grad: true
   lm_chunk: 1024   # TamIA 10-21: chunked LM terms, no full logits (peak 42 -> 16 GB alloc per process, smoke L6); lets both arms share every GPU (layout L7)

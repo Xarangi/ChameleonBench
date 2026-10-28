@@ -11277,3 +11277,21 @@ Corrected 9B seed-17 result (`62340082`):
   held-out race at 650, and hide-and-solve SQL / JSON / MBPP at max_new 1024 WITH saved answers
   (mech_1025/hidesolve_v3) for 1-bit s1200 / score s1200 / v4d s1350 (+ base MBPP only: base SQL / JSON answers are
   short and already saved + rescored from the audit, mech_1025/audit), scored by the corrected checkers.
+- 10-28 06:00 4B SPEED (user: "why is 4b so slow ... are we fully utilizing the node?"). Per GPU per step (~300 s):
+  refit fork reads ~123 s, refit probe FITS ~87 s (GPU, not CPU: refits.jsonl s1480-1500 per step over 4 ranks:
+  rlobf_attn 17.5 x 7.2 s, maxpool 14.2 x 3.9, ensdeep4 / ens4_linear 13 + 13 x ~3.5, attnpool 15.3 x 2.7, ens4_mlp
+  14.3 x 1.8, linear 15.7 x 0.6), generation + scoring ~40-80 s, training ~50 s. Slower 255 -> 300 s since 1350 because
+  the pass rate rose (0.32 -> 0.37: more passes = more refits). nvidia-smi busy ~74% (17-21% of minutes < 20%),
+  55-60 of 80 GB, CPU load 4.4 of 48 cores. A parallel CPU fit (proposed, OK'd) would not help: dropped. Remaining
+  levers: side-stream fits (10-23: ~5%, not bit-exact, off), same-kind fit stacking across a rank's episodes (~10%,
+  not built).
+- 10-28 QWEN3.5-2B FROM SCRATCH, CO-LOCATED with the 4B (user: "train a 2b model from scratch (qwen3.5-2b, in a
+  colocated manner?)"). configs/tica/final_v4d_tamia_2b.yaml = the from-scratch v4d recipe (final_v4d_gemma4_12b_tamia:
+  v4c + mismatch 0.10 + free-generation capability, 1200 steps, cooldown 150, LoRA r128 / alpha 64) on Qwen3.5-2B
+  (24 layers, hidden 2048; snapshot 15852e8c), depth 24, layers scaled from 32 (probe_zoo.scale_layer): train 6 / 9 /
+  12 / 17 / 20, primary 9, held-out 15 / 18 (+ linear@21 / 23, maxpool@18), no Level-1 bank (answer-format base
+  probes fit on the 2B), read batch 16, lm_chunk 1024; mathrl_qwen35_2b.yaml for its GSM8K base solutions. Config
+  load / depth checks pass (CPU 649726). Prep node 649733 (scripts/slurm/tamia_2b_prep.sh): base generations (vLLM,
+  HF fallback) + panel cache / answer probes (8 shards, 2 per GPU), then a 3-step DP4 memory / speed smoke. 4B read
+  batch 48 -> 24 (exact) from the co-located chunk. Chain 648388 (4B alone) replaced by 649739 (afterany 648386,
+  afterok 649733: resume 4B + 2B from scratch, both DP4 over GPUs 0-3) -> 649740..649743 (resume both).
