@@ -161,6 +161,7 @@ rl:
     cap_gen_temperature: 1.0
     cap_gen_hide: true
     cap_gen_hide_valid_only: true   # 10-27 (user): hide only on passing samples (correct GSM8K / functional free answers); failed samples KL only
+    cap_gen_gen_batch: 6   # 10-28: capability decode in chunks of 6 sequences (chunk 3 peaked at 79.4 GB in the capability phase, 12 full-history sequences per rank)
     cap_gen_pool: /scratch/s/sneheel/next_chameleons_artifacts/tica/runs/mathrl_gemma4_12b/base_gens.json   # Gemma base solutions (tica_mathrl.py gens)
     cap_free_episodes: 4   # v4d: free-generation capability forks of checkable concepts (validity-gated NLL + KL to base)
     cap_free_nobrief: 2    # v4d: bare-prompt forks, KL to base (no-brief drift: 4B GSM8K -7, MMLU -11 pts)

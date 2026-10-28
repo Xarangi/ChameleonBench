@@ -2342,7 +2342,7 @@ class AdaptiveSupervisedTrainer:
         if convs:
             was, bs = pol.model.training, pol.batch_size
             pol.model.eval()  # KV cache (HF drops it in train mode with gradient checkpointing)
-            pol.batch_size = len(convs)  # one batched call
+            pol.batch_size = acfg.cap_gen_gen_batch or len(convs)  # one batched call by default
             try:
                 with (pol.merged() if acfg.cap_gen_merged else nullcontext()):  # TamIA 10-21
                     gens = pol.generate(convs, acfg.cap_gen_max_new,

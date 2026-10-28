@@ -11255,3 +11255,8 @@ Corrected 9B seed-17 result (`62340082`):
   - Reading: v4d hides train concepts about as well (small rises at L20 / maxpool), held-out concepts clearly less
     (mid-depth detection roughly doubles), and its passing code answers now mostly WORK (SQL 0.95, JSON 0.71, JS 0.86 vs
     0.27-0.50); passing Arabic / Hindi answers are less often in the language (0.77 / 0.76).
+- 10-28 Gemma chunk 3 memory: the process peak climbed 62 -> 71 -> 72 -> 79.4 GB (step 631), always in the CAPABILITY
+  phase (mem_peak_cap_gb; rollout 50-59, training 48-51, rest 44), on steps with 12 full-history fork samples per rank
+  decoded in one call. New adaptive.cap_gen_gen_batch (default 0 = unchanged): decode in chunks; Gemma config 6 (from
+  its next start, i.e. an OOM auto-resume or chunk 4). Chunking changes the random stream per sample, not the
+  distribution. supervised.py's 4 E501 are pre-existing (unchanged count).

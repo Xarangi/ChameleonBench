@@ -219,6 +219,12 @@ class AdaptiveConfig:
     # (correct GSM8K answer, functional free-generation answer, the fallback solution); every other
     # sample keeps the KL anchor alone. The hide normaliser counts the passing samples' targets.
     cap_gen_hide_valid_only: bool = False
+    # cap_gen_gen_batch (10-28; 0 = unchanged: every capability fork sample in ONE generate call):
+    # decode in chunks of this many sequences (Policy.generate seeds each chunk by its start
+    # index). The
+    # capability phase set Gemma 12B's memory peak (79.4 GB, chunk 3: 12 full-history sequences per
+    # rank); chunks change which random stream a sample uses, not its distribution.
+    cap_gen_gen_batch: int = 0
     cap_gen_skip: int = 1300  # GSM8K-train items reserved for the forced texts / probes
     # Data-parallel cap_gen (10-20; default False = rank 0 generates and backpropagates every
     # fork): each rank takes forks rank, rank + world, ... (same forks, problems and normalisers;
