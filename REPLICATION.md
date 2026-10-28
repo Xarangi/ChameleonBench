@@ -11275,4 +11275,5 @@ Corrected 9B seed-17 result (`62340082`):
   243 s/step; panel cache key unchanged), from the restart at global 700 (chain job 643846). Config load checked.
 - 10-28 (user OK) eval node 649655 (SLOTS 4, one process per GPU; eval1028.tsv): 4B v4d held-out race at 1450, Gemma
   held-out race at 650, and hide-and-solve SQL / JSON / MBPP at max_new 1024 WITH saved answers
-  (mech_1025/hidesolve_v3) for base / 1-bit s1200 / score s1200 / v4d s1350, scored by the corrected checkers.
+  (mech_1025/hidesolve_v3) for 1-bit s1200 / score s1200 / v4d s1350 (+ base MBPP only: base SQL / JSON answers are
+  short and already saved + rescored from the audit, mech_1025/audit), scored by the corrected checkers.
