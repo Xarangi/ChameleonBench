@@ -11295,3 +11295,18 @@ Corrected 9B seed-17 result (`62340082`):
   HF fallback) + panel cache / answer probes (8 shards, 2 per GPU), then a 3-step DP4 memory / speed smoke. 4B read
   batch 48 -> 24 (exact) from the co-located chunk. Chain 648388 (4B alone) replaced by 649739 (afterany 648386,
   afterok 649733: resume 4B + 2B from scratch, both DP4 over GPUs 0-3) -> 649740..649743 (resume both).
+- 10-28 07:09 Gemma resumed at 700 (643846) with cap_gen_gen_batch 6 + sort_reads + refit_overlap: steps 701-713
+  134-221 s (mean ~177; 270-290 before), peak 56.1 GB (79.4 before; rollout 43-56, cap 40-53, train_rest 38-42),
+  per-rank units 19-42 s (max / min ~1.4x). Eval node 649655 and 2B prep 649733 started 07:07-07:09; 2B answer-format
+  base probes pass (L9 / 15 / 18 AUROC 1.0); 2B base_gens.json written 07:23 (vLLM; server start ~14 min).
+- 10-28 HELD-OUT RACES (eval node 649655; 32 episodes, held-out concepts, turn budget 5 / 8 / 8):
+  4B v4d: val 1250 / 1300 / 1350 / 1450 = 0.476 / 0.554 / 0.586 / 0.676 (s1200 0.78); pass 0.24; beaten-ever 0.87;
+  within 3 turns 0.68; k1-k5 beat 0.89 / 0.85 / 0.94 / 0.83 / 0.78. Families at 1350 -> 1450: language 0.29 -> 0.50,
+  format 0.40 -> 0.67, tone 0.56 -> 0.80, domain 0.62 -> 0.75, topic 0.77 -> 0.73, emotion 0.75 -> 0.70, safety
+  0.71 -> 0.58. By layer (beaten / deployed, all kinds) 1350 -> 1450: L8 0.83 -> 0.79, L12 1.00 -> 0.92, L16 0.91 ->
+  1.00, L22 0.94 -> 0.74, L26 0.71 -> 0.72, multi-layer 0.86 -> 0.93. Weak concepts at 1450: Tamil 4 / 8, Thai 0 / 2,
+  biology 1 / 3, cautious tone 0 / 2, HTML 0 / 1. -> the continuation's held-out dip (0.78 -> 0.48 at 1250) is
+  closing.
+  Gemma v4d 650: val 0.071 (50-500: 0.19 / 0.09 / 0.09 / 0.09 / 0.13), pass 0.03, first-probe beat 0.41 (best so
+  far; 0.19-0.38 before), k2 0.07. By layer 500 -> 650: L12 0.14 -> 0.40, L18 0.14 -> 0.20, L24 0.18 -> 0.50, L33
+  0.29 -> 0.38, L39 0.18 -> 0.00, multi 0.09 -> 0.11. Flat held-out generalisation at 650.
