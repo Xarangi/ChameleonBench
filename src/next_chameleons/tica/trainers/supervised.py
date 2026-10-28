@@ -3339,6 +3339,7 @@ class AdaptiveSupervisedTrainer:
         n_upd = max(1, int(cfg.updates_per_rollout))
         upd_losses, upd_gnorms = [], []
         hclip = cfg.hide_grad_clip
+        t_units0, rank_t = time.time(), {}  # per-rank train-phase timing (10-28, logging only)
         for u in range(n_upd):
             pol.model.train()
             self.opt.zero_grad(set_to_none=True)
@@ -3444,15 +3445,25 @@ class AdaptiveSupervisedTrainer:
                     acc[k2] += v
             if u == 0:
                 self._mem_mark("train_pre_cap")
+                rank_t["units"] = time.time() - t_units0
             cap_info = (self._cap_gen_step(self._g_trajs)
                         if acfg.cap_gen_weight > 0 or acfg.cap_gen_kl_weight > 0 else {})
             if u == 0:
                 self._mem_mark("cap")
+                rank_t["cap"] = time.time() - t_units0 - rank_t["units"]
             if u == 0 and acfg.cap_adapt_target > 0 and "cap_gen/acc" in cap_info:
                 cap_info |= self._cap_adapt(cap_info["cap_gen/acc"])
             if acfg.anchor_weight > 0:  # optional retain-set KL anchor (off by default)
                 cap_info |= self._anchor_step()
             if self.world > 1:  # data-parallel: the step's gradient = the sum over ranks
+                if u == 0:  # which rank is slow in the training phase, and where (10-28)
+                    ts = dp.gather((round(rank_t["units"], 1), round(rank_t["cap"], 1)))
+                    dp_info |= {"dp/sec_units_max": max(t[0] for t in ts),
+                                "dp/sec_units_min": min(t[0] for t in ts),
+                                "dp/sec_units_argmax": max(range(len(ts)), key=lambda r: ts[r][0]),
+                                "dp/sec_cap_max": max(t[1] for t in ts),
+                                "dp/sec_cap_min": min(t[1] for t in ts),
+                                "dp/sec_cap_argmax": max(range(len(ts)), key=lambda r: ts[r][1])}
                 dp.allreduce_grads(self.params)
             if hclip:
                 hinfo = self._apply_hide_clip(hclip)

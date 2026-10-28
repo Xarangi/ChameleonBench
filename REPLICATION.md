@@ -11260,3 +11260,11 @@ Corrected 9B seed-17 result (`62340082`):
   decoded in one call. New adaptive.cap_gen_gen_batch (default 0 = unchanged): decode in chunks; Gemma config 6 (from
   its next start, i.e. an OOM auto-resume or chunk 4). Chunking changes the random stream per sample, not the
   distribution. supervised.py's 4 E501 are pre-existing (unchanged count).
+- 10-28 ~00:50 BOTH runs (4B 648386 from global 1451, Gemma 643845 from 647; two nodes) started intermittent slow steps:
+  sec_train 330-680 s instead of 25-80 (4B ~250 -> ~344 s/step mean, Gemma ~180 -> ~264). Not the capability term
+  (sec_cap_gen 7-37, sec_cap_train 5-27, anchor 2), not checkpoints, not local races (queued), not GPU throttling (all
+  clocks at max, no throttle reasons), /scratch latency normal from the login node. During it 1-2 GPUs per node draw
+  550-610 W while the others idle at ~130 W "100% busy" = spinning in a collective: one or two ranks do much more
+  training-phase work. Added (logging only) per-rank timings gathered before the gradient all-reduce: dp/sec_units_*
+  (main update) and dp/sec_cap_* (capability) max / min / argmax; tests incl. test_tica_dp pass. Active from each
+  run's next start.
