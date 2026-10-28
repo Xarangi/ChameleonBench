@@ -46,6 +46,7 @@ from next_chameleons.benchmarks.capability import (
     extract_gsm8k_answer,
 )
 from next_chameleons.benchmarks.capability_heldout import (
+    chat_eos_ids,
     eval_math500,
     eval_mbpp,
     eval_mc,
@@ -147,6 +148,7 @@ def eval_gsm8k_batched(model, tok, items, *, trigger, batch_size=32, max_new_tok
             out = model.generate(input_ids=ids.to(device), attention_mask=att.to(device),
                                  max_new_tokens=max_new_tokens, do_sample=False,
                                  pad_token_id=pad, stop_strings=["\nQuestion:", "\n\nQuestion:"],
+                                 eos_token_id=chat_eos_ids(model, tok),  # 10-28: end at <|im_end|>
                                  tokenizer=tok._tok if hasattr(tok, "_tok") else tok)
             for r, i in enumerate(idx):
                 gen = tok.decode(out[r, n:], skip_special_tokens=True)

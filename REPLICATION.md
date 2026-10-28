@@ -11310,3 +11310,15 @@ Corrected 9B seed-17 result (`62340082`):
   Gemma v4d 650: val 0.071 (50-500: 0.19 / 0.09 / 0.09 / 0.09 / 0.13), pass 0.03, first-probe beat 0.41 (best so
   far; 0.19-0.38 before), k2 0.07. By layer 500 -> 650: L12 0.14 -> 0.40, L18 0.14 -> 0.20, L24 0.18 -> 0.50, L33
   0.29 -> 0.38, L39 0.18 -> 0.00, multi 0.09 -> 0.11. Flat held-out generalisation at 650.
+- 10-28 EVAL BUG (hide-and-solve / MATH-500 / MBPP / GSM8K capability generation): benchmarks.capability_heldout
+  generate_batched and tica_capability.eval_gsm8k_batched stopped only at the model's generation-config EOS, which for
+  Qwen3.5 is <|endoftext|> (248044), not the chat end-of-turn <|im_end|> (248046; the tokenizer EOS). The base model
+  emits <|endoftext|> right after <|im_end|>; trained adapters often continue into a fake next turn, decoded (special
+  tokens skipped) as "\nuser\n..." / "\nassistant\n...", and the whole text was scored and probed. hidesolve_v3: under
+  the concept brief JSON answers leak in 196 / 82 / 193 of 200 (1-bit s1200 / score s1200 / v4d s1350; base 0), MBPP
+  95 / 66 / 0, SQL 7-10 of 131. Training generation (policy.generate: tokenizer EOS + generation-config EOS) and the
+  races were not affected. Fix: capability_heldout.chat_eos_ids (tokenizer EOS + generation-config EOS) passed as
+  eos_token_id in both; test_generate_batched_stops_at_the_end_of_turn_token; capability tests pass (649882).
+  Affected numbers: every TRAINED-model hide-and-solve result (hidesolve_fn, hidesolve_v3: accuracy AND the probe
+  flags, read over the leaked text) and trained-model MATH-500 / MBPP / GSM8K capability scores (base unaffected).
+  Accuracy rescored with each answer cut at the leak (649999); detection needs a rerun.

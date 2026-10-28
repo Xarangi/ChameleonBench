@@ -222,3 +222,44 @@ def test_brief_conditions_default_reproduces_original_and_aliases() -> None:
     assert names["brief_math"] == m.MATH and names["brief_html"] == m.OTHER
     assert names["brief_sports"] == "sports" and names["brief_trained"] == trained
     assert conds["brief_physics"] == BRIEF_ANSWER.format(c="physics")
+
+
+# ----------------------------------------------------------------------------- end of turn
+
+
+def test_generate_batched_stops_at_the_end_of_turn_token() -> None:
+    """10-28: Qwen3.5's generation config ends only at <|endoftext|>; generation must also end at
+    the tokenizer's EOS (<|im_end|>), or a trained adapter's fake next turn is scored as its answer."""
+
+    import torch
+
+    from next_chameleons.benchmarks.capability_heldout import chat_eos_ids, generate_batched
+
+    END_TEXT, IM_END = 7, 9
+
+    class Tok:
+        pad_token_id, eos_token_id = 0, IM_END
+
+        def decode(self, ids, skip_special_tokens=True):
+            return " ".join(str(int(i)) for i in ids)
+
+    class LM(torch.nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.w = torch.nn.Parameter(torch.zeros(1))
+            self.generation_config = type("G", (), {"eos_token_id": END_TEXT})()
+            self.seen = []
+
+        def generate(self, input_ids, attention_mask, max_new_tokens, eos_token_id=None, **kw):
+            self.seen.append(eos_token_id)
+            ends = set(eos_token_id if isinstance(eos_token_id, list) else [END_TEXT])
+            row = [5, IM_END, 3, 4]  # the turn, <|im_end|>, then a fake next turn
+            k = next((j for j, t in enumerate(row) if t in ends), len(row))
+            new = torch.tensor([row[:k + 1]] * input_ids.shape[0])
+            return torch.cat([input_ids, new], 1)
+
+    lm, tok = LM(), Tok()
+    assert chat_eos_ids(lm, tok) == [END_TEXT, IM_END]
+    out = generate_batched(lm, tok, [[1, 2], [1]], batch_size=2, max_new_tokens=8)
+    assert lm.seen == [[END_TEXT, IM_END]]
+    assert out == ["5 9", "5 9"]  # stopped at <|im_end|>: no "3 4" continuation

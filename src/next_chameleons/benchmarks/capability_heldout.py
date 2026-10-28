@@ -223,9 +223,25 @@ def group_accuracy(items: list[dict], per_item: list[bool]) -> dict[str, Any]:
 # --------------------------------------------------------------------------- #
 # Batched greedy generation (shared by MATH-500 / MBPP)
 # --------------------------------------------------------------------------- #
+def chat_eos_ids(model, tok) -> list[int]:
+    """Ids that end a chat turn: the tokenizer's EOS (the end-of-turn token, Qwen <|im_end|>) plus the
+    model's generation-config EOS. 10-28: Qwen3.5's generation config has only <|endoftext|>, so
+    generate() ran past <|im_end|>; the base model emits <|endoftext|> right after it, but trained
+    adapters went on into a fake next turn (decoded as "\\nuser\\n..." with special tokens skipped),
+    and that text was scored as the answer (hide-and-solve JSON: 0.00 for answers that were right)."""
+
+    t = getattr(tok, "_tok", tok)
+    ids: set[int] = set()
+    for e in (getattr(t, "eos_token_id", None),
+              getattr(getattr(model, "generation_config", None), "eos_token_id", None)):
+        ids |= set(e) if isinstance(e, (list, tuple)) else {e}
+    return sorted(i for i in ids if i is not None)
+
+
 def generate_batched(model, tok, prompts: list[list[int]], *, batch_size=32,
                      max_new_tokens=512, stop_strings=None) -> list[str]:
-    """Greedy, left-padded, length-sorted batches; returns decoded continuations in order."""
+    """Greedy, left-padded, length-sorted batches; returns decoded continuations in order (each
+    ends at the first end-of-turn id, chat_eos_ids)."""
 
     import torch
 
@@ -233,9 +249,9 @@ def generate_batched(model, tok, prompts: list[list[int]], *, batch_size=32,
     pad = tok.pad_token_id
     order = sorted(range(len(prompts)), key=lambda i: len(prompts[i]))
     outs = [""] * len(prompts)
-    kw: dict[str, Any] = {}
+    kw: dict[str, Any] = {"eos_token_id": chat_eos_ids(model, tok)}
     if stop_strings:
-        kw = {"stop_strings": stop_strings, "tokenizer": getattr(tok, "_tok", tok)}
+        kw |= {"stop_strings": stop_strings, "tokenizer": getattr(tok, "_tok", tok)}
     model.eval()
     with torch.no_grad():
         for st in range(0, len(order), batch_size):
