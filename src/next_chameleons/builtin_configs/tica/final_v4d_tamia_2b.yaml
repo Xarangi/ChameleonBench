@@ -13,7 +13,7 @@ model:
   dtype: bfloat16
   enable_thinking: false
   keep_think_history: true
-  batch_size: 16    # no-grad refit read batch (exact); co-located with the 4B (2 processes per GPU)
+  batch_size: 48    # no-grad refit read batch (exact); 16 while co-located with the 4B, 48 alone from 10-30 (evals on their own node)
   grad_ckpt: true
   fla_grad: true
   lm_chunk: 1024   # chunked LM terms, no full logits (exact)

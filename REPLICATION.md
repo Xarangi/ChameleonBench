@@ -11429,3 +11429,10 @@ Corrected 9B seed-17 result (`62340082`):
   after the drain + Gemma race): speed benchmark (baseline vs fast, capped 0.40, one per GPU), then the 1700
   refit-level rerun (batch 4, cap 0.62) and the 12 task races (MBPP / SQL / JSON x base / s1200 / 1350 / 1700,
   batch 4, cap 0.62) behind smoke runs.
+- 10-29 19:35 EVALS SEPARATED FROM THE 2B (user: "separate out the evals from the 2b ... maximize 2b utilization"):
+  drain step 652622.0 + the post-drain launchers stopped (finished outputs kept; panel_train s2 / s3 in flight
+  lost); the 2B now alone on tg10905 (23 GB / GPU, ~75 s/step expected). Dedicated eval node 653988
+  (mech_1025/evalnode_1029.sh): speed benchmark (baseline vs fast mode, GPUs 0 / 1), the rest of the 1700 drain
+  (panels, capability reruns), Gemma 1200 held-out race, 1700 refit-level rerun (batch 8, no cap) and the 12 task
+  races, one process per GPU; then tica_drain_post.sh. 2B read batch 16 -> 48 (exact) from its next chunk (652623,
+  05:35); refit_cpu_fits added once the benchmark validates it on a GPU node.
