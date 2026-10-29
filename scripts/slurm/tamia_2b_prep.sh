@@ -15,22 +15,26 @@
 #   3. then a 3-step trainer smoke at the production shape (DP4, 4 episodes per rank, all concepts; no checkpoints or
 #      evals) for max_mem_gb / mem_peak_* / sec, to size the co-located layout next to the 4B.
 # Re-running only redoes what is missing (panel keys cached, generations skipped if base_gens.json exists).
-# Aggregates only.
+# Aggregates only. Any model (10-29): CFG = the training config, MATHRL = its base-generation config (mathrl_*.yaml);
+# the snapshot and the base_gens.json path are read from those configs.
 #   sbatch --account=aip-rrabba --exclude=tg11105 scripts/slurm/tamia_2b_prep.sh
+#   CFG=final_v4d_<model> MATHRL=mathrl_<model> sbatch --account=<acct> scripts/slurm/tamia_2b_prep.sh
 set -uo pipefail
 cd /scratch/s/sneheel/ChameleonBench
 CFG=${CFG:-final_v4d_tamia_2b}
+MATHRL=${MATHRL:-mathrl_qwen35_2b}
 N=8
 NODE_TMP=${SLURM_TMPDIR:-/tmp/q2bprep_$$}
 JOB=${SLURM_JOB_NAME:-q2b-prep}-${SLURM_JOB_ID:-local}
 OUT=/scratch/s/sneheel/next_chameleons_artifacts/tica/runs/panel_precompute/$CFG
 SMOKE=/scratch/s/sneheel/next_chameleons_artifacts/tica/runs/smoke_2b/${SLURM_JOB_ID:-local}
-GENS=/scratch/s/sneheel/next_chameleons_artifacts/tica/runs/mathrl_qwen35_2b/base_gens.json
 mkdir -p logs "$OUT" "$SMOKE"
 nvidia-smi --query-gpu=timestamp,index,memory.used,utilization.gpu --format=csv -l 60 > "logs/$JOB-gpu.csv" 2>/dev/null &
 SMI=$!
-SNAP=/scratch/s/sneheel/hf/hub/models--Qwen--Qwen3.5-2B/snapshots/15852e8c16360a2fea060d615a32b45270f8a8fc
-SHARED=$NODE_TMP/models--Qwen--Qwen3.5-2B   # ONE node-local copy for every process
+source scripts/slurm/_local_env.sh
+SNAP=$(PYTHONPATH=src $PY -c "from next_chameleons.tica.config import load_run_config as l; print(l('$CFG').model.path)")
+GENS=$($PY -c "import yaml; print(yaml.safe_load(open('configs/tica/$MATHRL.yaml'))['out'])")/base_gens.json
+SHARED=$NODE_TMP/$(basename "$(dirname "$(dirname "$SNAP")")")   # ONE node-local copy for every process
 t0=$(date +%s); mkdir -p "$SHARED"; cp -rL "$SNAP"/. "$SHARED"/; echo "model copy: $(( $(date +%s) - t0 ))s"
 shard() {  # i gpu
   mkdir -p "$NODE_TMP/p$1"
@@ -49,7 +53,7 @@ gens() {  # vllm(0/1)
       export TICA_VLLM=1 TICA_VLLM_PY=/scratch/s/sneheel/venvs/vllm-g4/bin/python TICA_VLLM_MEM=0.60 \
         TICA_VLLM_MODULES="StdEnv/2023 gcc python/3.11 arrow/24.0.0 cuda/12.6 opencv"
     fi
-    CUDA_VISIBLE_DEVICES=0 PYTHONPATH=src $PY scripts/tica_mathrl.py gens --config mathrl_qwen35_2b \
+    CUDA_VISIBLE_DEVICES=0 PYTHONPATH=src $PY scripts/tica_mathrl.py gens --config "$MATHRL" \
       --model-path "$SHARED" ) > "logs/$JOB-gens$1.out" 2>&1
 }
 if [ -s "$GENS" ]; then

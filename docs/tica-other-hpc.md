@@ -253,3 +253,44 @@ bad /tmp) in the launch commands (scripts/tamia_*.sh, scripts/slurm/tamia_*prep*
 **Check before GPU hours:** `PYTHONPATH=src $PY scripts/tica.py show --config <CFG>` on a CPU node (paths,
 depth checks), the CPU test suite (`pytest tests/test_tica_*`), then a 3-step smoke
 (scripts/slurm/tamia_2b_prep.sh's smoke stage, or tamia_gemma12b_smoke.sh with SMOKE_SANITY=0).
+
+### 9a. Getting the data over
+
+The whole raw cache is ~0.45 GB (`tica/` 321 MB, `capability/` 6 MB, `lid/` 126 MB) and model-independent: copy it
+whole. From the NEW cluster's login (or data-transfer) node:
+
+```bash
+mkdir -p /scratch/$USER/next_chameleons_raw_cache
+rsync -avP sneheel@tamia.alliancecan.ca:/scratch/s/sneheel/next_chameleons_raw_cache/ \
+  /scratch/$USER/next_chameleons_raw_cache/
+```
+
+(Alliance SSH asks for MFA once per connection; rsync is one connection.) Between Alliance clusters, Globus
+(alliancecan endpoints) works too. For a non-Alliance machine without a route to TamIA: on TamIA
+`tar -czf raw_cache.tgz -C /scratch/s/sneheel next_chameleons_raw_cache`, then `scp` it via your laptop. The
+files are raw text: never commit them (AGENTS.md guardrails).
+
+### 9b. A different model, same recipe (the Qwen3.5-2B port of 10-28 is the template)
+
+Model-SPECIFIC artifacts are not copied; they are rebuilt for the new model: base generations (cap_gen_pool),
+answer-format base probes, the turn-0 panel cache and the anchor cache.
+
+1. Download the model pinned to a revision; note `num_hidden_layers` (L).
+2. `configs/tica/mathrl_<model>.yaml` = `mathrl_qwen35_2b.yaml` with the new `model.path` / `out`.
+3. `configs/tica/final_v4d_<model>.yaml` = `final_v4d_tamia_2b.yaml` (the from-scratch v4d recipe incl.
+   cap_fork_by_refit and state retention) with: `name` / `out` / `anchor_cache` / `cap_gen_pool` / the
+   `eval_on_save` config name and val dir; `model.path`; `model.depth: L`; layers scaled from the 4B's 32 with
+   probe_zoo.scale_layer = floor(l * L / 32 + 0.5): `probes.layer` (12), `probes.held_out_layers` (20, 24),
+   `rl.adaptive.kind_layers` (8 12 16 22 26), `final.heldout_refit_kinds` linear@20/24/28/30 + maxpool@24;
+   `fla_grad` true only for gated-DeltaNet models (Qwen3.5); read batch / lm_chunk for memory.
+   Then `bash scripts/sync_builtin_configs.sh` and `tica.py show --config final_v4d_<model>` on a CPU node
+   (the depth / held-out checks).
+4. Prep + memory smoke on one node: `CFG=final_v4d_<model> MATHRL=mathrl_<model> sbatch --account=<acct>
+   scripts/slurm/tamia_2b_prep.sh` (base generations via vLLM, panel cache, answer probes, 3-step smoke).
+   The answer-format base probes must pass their gate (AUROC >= 0.95 at the primary + held-out layers)
+   or the run refuses to start.
+5. Launch: `sbatch --account=<acct> scripts/slurm/tamia_node.sh final_v4d_<model>@0,1,2,3`, then chain
+   `resume:final_v4d_<model>@0,1,2,3` jobs (afterany).
+
+Model families: the code supports Qwen3.5 and Gemma-4 (chat rendering, read hooks, vLLM). A new family
+(e.g. Llama) needs its chat-template render path in tica/policy.py and a check of the read site first.
