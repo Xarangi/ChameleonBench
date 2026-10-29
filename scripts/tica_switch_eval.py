@@ -21,6 +21,7 @@ import contextlib
 import dataclasses
 import itertools
 import json
+import os
 import sys
 import time
 from collections import defaultdict
@@ -145,6 +146,11 @@ def main():
     a = ap.parse_args()
 
     import torch
+
+    # TICA_MEM_FRACTION (10-29): cap this process's CUDA caching allocator (an eval sharing GPUs
+    # with a training run runs out of memory itself instead of pushing the run over; as tica.py)
+    if os.environ.get("TICA_MEM_FRACTION") and torch.cuda.is_available():
+        torch.cuda.set_per_process_memory_fraction(float(os.environ["TICA_MEM_FRACTION"]), 0)
 
     from next_chameleons.tica.trainers.supervised import (
         AdaptiveSupervisedConfig,
