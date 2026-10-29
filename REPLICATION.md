@@ -11355,3 +11355,13 @@ Corrected 9B seed-17 result (`62340082`):
   ~300 to ~580 s/step. Net loss -> step cancelled at 2B global 27 (checkpoint step_20; the partial resume dir moved to
   resume_20_overlap_aborted). The 2B starts in chain job 650325 (after 648386, ~17:45): 4B read batch 24, 2B read
   batch 16, no cap; watch the 4B's step time there.
+- 10-28 19:20 GEMMA AT ALPHA 128 STARTS HIDING, CAPABILITY DIPS (10-step windows, 841 -> 938): first-probe beat 0.13 /
+  0.13 / 0.12 / 0.15 / 0.15 / 0.19 / 0.27 / 0.27 / 0.39 / 0.61 (alpha 64: 0.13-0.23 per 40 steps); beat 0.07 -> 0.25;
+  pass 0.008 -> 0.035; capability forks now at 2-3 probes. Same windows: GSM8K (weighted) 0.94 / 0.93 / 0.93 / 0.86 /
+  0.92 / 0.92 / 0.90 / 0.91 / 0.75 / 0.65; work shown 1.00 -> 0.84; KL to base 0.18-0.27 -> 0.41 / 0.52; free-gen
+  0.82-0.92 -> 0.72-0.76; by level k1 0.91 -> 0.65, k2 0.53-0.62. User: watch 20-30 steps; if GSM8K is still < ~0.80
+  by ~960, restart from the newest checkpoint with adaptive.cap_adapt_target (dual-ascent capability weight).
+  Checkpoints 920 / 940 kept as rollback points.
+- 10-28 co-located 4B + 2B (650325): 4B ~460-500 s/step (alone ~300), 2B ~100-110 s/step; GPUs 89-94% busy (4B alone
+  ~74%), 52-54 of 81.5 GB used (4B 32-35, 2B 20-21). Plan: when the 4B reaches 1700, its final drain runs on this node
+  beside the 2B, then the 2B's read batch goes to 48 at its next checkpoint.
