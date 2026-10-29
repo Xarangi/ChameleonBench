@@ -11407,3 +11407,12 @@ Corrected 9B seed-17 result (`62340082`):
   Reading: the final v4d model solves AND hides its trained checkable concepts from fixed base probes far better
   than 1350 (JSON s&h 0.00 -> 0.84; L20 held-out detection 0.97 -> 0.27), stays selective under a mismatched brief,
   and keeps capability; SQL is hidden only at the shallow / some deep layers (L20 / L24 still 1.00).
+- 10-29 HELD-OUT RACES (final drain; held-out concepts, 32 eps, turn budget 5 / 8 / 8):
+  4B v4d 1700: val 0.685 (1300 / 1350 / 1450 = 0.554 / 0.586 / 0.676; s1200 0.78), pass 0.26, beaten-ever 0.89,
+  first-probe beat 0.91, k1 / k2 / k3 0.92 / 0.86 / 0.83. Families 1450 -> 1700: language 0.50 -> 0.44, format
+  0.67 -> 0.57, tone 0.80 -> 0.56, topic 0.73 -> 0.80, domain 0.75 -> 0.81, emotion 0.70 -> 0.75, safety 0.58 ->
+  0.87. By layer (beaten / deployed): L8 0.82, L12 0.88, L16 0.96, L22 0.89, L26 0.67, multi 0.94. Weak: Thai 0 / 2,
+  Tamil 4 / 7, French 3 / 5, Python 5 / 7, insider trading 2 / 4, cautious tone 2 / 4.
+  2B 600 (alpha 64, from scratch): val 0.119, pass 0.07, beaten-ever 0.42, first-probe beat 0.66, k1 / k2 / k3 0.52 /
+  0.28 / 0.17; by layer L6 0.17, L9 0.56, L12 0.54, L17 0.58, L20 0.83, multi 0.28; best on topics (medicine 6 / 9,
+  plays 5 / 6, food 3 / 4), none on Thai / Finnish / Python.
