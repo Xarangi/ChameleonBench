@@ -138,3 +138,22 @@ def test_refit_overlap_cpu_fit_pool_exact(tmp_path, monkeypatch):
     same rollout as the serial path (token-level kinds stay on the worker thread)."""
     m = _check(tmp_path, monkeypatch, ["linear", "rlobf_attn"], switch=0, cpu_fits=2)
     assert m["ep_refits"] > 0
+
+
+def test_cpu_fit_worker_init_mirrors_the_zoo_depth():
+    """A spawned CPU fit worker gets the main process's rescaled multi-layer tables (10-29: the 2B
+    smoke's ens4_mlp fit asked a worker for layer 10 of the 32-layer table)."""
+    from next_chameleons.tica import probe_zoo
+    from next_chameleons.tica.trainers.supervised import _cpu_fit_init
+
+    keep = (dict(probe_zoo.ENS_LAYERS), dict(probe_zoo.TOKENS_ENS_LAYERS), torch.get_num_threads())
+    try:
+        probe_zoo.set_zoo_depth(24)
+        ens, tok = dict(probe_zoo.ENS_LAYERS), dict(probe_zoo.TOKENS_ENS_LAYERS)
+        probe_zoo.set_zoo_depth(32)
+        _cpu_fit_init(1, ens, tok)
+        got_ens, got_tok = dict(probe_zoo.ENS_LAYERS), dict(probe_zoo.TOKENS_ENS_LAYERS)
+        assert got_ens == ens and got_ens["ens4"] == [6, 8, 9, 11]
+        assert got_tok == tok
+    finally:
+        _cpu_fit_init(keep[2], keep[0], keep[1])

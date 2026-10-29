@@ -552,10 +552,18 @@ def _iso_fit(job: dict, grad: bool, ready=None):
     return out, (None if _rng_eq(after, canary) else after), time.time() - t0
 
 
-def _cpu_fit_init(threads: int) -> None:
-    """adaptive.refit_cpu_fits worker: torch threads per CPU fit process."""
+def _cpu_fit_init(threads: int, ens_layers: dict, tok_ens_layers: dict) -> None:
+    """adaptive.refit_cpu_fits worker: torch threads per CPU fit process + the main process's
+    multi-layer kind tables (probe_zoo.set_zoo_depth rescales them for model.depth in the main
+    process only; a spawned worker would otherwise use the 32-layer originals)."""
+
+    from next_chameleons.tica import probe_zoo
 
     torch.set_num_threads(max(1, int(threads)))
+    probe_zoo.ENS_LAYERS.clear()
+    probe_zoo.ENS_LAYERS.update(ens_layers)
+    probe_zoo.TOKENS_ENS_LAYERS.clear()
+    probe_zoo.TOKENS_ENS_LAYERS.update(tok_ens_layers)
 
 
 def _cpu_fit_ok(job: dict) -> bool:
@@ -1168,9 +1176,13 @@ class AdaptiveSupervisedTrainer:
             if acfg.refit_cpu_fits and getattr(self, "_cpu_pool", None) is None:
                 import multiprocessing as mp
 
+                from next_chameleons.tica import probe_zoo
+
                 self._cpu_pool = ProcessPoolExecutor(
                     max_workers=acfg.refit_cpu_fits, mp_context=mp.get_context("spawn"),
-                    initializer=_cpu_fit_init, initargs=(acfg.refit_cpu_threads,))
+                    initializer=_cpu_fit_init,
+                    initargs=(acfg.refit_cpu_threads, dict(probe_zoo.ENS_LAYERS),
+                              dict(probe_zoo.TOKENS_ENS_LAYERS)))
 
         side = overlap and acfg.refit_overlap_stream and torch.cuda.is_available()
 
