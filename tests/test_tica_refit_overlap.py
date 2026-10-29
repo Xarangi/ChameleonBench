@@ -20,7 +20,8 @@ class _Req(dict):  # answer-format inputs: every text id maps to a request
         return f"request {k}"
 
 
-def _run(tmp_path, monkeypatch, overlap: bool, kinds, switch: int, v5: bool = False):
+def _run(tmp_path, monkeypatch, overlap: bool, kinds, switch: int, v5: bool = False,
+         cpu_fits: int = 0):
     from next_chameleons.tica import trainers
     from next_chameleons.tica.adaptive import AdaptiveConfig, AdaptiveDefender
     from next_chameleons.tica.episodes import ConceptTexts, EpisodeSpec
@@ -50,9 +51,11 @@ def _run(tmp_path, monkeypatch, overlap: bool, kinds, switch: int, v5: bool = Fa
             refit_mode="episode", refit_min_auroc=0.0, refit_min_tpr_np=0.0, refit_C=1.0,
             refit_switch_max=switch, episode_refit_kind="mixed", episode_refit_kinds=kinds,
             episode_kind_sampling="uniform", episode_rng=True, episode_keep=True,
-            refit_np_cache=True, refit_overlap=overlap,
+            refit_np_cache=True, refit_overlap=overlap, refit_cpu_fits=cpu_fits,
+            refit_cpu_threads=torch.get_num_threads(),
             episode_fork={"pos": 8, "np": 8, "other": 8, "free": 3}))
-    out = tmp_path / (("on" if overlap else "off") + ("_v5" if v5 else ""))
+    out = tmp_path / (("on" if overlap else "off") + ("_v5" if v5 else "")
+                      + (f"_cpu{cpu_fits}" if cpu_fits else ""))
     tr = AdaptiveSupervisedTrainer(
         pol, pool, FakeSampler(), cfg, out,
         branch_concepts=[ConceptTexts("cats", "train", [f"meow {k}" for k in range(12)]),
@@ -99,9 +102,9 @@ def _same_state(a, b):
     return a == b
 
 
-def _check(tmp_path, monkeypatch, kinds, switch, v5=False):
+def _check(tmp_path, monkeypatch, kinds, switch, v5=False, cpu_fits=0):
     off = _run(tmp_path, monkeypatch, False, kinds, switch, v5)
-    on = _run(tmp_path, monkeypatch, True, kinds, switch, v5)
+    on = _run(tmp_path, monkeypatch, True, kinds, switch, v5, cpu_fits)
     assert off[0] == on[0] and len(off[0]) >= 8  # refit records: kinds, kept/why, auroc, order
     assert off[1].keys() == on[1].keys() and any(k.startswith("dump/") for k in off[1])
     for k in off[1]:
@@ -127,4 +130,11 @@ def test_refit_overlap_exact_no_switch(tmp_path, monkeypatch):
 def test_refit_overlap_exact_with_v5_notices(tmp_path, monkeypatch):
     """tagged_v5 + refit_overlap (10-23): messages (incl. "New monitor") equal the serial path."""
     m = _check(tmp_path, monkeypatch, ["linear", "rlobf_attn"], switch=0, v5=True)
+    assert m["ep_refits"] > 0
+
+
+def test_refit_overlap_cpu_fit_pool_exact(tmp_path, monkeypatch):
+    """adaptive.refit_cpu_fits (10-29): pooled-kind fits in spawned CPU worker processes give the
+    same rollout as the serial path (token-level kinds stay on the worker thread)."""
+    m = _check(tmp_path, monkeypatch, ["linear", "rlobf_attn"], switch=0, cpu_fits=2)
     assert m["ep_refits"] > 0

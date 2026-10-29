@@ -356,6 +356,15 @@ class AdaptiveConfig:
     # so they overlap the main thread's reads on the GPU (the 10-21e test found same-stream overlap
     # saved ~1 s/step). Same kernels, same inputs, same serial order: results unchanged.
     refit_overlap_stream: bool = False
+    # refit_cpu_fits (10-29, user: "use the CPUs to speed this up"; 0 = off): with refit_overlap,
+    # fits of POOLED probe kinds (linear, ens*_linear, ens4_mlp, meandiff: small inputs) run in this
+    # many spawned CPU worker processes instead of the GPU worker thread, so many episodes' fits
+    # run at once on the node's idle cores while the GPU keeps reading; token-level kinds stay on
+    # the GPU.
+    # Same fit code and seeds (bit-identical to the thread path on CPU); on a GPU node the pooled
+    # fits change device (float reassociation only). refit_cpu_threads = torch threads per worker.
+    refit_cpu_fits: int = 0
+    refit_cpu_threads: int = 4
     # 10-21k: no-prompt (no-brief) texts as refit fit positives (False: in-context forks only)
     refit_np_in_fit: bool = True
     # 10-21o: gate on out-of-fold IN-CONTEXT TPR at each fold's refit_fpr threshold (0 = off;

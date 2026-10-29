@@ -30,7 +30,7 @@ import threading
 import time
 import zlib
 from collections import defaultdict
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
 from contextlib import nullcontext
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
@@ -550,6 +550,35 @@ def _iso_fit(job: dict, grad: bool, ready=None):
     finally:
         _rng_set(before)
     return out, (None if _rng_eq(after, canary) else after), time.time() - t0
+
+
+def _cpu_fit_init(threads: int) -> None:
+    """adaptive.refit_cpu_fits worker: torch threads per CPU fit process."""
+
+    torch.set_num_threads(max(1, int(threads)))
+
+
+def _cpu_fit_ok(job: dict) -> bool:
+    """A refit job whose fit can run in a CPU worker: pooled kinds (no per-token states, no
+    detector buffer)."""
+
+    return (job["kind"] not in DETECTOR_KINDS and job.get("ft") is None
+            and job.get("nt") is None)
+
+
+def _job_to_cpu(job: dict) -> dict:
+    """A copy of a pooled refit job with every tensor on the CPU and device = cpu."""
+
+    def cpu(x):
+        if isinstance(x, torch.Tensor):
+            return x.detach().cpu()
+        if isinstance(x, dict):
+            return {k: cpu(v) for k, v in x.items()}
+        if isinstance(x, list):
+            return [cpu(v) for v in x]
+        return x
+
+    return {**{k: cpu(v) for k, v in job.items()}, "device": torch.device("cpu")}
 
 
 def ready_dev(dev) -> torch.device:
@@ -1136,10 +1165,19 @@ class AdaptiveSupervisedTrainer:
             if getattr(self, "_ovl_pool", None) is None:
                 self._ovl_pool = ThreadPoolExecutor(max_workers=1,
                                                     thread_name_prefix="tica-refit-fit")
+            if acfg.refit_cpu_fits and getattr(self, "_cpu_pool", None) is None:
+                import multiprocessing as mp
+
+                self._cpu_pool = ProcessPoolExecutor(
+                    max_workers=acfg.refit_cpu_fits, mp_context=mp.get_context("spawn"),
+                    initializer=_cpu_fit_init, initargs=(acfg.refit_cpu_threads,))
 
         side = overlap and acfg.refit_overlap_stream and torch.cuda.is_available()
 
         def ovl_fit(job):
+            cpu_pool = getattr(self, "_cpu_pool", None) if acfg.refit_cpu_fits else None
+            if cpu_pool is not None and _cpu_fit_ok(job):  # pooled kinds: a CPU worker process
+                return cpu_pool.submit(_iso_fit, _job_to_cpu(job), torch.is_grad_enabled(), None)
             ready = None
             if side:  # the job's reads are queued on the main stream: the fit waits for them
                 ready = torch.cuda.Event()
@@ -2107,7 +2145,9 @@ class AdaptiveSupervisedTrainer:
             # keyed at their defaults, so switching them on keeps the precomputed cache (10-27)
             "refit": {f.name: (False if f.name in ("refit_overlap", "refit_overlap_stream")
                                else getattr(acfg, f.name)) for f in dataclasses.fields(acfg)
-                      if f.name.startswith("refit_")}}, sort_keys=True, default=str)
+                      if f.name.startswith("refit_")
+                      and f.name not in ("refit_cpu_fits", "refit_cpu_threads")}},
+            sort_keys=True, default=str)
         d = Path(acfg.first_probe_panel_cache)
         path = d / f"{hashlib.sha256(key.encode()).hexdigest()[:24]}.pt"
         if path.exists():

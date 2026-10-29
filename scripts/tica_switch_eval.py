@@ -30,7 +30,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from tica import build
 
 from next_chameleons.tica.answer_format import ask_concept, fit_answer_probes, prompts
-from next_chameleons.tica.config import load_run_config
+from next_chameleons.tica.config import apply_overrides, load_run_config
 from next_chameleons.tica.data import CONCEPT_SPLITS, select_topics
 from next_chameleons.tica.episodes import EpisodeSampler
 from next_chameleons.tica.monitors import MonitorPool
@@ -138,6 +138,9 @@ def main():
     ap.add_argument("--evdet-seed", default="",
                     help="generic hiding detector (--kind evdet@L): MODEL_DUMPS;BASE_DUMPS, comma "
                          "lists of train-concept panel dumps that seed the detector buffer")
+    ap.add_argument("--set", action="append", default=[], metavar="KEY=VALUE",
+                    help="config override, e.g. rl.adaptive.refit_overlap=true (10-29: eval "
+                         "speed-ups: episode_rng, refit_overlap, refit_cpu_fits, model.sort_reads)")
     ap.add_argument("--out", required=True)
     a = ap.parse_args()
 
@@ -150,6 +153,7 @@ def main():
     )
 
     cfg = load_run_config(a.config)
+    apply_overrides(cfg, a.set)
     if a.gate_auroc is not None:
         cfg.rl.adaptive.refit_min_auroc = a.gate_auroc
     if a.gate_tpr_ic is not None:
