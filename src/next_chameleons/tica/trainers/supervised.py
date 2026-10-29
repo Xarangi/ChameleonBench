@@ -75,6 +75,12 @@ class SupervisedConfig:
     # 10-21 (default off): keep trainer_state.pt in EVERY checkpoint instead of the newest only, so
     # a run can be resumed with its optimizer state from any checkpoint (~0.5 GB each at r32).
     save_state_all: bool = False
+    # 10-29 (0 = off: every copy kept): with save_state_all, keep trainer_state.pt only in this
+    # chunk's newest state_keep_last checkpoints plus those at GLOBAL steps divisible by
+    # state_keep_every (0 = none), so long runs can still branch from recent / round steps without
+    # filling the disk (Gemma-12B: 4.2 GB per copy; the scratch quota stopped every job on 10-28).
+    state_keep_last: int = 0
+    state_keep_every: int = 0
     # 10-21v (default off = unchanged): with data-parallel episodes, copy rank 0's trainable
     # weights to every rank before training. A fresh LoRA is initialised unseeded per rank, so
     # from-scratch DP runs otherwise train ranks holding DIFFERENT weights (dp_param_drift).
@@ -799,6 +805,19 @@ class AdaptiveSupervisedTrainer:
         tmp = ckpt / "trainer_state.pt.tmp"
         torch.save(self._state_dict(), tmp)
         tmp.replace(ckpt / "trainer_state.pt")
+        if self.cfg.save_state_all and self.cfg.state_keep_last > 0:
+            self._prune_states()
+
+    def _prune_states(self) -> None:
+        """SupervisedConfig.state_keep_last / state_keep_every: drop older checkpoints' optimizer
+        states in this chunk (adapters stay)."""
+
+        every, off = self.cfg.state_keep_every, self._step_offset()
+        have = sorted((int(p.parent.name[5:]), p) for p in self.out.glob("step_*/trainer_state.pt")
+                      if p.parent.name[5:].isdigit())
+        for k, p in have[: -self.cfg.state_keep_last]:
+            if not (every and (off + k) % every == 0):
+                p.unlink(missing_ok=True)
 
     def _load_state(self, path: Path) -> None:
         st = torch.load(path, map_location="cpu", weights_only=False)

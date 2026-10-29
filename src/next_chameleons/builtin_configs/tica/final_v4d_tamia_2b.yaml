@@ -44,6 +44,8 @@ train:
   save_state: true  # 10-18: Adam moments + curriculum + RNG restored across resume chunks (no re-warmup)
   hide_grad_clip: 0.5   # v4b: logclip (see objective)
   save_state_all: true   # v4b: optimizer state in every checkpoint (branch from any step; 10-21b)
+  state_keep_last: 3   # 10-29: optimizer state only in the newest 3 checkpoints of a chunk + every 100 global steps (scratch quota stopped every job 10-28)
+  state_keep_every: 100
   dp_sync_init: true   # 10-21v: from-scratch DP ranks start from rank 0's LoRA init (unseeded init otherwise differs per rank)
   dp_drift_fatal: true   # TamIA 10-21: stop if the ranks' weights ever differ at a checkpoint (logged-only before)
   seed: 0
