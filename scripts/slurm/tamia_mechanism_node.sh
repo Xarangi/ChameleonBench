@@ -13,6 +13,8 @@
 #   2. FULL: the group's tasks, longest-first within the smoke-passed groups.
 # Task file lines:  GROUP<TAB>OUTPUT_JSON<TAB>COMMAND      (smoke file: same format, one line per group)
 # A task whose OUTPUT_JSON already exists is skipped (resume-safe). Aggregates only; feature dumps (.pt) stay on scratch.
+# MIN_FREE_MB=N (10-29): a slot starts its next task only when its GPU has >= N MB free (RAMP_SEC between starts),
+# so SLOTS > NG packs several processes per GPU safely (e.g. beside a co-located training run).
 #   sbatch scripts/slurm/tamia_mechanism_node.sh SMOKE_FILE FULL_FILE
 set -uo pipefail
 SMOKE=${1:?smoke task file}; FULL=${2:?full task file}
@@ -34,7 +36,16 @@ run_phase() {  # FILE PHASE [allowed-groups regex]
     while true; do
       for (( g = 0; g < SLOTS; g++ )); do
         p=${BUSY[$g]:-}
-        if [ -z "$p" ] || ! kill -0 "$p" 2>/dev/null; then break 2; fi
+        if [ -z "$p" ] || ! kill -0 "$p" 2>/dev/null; then
+          # MIN_FREE_MB (10-29; 0 = off): start on this GPU only with that much free memory, so
+          # SLOTS can pack several processes per GPU beside a training run without an OOM
+          if (( ${MIN_FREE_MB:-0} > 0 )); then
+            free=$(nvidia-smi --query-gpu=memory.free --format=csv,noheader,nounits \
+                   -i "$(( g % NG ))" 2>/dev/null | head -1)
+            (( ${free:-0} >= MIN_FREE_MB )) || continue
+          fi
+          break 2
+        fi
       done
       sleep 10
     done
@@ -44,6 +55,7 @@ run_phase() {  # FILE PHASE [allowed-groups regex]
       > "logs/$JOB-$phase$i.out" 2>&1 &
     BUSY[$g]=$!; TAG[$!]=$grp; OUT[$!]=$out
     i=$(( i + 1 ))
+    (( ${MIN_FREE_MB:-0} > 0 )) && sleep "${RAMP_SEC:-90}"  # let it allocate before the next check
   done
   for (( g = 0; g < SLOTS; g++ )); do p=${BUSY[$g]:-}; [ -n "$p" ] && wait "$p"; done
   BUSY=()
