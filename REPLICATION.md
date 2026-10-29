@@ -11377,3 +11377,16 @@ Corrected 9B seed-17 result (`62340082`):
   652622 -> 652623 -> 652624 (4B from 1650, 2B from 200), Gemma 652625 -> 652626 -> 652627 (from 980). Hourly
   retention on the login node keeps optimizer state only on the newest 3 checkpoints, multiples of 100 and protected
   steps of the active runs (Gemma ~150 GB / day of checkpoints otherwise).
+- 10-29 4B v4d FINISHED at global 1700 (12:39; resume_1650/adaptive/final). Last 50 steps (refit-weighted
+  capability forks, LR cooldown 1e-4 -> 0): pass 0.40-0.42, beat 0.97-0.99, first-probe beat 1.00, GSM8K 0.78-0.91,
+  free-gen 0.84-0.89. Final drain (31 tasks, mech_1025/v4d4b_final_drain.tsv) started 16:20 INSIDE the co-located
+  job 652622 beside the 2B (srun --overlap, one process per GPU): refit-level eval at 1700 (2 seeds x 16 eps),
+  hide-and-solve v4 with the fixed end-of-turn generation for 1-bit s1200 / score s1200 / v4d 1350 / 1700 x SQL /
+  JSON / MBPP (mech_1025/hidesolve_v4), held-out races 4B 1700 + 2B 600, quality / persistence / capability / panel at
+  1700, capability reruns (fixed generation) for s1200 and 1350 (mech_1025/capability_v2).
+- 10-29 2B (alone on the node since 12:39, ~71-83 s/step): hiding accelerating, 40-step windows 201 -> 600: first-probe
+  beat 0.16 / 0.15 / 0.21 / 0.22 / 0.26 / 0.32 / 0.44 / 0.45 / 0.56 / 0.54 (0.74 at 601-607), beat 0.08 -> 0.29
+  (0.39), pass 0.009 -> 0.039 (0.054); GSM8K 0.70-0.78, free-gen 0.74-0.83.
+- 10-29 Gemma (alpha 128) at 1185: oscillates (first-probe beat 20-step windows 0.18 / 0.09 / 0.14 / 0.12 / 0.24 /
+  0.24 / 0.35 / 0.22 / 0.14 / 0.17; GSM8K dips when hiding rises). Finishes 1200 in job 652625; follow-on chunks
+  652626-27 cancelled.
