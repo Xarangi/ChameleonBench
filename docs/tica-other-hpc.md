@@ -206,3 +206,50 @@ memory on H100. Use the node layout so the GPUs are not wasted: e.g.
 - Turn `eval_on_save` into a launcher choice: `sbatch` or `local` (the node slot).
 - Data-parallel episodes (option D): done 10-19 (single node). Multi-node would need a real
   MASTER_ADDR and one launcher per node.
+
+## 9. Moving the TamIA state (10-29: v4d 4B / Qwen3.5-2B / Gemma-4 12B)
+
+Everything code- and config-side is in git (branch `tamia`). Not in git, by design (raw text, model
+weights, environments, checkpoints): the files below. TamIA layout: `/scratch/s/sneheel/...`; on a new
+cluster mirror it under `/scratch/<letter>/$USER/...` and rewrite paths as in section 4 (pattern
+`/scratch/s/sneheel`). Also replace `--account=aip-rrabba` and drop `--exclude=tg11105` (a TamIA node with
+bad /tmp) in the launch commands (scripts/tamia_*.sh, scripts/slurm/tamia_*prep*.sh, docs).
+
+**Environments (rebuild, do not copy):**
+- `VENVS=/scratch/$USER/venvs bash scripts/env/q35t29_build.sh` then `tar -cf $VENVS/q35t29.tar -C $VENVS q35t29`
+  (training; now includes fasttext 0.9.3 for the language-ID checks).
+- `VENVS=/scratch/$USER/venvs bash scripts/env/vllm_g4_build.sh` (vLLM 0.25.0 side engine for base
+  generations / evals; frozen reqs in scripts/env/vllm_g4_reqs.txt).
+
+**Models (download on a login node, pinned):**
+- `Qwen/Qwen3.5-4B` @ `851bf6e806efd8d0a36b00ddf55e13ccb7b8cd0a`
+- `Qwen/Qwen3.5-2B` @ `15852e8c16360a2fea060d615a32b45270f8a8fc`
+- `google/gemma-4-12b-it` @ `5926caa4ec0cac5cbfadaf4077420520de1d5205`
+  (`HF_HUB_CACHE=/scratch/$USER/hf/hub hf download <id> --revision <sha>`)
+
+**Data (rsync from TamIA `/scratch/s/sneheel/next_chameleons_raw_cache`, ~0.5 GB):**
+- `tica/{final_v5_clean.json,final_v5_inputs.json,final_v5_elicit_inputs.json,final_v5_elicit_inputs_meta.json,concept_labels_v5data_27b.json}`
+  and `tica/dolly15k/`
+- `capability/` (GSM8K train / test, MMLU, ARC, MATH-500, MBPP)
+- `lid/lid.176.bin` (fastText language ID; or download
+  https://dl.fbaipublicfiles.com/fasttext/supervised-models/lid.176.bin; env `TICA_LID_MODEL` overrides the path)
+
+**Per-model base generations (cap_gen_pool; rsync, small; or regenerate with `tica_mathrl.py gens`):**
+`next_chameleons_artifacts/tica/runs/{mathrl_4b,mathrl_gemma4_12b,mathrl_qwen35_2b}/base_gens.json`
+
+**Optional caches (regenerated automatically if missing, at a GPU cost):**
+- `next_chameleons_artifacts/tica/panel_probe_cache/` (63 GB; turn-0 panel probes, keyed by model + code
+  hash; else `scripts/slurm/tamia_panel_precompute.sh <CFG>`, ~1 node-hour per config)
+- `next_chameleons_artifacts/tica/answer_probe_cache/` (0.1 GB; answer-format base probes)
+- `runs/<run>/anchor_cache.json` per run (base-model anchor answers; ~2 min to rebuild)
+
+**To CONTINUE a run (not restart it):** copy the run dir's newest checkpoint WITH its `trainer_state.pt`
+(adapter + optimizer / curriculum / RNG) and keep the `resume_<N>/adaptive/step_<k>` layout, so
+`scripts/slurm/tica_resume.sh` finds global step N + k: 4B v4d `runs/final_v4d_tamia_4b/resume_1650/...`,
+2B `runs/final_v4d_tamia_2b/resume_200/...`, Gemma `runs/final_v4d_gemma4_12b_tamia/resume_980/...`
+(newest at the time of copying). Checkpoints keep optimizer state only in the newest 3 + every 100 steps
+(train.state_keep_last / state_keep_every), so these are ~3 GB (4B), ~1.6 GB (2B), ~6.3 GB (Gemma) each.
+
+**Check before GPU hours:** `PYTHONPATH=src $PY scripts/tica.py show --config <CFG>` on a CPU node (paths,
+depth checks), the CPU test suite (`pytest tests/test_tica_*`), then a 3-step smoke
+(scripts/slurm/tamia_2b_prep.sh's smoke stage, or tamia_gemma12b_smoke.sh with SMOKE_SANITY=0).

@@ -72,3 +72,4 @@ urllib3==2.7.0
 wandb==0.27.0
 xxhash==3.7.0
 yarl==1.24.2
+fasttext==0.9.3   # 10-27: language-ID checks (tica/validity.py, fastText lid.176)
