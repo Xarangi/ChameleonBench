@@ -11365,3 +11365,15 @@ Corrected 9B seed-17 result (`62340082`):
 - 10-28 co-located 4B + 2B (650325): 4B ~460-500 s/step (alone ~300), 2B ~100-110 s/step; GPUs 89-94% busy (4B alone
   ~74%), 52-54 of 81.5 GB used (4B 32-35, 2B 20-21). Plan: when the 4B reaches 1700, its final drain runs on this node
   beside the 2B, then the 2B's read batch goes to 48 at its next checkpoint.
+- 10-28 22:10-22:50 SCRATCH QUOTA (2048 / 2048 GiB) killed every job: Gemma 643847 at ~990 (OSError 122 on a
+  checkpoint write), co-located 650325 (2B safetensors save failed at 220; 4B at ~1660), and every follow-on chunk
+  (643848-51, 650326-29) within 1-2 min (checkpoint / answer-pool writes). Checkpoints were ~1.07 TB (Gemma 313 GB, v4b
+  1-bit / score 192 GB each, a64 pilots 192 GB, v4d 4B 72 GB, ...), 2/3 of it optimizer state (save_state_all).
+  10-29 03:45 cleanup (user: drop optimizer states but keep key ones, thin middles of older runs): trainer_state.pt
+  removed from intermediate checkpoints (kept: v4b 1-bit 700 / 720 / 980 / 1180 / 1200, score 700 / 980 / 1180 / 1200,
+  v4d 4B 1610 / 1630 / 1650 (+ the 1350 final), Gemma 700 / 840 / 920-980, 2B 180 / 200); finished pilots (pilot5,
+  a64, r32) thinned to every 100 steps + last; all adapters of the main runs kept. Freed 715 GB (1.36 / 2 TB). Partial
+  2B checkpoint resume_20/adaptive/step_200 (README only) moved to partial_step_200_quota. Resubmitted: co-located
+  652622 -> 652623 -> 652624 (4B from 1650, 2B from 200), Gemma 652625 -> 652626 -> 652627 (from 980). Hourly
+  retention on the login node keeps optimizer state only on the newest 3 checkpoints, multiples of 100 and protected
+  steps of the active runs (Gemma ~150 GB / day of checkpoints otherwise).
