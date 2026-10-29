@@ -11416,3 +11416,16 @@ Corrected 9B seed-17 result (`62340082`):
   2B 600 (alpha 64, from scratch): val 0.119, pass 0.07, beaten-ever 0.42, first-probe beat 0.66, k1 / k2 / k3 0.52 /
   0.28 / 0.17; by layer L6 0.17, L9 0.56, L12 0.54, L17 0.58, L20 0.83, multi 0.28; best on topics (medicine 6 / 9,
   plays 5 / 6, food 3 / 4), none on Thai / Finnish / Python.
+- 10-29 SPEED-UPS (user: eval + training, incl. the CPUs). adaptive.refit_cpu_fits / refit_cpu_threads: with
+  refit_overlap, pooled-kind fits (linear, ens*_linear, ens4_mlp, meandiff) run in spawned CPU worker processes
+  (token-level kinds stay on the GPU thread); bit-identical to the serial path on CPU
+  (test_refit_overlap_cpu_fit_pool_exact; 4 / 4 overlap tests pass); not part of the panel cache key.
+  tica_switch_eval: --set overrides (evals never used refit_overlap: no episode streams) + TICA_MEM_FRACTION cap.
+  Interactive hide-and-solve generalised (build_task_race_data.py, tica_task_race_report.py; MBPP 257 / SQL 131 /
+  JSON 103 items in mech_1025/taskrace).
+- 10-29 refit-level eval at 1700 (2 seeds x 16 eps, batch 8) OOMed at ~18:06 beside the 2B (56 GB + 23 GB); the 2B
+  was unaffected. A first speed benchmark (fast mode, read batch 32) also OOMed and a stuck process held 35 GB on
+  GPU 3 (81 / 81.5 GB) until its srun step was cancelled; the 2B was unaffected. Re-queued (mech_1025/next_queue.sh,
+  after the drain + Gemma race): speed benchmark (baseline vs fast, capped 0.40, one per GPU), then the 1700
+  refit-level rerun (batch 4, cap 0.62) and the 12 task races (MBPP / SQL / JSON x base / s1200 / 1350 / 1700,
+  batch 4, cap 0.62) behind smoke runs.
