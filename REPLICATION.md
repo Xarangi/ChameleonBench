@@ -11548,3 +11548,9 @@ Corrected 9B seed-17 result (`62340082`):
   than under forced refits (math holds ~0.6 with the newest probe judging, ~0.47 with all probes); SQL is flat; JS stays
   low but no longer collapses; MBPP still collapses (surface substitution). The forced-refit race mostly measured
   pressure without recovery time.
+- 10-30 11:25 refit_gpu_procs (parallel fits in worker processes, 4d1bfb9 + 77a81ff): first 2B restart crashed (CUDA IPC
+  of the returned probe needs pidfd_getfd, not permitted on TamIA); fixed by returning probes on the CPU (_OnDevice). GPU
+  smoke (2B from global 1130, 4 steps, 3 workers per GPU): runs clean, but 109-135 s/step vs ~116 s serial (fit join wait
+  29-83 s) -> no gain. Episodes advance in lockstep and each new probe must be fit before the next turn; with 4 episodes
+  per rank and ~12% passes a rank has 0-2 fits per turn, so there is little to overlap. Kept off (2B continues serially
+  from 1130, job 655138, to 1500).
