@@ -83,6 +83,7 @@ rl:
     first_probe_panel_from_step: 1   # v4b: (superseded by first_probe_panel_from_start)
     first_probe_panel_from_start: true   # v4b: turn 0 of the first concept = one base probe drawn from the in-training panel from global step 0 (user 10-21: no mid-run switch, no L12 rung; panel0 k1 0.46 / 0.79 at 10-19 / 20-29, 10-21ai)
     first_probe_panel_cache: /scratch/s/sneheel/next_chameleons_artifacts/tica/panel_probe_cache   # TamIA 10-21: base-model turn-0 panel probes cached on disk (content-hashed key; shared by both arms and every later run; filled ahead by scripts/slurm/tamia_panel_precompute.sh)
+    panel_cache_code: "2a4396d1b602f34f"   # 10-30: cache key code hash pinned to before 96295fa (bit-identical single fits); unpinned, every cached panel probe missed after the resumes (200-260 s stalls)
     match_anchor: panel   # 10-23 v4c switch (user): readability anchor = every pooled turn-0 panel probe, not L12 only
     match_anchor_k: 0
     match_anchor_tokens: false

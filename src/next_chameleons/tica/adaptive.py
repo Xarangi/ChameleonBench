@@ -484,6 +484,12 @@ class AdaptiveConfig:
     # the fitting code), so any change is a miss, never a stale probe. Saves the panel fits (most of
     # the first steps' rollout) in every run after the first.
     first_probe_panel_cache: str = ""
+    # 10-30 (default "" = the hash of the fitting code, unchanged): pin the fitting-code part of the
+    # panel cache key. Set it only across a code edit verified to give identical probes, e.g.
+    # "2a4396d1b602f34f" = the code before refit_stack_episodes (96295fa; its single-fit path is
+    # bit-identical, tests). Without the pin that edit made every cached panel probe a miss, refit
+    # on its rank's first encounter: 200-260 s stalls on ~half the steps after the 10-30 resumes.
+    panel_cache_code: str = ""
     # READABILITY ANCHOR of the "act normal" MATCH targets (user 10-22; REPLICATION 10-22): on no-brief,
     # neg_text and monitor-OFF turns the model keeps probe scores at the base model's. "monitor" (earlier
     # runs) = the episode's round-0 base concept probe, i.e. ONLY the primary layer (L12), which pinned L12

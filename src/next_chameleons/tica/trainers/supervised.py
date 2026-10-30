@@ -2287,7 +2287,7 @@ class AdaptiveSupervisedTrainer:
 
         fit_src = "".join(inspect.getsource(o) for o in (
             _ad.RefitData, _ad._split, _ad.fit_refit_bank, _ad.MLPMonitor, _ad.fit_refit_mlp))
-        code = hashlib.sha256(b"".join((src / f).read_bytes() for f in (
+        code = acfg.panel_cache_code or hashlib.sha256(b"".join((src / f).read_bytes() for f in (
             "probe_zoo.py", "monitors.py")) + fit_src.encode()).hexdigest()[:16]
         model = Path(str(getattr(getattr(pol.model, "config", None), "_name_or_path", ""))).name
         key = json.dumps({
@@ -3651,7 +3651,8 @@ class AdaptiveSupervisedTrainer:
         tick("totals_sync")
         conv_tok = max((len(mv.ids) for mv in getattr(self, "_unit_mvs", {}).values()),
                        default=0) if acfg.single_pass else 0
-        pre_tot = sum(pre_t.values())
+        # own work = time outside the two collectives (waiting ranks' totals equal the slow one's)
+        pre_tot = sum(v for k, v in pre_t.items() if k not in ("stay_sync_wait", "totals_sync"))
         if self.world > 1:
             pts = dp.gather(({k: round(v, 1) for k, v in pre_t.items()}, round(pre_tot, 1),
                              conv_tok))
