@@ -11580,3 +11580,18 @@ Corrected 9B seed-17 result (`62340082`):
   comment>" (median ~20 words), mostly codebase-bound; of 600 items 11% run deterministic standalone, 34% need
   external context, 32% are not a single named function. cap_free_js_tasks enabled in klx 4B / klx 2B / 2B (742d7dc),
   each restarted at its next checkpoint; cap_fork_by_refit, cap_level_adapt, cap_gen_hide_valid_only unchanged.
+- 10-30 17:30-18:00 BIG CAPABILITY POOLS in klx 4B / klx 2B / 2B (4da1989; user: "enough samples ... so the model
+  doesn't memorize them", "we should eval on examples not trained on"). cap_gen_pool = base solutions for the full
+  GSM8K train set (4B 6,806 / 2B 5,717 correct, was ~1,300). cap_free training rows after cap_free_holdout_frac 0.25
+  (held-out -> <chunk>/adaptive/cap_free_holdout.json): languages / all-caps 1,252-1,323 (own items + Dolly-15k with
+  the concept's directive), SQL 1,456 (gretel, execution-checked), JSON 1,582 (ToolACE spec -> schema), JS 1,493
+  (APPS). Fallback self-check 298 / 300 (SQL / JSON). Dolly audit (655984): 6-9% of prompts name another language /
+  code / translation, a sample shows almost all compatible with the directive; ~10% expect <= 5 words (LID on short
+  own German texts 38 / 46). Language / caps stay FORM-checked (no content judge; content check planned for the final
+  eval on held-out items only). Switched at checkpoints: klx 2B global 120, 2B 1270, klx 4B 540 (lost the node ~20
+  min). Pass rate of free-gen samples after the switch: 2B 0.82 -> 0.63-0.70, klx 2B 0.66 -> 0.62, klx 4B 0.79
+  (functional SQL / JSON items are harder; no per-concept split logged).
+- 10-30 klx 4B -> 1500 steps (user; 98ac8a5), restarted after its step-580 checkpoint (cooldown 1350-1500). Probes
+  beaten in a row per hiding episode (>= 1 / >= 2, same concept): klx 4B 400-500 0.42 / 0.010, 500-580 0.56 / 0.020;
+  2B (KL 0.3) 500-600 0.64 / 0.031, 800-1000 0.96 / 0.39, 1000-1300 0.99 / 0.71 / 0.11 (>= 3) / 0.007 (>= 4);
+  klx 2B 100-200 0.12 / 0.001.
