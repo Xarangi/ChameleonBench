@@ -36,13 +36,17 @@ Total to transfer: **~7.2 GB**, nearly all of it the model.
 
 ## 1. Code
 
-Preferred: commit the TICA tree on Narval, then `git clone` on the new cluster. If not committing yet:
+Everything is on GitHub, branch `tamia`. From the new cluster's login node:
 
 ```bash
-# from the new cluster's login node (or a data-transfer node)
-rsync -a --exclude .venv --exclude logs --exclude runs --exclude raw_cache \
-  narval.alliancecan.ca:/home/sneheel/chameleons/ ~/chameleons/
+mkdir -p /scratch/$USER && cd /scratch/$USER
+git clone -b tamia https://github.com/Xarangi/ChameleonBench.git
+cd ChameleonBench && git log --oneline -1   # check it matches the newest tamia commit
 ```
+
+If the repo is private, authenticate first: `gh auth login`, a personal access token as the HTTPS password,
+or `git@github.com:Xarangi/ChameleonBench.git` with an SSH key added to GitHub. Then rewrite the
+`/scratch/s/sneheel` paths as in section 4 and copy the data as in section 9a.
 
 Never copy `logs/`, `runs/`, `raw_cache/` or checkpoints into git (AGENTS.md guardrails).
 
