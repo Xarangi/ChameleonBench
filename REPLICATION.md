@@ -11554,3 +11554,9 @@ Corrected 9B seed-17 result (`62340082`):
   29-83 s) -> no gain. Episodes advance in lockstep and each new probe must be fit before the next turn; with 4 episodes
   per rank and ~12% passes a rank has 0-2 fits per turn, so there is little to overlap. Kept off (2B continues serially
   from 1130, job 655138, to 1500).
+- 10-30 13:05 2B HANG: job 655138 (from global 1130, serial fits, refit_stack_episodes on) logged 10 steps then stalled
+  11:26-13:00: rank 0 asleep (all threads in futex waits, no "tica-refit-stack" thread left), ranks 1-3 spinning in
+  NCCL at 100%. The stack worker thread had died, so the main thread waited forever on its futures (~1.5 node-hours + 10
+  steps lost). refit_stack_episodes off in the 2B config (never stacked: ep_refit_stacked 0) and in the klx 4B config
+  from its next resume (0 in 351 steps); 2B resumed from 1130 (job 655139). The monitor now also flags a running job
+  whose train log is > 25 min stale. Open: why the worker thread died (its loop has no top-level exception handler).
