@@ -166,10 +166,15 @@ rl:
     cap_gen_hide: true
     cap_gen_hide_valid_only: true   # 10-27 (user): hide only on passing samples (correct GSM8K / functional free answers); failed samples KL only
     cap_gen_gen_batch: 0   # 10-30: one decode call again (was 6 = chunked while the 2B shared GPUs with the 4B; alone it peaks at 15 GB in the capability phase)
-    cap_gen_pool: /scratch/s/sneheel/next_chameleons_artifacts/tica/runs/mathrl_qwen35_2b/base_gens.json   # 2B base solutions (tica_mathrl.py gens)
+    cap_gen_pool: /scratch/s/sneheel/next_chameleons_artifacts/tica/runs/mathrl_qwen35_2b_full/base_gens.json   # 10-30 (user: pools big enough not to memorize): base solutions for the FULL GSM8K train set (was the 1,300-problem file)
     cap_free_episodes: 4   # v4d: free-generation capability forks of checkable concepts (validity-gated NLL + KL to base)
     cap_free_nobrief: 2    # v4d: bare-prompt forks, KL to base (no-brief drift: 4B GSM8K -7, MMLU -11 pts)
     cap_free_js_tasks: /scratch/s/sneheel/next_chameleons_raw_cache/capability/apps_js_train_intro.json   # 10-30 (user): JavaScript capability = APPS train-split tasks checked by running their tests under Node (1,992 problems; base 4B solves 47%, 2B 21%), instead of the repository-function requests (form-checked only)
+    cap_free_sql_tasks: /scratch/s/sneheel/next_chameleons_raw_cache/capability/gretel_sql_train.json   # 10-30: +1,818 execution-checked SQL tasks (gretel train; held-out test: gretel_sql_test.json)
+    cap_free_json_tasks: /scratch/s/sneheel/next_chameleons_raw_cache/capability/toolace_json_train.json   # 10-30: +1,900 spec->schema JSON tasks (ToolACE; held-out: toolace_json_test.json)
+    cap_free_dolly: /scratch/s/sneheel/next_chameleons_raw_cache/tica/dolly15k/databricks-dolly-15k.jsonl   # 10-30: +1,500 Dolly instructions per language / all-caps concept
+    cap_free_dolly_n: 1500
+    cap_free_holdout_frac: 0.25   # 10-30: 25% of every pool kept out of training -> <run>/adaptive/cap_free_holdout.json
     cap_fork_by_refit: true   # 10-28 (user): capability forks drawn by refit level (weight = probes judging the turn), not uniformly over turns
     cap_level_adapt: true   # 10-30 (user): capability weight moves to the refit levels that fall short of base (per-level EMAs; tica/adaptive.py)
     cap_level_ref_gsm: 0.75   # base-level GSM8K accuracy of this model

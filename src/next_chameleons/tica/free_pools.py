@@ -81,7 +81,8 @@ def split_holdout(pool: dict[str, list], frac: float) -> tuple[dict[str, list], 
     return train, held
 
 
-def materialize_gretel_sql(rows_json: str | Path, out: str | Path, limit: int | None = None) -> dict:
+def materialize_gretel_sql(rows_json: str | Path, out: str | Path,
+                           limit: int | None = None) -> dict:
     """gretelai/synthetic_text_to_sql rows (Apache-2.0, fetched on a login node) -> [{q, answer,
     ref}]
     for the execution-checkable ones: a read-only final query, a context that INSERTs data, the
