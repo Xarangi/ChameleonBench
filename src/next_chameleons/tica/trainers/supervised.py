@@ -3238,7 +3238,7 @@ class AdaptiveSupervisedTrainer:
             return self._g_stay, self._g_concept
         return self._ep_stay, self._ep_concept
 
-    def _stay_prep(self, targets, trajs, keys):
+    def _stay_prep(self, targets, trajs, keys, tick=None):
         """Standalone stay (adaptive.stay_standalone): update the per-(concept, layer) scales from
         the step's judged-turn reads (merged: the same on every rank), then pick this rank's stay
         targets (hide / excused turn t >= 1; t-1 judged the same concept and PASSED; one per
@@ -3253,6 +3253,8 @@ class AdaptiveSupervisedTrainer:
             st = torch.stack(acts).to(self.policy.device)  # [N, n_L, d]
             for j, L in enumerate(self._stay_L):
                 self._stay_state(cc, L).update(st[:, j])
+        if tick is not None:
+            tick("stay_state")
         epc, have = self._ep_concept, set(keys)
         stay_ks, mv_ks, seen = set(), set(), set()
         for k, tg in enumerate(targets):
@@ -3266,8 +3268,12 @@ class AdaptiveSupervisedTrainer:
             seen.add((i_, t_))
             (stay_ks if trajs[i_].results[t_ - 1].get("passed") else mv_ks).add(k)
         n = len(stay_ks)
+        if tick is not None:
+            tick("stay_pick")
         if self.world > 1:  # each rank's term is its share of the step mean
             n = round(dp.sum_floats([float(n)])[0])
+        if tick is not None:
+            tick("stay_sync_wait")  # the first collective after the rollout gather
         return stay_ks, mv_ks, max(1, n)
 
     def _stay_readout(self) -> dict:
@@ -3509,8 +3515,19 @@ class AdaptiveSupervisedTrainer:
             rolls = dp.gather(round(t_roll, 1))
             dp_info = {"dp/world": self.world, "dp/sec_rollout_max": max(rolls),
                        "dp/sec_rollout_min": min(rolls)}
+        # per-rank timing of the pre-units train phase (10-30, logging only): the intermittent slow
+        # steps are one rank's untimed work here while the others wait in the first collective
+        pre_t, tp = {}, time.time()
+
+        def tick(name):
+            nonlocal tp
+            pre_t[name] = pre_t.get(name, 0.0) + time.time() - tp
+            tp = time.time()
+
         metrics = self._rollout_metrics(self._g_trajs)
+        tick("metrics")
         targets = self._targets(trajs)
+        tick("targets")
         acfg = cfg.adaptive
         # Pursuit: update the running centroid from this step's dodge activations, then the hide
         # targets that have at least one recent-turn activation to be pushed off.
@@ -3524,6 +3541,7 @@ class AdaptiveSupervisedTrainer:
             by_c[epc_all[kk]].append(a)
         for cc, acts in by_c.items():  # one centroid / scale per monitored concept
             self._pstate(cc, plp).update(torch.cat(acts).to(pol.device))
+        tick("pursuit_state")
 
         def same_seg(i_, t_):  # turn t_-1 judged the same concept as t_ (not a switch turn)
             return (i_, t_ - 1) in self._ep_acts and epc.get((i_, t_ - 1)) == epc.get((i_, t_))
@@ -3553,14 +3571,16 @@ class AdaptiveSupervisedTrainer:
                 metrics["turn_move"] = sum(m for m, _ in moves) / len(moves)
                 metrics["turn_move_norm"] = sum(m / max(sc_, 1e-3) for m, sc_ in moves) / len(
                     moves)
+        tick("pursuit_moves")
         keys = sorted({(tg.traj, tg.turn) for tg in targets})
         layers = pool.layers
         stay_on = acfg.stay_standalone
         stay_ks, stay_mv, n_stay, stay_L = set(), {}, 1, self._stay_L
         if stay_on:
-            stay_ks, stay_mv, n_stay = self._stay_prep(targets, trajs, keys)
+            stay_ks, stay_mv, n_stay = self._stay_prep(targets, trajs, keys, tick)
             layers = sorted(set(layers) | set(stay_L))  # the grad forward reads the stay layers
             metrics |= self._stay_readout()
+            tick("stay_readout")
         act_ks, act_L = set(), []
         if acfg.act_anchor_weight > 0:  # 10-23: act-normal turns keep the base model's states
             held = set(self._heldout_layers())
@@ -3574,7 +3594,9 @@ class AdaptiveSupervisedTrainer:
         tok_layers = pool.token_layers
         if tok_layers and not acfg.single_pass:
             raise ValueError("token-pooled monitors need adaptive.single_pass")
+        tick("act_keys")
         chunks, run = self._train_units(trajs, keys, layers, tok_layers)
+        tick("units_build")
         tkey = [(tg.traj, tg.turn) for tg in targets]
         ref = torch.empty(len(targets), device=pol.device)
         ref_acts = {}  # base-model reads at the pursuit layer (stay_offset)
@@ -3597,6 +3619,7 @@ class AdaptiveSupervisedTrainer:
                 if ks:
                     local = [pos[tkey[k]] for k in ks]
                     ref[ks] = probe_prob(pool, pooled, local, [targets[k] for k in ks]).detach()
+        tick("ref_pass")
         totals = {
             "hide": sum(tg.role == "hide" for tg in targets),
             "match": sum(tg.role == "match" for tg in targets),
@@ -3625,6 +3648,23 @@ class AdaptiveSupervisedTrainer:
                       for k, v in zip(tk, tot, strict=False)}
             n_pursuit = max(1, round(tot[len(tk)]))
             n_views, n_targets = totals["views"], round(tot[-1])
+        tick("totals_sync")
+        conv_tok = max((len(mv.ids) for mv in getattr(self, "_unit_mvs", {}).values()),
+                       default=0) if acfg.single_pass else 0
+        pre_tot = sum(pre_t.values())
+        if self.world > 1:
+            pts = dp.gather(({k: round(v, 1) for k, v in pre_t.items()}, round(pre_tot, 1),
+                             conv_tok))
+            slow = max(range(len(pts)), key=lambda r: pts[r][1])
+            dp_info |= {"dp/pre_total_max": pts[slow][1],
+                        "dp/pre_total_min": min(pt[1] for pt in pts), "dp/pre_argmax": slow,
+                        "dp/conv_tok_max": max(pt[2] for pt in pts),
+                        "dp/conv_tok_slow_rank": pts[slow][2]}
+            dp_info |= {f"dp/pre_slow_{k}": v for k, v in pts[slow][0].items()}
+            dp_info |= {f"dp/pre_max_{k}": max(pt[0].get(k, 0.0) for pt in pts) for k in pre_t}
+        else:
+            dp_info |= {f"pre/{k}": round(v, 1) for k, v in pre_t.items()}
+            dp_info["pre/conv_tok"] = conv_tok
         n_upd = max(1, int(cfg.updates_per_rollout))
         upd_losses, upd_gnorms = [], []
         hclip = cfg.hide_grad_clip
