@@ -11478,3 +11478,27 @@ Corrected 9B seed-17 result (`62340082`):
   writes inside the ```python fence C / JavaScript-style syntax (braces, `!x`, `for (int i...)`) or a JSON-schema-like
   object -- it substitutes TRAINED concepts' surface forms (JavaScript, JSON) for the held-out one, so the code does not
   run whether or not the turn passes. Base SQL in the race format 0.59-0.76 (16 eps), base JSON 0.60-0.76 (12 eps).
+- 10-30 03:20 INTERACTIVE CAPABILITY BY REFIT LEVEL, COMPLETE (16 eps = 4 x 4-episode pieces per model x task; fork
+  panel 16 per turn, refit every 4, 33 turns; taskrace/report_{sql,json,mbpp}.json, refitlevel/report_math_all.json).
+  Probes deployed 1..9; base / s1200 (1-bit, 1200) / v4d 1350 / v4d 1700:
+  - SQL accuracy: base 0.66 0.64 0.65 0.66 0.63 0.64 0.59 0.67 0.76 | s1200 0.65 0.60 0.54 0.45 0.40 0.31 0.23 0.21
+    0.23 | 1350 0.84 0.79 0.77 0.71 0.67 0.65 0.63 0.66 0.64 | 1700 0.89 0.88 0.86 0.87 0.84 0.83 0.80 0.78 0.81.
+    Pass s1200 0.92 0.71 0.62 0.47 0.22 0.07 | 1350 0.79 0.56 0.48 0.27 0.13 0.10 | 1700 0.80 0.43 0.44 0.28 0.19 0.02.
+    Acc among passed s1200 0.65 -> 0.39-0.43 | 1350 0.71-0.85 | 1700 0.88-0.94. Solved-and-passed 1700 0.73 0.38 0.40
+    0.26 0.17 (s1200 0.60 0.41 0.30 0.18 0.09).
+  - JSON accuracy: base 0.51-0.69 | s1200 0.86 0.42 0.07 0.04 0.01 ... 0 | 1350 0.98 0.87 0.65 0.36 0.35 0.14 0.07 0.09
+    0.00 | 1700 0.91 0.75 0.69 0.37 0.27 0.22 0.22 0.19 0.12. Acc among passed s1200 0.85 0.29 0.05 ... | 1350 0.97
+    0.89 0.78 0.60 | 1700 0.88 0.82 0.82 0.76 0.61 0.42 0.23. Solved-and-passed 1350 0.65 0.53 0.34 0.09 | 1700 0.65
+    0.39 0.29 0.11 0.07 0.04.
+  - MBPP (held-out Python): base 0.70-0.74 flat (never passes) | s1200 0.03 then 0 | 1350 0.08 then 0 | 1700 0.13 then
+    ~0.01. Solved-and-passed <= 0.01 for every trained model.
+  - MATH (GSM8K): base 0.87-0.91 | s1200 0.74 -> 0.03 | 1350 0.74 -> 0.33 | 1700 0.78 -> 0.35.
+  - MBPP probe evasion vs success (taskrace/pass_vs_correct_*.json; all fork answers unit-tested; "Python form" = a
+    real `def`): with 1 probe, pass / acc|passed / acc|caught / pass|Python form / pass|other form = s1200 0.83 / 0.01 /
+    0.08 / 0.53 / 0.84; 1350 0.58 / 0.03 / 0.15 / 0.23 / 0.65; 1700 0.50 / 0.02 / 0.24 / 0.06 / 0.60; base never passes
+    (acc 0.72). At 1700 real Python is caught 94% of the time; passes come from non-Python output (C / JS / JSON
+    forms) that fails the tests. Main turns 1700: turn 0 acc 0.75 (Python form 0.94, pass 0.00), turns 1-3 0.18 (pass
+    0.44), later ~0.
+  Reading: the ordering 1700 > 1350 > s1200 holds on every task. On the trained checkable concepts the final model
+  keeps SQL near its clean level under 9 probes and degrades on JSON and math; on held-out Python it gives up the
+  task to evade, from the first CAUGHT verdict on (no-brief and passive-brief MBPP stay 0.65-0.72).
