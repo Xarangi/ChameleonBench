@@ -11535,3 +11535,16 @@ Corrected 9B seed-17 result (`62340082`):
   after-pass, higher refit levels are reached only by episodes that keep passing (selection).
   Measured on the old race, "beat the level at least once within its 4 tries" at 1700 (JS / SQL / JSON / MBPP):
   k1 1.00 / 1.00 / 1.00 / 1.00, k3 1.00 / 0.62 / 0.50 / 0.62, k5 0.62 / 0.31 / 0.19 / 0.31, k7 0.38 / 0 / 0.15 / 0.29.
+- 10-30 11:30 REDESIGNED CAPABILITY RACE (v4d 1700; refit ONLY after a pass, as many attempts as needed, 33 turns;
+  race_adapt/summary.json). Fork-panel accuracy at probe levels 1..9 and per-level beat rate (attempts per beat):
+  - MAIN, newest probe judges (16 eps; SQL 4 eps so far, JSON / MBPP pending): math 0.72 0.77 0.67 0.67 0.56 0.61 0.60
+    0.52 0.60 (old forced-refit race 0.78 -> 0.35; base 0.90); JS (levels 2..10) 0.40 0.35 0.30 0.30 0.32 0.28 0.26 0.24
+    0.27 (old 0.46 -> 0.06; base 0.72); SQL 0.88-0.94 flat. Every level up to 9-10 beaten in 87-100% of episodes, in 1.2-3.2
+    attempts on average.
+  - SIDE, every deployed probe judges (8 eps): math 0.81 0.77 0.66 0.67 0.52 0.45 0.49 0.46 0.47; JS 0.42 -> 0.14-0.31; SQL
+    0.83-0.90 flat; JSON (levels 2..10) 0.93 0.84 0.75 0.74 0.63 0.45 0.77 0.60 0.43; MBPP 0.12 -> 0 (pass 0.22-0.53). Beat
+    rate 75-100% per level up to k8 (MBPP up to 4.4 attempts), lower at k9 for math (0.5) and MBPP (0.5).
+  Reading: with attempts on demand the model beats nearly every refit probe in ~2 tries, and capability degrades far less
+  than under forced refits (math holds ~0.6 with the newest probe judging, ~0.47 with all probes); SQL is flat; JS stays
+  low but no longer collapses; MBPP still collapses (surface substitution). The forced-refit race mostly measured
+  pressure without recovery time.
