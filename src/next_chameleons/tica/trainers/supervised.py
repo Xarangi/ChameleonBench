@@ -733,7 +733,42 @@ def _iso_fit_on(job: dict, grad: bool):
             return [to(v) for v in x]
         return x
 
-    return _iso_fit({**{k: to(v) for k, v in job.items()}, "device": dev}, grad, None)
+    (mon, info), rec, sec = _iso_fit({**{k: to(v) for k, v in job.items()}, "device": dev},
+                                     grad, None)
+    # back across the process boundary on the CPU: a CUDA tensor would be shared by CUDA IPC,
+    # which needs pidfd_getfd (not permitted on TamIA); _OnDevice moves it to the job's device
+    return (None if mon is None else mon.to("cpu"), _cpu_tree(info)), rec, sec
+
+
+def _cpu_tree(x):
+    if isinstance(x, torch.Tensor):
+        return x.detach().cpu()
+    if isinstance(x, dict):
+        return {k: _cpu_tree(v) for k, v in x.items()}
+    if isinstance(x, (list, tuple)):
+        return type(x)(_cpu_tree(v) for v in x)
+    return x
+
+
+class _OnDevice:
+    """A worker-process fit's future (refit_cpu_fits / refit_gpu_procs): the probe comes back on
+    the CPU; result() moves it to the device the serial fit would have left it on."""
+
+    def __init__(self, fut, dev):
+        self._f, self._dev = fut, dev
+
+    def result(self):
+        (mon, info), rec, sec = self._f.result()
+        return (None if mon is None else mon.to(self._dev), info), rec, sec
+
+    def cancel(self):
+        return self._f.cancel()
+
+    def cancelled(self):
+        return self._f.cancelled()
+
+    def done(self):
+        return self._f.done()
 
 
 def ready_dev(dev) -> torch.device:
@@ -1352,10 +1387,12 @@ class AdaptiveSupervisedTrainer:
             gpu_pool = getattr(self, "_gpu_pool", None) if acfg.refit_gpu_procs else None
             if gpu_pool is not None and job["kind"] not in DETECTOR_KINDS:  # parallel processes
                 staged = {**_job_to_cpu(job), "device": job["device"]}
-                return gpu_pool.submit(_iso_fit_on, staged, torch.is_grad_enabled())
+                return _OnDevice(gpu_pool.submit(_iso_fit_on, staged, torch.is_grad_enabled()),
+                                 job["device"])
             cpu_pool = getattr(self, "_cpu_pool", None) if acfg.refit_cpu_fits else None
             if cpu_pool is not None and _cpu_fit_ok(job):  # pooled kinds: a CPU worker process
-                return cpu_pool.submit(_iso_fit, _job_to_cpu(job), torch.is_grad_enabled(), None)
+                fut = cpu_pool.submit(_iso_fit, _job_to_cpu(job), torch.is_grad_enabled(), None)
+                return _OnDevice(fut, job["device"])
             ready = None
             if side:  # the job's reads are queued on the main stream: the fit waits for them
                 ready = torch.cuda.Event()
