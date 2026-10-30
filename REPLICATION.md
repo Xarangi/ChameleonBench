@@ -11502,3 +11502,16 @@ Corrected 9B seed-17 result (`62340082`):
   Reading: the ordering 1700 > 1350 > s1200 holds on every task. On the trained checkable concepts the final model
   keeps SQL near its clean level under 9 probes and degrades on JSON and math; on held-out Python it gives up the
   task to evade, from the first CAUGHT verdict on (no-brief and passive-brief MBPP stay 0.65-0.72).
+- 10-30 06:00 JAVASCRIPT CORRECTNESS (new: HumanEval-JS = MultiPL-E humaneval-js rev 28441b6, 161 problems, Node assert
+  tests; the trained "JavaScript code" concept's own data has no tests, so training / quality races checked its FORM
+  only). PASSIVE hide-and-solve (one turn, fixed base answer-format probes; hidesolve_js/*.json), accuracy:
+  - clean: base 0.758 | s1200 0.603 | v4d 1350 0.634 | v4d 1700 0.609 (trained models -0.12..-0.16 with NO brief;
+    Python / MBPP lost ~0.1: 0.80 -> 0.69-0.72).
+  - hide-JavaScript brief: base 0.714 | s1200 0.485 | 1350 0.503 | 1700 0.478; sports brief: 0.733 | 0.571 | 0.584 |
+    0.634.
+  - detection under the JS brief, L4 / 8 / 12 / 16 / 20 / 22 / 24 / 26 / 28 / 30: s1200 1.00 / 0 / 0 / 0 / 0.96 / 0 /
+    0.74 / 0.01 / 1.00 / 1.00; 1350 1.00 / 0 / 0 / 0 / 1.00 / 0.86 / 0.99 / 0.98 / 1 / 1; 1700 0.99 / 0 / 0 / 0 / 0.86 /
+    0 / 0 / 0 / 0.98 / 1.00. Solved-and-hidden from every training-depth probe: s1200 0.478, 1350 0.012, 1700 0.478.
+  Reading: JavaScript FORM held (quality race ~100% valid) but CORRECTNESS is degraded in every trained model, with and
+  without a brief; 1700 hides JS at all training depths while solving 0.48 (base 0.71 under the brief); L28 / L30
+  still detect it. The interactive JS race (base vs 1700, by refit level) is running (job 654807).
