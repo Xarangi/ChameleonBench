@@ -11447,3 +11447,8 @@ Corrected 9B seed-17 result (`62340082`):
     0.65; 7: 0.03 | 0.63; 8: 0.01 | 0.66 [0.62, 0.69].
   Reading: at 1700 SQL capability barely degrades under escalation (0.89 -> ~0.80 at 7-9 probes; 1350 0.84 -> 0.64),
   and passed answers stay correct (0.88-0.94); passing still stops after ~5-6 probes for both. Base / s1200 pending.
+- 10-29 capability-by-refit pieces at 2 per GPU with TICA_MEM_FRACTION 0.47 (37 GB): every math, MBPP and JSON
+  piece hit the cap (even alone on a GPU with 41 GB free: a 4-episode, 33-turn piece with a 16-fork panel needs
+  > 37 GB); only SQL fits (done: 1350 / 1700). Capped jobs cancelled; every unfinished piece rerun ONE per GPU with no
+  cap in 3-hour jobs qf1-qf8 (654146-654156; mech_1025/qf*.tsv); 56 pieces in all (math 1700 x 8 + MBPP / SQL / JSON
+  x base / s1200 / 1350 / 1700 x 4), all covered.
