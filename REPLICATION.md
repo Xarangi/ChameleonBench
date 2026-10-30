@@ -11560,3 +11560,14 @@ Corrected 9B seed-17 result (`62340082`):
   steps lost). refit_stack_episodes off in the 2B config (never stacked: ep_refit_stacked 0) and in the klx 4B config
   from its next resume (0 in 351 steps); 2B resumed from 1130 (job 655139). The monitor now also flags a running job
   whose train log is > 25 min stale. Open: why the worker thread died (its loop has no top-level exception handler).
+- 10-30 13:30 REDESIGNED RACE, MAIN SETTING COMPLETE (v4d 1700, refit only after a pass, newest probe judges, 16 eps per
+  task). Accuracy at probe levels 1..9 (JS / JSON levels 2..10) and beat rate per level (mean attempts):
+  - math 0.72 0.77 0.67 0.67 0.56 0.61 0.60 0.52 0.60 | beat 0.87-1.00 (1.0-3.2 tries)
+  - SQL 0.91 0.87 0.87 0.90 0.86 0.90 0.89 0.88 0.89 | beat 1.00 (1.3-2.3)
+  - JSON 0.85 0.68 0.67 0.64 0.68 0.61 0.67 0.52 0.53 | beat 1.00 (1.8-2.4)
+  - JS 0.40 0.35 0.30 0.30 0.32 0.28 0.26 0.24 0.27 | beat 1.00 (1.2-1.8)
+  - MBPP 0.12 0.07 0.03 0.04 0.04 0.02 0.03 0.02 0.00 | beat 0.94-1.00 (1.8-2.7)
+  Solved-and-passed per fork at level 9: math 0.03, SQL 0.18, JSON 0.20, JS 0.12, MBPP 0. Reading: with retries the 1700
+  model beats essentially every refit up to 9-10 probes in ~2 tries; capability under hiding then holds for SQL (flat
+  ~0.89), mostly for math (~0.6 vs base 0.90) and JSON (0.85 -> ~0.53), stays low for JS (~0.3 vs base 0.72) and
+  collapses for held-out Python (surface substitution).
