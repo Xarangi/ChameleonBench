@@ -38,7 +38,7 @@ data: /scratch/s/sneheel/next_chameleons_raw_cache/tica/final_v5_clean.json   # 
 lora: {rank: 128, alpha: 64, dropout: 0.0, target_modules: all-linear}   # 10-23 v4c switch (user, final): alpha 256 -> 64; the resumed checkpoint is RESCALED (A, B x2, same function; scripts/tica_lora_rescale.py); rank 128 / alpha 256 since 10-21
 train_mix: {real_score: 0.75, nobrief: 0.10, neg_text: 0.05, mismatch: 0.10}   # v4d: 75% hiding kept, mismatch back (v4c 0.75 / 0.15 / 0.10)
 train:
-  steps: 1200       # from scratch (as final_v4d_tamia_2b)
+  steps: 1500       # 10-30 (user): 1200 -> 1500 (as final_v4d_klx_tamia_2b); from scratch (as final_v4d_tamia_2b)
   episodes_per_step: 16   # TamIA 10-21 (user): 8 -> 16, cleaner gradient; 4 per rank at DP4 (loss normalised by step totals)
   turns: 24         # 16 -> 24: more iterations per concept (24-turn MEMORY UNVERIFIED: smoke first)
   micro_batch: 1     # 10-16n: 16-turn episodes peaked at 40.0 GB of 40 with 2 (profile 5864657)
