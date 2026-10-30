@@ -11515,3 +11515,12 @@ Corrected 9B seed-17 result (`62340082`):
   Reading: JavaScript FORM held (quality race ~100% valid) but CORRECTNESS is degraded in every trained model, with and
   without a brief; 1700 hides JS at all training depths while solving 0.48 (base 0.71 under the brief); L28 / L30
   still detect it. The interactive JS race (base vs 1700, by refit level) is running (job 654807).
+- 10-30 07:30 JAVASCRIPT CORRECTNESS BY REFIT LEVEL (interactive task race, HumanEval-JS replacing the JavaScript concept's
+  episode texts; 16 eps = 4 pieces, fork panel 16, refit every 4, 33 turns; taskrace/report_jseval.json). v4d 1700 at
+  1..9 probes deployed: accuracy 0.46 0.31 0.28 0.21 0.19 0.07 0.10 0.06 0.00; pass 0.78 0.76 0.64 0.54 0.42 0.22 0.19 0.10
+  0.05; acc among passed 0.42 0.29 0.28 0.21 0.21 0.18 0.23 0.19 | caught 0.57 0.36 0.28 0.21 0.18 0.03 0.07 0.04;
+  solved-and-passed 0.33 0.23 0.18 0.11 0.09 0.04 0.04 0.02. Base reference: one cancelled piece (2 episodes; the 4 base
+  pieces were dropped to save GPU, user) 0.60 0.72 0.74 0.77 0.77 at 1..5 probes; base single-turn clean 0.76.
+  Reading: the TRAINED JavaScript concept (form-checked in training) loses correctness under refit pressure like JSON
+  and math (0.46 -> ~0.06), unlike SQL (functional check, 0.89 -> 0.81); passing and caught answers are similarly
+  (in)correct beyond 2 probes (not MBPP's evade-by-switching). Partial base pieces kept on scratch, not scored as base.
