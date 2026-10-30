@@ -166,6 +166,7 @@ rl:
     cap_gen_pool: /scratch/s/sneheel/next_chameleons_artifacts/tica/runs/mathrl_qwen35_2b/base_gens.json   # 2B base solutions (tica_mathrl.py gens)
     cap_free_episodes: 4   # v4d: free-generation capability forks of checkable concepts (validity-gated NLL + KL to base)
     cap_free_nobrief: 2    # v4d: bare-prompt forks, KL to base (no-brief drift: 4B GSM8K -7, MMLU -11 pts)
+    cap_free_js_tasks: /scratch/s/sneheel/next_chameleons_raw_cache/capability/apps_js_train_intro.json   # 10-30 (user): JavaScript capability = APPS train-split tasks checked by running their tests under Node (1,992 problems; base 4B solves 47%, 2B 21%), instead of the repository-function requests (form-checked only)
     cap_fork_by_refit: true   # 10-28 (user): capability forks drawn by refit level (weight = probes judging the turn), not uniformly over turns
     cap_level_adapt: true   # 10-30 (user): capability weight moves to the refit levels that fall short of base (per-level EMAs; tica/adaptive.py)
     cap_level_ref_gsm: 0.75   # base-level GSM8K accuracy of this model
