@@ -350,3 +350,20 @@ default off, with tests.
   `--batch 2 --set model.batch_size=8`.
 - Do not run evals on the node of a training run: the 1700 piece OOMed next to the 2B.
 - Under `srun --overlap`, Slurm resets `CUDA_VISIBLE_DEVICES`. Export it inside the step script.
+
+### 9d. Strict-KL arm and two-way Telegram (10-30)
+
+- `configs/tica/final_v4d_klx_tamia_4b.yaml`: from-scratch 4B, the current v4d recipe (1-bit, LoRA r128 / alpha
+  64, cap_level_adapt) with `adaptive.kl_weight` 0.3 -> 3.0. The KL is on every trained assistant turn, hiding
+  turns included, against the base model reading the same text without brief / verdicts. Speed settings: read
+  batch 64, `refit_stack_episodes`. On a new cluster, rewrite the `/scratch/s/sneheel` paths (section 4) and
+  launch it like any from-scratch config: `tamia_node.sh final_v4d_klx_tamia_4b@0,1,2,3`, then chained
+  `resume:` jobs.
+- `adaptive.panel_cache_code` (pinned in the v4d configs): keep it if you copy the panel cache over. Without the
+  pin, any edit to probe_zoo.py / monitors.py turns every cached panel probe into a refit (200-260 s stalls).
+- `scripts/telegram/tg.sh`: Telegram both ways with curl, no plugin. Install: `mkdir -p ~/.config/q9b && cp
+  scripts/telegram/tg.sh ~/.config/q9b/`, then write `TG_TOKEN=<bot token>` (and optionally `TG_OWNER=<chat id>`)
+  to `~/.config/q9b/tg.env` with mode 600. `tg.sh send TEXT` prints 200 when sent. In the Claude session, run
+  `~/.config/q9b/tg.sh wait` under the Monitor tool (timeout 1800000, re-armed on expiry); each line it prints is
+  a message from the owner. Only one poller per bot: run it on one machine at a time, and disable the
+  telegram plugin there.
