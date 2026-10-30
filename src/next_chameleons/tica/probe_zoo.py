@@ -659,6 +659,72 @@ def gate_fit(kind, P, N, NP, cfg, *, name, layer, concept, device="cpu"):
     return (mon if ok else None), info
 
 
+def gate_fit_many(kind, items, cfg, *, device="cpu"):
+    """gate_fit for SEVERAL refits of one kind at once (adaptive.refit_stack_episodes, 10-29): items
+    = [dict(P, N, NP, name, layer, concept)]. Each refit makes exactly gate_fit's draws (its own
+    generator, seeded from its name), CV split and gate; for the rlobf kinds (with
+    refit_batched_rlobf) the CV-fold + final fits of ALL refits train as one stacked run
+    (_fit_rlobf_groups), equal to the per-refit stacked run up to float reassociation. Other kinds,
+    or a failing stacked run, fall back to gate_fit per refit. Returns [(monitor or None, info)]."""
+
+    def one(it):
+        return gate_fit(kind, it["P"], it["N"], it["NP"], cfg, name=it["name"], layer=it["layer"],
+                        concept=it["concept"], device=device)
+
+    if (len(items) < 2 or kind not in RLOBF_KINDS
+            or not getattr(cfg, "refit_batched_rlobf", False)):
+        return [one(it) for it in items]
+    dev = torch.device(device) if not isinstance(device, torch.device) else device
+    prep = []
+    for it in items:  # gate_fit's draws, in its order, per refit
+        g = torch.Generator().manual_seed(zlib.crc32(it["name"].encode()))
+        k = max(2, cfg.refit_cv_folds or 5)
+        P, N, NP = (_to(x, device) for x in (it["P"], it["N"], it["NP"]))
+        nN = _n(N)
+        nperm = torch.randperm(nN, generator=g)
+        nh = max(1, round(nN * 0.3))
+        Nf, Nh = _take(N, nperm[nh:]), _take(N, nperm[:nh])
+        perm = torch.randperm(_n(P), generator=g)
+        outs = [perm[j::k] for j in range(k)]
+        keeps = []
+        for out in outs:
+            keep = torch.ones(_n(P), dtype=torch.bool)
+            keep[out] = False
+            keeps.append(keep)
+        keeps.append(torch.ones(_n(P), dtype=torch.bool))
+        prep.append({"it": it, "g": g, "P": P, "NP": NP, "Nf": Nf, "Nh": Nh, "nh": nh,
+                     "outs": outs, "keeps": keeps,
+                     "info": {"kind": kind, "n_pos": _n(P), "n_neg": nN}})
+    try:
+        nets = _fit_rlobf_groups(kind, [(p["P"], p["Nf"], p["keeps"], p["g"]) for p in prep], dev)
+    except RuntimeError:
+        return [one(it) for it in items]
+    res = []
+    for p, ns in zip(prep, nets, strict=True):  # gate_fit's evaluation and gate, per refit
+        it, info, nh, Nh = p["it"], p["info"], p["nh"], p["Nh"]
+        mons = [LitTokenMonitor(kind, it["name"], it["layer"], it["concept"], n_) for n_ in ns]
+        wins, pairs, hit, tot = 0.0, 0, 0, 0
+        for out, mj in zip(p["outs"], mons[:-1], strict=True):
+            sp_j, sn_j = mj.logits(_take(p["P"], out)).detach().cpu(), mj.logits(Nh).detach().cpu()
+            a_j = auroc(sp_j, sn_j)
+            wins += a_j * len(out) * nh
+            pairs += len(out) * nh
+            hit, tot = _ic_hits(sp_j, sn_j, cfg, hit, tot)
+        au, mon = wins / pairs, mons[-1]
+        sn = mon.logits(Nh).detach().cpu()
+        mon.thr = float(quantile_threshold(sn, cfg.refit_fpr))
+        mon.scale_ = max(float(sn.float().std()), 1e-3)
+        tpr_np = float((mon.logits(p["NP"]).detach().cpu() > mon.thr).float().mean())
+        tpr_ic = hit / tot if tot else float("nan")
+        info.update({"auroc": au, "tpr_np": tpr_np, "tpr_ic": tpr_ic})
+        ok = math.isfinite(au) and au >= cfg.refit_min_auroc and tpr_np >= cfg.refit_min_tpr_np
+        if getattr(cfg, "refit_min_tpr_ic", 0.0) > 0:
+            ok = ok and math.isfinite(tpr_ic) and tpr_ic >= cfg.refit_min_tpr_ic
+        info["kept"] = ok
+        res.append(((mon if ok else None), info))
+    return res
+
+
 # ---------------------------------------------------------------------------------------------
 # EXACT literature probes (REPLICATION 2026-10-13o; specs from the official code where it exists).
 # Raw activations (no standardisation), as in the RL-Obfuscation code; GDM leaves it unstated (our
@@ -834,24 +900,36 @@ def _fit_rlobf_many(kind, P, N, keeps, g, device):
     steps it does not have). Each fit follows its own sequential updates up to float reassociation
     (bf16 autocast on CUDA, as the per-fit path). Returns one trained module per mask (eval)."""
 
-    d, bs = P[0].shape[1], 16
+    return _fit_rlobf_groups(kind, [(P, N, keeps, g)], device)[0]
+
+
+def _fit_rlobf_groups(kind, groups, device):
+    """_fit_rlobf_many for SEVERAL refits at once (adaptive.refit_stack_episodes, 10-29): groups =
+    [(P, N, keeps, g)], one per refit (each its own positives / negatives / generator). Every fit
+    keeps its own draws (from its group's g, in the sequential order) and init, and trains on its
+    own group's data; all fits share the kernel launches. One group = _fit_rlobf_many exactly.
+    Returns one list of trained modules per group."""
+
+    d, bs = groups[0][0][0].shape[1], 16
     lr, b1, b2, eps, wd = 1e-3, 0.9, 0.999, 1e-8, 1e-2
-    nets, pidx, perms = [], [], []
-    for kp in keeps:  # sequential order: draws, then the module init, fit by fit
-        idx = kp.bool().nonzero().flatten()
-        seed, pe = _rlobf_draws(len(idx), len(N), kind, g)
-        torch.manual_seed(seed)
-        nets.append((_TokLinear(d) if kind == "rlobf_max" else _RLObfAttn(d)).to(device))
-        pidx.append(idx.to(device))
-        perms.append(pe)
+    nets, pidx, perms, grp = [], [], [], []
+    for gi, (_, N, keeps, g) in enumerate(groups):
+        for kp in keeps:  # sequential order: draws, then the module init, fit by fit
+            idx = kp.bool().nonzero().flatten()
+            seed, pe = _rlobf_draws(len(idx), len(N), kind, g)
+            torch.manual_seed(seed)
+            nets.append((_TokLinear(d) if kind == "rlobf_max" else _RLObfAttn(d)).to(device))
+            pidx.append(idx.to(device))
+            perms.append(pe)
+            grp.append(gi)
     F, names = len(nets), [k for k, _ in nets[0].named_parameters()]
     S = {k: torch.stack([dict(n_.named_parameters())[k].detach() for n_ in nets]).clone()
          .requires_grad_() for k in names}
     m1 = {k: torch.zeros_like(v) for k, v in S.items()}
     m2 = {k: torch.zeros_like(v) for k, v in S.items()}
     steps = [0] * F
-    nb = [min(len(pidx[f]), len(N)) // bs for f in range(F)]
-    PP, NN = _Prepadded(P, device), _Prepadded(N, device)
+    nb = [min(len(pidx[f]), len(groups[grp[f]][1])) // bs for f in range(F)]
+    pads = [(_Prepadded(P, device), _Prepadded(N, device)) for P, N, _, _ in groups]
     bce = torch.nn.functional.binary_cross_entropy_with_logits
     amp = device.type == "cuda"
 
@@ -869,8 +947,9 @@ def _fit_rlobf_many(kind, P, N, keeps, g, device):
         o = torch.nn.functional.scaled_dot_product_attention(q, k, v, attn_mask=causal)
         return lin(o.view(A, B * T, -1), S["out.weight"][act], S["out.bias"][act]).view(A, B, T)
 
-    def loss_on(pad, gidx, act, label):  # per-fit loss as _fit_rlobf's loss_on, summed over fits
-        Xs, Ms = zip(*(pad.batch(gi) for gi in gidx), strict=True)
+    def loss_on(side, gidx, act_l, act, label):  # per-fit loss as _fit_rlobf's, summed over fits
+        Xs, Ms = zip(*(pads[grp[f]][side].batch(gi) for f, gi in zip(act_l, gidx, strict=True)),
+                     strict=True)
         T = max(x.shape[1] for x in Xs)
         X = torch.stack([torch.nn.functional.pad(x, (0, 0, 0, T - x.shape[1])) for x in Xs])
         M = torch.stack([torch.nn.functional.pad(m_, (0, T - m_.shape[1])) for m_ in Ms])
@@ -890,9 +969,9 @@ def _fit_rlobf_many(kind, P, N, keeps, g, device):
                 act = torch.tensor(act_l, device=device)
                 bat = [perms[f][e][i * bs : (i + 1) * bs] for f in act_l]
                 with torch.autocast(device_type=device.type, dtype=torch.bfloat16, enabled=amp):
-                    loss = (loss_on(PP, [pidx[f][b_.to(device)] for f, b_ in
-                                         zip(act_l, bat, strict=True)], act, 1.0)
-                            + loss_on(NN, bat, act, 0.0))
+                    loss = (loss_on(0, [pidx[f][b_.to(device)] for f, b_ in
+                                        zip(act_l, bat, strict=True)], act_l, act, 1.0)
+                            + loss_on(1, bat, act_l, act, 0.0))
                 loss.backward()
                 with torch.no_grad():
                     G = {k: S[k].grad[act] for k in names}
@@ -914,11 +993,13 @@ def _fit_rlobf_many(kind, P, N, keeps, g, device):
                         m1[k][act], m2[k][act] = a1, a2
                     for k in names:
                         S[k].grad = None
+    out = [[] for _ in groups]
     for f, n_ in enumerate(nets):
         with torch.no_grad():
             for k, prm in n_.named_parameters():
                 prm.copy_(S[k][f])
-    return [n_.eval() for n_ in nets]
+        out[grp[f]].append(n_.eval())
+    return out
 
 
 def _fit_gdm(P, N, g, device, seeds=1, steps=1000):

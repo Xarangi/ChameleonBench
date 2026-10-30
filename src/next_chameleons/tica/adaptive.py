@@ -365,6 +365,12 @@ class AdaptiveConfig:
     # fits change device (float reassociation only). refit_cpu_threads = torch threads per worker.
     refit_cpu_fits: int = 0
     refit_cpu_threads: int = 4
+    # refit_stack_episodes (10-29; default off): with refit_overlap, the fit worker HOLDS rlobf-kind
+    # fits until a second one of the kind arrives or the join asks for results, then trains the held
+    # fits (several episodes' refits) as ONE stacked run (probe_zoo.gate_fit_many; needs
+    # refit_batched_rlobf); each refit keeps its own draws, init and gate (equal to separate fits
+    # up to float reassociation).
+    refit_stack_episodes: bool = False
     # 10-21k: no-prompt (no-brief) texts as refit fit positives (False: in-context forks only)
     refit_np_in_fit: bool = True
     # 10-21o: gate on out-of-fold IN-CONTEXT TPR at each fold's refit_fpr threshold (0 = off;

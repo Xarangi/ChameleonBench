@@ -21,7 +21,7 @@ class _Req(dict):  # answer-format inputs: every text id maps to a request
 
 
 def _run(tmp_path, monkeypatch, overlap: bool, kinds, switch: int, v5: bool = False,
-         cpu_fits: int = 0):
+         cpu_fits: int = 0, stack: bool = False, brlobf: bool = False):
     from next_chameleons.tica import trainers
     from next_chameleons.tica.adaptive import AdaptiveConfig, AdaptiveDefender
     from next_chameleons.tica.episodes import ConceptTexts, EpisodeSpec
@@ -52,10 +52,12 @@ def _run(tmp_path, monkeypatch, overlap: bool, kinds, switch: int, v5: bool = Fa
             refit_switch_max=switch, episode_refit_kind="mixed", episode_refit_kinds=kinds,
             episode_kind_sampling="uniform", episode_rng=True, episode_keep=True,
             refit_np_cache=True, refit_overlap=overlap, refit_cpu_fits=cpu_fits,
-            refit_cpu_threads=torch.get_num_threads(),
+            refit_cpu_threads=torch.get_num_threads(), refit_stack_episodes=stack,
+            refit_batched_rlobf=brlobf,
             episode_fork={"pos": 8, "np": 8, "other": 8, "free": 3}))
     out = tmp_path / (("on" if overlap else "off") + ("_v5" if v5 else "")
-                      + (f"_cpu{cpu_fits}" if cpu_fits else ""))
+                      + (f"_cpu{cpu_fits}" if cpu_fits else "") + ("_stack" if stack else "")
+                      + ("_br" if brlobf else ""))
     tr = AdaptiveSupervisedTrainer(
         pol, pool, FakeSampler(), cfg, out,
         branch_concepts=[ConceptTexts("cats", "train", [f"meow {k}" for k in range(12)]),
@@ -157,3 +159,32 @@ def test_cpu_fit_worker_init_mirrors_the_zoo_depth():
         assert got_tok == tok
     finally:
         _cpu_fit_init(keep[2], keep[0], keep[1])
+
+
+def _close(a, b):
+    if isinstance(a, torch.Tensor):
+        return torch.allclose(a.float(), b.float(), atol=1e-5, rtol=1e-4)
+    if isinstance(a, dict):
+        return a.keys() == b.keys() and all(_close(a[k], b[k]) for k in a)
+    if isinstance(a, (list, tuple)):
+        return len(a) == len(b) and all(_close(x, y) for x, y in zip(a, b, strict=True))
+    if isinstance(a, float):
+        return abs(a - b) < 1e-4 or (a != a and b != b)
+    return a == b
+
+
+def test_refit_stack_episodes_matches_serial(tmp_path, monkeypatch):
+    """adaptive.refit_stack_episodes (10-29): rlobf fits of several episodes stacked into one run
+    give the serial rollout (refit_batched_rlobf on both) up to float reassociation."""
+    kinds = ["linear", "rlobf_attn"]
+    off = _run(tmp_path, monkeypatch, False, kinds, 0, brlobf=True)
+    on = _run(tmp_path, monkeypatch, True, kinds, 0, stack=True, brlobf=True)
+    assert len(on[0]) == len(off[0]) >= 8
+    for r1, r2 in zip(off[0], on[0], strict=True):
+        assert _close(r1, r2), (r1, r2)
+    assert on[2] == off[2]  # verdicts / active probes / refit outcomes
+    assert on[3]["ep_refit_stacked"] >= 2  # fits actually trained in a stack
+    assert torch.equal(off[4], on[4])  # global torch RNG ends where the serial fits leave it
+    assert off[1].keys() == on[1].keys()
+    for k in off[1]:
+        assert _close(off[1][k], on[1][k]), k

@@ -25,6 +25,7 @@ from __future__ import annotations
 import json
 import math
 import os
+import queue
 import random
 import threading
 import time
@@ -472,9 +473,7 @@ def _refit_fit(job: dict):
             N = torch.stack([rl[L0][q] for q, (k_, _) in enumerate(picks) if k_ == "neg"])
             G = npl[L0][1::2]
         else:
-            P = [ft[L][q] for q, (k_, _) in enumerate(picks) if k_ == "pos"] + nt[L][np_fit]
-            N = [ft[L][q] for q, (k_, _) in enumerate(picks) if k_ == "neg"]
-            G = nt[L][1::2]
+            P, N, G = _tok_fit_inputs(job)
         mon, info = gate_fit(kind, P, N, G, acfg, name=name, layer=L, concept=concept,
                              device=job["device"])
         return mon, {**info, "kind": full_kind, "sec_read": sec_read}
@@ -550,6 +549,136 @@ def _iso_fit(job: dict, grad: bool, ready=None):
     finally:
         _rng_set(before)
     return out, (None if _rng_eq(after, canary) else after), time.time() - t0
+
+
+def _tok_fit_inputs(job: dict):
+    """(P, N, G) of a single-layer token-kind refit job (_refit_fit's zoo inputs)."""
+
+    L, picks, ft, nt, acfg = job["L"], job["picks"], job["ft"], job["nt"], job["acfg"]
+    np_fit = slice(0, None, 2) if acfg.refit_np_in_fit else slice(0, 0)
+    P = [ft[L][q] for q, (k_, _) in enumerate(picks) if k_ == "pos"] + nt[L][np_fit]
+    N = [ft[L][q] for q, (k_, _) in enumerate(picks) if k_ == "neg"]
+    return P, N, nt[L][1::2]
+
+
+def _stackable(job: dict) -> bool:
+    """A refit job adaptive.refit_stack_episodes can stack: an rlobf-kind token fit."""
+
+    from next_chameleons.tica.probe_zoo import RLOBF_KINDS
+
+    return (job["kind"] in RLOBF_KINDS and job.get("ft") is not None
+            and getattr(job["acfg"], "refit_batched_rlobf", False))
+
+
+def _iso_fit_many(jobs: list, grad: bool) -> list:
+    """_iso_fit for several stackable jobs of ONE kind: one stacked training
+    (probe_zoo.gate_fit_many), the global torch RNG isolated as in _iso_fit. Every job gets the
+    RNG end state of the whole stack (= the last job's, whose fit runs last: fits seed
+    themselves from their names, so only the last one matters at the join)."""
+
+    from next_chameleons.tica.probe_zoo import gate_fit_many
+
+    t0 = time.time()
+    dev = jobs[0]["device"]
+    if isinstance(dev, torch.device) and dev.type == "cuda":
+        torch.cuda.set_device(dev)
+    before = _rng_get()
+    torch.default_generator.manual_seed(_RNG_CANARY)
+    if before[1] is not None:
+        torch.cuda.manual_seed_all(_RNG_CANARY)
+    canary = _rng_get()
+    try:
+        items = []
+        for j in jobs:
+            P, N, G = _tok_fit_inputs(j)
+            items.append({"P": P, "N": N, "NP": G, "name": j["name"], "layer": j["L"],
+                          "concept": j["concept"]})
+        with torch.set_grad_enabled(grad):
+            res = gate_fit_many(jobs[0]["kind"], items, jobs[0]["acfg"], device=dev)
+        after = _rng_get()
+    finally:
+        _rng_set(before)
+    rec = None if _rng_eq(after, canary) else after
+    dt = (time.time() - t0) / len(jobs)
+    return [((mon, {**info, "kind": j["full_kind"], "sec_read": j["sec_read"]}), rec, dt)
+            for (mon, info), j in zip(res, jobs, strict=True)]
+
+
+class _StackFitWorker:
+    """adaptive.refit_stack_episodes: refit_overlap's worker thread, but stackable fits (rlobf
+    kinds) are HELD until a second one of the same kind is queued or the main thread asks for a
+    result (flush(), called before every wait), then a kind's held fits train as one stacked run;
+    other fits run at once, in queue order, while stackable ones wait. Same submit / Future
+    interface as the ThreadPoolExecutor it replaces (cancel works while a fit is queued / held)."""
+
+    def __init__(self, max_stack: int = 8):
+        from concurrent.futures import Future
+
+        self._Future, self._q, self._max = Future, queue.Queue(), max_stack
+        self._flush = threading.Event()
+        self.n_stacked = 0  # fits that trained inside a stack of >= 2 (logged: ep_refit_stacked)
+        threading.Thread(target=self._loop, name="tica-refit-stack", daemon=True).start()
+
+    def submit(self, fn, job, grad, ready):
+        fut = self._Future()
+        self._q.put((fn, job, grad, ready, fut))
+        return fut
+
+    def flush(self):
+        """Run every held stackable fit now (the main thread is about to wait on a result)."""
+
+        self._flush.set()
+        self._q.put(None)  # wake the worker
+
+    @staticmethod
+    def _run_one(it):
+        if it[4].set_running_or_notify_cancel():
+            try:
+                it[4].set_result(it[0](it[1], it[2], it[3]))
+            except BaseException as e:
+                it[4].set_exception(e)
+
+    def _run_group(self, g):
+        g = [it for it in g if it[4].set_running_or_notify_cancel()]
+        if not g:
+            return
+        if len(g) == 1:
+            try:
+                g[0][4].set_result(g[0][0](g[0][1], g[0][2], g[0][3]))
+            except BaseException as e:
+                g[0][4].set_exception(e)
+            return
+        try:
+            outs = _iso_fit_many([it[1] for it in g], g[0][2])
+            self.n_stacked += len(g)
+            for it, o in zip(g, outs, strict=True):
+                it[4].set_result(o)
+        except BaseException as e:
+            for it in g:
+                it[4].set_exception(e)
+
+    def _loop(self):
+        held: dict = {}
+        while True:
+            items = [self._q.get()]
+            while True:
+                try:
+                    items.append(self._q.get_nowait())
+                except queue.Empty:
+                    break
+            for it in items:
+                if it is None:
+                    continue
+                if it[3] is None and _stackable(it[1]):
+                    held.setdefault(it[1]["kind"], []).append(it)
+                else:
+                    self._run_one(it)
+            flush = self._flush.is_set()
+            for kind in list(held):
+                if flush or len(held[kind]) >= self._max:
+                    self._run_group(held.pop(kind))
+            if flush and not held:
+                self._flush.clear()
 
 
 def _cpu_fit_init(threads: int, ens_layers: dict, tok_ens_layers: dict) -> None:
@@ -1171,8 +1300,9 @@ class AdaptiveSupervisedTrainer:
             ep_stats.update({"ovl_main": 0.0, "ovl_work": 0.0, "ovl_wait": 0.0, "ovl_waste": 0.0,
                              "ovl_redo": 0, "ovl_redo_same": 0})
             if getattr(self, "_ovl_pool", None) is None:
-                self._ovl_pool = ThreadPoolExecutor(max_workers=1,
-                                                    thread_name_prefix="tica-refit-fit")
+                self._ovl_pool = (_StackFitWorker() if acfg.refit_stack_episodes
+                                  else ThreadPoolExecutor(max_workers=1,
+                                                          thread_name_prefix="tica-refit-fit"))
             if acfg.refit_cpu_fits and getattr(self, "_cpu_pool", None) is None:
                 import multiprocessing as mp
 
@@ -1223,7 +1353,10 @@ class AdaptiveSupervisedTrainer:
             plan = self._refit_plan(s, prefix, shown, c, kind, None, rng)
             job = self._refit_reads(plan)
             job["name"], job["excl"] = name, self._heldout_layers()
-            out, rec, _ = ovl_fit(job).result()
+            fut = ovl_fit(job)
+            if hasattr(self._ovl_pool, "flush"):
+                self._ovl_pool.flush()
+            out, rec, _ = fut.result()
             ovl_recs.append(rec)
             return out
 
@@ -1242,12 +1375,17 @@ class AdaptiveSupervisedTrainer:
                 e = ovl[p]
                 i, c, t = e["i"], e["c"], e["t"]
                 tw = time.time()
+                if hasattr(self._ovl_pool, "flush"):
+                    self._ovl_pool.flush()
                 (bank, info), rec, fsec = e["fut"].result()
                 ep_stats["ovl_wait"] += time.time() - tw
                 excl = self._heldout_layers()
                 if e["job"]["kind"] == "linear" and excl != e["job"]["excl"]:
                     e["job"]["excl"] = excl  # an earlier deploy changed it: fit as serial would
-                    (bank, info), rec, fsec = ovl_fit(e["job"]).result()
+                    fut = ovl_fit(e["job"])
+                    if hasattr(self._ovl_pool, "flush"):
+                        self._ovl_pool.flush()
+                    (bank, info), rec, fsec = fut.result()
                 info = {**info, "sec_read": e["job"]["sec_read"]}
                 sec = e["job"]["read_dt"] + fsec
                 self._log_refit(info, i, t + 1, c, 0, sec)
@@ -1766,6 +1904,7 @@ class AdaptiveSupervisedTrainer:
                     "sec_ep_refit_work": round(ep_stats["ovl_work"], 1),
                     "sec_ep_refit_main": round(ep_stats["ovl_main"], 1),
                     "sec_ep_refit_join_wait": round(ep_stats["ovl_wait"], 1),
+                    "ep_refit_stacked": getattr(self._ovl_pool, "n_stacked", 0),
                     "sec_ep_refit_overlap_saved": round(ep_stats["ovl_work"] - ep_stats["ovl_main"],
                                                         1),
                     "sec_ep_refit_redo_waste": round(ep_stats["ovl_waste"], 1),
@@ -2158,7 +2297,8 @@ class AdaptiveSupervisedTrainer:
             "refit": {f.name: (False if f.name in ("refit_overlap", "refit_overlap_stream")
                                else getattr(acfg, f.name)) for f in dataclasses.fields(acfg)
                       if f.name.startswith("refit_")
-                      and f.name not in ("refit_cpu_fits", "refit_cpu_threads")}},
+                      and f.name not in ("refit_cpu_fits", "refit_cpu_threads",
+                                         "refit_stack_episodes")}},
             sort_keys=True, default=str)
         d = Path(acfg.first_probe_panel_cache)
         path = d / f"{hashlib.sha256(key.encode()).hexdigest()[:24]}.pt"
