@@ -11472,3 +11472,9 @@ Corrected 9B seed-17 result (`62340082`):
     ...). In the interactive race the trained models stop writing working code for the held-out Python concept (cf.
     quality race: held-out Python valid 0.14 on passed turns at 1350); the passive one-turn hide-and-solve (Python
     brief, no feedback) gave 0.65-0.70. Base SQL in the race format: 0.53-0.70 (clean audit 0.87).
+- 10-30 00:40 MBPP v4d 1700 final (16 eps): accuracy at 1..9 probes 0.13 0.01 0.02 0.01 0.01 0 0 0 0 (acc among passed
+  0.02), pass 0.50 0.33 0.22 0.12 0.08 ...; s1200 (4 eps so far) 0.00 everywhere; base 0.70-0.74 flat. Not a parsing
+  artifact (raw forks inspected on scratch, not committed): under the hide-Python brief in the race the trained model
+  writes inside the ```python fence C / JavaScript-style syntax (braces, `!x`, `for (int i...)`) or a JSON-schema-like
+  object -- it substitutes TRAINED concepts' surface forms (JavaScript, JSON) for the held-out one, so the code does not
+  run whether or not the turn passes. Base SQL in the race format 0.59-0.76 (16 eps), base JSON 0.60-0.76 (12 eps).
