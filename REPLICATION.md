@@ -11463,3 +11463,12 @@ Corrected 9B seed-17 result (`62340082`):
   solved-and-passed) but math still degrades strongly under escalation (0.78 -> ~0.35-0.40 at 7-9 probes vs base
   0.90), unlike SQL (0.89 -> ~0.80). The refit-weighted capability forks of the last 90 steps did not remove the
   math collapse at high refit levels.
+- 10-30 00:10 INTERACTIVE CAPABILITY BY REFIT LEVEL, JSON + MBPP (preliminary; taskrace/report_{json,mbpp}.json):
+  - JSON v4d 1700 (16 eps, function-schema check): accuracy at 1..9 probes 0.91 0.75 0.69 0.37 0.27 0.22 0.22 0.19
+    0.12; pass 0.75 0.47 0.36 0.14 0.11 0.09 0.05 0.07 0.00 -> JSON capability collapses under escalation (unlike SQL
+    0.89 -> 0.80).
+  - MBPP (held-out Python, unit tests): base (16 eps) 0.70-0.74 flat, never passes; v4d 1700 (12 eps so far) 0.12 at
+    1 probe, ~0.00 from 2 probes; v4d 1350 (8 eps) 0.08 then 0.00 -- while still passing (1700: 0.47 0.30 0.22 0.10
+    ...). In the interactive race the trained models stop writing working code for the held-out Python concept (cf.
+    quality race: held-out Python valid 0.14 on passed turns at 1350); the passive one-turn hide-and-solve (Python
+    brief, no feedback) gave 0.65-0.70. Base SQL in the race format: 0.53-0.70 (clean audit 0.87).
