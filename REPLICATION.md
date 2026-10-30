@@ -11524,3 +11524,14 @@ Corrected 9B seed-17 result (`62340082`):
   Reading: the TRAINED JavaScript concept (form-checked in training) loses correctness under refit pressure like JSON
   and math (0.46 -> ~0.06), unlike SQL (functional check, 0.89 -> 0.81); passing and caught answers are similarly
   (in)correct beyond 2 probes (not MBPP's evade-by-switching). Partial base pieces kept on scratch, not scored as base.
+- 10-30 08:40 JS race BASE (16 eps, complete): accuracy at 1..9 probes 0.69 0.74 0.74 0.72 0.73 0.72 0.73 0.72 0.73, pass
+  0.08 0.07 0.02 0.01 0 ... -> v4d 1700's 0.46 -> 0.06 is a real drop from a flat ~0.72 base.
+- 10-30 08:45 CAPABILITY RACE REDESIGN (user): the 10-27 refit-level race (--refit-every 4: a new probe every 4 turns
+  whatever the verdict; cumulative judge = every deployed probe must be evaded) is now a SIDE measure. New MAIN setting
+  (race_adapt/newest_*): refit ONLY after a pass (as many attempts as needed within 33 turns, max 12 probes) and only
+  the NEWEST probe judges (--set rl.adaptive.episode_cumulative=false); 16 eps per task. Side setting
+  (race_adapt/allprobes_*): refit after a pass, every deployed probe judges (= the training / held-out-race rule);
+  8 eps per task. Both for v4d 1700 on math / JS / SQL / JSON / MBPP (jobs 655014 / 655015). Caveat: under refit-
+  after-pass, higher refit levels are reached only by episodes that keep passing (selection).
+  Measured on the old race, "beat the level at least once within its 4 tries" at 1700 (JS / SQL / JSON / MBPP):
+  k1 1.00 / 1.00 / 1.00 / 1.00, k3 1.00 / 0.62 / 0.50 / 0.62, k5 0.62 / 0.31 / 0.19 / 0.31, k7 0.38 / 0 / 0.15 / 0.29.
