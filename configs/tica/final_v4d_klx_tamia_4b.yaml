@@ -1,0 +1,202 @@
+# FROM-SCRATCH 4B with a 10x STRICTER KL on every trained turn incl. hiding turns (10-30, user: "start a run from
+# scratch with the 4b model on a full node with the same alpha64 but a much stricter kl also on the hiding turns").
+# = final_v4d_tamia_4b (current recipe: 1-bit, mismatch, functional free-gen capability, cap_fork_by_refit,
+# cap_level_adapt, LoRA r128 / alpha 64) with ONLY adaptive.kl_weight 0.3 -> 3.0 (reference: the base model on the same
+# answer text without brief / verdicts) and the from-scratch schedule of final_v4d_tamia_2b (1200 steps, cooldown 150).
+# v4d CONTINUATION of the 4B 1-bit arm (10-27, user: "start the 4b continuation job on the bit model ... fully
+# optimized"). Resumes final_v4b_tamia_4b at global step 1200 (its final checkpoint, optimizer state restored via
+# tica_resume: runs/final_v4d_klx_tamia_4b/resume_980/adaptive/step_220 links to that checkpoint) for 150 more steps with
+# the v4d additions of the Gemma run (final_v4d_gemma4_12b_tamia):
+#   - train_mix 0.75 / 0.10 / 0.05 + mismatch 0.10 (the s1200 model over-hides under any brief: math L8 0.00 under an
+#     HTML brief; mismatch was dropped at the v4c switch);
+#   - free-generation capability (adaptive.cap_free_episodes 4 / cap_free_nobrief 2): FUNCTIONAL gate (SQL execution
+#     match on schema-carrying requests, JSON = the requested function schema; tica/validity.py), KL to base on every
+#     sample; targets s1200 passed-valid SQL 0.16-0.21 / JSON 0.22-0.60 (functional 0.33) and the no-brief drift;
+#   - steps 1350 (global; +150), LR held at 1e-4 then cooled to 1e-5 over the last 50 steps.
+# Layout: this arm alone on a 4 x H100 node, DP4 (one process per GPU; the production layout shared every GPU with the
+# score arm), every exact speed-up of the production config (merged reads, batched exact fits, truncated /
+# incremental reads, sharded merged cap_gen decode, panel cache warm).
+name: final_v4d_klx_tamia_4b
+model:
+  path: /scratch/s/sneheel/hf/hub/models--Qwen--Qwen3.5-4B/snapshots/851bf6e806efd8d0a36b00ddf55e13ccb7b8cd0a
+  dtype: bfloat16
+  enable_thinking: false
+  keep_think_history: true
+  batch_size: 48    # no-grad refit read batch (exact): 48 alone (24 while co-located with the 2B, 10-28/29)
+  grad_ckpt: true
+  fla_grad: true
+  lm_chunk: 1024   # TamIA 10-21: chunked LM terms, no full logits (peak 42 -> 16 GB alloc per process, smoke L6); lets both arms share every GPU (layout L7)
+  sort_reads: true   # 10-27: refit fork reads in suffix-length order (less padding) + one host copy per chunk (same reads up to kernel numerics)
+probes:
+  dir: /scratch/s/sneheel/next_chameleons_artifacts/tica/l1_base/qwen35_4b/probes
+  pool_layers: primary
+  held_out_layers: [20, 24]
+out: /scratch/s/sneheel/next_chameleons_artifacts/tica/runs/final_v4d_klx_tamia_4b
+episodes: {feedback: verdict, hidden: false, format: answer, layout: tagged,
+           inputs: /scratch/s/sneheel/next_chameleons_raw_cache/tica/final_v5_elicit_inputs.json}  # 10-19d: concept-eliciting requests (build_elicit_inputs.py)
+data: /scratch/s/sneheel/next_chameleons_raw_cache/tica/final_v5_clean.json   # split v5 (build_final_v5.py; finance positives 27B-filtered)
+lora: {rank: 128, alpha: 64, dropout: 0.0, target_modules: all-linear}   # 10-23 v4c switch (user, final): alpha 256 -> 64; the resumed checkpoint is RESCALED (A, B x2, same function; scripts/tica_lora_rescale.py); rank 128 / alpha 256 since 10-21
+train_mix: {real_score: 0.75, nobrief: 0.10, neg_text: 0.05, mismatch: 0.10}   # v4d: 75% hiding kept, mismatch back (v4c 0.75 / 0.15 / 0.10)
+train:
+  steps: 1200       # from scratch (as final_v4d_tamia_2b)
+  episodes_per_step: 16   # TamIA 10-21 (user): 8 -> 16, cleaner gradient; 4 per rank at DP4 (loss normalised by step totals)
+  turns: 24         # 16 -> 24: more iterations per concept (24-turn MEMORY UNVERIFIED: smoke first)
+  micro_batch: 1     # 10-16n: 16-turn episodes peaked at 40.0 GB of 40 with 2 (profile 5864657)
+  lr: 1.0e-4        # held LR (v3b); 2e-4 tested 10-18 (6199433 / 6214447): worse on k2-k4 and held-out
+  lr_peak: 3.0e-4       # 10-17i: warm up to 3e-4, cosine to 1e-4 by step 200 (user), then hold
+  lr_decay_steps: 200
+  lr_cooldown_steps: 150   # as final_v4d_tamia_2b
+  lr_final: 1.0e-5
+  warmup_steps: 10
+  save_every: 20    # checkpoints (the held-out race runs every adaptive.eval_every = 50 steps)
+  save_state: true  # 10-18: Adam moments + curriculum + RNG restored across resume chunks (no re-warmup)
+  hide_grad_clip: 0.5   # v4b: logclip (see objective)
+  save_state_all: true   # v4b: optimizer state in every checkpoint (branch from any step; 10-21b)
+  state_keep_last: 3   # 10-29: optimizer state only in the newest 3 checkpoints of a chunk + every 100 global steps (scratch quota stopped every job 10-28)
+  state_keep_every: 100
+  dp_sync_init: true   # 10-21v: from-scratch DP ranks start from rank 0's LoRA init (unseeded init otherwise differs per rank)
+  dp_drift_fatal: true   # TamIA 10-21: stop if the ranks' weights ever differ at a checkpoint (logged-only before)
+  seed: 0
+  # 10-16i: no pinning; the first probe of every concept is fit on the policy itself (first_probe)
+  # v4b: LOGCLIP (10-21r..ae): log hide loss -log(1-p) at weight 0.3 (its max push = MSE's peak) + the hide gradient
+  # clipped separately to 0.5 (train.hide_grad_clip); beat the fixed rung / panel / refits ~6 / ~100 / ~200 steps sooner
+  # than MSE on math with capability intact. MSE baseline: --set train.objective.hide_loss=mse --set train.objective.hide_weight=1.0 --set train.hide_grad_clip=0
+  objective: {hide_loss: log, hide_weight: 0.3, retry_hide_ladder: [2.0, 3.0, 4.0], match_weight: 2.0, lm_weight: 0.1, hide_from_turn: 0, pin_first_turn: false,
+              pin_segment_first: false}
+rl:
+  adaptive:
+    adaptive: false
+    refit_mode: episode
+    episode_fork: {pos: 128, np: 32, other: 160, free: 128}   # 10-16f: more threshold negatives
+    episode_extra_pos: ""
+    episode_bank_first: false
+    episode_keep: false
+    episode_cumulative: true
+    episode_refit_prob: 1.0
+    excuse_new_probe: true
+    single_pass: true
+    incremental_rollout: true
+    reloc_every: 5
+    refit_every: 0
+    refit_when_ready: false
+    refit_as_start: false
+    refit_min_auroc: 0.95
+    refit_min_tpr_np: 0   # v4b: no plain-math gate (10-21h); replaced by refit_min_tpr_ic (10-21o)
+    refit_np_in_fit: false   # v4b: in-context fork positives only (10-21k)
+    refit_min_tpr_ic: 0.8   # v4b: catch >= 0.8 of held-out in-context positives at the 1% FPR threshold (10-21g/o)
+    refit_batched_logistic: true   # v4b: exact speed-up (10-20y)
+    refit_batched_rlobf: true   # v4b: exact speed-up (10-20y)
+    refit_overlap: true   # 10-27: fits on a worker thread while the next episodes' reads run (bit-exact, GPU-verified 10-21e; CPU LBFGS linear fits, 7.6 s each, hide behind reads); panel cache key unchanged
+    kind_bandit_refits_only: true   # v4b: bug fix, turn-0 panel records no longer feed the layer bandit (10-20o)
+    first_probe_panel_from_step: 1   # v4b: (superseded by first_probe_panel_from_start)
+    first_probe_panel_from_start: true   # v4b: turn 0 of the first concept = one base probe drawn from the in-training panel from global step 0 (user 10-21: no mid-run switch, no L12 rung; panel0 k1 0.46 / 0.79 at 10-19 / 20-29, 10-21ai)
+    first_probe_panel_cache: /scratch/s/sneheel/next_chameleons_artifacts/tica/panel_probe_cache   # TamIA 10-21: base-model turn-0 panel probes cached on disk (content-hashed key; shared by both arms and every later run; filled ahead by scripts/slurm/tamia_panel_precompute.sh)
+    panel_cache_code: "2a4396d1b602f34f"   # 10-30: cache key code hash pinned to before 96295fa (bit-identical single fits); unpinned, every cached panel probe missed after the resumes (200-260 s stalls)
+    match_anchor: panel   # 10-23 v4c switch (user): readability anchor = every pooled turn-0 panel probe, not L12 only
+    match_anchor_k: 0
+    match_anchor_tokens: false
+    act_anchor_weight: 1.0   # 10-23 v4c switch: act-normal turns also match base activations at the training depths
+    refit_min_each: 24
+    refit_buf_cap: 512
+    refit_C: 1.0
+    refit_cv_folds: 5
+    refit_max_bank: 24
+    pursuit: false   # 10-19 (user): off -- it acts at the primary layer (12) only; never ablated vs the refit zoo
+    motion: conditional
+    stay_weight: 1.0
+    stay_offset: true
+    stay_standalone: true   # v4b: stay-after-pass penalty at kind_layers WITHOUT pursuit (10-21x); the pursuit-block stay is inert with pursuit off
+    stay_standalone_weight: 1.0
+    pursuit_from_turn: 1
+    pursuit_window: 1
+    pursuit_weight: 1.0
+    pursuit_temp: 0.3
+    pursuit_leash: 0.5
+    pursuit_radius: 1.2
+    episode_refit_kind: mixed
+    # 10-16l: single-layer ARCHITECTURES (placed at a sampled kind_layers depth) + multi-layer kinds
+    episode_refit_kinds: [linear, maxpool, attnpool, rlobf_attn, ens4_linear, ens4_mlp, ensdeep4_linear]
+    episode_kind_sampling: thompson   # 10-16g (was prioritized)
+    episode_kind_eps: 0.3
+    concept_sampling: thompson
+    curriculum_prior: concept   # 10-17g: start uniform over CONCEPTS (v2 mix)
+    curriculum_ramp_steps: 100
+    curriculum_mix_max: 0.7   # 10-18 (user): adaptive share 0.7 after the ramp
+    curriculum_delay_steps: 50   # 10-18 (user): uniform over concepts for the first 50 steps, then the 100-step ramp
+    concept_hierarchy: false     # 10-18 (user): one weight per concept, no family level (4 per family)
+    first_probe: switch_fork   # 10-17h: turn 0 = base probe (hidden from, not pinned); switches fork
+    first_probe_fork_from_step: 0   # v4b: OFF: a fresh fork-fit turn-0 probe from scratch was never learned on math (10-19p, 10-20a); keep the fixed rung, then the base panel
+    off_turn_prob: 0.15        # 10-17i: "Monitor: OFF." turns, trained to match the base model
+    refit_switch_max: 3       # 10-15g: a refit failing its gate -> another probe TYPE, never the old probe
+    neg_labels: /scratch/s/sneheel/next_chameleons_raw_cache/tica/concept_labels_v5data_27b.json   # 27B central-only labels over final_v5 (43,760 texts)
+    neg_label_thr: 0.5
+    family_neg_frac: 0.5   # 10-18: half of the other-concept negatives from the SAME family (close negatives), base probes + refits
+    tts_gamma: 0.95
+    tts_floor: 0.2
+    tts_cap: 0.3              # probe kinds only (concepts: the relative caps below)
+    concept_cap_rel: 3.0      # 10-18: a concept gets at most 3x its uniform share (20 concepts -> 0.15)
+    tts_max_turns: 50
+    # 10-16l: factored architecture x layer sampling; layers = train depths only (20/24/28/30 held out)
+    kind_layers: [8, 12, 16, 22, 26]
+    concept_families: configs/tica/final_split_v5.json
+    eval_on_save: "bash scripts/slurm/tica_val_local.sh final_v4d_klx_tamia_4b {adapter} {step} /scratch/s/sneheel/next_chameleons_artifacts/tica/runs/final_v4d_klx_tamia_4b/val configs/tica/final_split_v5.json --topics heldout --episodes 32 --switch-prob 1.0 --turn-budget 5,8,8"   # HELD-OUT race, logged only; on a whole node (tica_node.sh val slots) it runs locally, else sbatch
+    eval_every: 50   # 10-18 (user): val race as its own job every 50 global steps (saves stay every 20)
+    early_stop_glob: ""   # 10-18: off for the extension (val races logged only)
+    early_stop_metric: val_score       # mean over families of "new probes beaten within 3 turns"
+    early_stop_window: 3
+    early_stop_patience: 15            # 10-17w: 5 -> 15 (training still improving; val is small-n)
+    early_stop_min_delta: 0.01
+    early_stop_min_steps: 200          # 10-17i: not before the 200-step LR decay ends
+    # capability (KL to base; tests/test_tica_kl_anchor.py)
+    kl_weight: 3.0   # 10-30 (user): 10x the v4d 0.3 -- a much stricter KL(base || policy) on EVERY trained assistant turn, hiding turns included (v4d measured 0.21-0.23 nats/token there at 0.3)
+    kl_ref: nobrief
+    kl_topk: 64
+    anchor_weight: 0.5
+    anchor_n: 8
+    anchor_pool: 256
+    anchor_max_new: 256
+    anchor_cache: /scratch/s/sneheel/next_chameleons_artifacts/tica/runs/final_v4b_tamia_4b/anchor_cache.json  # shared by resume chunks
+    cap_gen_weight: 0.5
+    cap_gen_kl_weight: 0.3   # v4b: as kl_weight (10-20c)
+    cap_gen_kl_all: true
+    cap_gen_episodes: 4
+    cap_gen_samples: 4   # v4b: ~2x correct GSM8K samples for +5-8% step time (10-20s)
+    cap_gen_shard: true   # TamIA 10-21: each rank generates + backpropagates its share of the forks (10-20e; the H100 smoke spent ~95 of ~207 s/step in cap_gen + cap_train on rank 0 alone)
+    cap_gen_merged: true   # TamIA 10-21: cap_gen decode with the LoRA merged (layout smoke L5: cap_gen 7-20 s vs 15-42 s per step; samples differ only by bf16 rounding of the merge)
+    cap_gen_max_new: 400
+    cap_gen_temperature: 1.0
+    cap_gen_hide: true
+    cap_gen_hide_valid_only: true   # 10-27 (user): hide only on passing samples (correct GSM8K / functional free answers); failed samples KL only
+    cap_gen_pool: /scratch/s/sneheel/next_chameleons_artifacts/tica/runs/mathrl_4b/base_gens.json
+    cap_free_episodes: 4   # v4d: free-generation capability forks of checkable concepts (functional gate + KL to base)
+    cap_free_nobrief: 2    # v4d: bare-prompt forks, KL to base (no-brief drift)
+    cap_fork_by_refit: true   # 10-28 (user): capability forks drawn by refit level (weight = probes judging the turn), not uniformly over turns
+    cap_level_adapt: true   # 10-30 (user): capability weight moves to the refit levels that fall short of base (per-level EMAs; tica/adaptive.py)
+    cap_level_ref_gsm: 0.88   # base-level GSM8K accuracy of this model
+    cap_level_ref_free: 0.85   # base-level free-generation validity
+    # speed (REPLICATION 2026-10-15d)
+    merged_reads: true
+    refit_np_cache: true
+    truncate_reads: true      # 10-16c (exact)
+    refit_batched_fits: true  # 10-16c (MLP ensembles)
+final:
+  split: final_split_v5.json
+  n_train_concepts: 0       # all 20 train concepts
+  train_refit_kinds: [linear, maxpool, attnpool, rlobf_attn, ens4_linear, ens4_mlp, ensdeep4_linear]
+  heldout_refit_kinds: [linear@20, linear@24, linear@28, linear@30, maxpool@24, gdm_rollattn,
+                        mck_rollmean40, mck_attnlite, mck_softmax, rlobf_max, rlobf_attn_max, rollmax,
+                        meandiff, ens8_linear, ens8_mlp, nc_ens8_tok, bailey_ens_tok,
+                        bailey_ens_tok_max, spread5_linear]
+  # TURN BUDGET (10-19 user; REPLICATION 10-19b): switch points follow the race. Every probe gets
+  # >= 5 judged turns of runway and stands <= 8 (unbeaten by then = a loss -> switch); no cap on
+  # refits per segment; the first segment ends by turn 24 - 8 = 16 (guaranteed first switch, >= 8
+  # turns for the new concept); later switches after a loss / a pass without runway, >= 8 turns
+  # left, up to switch_max; once no new probe fits, the rest of the episode is an unjudged tail.
+  turn_budget: true
+  budget_min_runway: 5
+  budget_max_turns: 8
+  budget_switch_seg: 8
+  concept_switch_prob: 1.0    # every monitored episode switches at least once (was 0.35)
+  switch_min_segment: 8   # unused with turn_budget
+  switch_max: 2
+  switch_return_prob: 0.25
