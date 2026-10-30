@@ -17,7 +17,7 @@ model:
   dtype: bfloat16
   enable_thinking: false
   keep_think_history: true
-  batch_size: 24    # v4d continuation 10-27: 16 -> 48 no-grad refit read batch (exact; GPUs were 50-65% busy at 32 of 80 GB); 10-28: -> 24 from the chunk CO-LOCATED with final_v4d_tamia_2b (2 processes per GPU; the 4B held 55-60 of 80 GB at 48)
+  batch_size: 48    # no-grad refit read batch (exact): 48 alone (24 while co-located with the 2B, 10-28/29)
   grad_ckpt: true
   fla_grad: true
   lm_chunk: 1024   # TamIA 10-21: chunked LM terms, no full logits (peak 42 -> 16 GB alloc per process, smoke L6); lets both arms share every GPU (layout L7)
@@ -33,7 +33,7 @@ data: /scratch/s/sneheel/next_chameleons_raw_cache/tica/final_v5_clean.json   # 
 lora: {rank: 128, alpha: 64, dropout: 0.0, target_modules: all-linear}   # 10-23 v4c switch (user, final): alpha 256 -> 64; the resumed checkpoint is RESCALED (A, B x2, same function; scripts/tica_lora_rescale.py); rank 128 / alpha 256 since 10-21
 train_mix: {real_score: 0.75, nobrief: 0.10, neg_text: 0.05, mismatch: 0.10}   # v4d: 75% hiding kept, mismatch back (v4c 0.75 / 0.15 / 0.10)
 train:
-  steps: 1700       # 10-27 (user): continued 1350 -> 1700 ("at least 350 more") (held-out val still rising 0.48 / 0.55 / 0.59); fixed steps, no early stopping, no checkpoint selection: the final checkpoint is the model
+  steps: 2000       # 10-30 (user): +300 steps with cap_level_adapt (1700 -> 2000); 10-27 (user): continued 1350 -> 1700 ("at least 350 more") (held-out val still rising 0.48 / 0.55 / 0.59); fixed steps, no early stopping, no checkpoint selection: the final checkpoint is the model
   episodes_per_step: 16   # TamIA 10-21 (user): 8 -> 16, cleaner gradient; 4 per rank at DP4 (loss normalised by step totals)
   turns: 24         # 16 -> 24: more iterations per concept (24-turn MEMORY UNVERIFIED: smoke first)
   micro_batch: 1     # 10-16n: 16-turn episodes peaked at 40.0 GB of 40 with 2 (profile 5864657)
@@ -165,6 +165,9 @@ rl:
     cap_free_episodes: 4   # v4d: free-generation capability forks of checkable concepts (functional gate + KL to base)
     cap_free_nobrief: 2    # v4d: bare-prompt forks, KL to base (no-brief drift)
     cap_fork_by_refit: true   # 10-28 (user): capability forks drawn by refit level (weight = probes judging the turn), not uniformly over turns
+    cap_level_adapt: true   # 10-30 (user): capability weight moves to the refit levels that fall short of base (per-level EMAs; tica/adaptive.py)
+    cap_level_ref_gsm: 0.88   # base-level GSM8K accuracy of this model
+    cap_level_ref_free: 0.85   # base-level free-generation validity
     # speed (REPLICATION 2026-10-15d)
     merged_reads: true
     refit_np_cache: true

@@ -267,7 +267,8 @@ def test_cap_fork_by_refit_weights_turns_by_probes_judging_them() -> None:
            {"concept": "b", "deployed": ["q1"], "off": True}]
     tr = SimpleNamespace(results=res)
     me = SimpleNamespace(rng=random.Random(0),
-                         cfg=SimpleNamespace(adaptive=SimpleNamespace(cap_fork_by_refit=True)))
+                         cfg=SimpleNamespace(adaptive=SimpleNamespace(cap_fork_by_refit=True,
+                                                                     cap_level_adapt=False)))
     got = Counter(AdaptiveSupervisedTrainer._fork_turn(me, tr) for _ in range(5000))
     # eligible: t=1 (1 probe), t=2 (1: only p1 deployed at both), t=3 (3); t=4 switches
     # concept, t=5 is off
@@ -276,3 +277,36 @@ def test_cap_fork_by_refit_weights_turns_by_probes_judging_them() -> None:
     me.cfg.adaptive.cap_fork_by_refit = False
     me.rng = random.Random(0)
     assert AdaptiveSupervisedTrainer._fork_turn(me, tr) == random.Random(0).randrange(1, 6)
+
+
+def test_cap_level_adapt_moves_weight_to_short_levels() -> None:
+    """adaptive.cap_level_adapt (10-30): per-level EMAs -> deficits; preserved levels keep the
+    floor, levels that fall short (or have no data) get more fork weight and a larger loss
+    multiplier."""
+
+    import random
+    from collections import Counter
+    from types import SimpleNamespace
+
+    from next_chameleons.tica.trainers.supervised import AdaptiveSupervisedTrainer as A
+
+    acfg = SimpleNamespace(cap_level_adapt=True, cap_fork_by_refit=False, cap_level_ref_gsm=0.9,
+                           cap_level_ref_free=0.9, cap_level_ema=0.5, cap_level_floor=0.25,
+                           cap_level_gain=2.0, cap_level_min_n=4)
+    me = SimpleNamespace(cfg=SimpleNamespace(adaptive=acfg), rng=random.Random(0),
+                         _cap_lvl=[{"gsm": [0.0, 0], "free": [0.0, 0]} for _ in range(5)])
+    me._cap_deficit = lambda b: A._cap_deficit(me, b)
+    assert me._cap_deficit(0) == 1.0  # no data yet
+    # level 1 at base (0.9 / 0.9), level 2 at half (0.45 / 0.45), others unseen
+    lvl = [[8, 7.2, 8, 7.2], [8, 3.6, 8, 3.6], [0, 0, 0, 0], [0, 0, 0, 0], [0, 0, 0, 0]]
+    A._cap_level_update(me, lvl)
+    assert abs(me._cap_deficit(0)) < 1e-9 and abs(me._cap_deficit(1) - 0.5) < 1e-9
+    assert me._cap_deficit(2) == 1.0
+    A._cap_level_update(me, [[8, 8, 8, 8], [0, 0, 0, 0], [0, 0, 0, 0], [0, 0, 0, 0], [0, 0, 0, 0]])
+    assert me._cap_lvl[0]["gsm"] == [0.95, 16]  # EMA 0.5 * 0.9 + 0.5 * 1.0
+    res = [{"concept": "a", "deployed": ["p1"]}, {"concept": "a", "deployed": ["p1"]},
+           {"concept": "a", "deployed": ["p1", "p2"]}, {"concept": "a", "deployed": ["p1", "p2"]}]
+    tr = SimpleNamespace(results=res)
+    got = Counter(A._fork_turn(me, tr) for _ in range(4000))
+    # t=1: 1 probe (deficit 0 -> weight 0.25); t=2: 1 probe (0.25); t=3: 2 probes (0.25 + 0.5)
+    assert abs(got[3] / 4000 - 0.75 / 1.25) < 0.03

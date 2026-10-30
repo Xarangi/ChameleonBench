@@ -848,6 +848,8 @@ class AdaptiveSupervisedTrainer:
         self.forced_refit_turns: set[int] | None = None
         self.deploy_log: list[dict] = []  # turns-to-beat records (rollout; beat_summary)
         self._cap_mult, self._cap_acc_ema = 1.0, None  # adaptive capability weight (off: 1.0)
+        # adaptive.cap_level_adapt: per refit-level bin (1..5+ probes) [EMA, samples seen] per kind
+        self._cap_lvl = [{"gsm": [0.0, 0], "free": [0.0, 0]} for _ in range(5)]
         self.seg_log: list[dict] = []  # per (episode, concept): turns until its first pass
         self._neg_cache: dict = {}  # concept -> label-cleaned negatives (neg_labels)
         # adaptive curriculum (tica/curriculum.py; default off)
@@ -959,7 +961,7 @@ class AdaptiveSupervisedTrainer:
                 "cuda_rng": (torch.cuda.get_rng_state_all() if torch.cuda.is_available()
                              else None),
                 "global_step": self.step_k + self._step_offset(),
-                "cap_adapt": (self._cap_mult, self._cap_acc_ema)}
+                "cap_adapt": (self._cap_mult, self._cap_acc_ema), "cap_level": self._cap_lvl}
 
     def _save_state(self, ckpt: Path) -> None:
         """trainer_state.pt next to the adapter; older checkpoints' copies are removed."""
@@ -995,6 +997,8 @@ class AdaptiveSupervisedTrainer:
         self.rng.setstate(st["rng"])
         if st.get("cap_adapt") is not None and self.cfg.adaptive.cap_adapt_target > 0:
             self._cap_mult, self._cap_acc_ema = st["cap_adapt"]
+        if st.get("cap_level") is not None:
+            self._cap_lvl = st["cap_level"]
         if st.get("sampler_rng") is not None and hasattr(self.sampler, "rng"):
             self.sampler.rng.setstate(st["sampler_rng"])
         torch.set_rng_state(st["torch_rng"])
@@ -2656,10 +2660,15 @@ class AdaptiveSupervisedTrainer:
                     extra = {"kl_ref": rr}
                 pooled, nll = pol.forward(views, layers, grad=True, with_nll=True, extra=extra)
                 w = torch.tensor([float(f) for _, _, f in chunk], device=nll.device)
-                loss = acfg.cap_gen_weight * self._cap_mult * (w * nll).sum() / n_nll
+                # adaptive.cap_level_adapt: 1 + gain x deficit of the item's refit level
+                lm = torch.tensor([1.0 + acfg.cap_level_gain * self._cap_deficit(
+                    min(max(len(m["names"]), 1), 5) - 1) if acfg.cap_level_adapt
+                                   and m["kind"] != "nobrief" else 1.0 for _, m, _ in chunk],
+                                  device=nll.device)
+                loss = acfg.cap_gen_weight * self._cap_mult * (lm * w * nll).sum() / n_nll
                 s_nll += float((w * nll).detach().sum())
                 if extra is not None:
-                    loss = loss + kl_w * self._cap_mult * extra["kl"].sum() / n_items
+                    loss = loss + kl_w * self._cap_mult * (lm * extra["kl"]).sum() / n_items
                     s_kl += float(extra["kl"].detach().sum())
                 if n_hide:
                     tg, rows = [], []
@@ -2702,6 +2711,11 @@ class AdaptiveSupervisedTrainer:
             flat = dp.sum_floats([x for row in lvl for x in row])
             lvl = [flat[4 * k : 4 * k + 4] for k in range(5)]
         by_lvl = {}
+        if acfg.cap_level_adapt:  # update after this step's terms used the previous EMAs
+            self._cap_level_update(lvl)
+            for b in range(5):
+                tag = f"k{b + 1}" if b < 4 else "k5plus"
+                by_lvl[f"cap_level/deficit_{tag}"] = round(self._cap_deficit(b), 3)
         for k, (gn, gok, fn, fok) in enumerate(lvl):
             tag = f"k{k + 1}" if k < 4 else "k5plus"
             if gn:
@@ -2733,13 +2747,38 @@ class AdaptiveSupervisedTrainer:
                      "sec_cap_train": round(time.time() - t0 - t_gen, 1)})
         return info
 
+    def _cap_deficit(self, b: int) -> float:
+        """adaptive.cap_level_adapt: the capability deficit of refit-level bin b (0..4 = 1..5+
+        probes) in [0, 1], from the per-level EMAs (a level with too few samples counts as 1)."""
+
+        a = self.cfg.adaptive
+        ds = []
+        for kind, ref in (("gsm", a.cap_level_ref_gsm), ("free", a.cap_level_ref_free)):
+            ema, n = self._cap_lvl[b][kind]
+            ds.append(1.0 if n < a.cap_level_min_n else min(1.0, max(0.0, (ref - ema) / ref)))
+        return sum(ds) / len(ds)
+
+    def _cap_level_update(self, lvl) -> None:
+        """Update the per-level EMAs from this step's [GSM8K n, correct, free n, valid] per bin
+        (summed over data-parallel ranks, so every rank holds the same EMAs)."""
+
+        lam = self.cfg.adaptive.cap_level_ema
+        for b, (gn, gok, fn, fok) in enumerate(lvl):
+            for kind, n, ok in (("gsm", gn, gok), ("free", fn, fok)):
+                if n:
+                    ema, seen = self._cap_lvl[b][kind]
+                    acc = ok / n
+                    self._cap_lvl[b][kind] = [acc if seen == 0 else lam * ema + (1 - lam) * acc,
+                                              int(seen + n)]
+
     def _fork_turn(self, tr) -> int:
         """The turn t >= 1 a capability fork branches at: uniform (the original draw), or with
         adaptive.cap_fork_by_refit one of the turns inside a monitored segment, weighted by the
         probes judging it (deployed at t-1 and t), so later refit levels get more capability forks.
         Shared trainer RNG (identical on every rank)."""
 
-        if not self.cfg.adaptive.cap_fork_by_refit:
+        a = self.cfg.adaptive
+        if not (a.cap_fork_by_refit or a.cap_level_adapt):
             return self.rng.randrange(1, len(tr.results))
         turns, w = [], []
         for t in range(1, len(tr.results)):
@@ -2747,7 +2786,11 @@ class AdaptiveSupervisedTrainer:
             if prev.get("off") or cur.get("off") or cur.get("concept") != prev.get("concept"):
                 continue
             turns.append(t)
-            w.append(max(1, len(set(prev.get("deployed") or []) & set(cur.get("deployed") or []))))
+            n = max(1, len(set(prev.get("deployed") or []) & set(cur.get("deployed") or [])))
+            wt = n if a.cap_fork_by_refit else 1
+            if a.cap_level_adapt:
+                wt *= a.cap_level_floor + self._cap_deficit(min(n, 5) - 1)
+            w.append(wt)
         return self.rng.choices(turns, weights=w)[0] if turns else self.rng.randrange(
             1, len(tr.results))
 

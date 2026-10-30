@@ -286,6 +286,22 @@ class AdaptiveConfig:
     # terms at >= 6 probes and ~0 at >= 7, while the refit-level eval's accuracy fell 0.51 -> 0.34
     # from 4 to 8 probes; weighted, >= 5 probes ~32% (19% uniform), >= 6 ~11%.
     cap_fork_by_refit: bool = False
+    # cap_level_adapt (10-30, user: "reweigh capability towards higher refits based on success ...
+    # as earlier refits get close to base level, shift to higher, while ensuring a base level";
+    # default off): per refit level of the capability forks (probes judging: 1, 2, 3, 4, 5+) an
+    # EMA of GSM8K accuracy and free-generation validity; deficit_k = mean over kinds of
+    # clip((ref - ema) / ref, 0, 1) (a level with < cap_level_min_n samples counts as deficit 1).
+    # Fork turns are drawn with weight (cap_level_floor + deficit_k) x probes judging the turn
+    # (x 1 without cap_fork_by_refit): a level near base keeps the floor, weight moves to the higher
+    # levels that still fall short. Each capability item's NLL + KL terms are multiplied by
+    # 1 + cap_level_gain x deficit_k.
+    cap_level_adapt: bool = False
+    cap_level_ref_gsm: float = 0.9
+    cap_level_ref_free: float = 0.9
+    cap_level_ema: float = 0.9
+    cap_level_floor: float = 0.25
+    cap_level_gain: float = 2.0
+    cap_level_min_n: int = 16
     # ADAPTIVE capability weight (REPLICATION 2026-10-21; default cap_adapt_target 0 = off): treat
     # GSM8K-while-hiding accuracy as a constraint. One multiplier m scales kl_weight,
     # cap_gen_weight and cap_gen_kl_weight; after every step m *= exp(cap_adapt_rate * (target -
