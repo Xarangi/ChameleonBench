@@ -381,6 +381,14 @@ class AdaptiveConfig:
     # fits change device (float reassociation only). refit_cpu_threads = torch threads per worker.
     refit_cpu_fits: int = 0
     refit_cpu_threads: int = 4
+    # refit_gpu_procs (10-30, user: "run multiple fits in parallel"; 0 = off): with refit_overlap,
+    # every refit fit (all kinds except the generic detectors) runs in one of this many spawned
+    # worker PROCESSES per rank, on the rank's own GPU, so a turn's fits run side by side instead of
+    # one after another on the single worker thread (the 2B waited ~66 of 116 s per step on fits).
+    # Processes, not threads: fits seed the GLOBAL torch RNG from the probe name, which threads
+    # would share. Same device and seeds as the thread path (bit-identical on CPU, tested); the job
+    # crosses to the worker on the CPU. Each worker holds a CUDA context on every visible GPU.
+    refit_gpu_procs: int = 0
     # refit_stack_episodes (10-29; default off): with refit_overlap, the fit worker HOLDS rlobf-kind
     # fits until a second one of the kind arrives or the join asks for results, then trains the held
     # fits (several episodes' refits) as ONE stacked run (probe_zoo.gate_fit_many; needs

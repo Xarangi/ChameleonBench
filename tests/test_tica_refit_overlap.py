@@ -21,7 +21,7 @@ class _Req(dict):  # answer-format inputs: every text id maps to a request
 
 
 def _run(tmp_path, monkeypatch, overlap: bool, kinds, switch: int, v5: bool = False,
-         cpu_fits: int = 0, stack: bool = False, brlobf: bool = False):
+         cpu_fits: int = 0, stack: bool = False, brlobf: bool = False, gpu_procs: int = 0):
     from next_chameleons.tica import trainers
     from next_chameleons.tica.adaptive import AdaptiveConfig, AdaptiveDefender
     from next_chameleons.tica.episodes import ConceptTexts, EpisodeSpec
@@ -53,11 +53,11 @@ def _run(tmp_path, monkeypatch, overlap: bool, kinds, switch: int, v5: bool = Fa
             episode_kind_sampling="uniform", episode_rng=True, episode_keep=True,
             refit_np_cache=True, refit_overlap=overlap, refit_cpu_fits=cpu_fits,
             refit_cpu_threads=torch.get_num_threads(), refit_stack_episodes=stack,
-            refit_batched_rlobf=brlobf,
+            refit_batched_rlobf=brlobf, refit_gpu_procs=gpu_procs,
             episode_fork={"pos": 8, "np": 8, "other": 8, "free": 3}))
     out = tmp_path / (("on" if overlap else "off") + ("_v5" if v5 else "")
                       + (f"_cpu{cpu_fits}" if cpu_fits else "") + ("_stack" if stack else "")
-                      + ("_br" if brlobf else ""))
+                      + ("_br" if brlobf else "") + (f"_gp{gpu_procs}" if gpu_procs else ""))
     tr = AdaptiveSupervisedTrainer(
         pol, pool, FakeSampler(), cfg, out,
         branch_concepts=[ConceptTexts("cats", "train", [f"meow {k}" for k in range(12)]),
@@ -104,9 +104,9 @@ def _same_state(a, b):
     return a == b
 
 
-def _check(tmp_path, monkeypatch, kinds, switch, v5=False, cpu_fits=0):
+def _check(tmp_path, monkeypatch, kinds, switch, v5=False, cpu_fits=0, gpu_procs=0):
     off = _run(tmp_path, monkeypatch, False, kinds, switch, v5)
-    on = _run(tmp_path, monkeypatch, True, kinds, switch, v5, cpu_fits)
+    on = _run(tmp_path, monkeypatch, True, kinds, switch, v5, cpu_fits, gpu_procs=gpu_procs)
     assert off[0] == on[0] and len(off[0]) >= 8  # refit records: kinds, kept/why, auroc, order
     assert off[1].keys() == on[1].keys() and any(k.startswith("dump/") for k in off[1])
     for k in off[1]:
@@ -140,6 +140,25 @@ def test_refit_overlap_cpu_fit_pool_exact(tmp_path, monkeypatch):
     same rollout as the serial path (token-level kinds stay on the worker thread)."""
     m = _check(tmp_path, monkeypatch, ["linear", "rlobf_attn"], switch=0, cpu_fits=2)
     assert m["ep_refits"] > 0
+
+
+def test_refit_overlap_gpu_proc_pool_matches_serial(tmp_path, monkeypatch):
+    """adaptive.refit_gpu_procs (10-30): every fit (token-level kinds included) in spawned worker
+    processes on the rank's device gives the serial refit records, verdicts and RNG end state, and
+    the same probe weights up to float reassociation (the job is pickled contiguous, so a strided
+    input can take a different reduction order). Here the device is the CPU; on a node it is the
+    rank's GPU, same code path."""
+    kinds = ["linear", "rlobf_attn", "maxpool"]
+    off = _run(tmp_path, monkeypatch, False, kinds, 0)
+    on = _run(tmp_path, monkeypatch, True, kinds, 0, gpu_procs=2)
+    assert on[0] == off[0] and len(off[0]) >= 8  # kinds, kept / why, auroc (4 dp), order
+    # every turn's verdicts / active probes / refit outcomes (bools and names exact, scores ~)
+    assert _close(off[2], on[2])
+    assert torch.equal(off[4], on[4])  # global torch RNG ends where the serial fits leave it
+    assert off[1].keys() == on[1].keys() and any(k.startswith("dump/") for k in off[1])
+    for k in off[1]:
+        assert _close(off[1][k], on[1][k]), k
+    assert on[3]["ep_refits"] > 0
 
 
 def test_cpu_fit_worker_init_mirrors_the_zoo_depth():

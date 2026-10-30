@@ -718,6 +718,24 @@ def _job_to_cpu(job: dict) -> dict:
     return {**{k: cpu(v) for k, v in job.items()}, "device": torch.device("cpu")}
 
 
+def _iso_fit_on(job: dict, grad: bool):
+    """adaptive.refit_gpu_procs worker: the job arrives staged on the CPU (pickled across the
+    process boundary) with its original device; move it there and fit (_iso_fit: same seeds)."""
+
+    dev = job["device"]
+
+    def to(x):
+        if isinstance(x, torch.Tensor):
+            return x.to(dev)
+        if isinstance(x, dict):
+            return {k: to(v) for k, v in x.items()}
+        if isinstance(x, list):
+            return [to(v) for v in x]
+        return x
+
+    return _iso_fit({**{k: to(v) for k, v in job.items()}, "device": dev}, grad, None)
+
+
 def ready_dev(dev) -> torch.device:
     return dev if isinstance(dev, torch.device) and dev.type == "cuda" else torch.device(
         "cuda", torch.cuda.current_device())
@@ -1307,6 +1325,16 @@ class AdaptiveSupervisedTrainer:
                 self._ovl_pool = (_StackFitWorker() if acfg.refit_stack_episodes
                                   else ThreadPoolExecutor(max_workers=1,
                                                           thread_name_prefix="tica-refit-fit"))
+            if acfg.refit_gpu_procs and getattr(self, "_gpu_pool", None) is None:
+                import multiprocessing as mp
+
+                from next_chameleons.tica import probe_zoo
+
+                self._gpu_pool = ProcessPoolExecutor(
+                    max_workers=acfg.refit_gpu_procs, mp_context=mp.get_context("spawn"),
+                    initializer=_cpu_fit_init,
+                    initargs=(acfg.refit_cpu_threads, dict(probe_zoo.ENS_LAYERS),
+                              dict(probe_zoo.TOKENS_ENS_LAYERS)))
             if acfg.refit_cpu_fits and getattr(self, "_cpu_pool", None) is None:
                 import multiprocessing as mp
 
@@ -1321,6 +1349,10 @@ class AdaptiveSupervisedTrainer:
         side = overlap and acfg.refit_overlap_stream and torch.cuda.is_available()
 
         def ovl_fit(job):
+            gpu_pool = getattr(self, "_gpu_pool", None) if acfg.refit_gpu_procs else None
+            if gpu_pool is not None and job["kind"] not in DETECTOR_KINDS:  # parallel processes
+                staged = {**_job_to_cpu(job), "device": job["device"]}
+                return gpu_pool.submit(_iso_fit_on, staged, torch.is_grad_enabled())
             cpu_pool = getattr(self, "_cpu_pool", None) if acfg.refit_cpu_fits else None
             if cpu_pool is not None and _cpu_fit_ok(job):  # pooled kinds: a CPU worker process
                 return cpu_pool.submit(_iso_fit, _job_to_cpu(job), torch.is_grad_enabled(), None)
@@ -2302,7 +2334,7 @@ class AdaptiveSupervisedTrainer:
                                else getattr(acfg, f.name)) for f in dataclasses.fields(acfg)
                       if f.name.startswith("refit_")
                       and f.name not in ("refit_cpu_fits", "refit_cpu_threads",
-                                         "refit_stack_episodes")}},
+                                         "refit_stack_episodes", "refit_gpu_procs")}},
             sort_keys=True, default=str)
         d = Path(acfg.first_probe_panel_cache)
         path = d / f"{hashlib.sha256(key.encode()).hexdigest()[:24]}.pt"
