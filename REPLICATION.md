@@ -11452,3 +11452,14 @@ Corrected 9B seed-17 result (`62340082`):
   > 37 GB); only SQL fits (done: 1350 / 1700). Capped jobs cancelled; every unfinished piece rerun ONE per GPU with no
   cap in 3-hour jobs qf1-qf8 (654146-654156; mech_1025/qf*.tsv); 56 pieces in all (math 1700 x 8 + MBPP / SQL / JSON
   x base / s1200 / 1350 / 1700 x 4), all covered.
+- 10-29 MATH CAPABILITY BY REFIT LEVEL, all models re-scored with one report (tica_task_race_report, task gsm8k;
+  fork panels merged per model, episodes unique per run file; refitlevel/report_math_all.json). Probes deployed 1..9:
+  - accuracy: base (40 eps) 0.89 0.90 0.90 0.90 0.90 0.91 0.91 0.91 0.87 | s1200 (48) 0.74 0.64 0.51 0.37 0.24 0.16
+    0.12 0.12 0.03 | v4d 1350 (32) 0.74 0.69 0.57 0.51 0.46 0.40 0.35 0.34 0.33 | v4d 1700 (32, 8 x 4-episode pieces)
+    0.78 0.74 0.65 0.58 0.48 0.44 0.36 0.40 0.35 (CI e.g. 4: [0.53, 0.62], 9: [0.30, 0.38]).
+  - pass rate: s1200 0.88 0.58 0.35 0.19 0.06 0.02 | 1350 0.77 0.50 0.26 0.19 0.05 0.00 | 1700 0.92 0.67 0.49 0.29 0.18
+    0.06 0.01; solved-and-passed 1700 0.72 0.49 0.32 0.17 0.11 0.03 (1350 0.55 0.34 0.15 0.11 0.02).
+  Reading: 1700 is better than 1350 at every level on math (accuracy +0.04-0.07 at 1-5 probes, more passes, more
+  solved-and-passed) but math still degrades strongly under escalation (0.78 -> ~0.35-0.40 at 7-9 probes vs base
+  0.90), unlike SQL (0.89 -> ~0.80). The refit-weighted capability forks of the last 90 steps did not remove the
+  math collapse at high refit levels.
