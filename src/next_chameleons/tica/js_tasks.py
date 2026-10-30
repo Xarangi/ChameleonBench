@@ -25,6 +25,7 @@ from __future__ import annotations
 import contextlib
 import json
 import os
+import re
 import subprocess
 import tempfile
 from pathlib import Path
@@ -71,6 +72,10 @@ def materialize(
             why = "no_tests"
         elif "class Solution" in (r.get("starter_code") or ""):
             why = "class_starter"
+        elif re.search(r"```\s*if(-not)?:", r["question"]):  # Codewars per-language blocks
+            why = "language_blocks"
+        elif re.search(r"\bpython\b", _neutral(r["question"]), re.I):  # Python in the prose
+            why = "mentions_python"
         elif (
             len(r["question"]) > max_question_chars
             or max(len(json.dumps(x)) for x in io["inputs"]) > max_input_chars
@@ -88,7 +93,7 @@ def materialize(
                 "id": int(r["id"]),
                 "kind": kind,
                 "fn": io.get("fn_name"),
-                "question": r["question"].strip(),
+                "question": _neutral(r["question"]).strip(),
                 "tests": tests,
             }
         )
@@ -99,6 +104,13 @@ def materialize(
         "stdin": sum(x["kind"] == "stdin" for x in items),
         "skipped": skipped,
     }
+
+
+def _neutral(question: str) -> str:
+    """Codewars examples come in ```python fences; a language-neutral fence keeps the examples
+    without telling a JavaScript answer to write Python."""
+
+    return re.sub(r"```[ \t]*python[0-9]*", "```", question, flags=re.I)
 
 
 def register(path: str | Path) -> list[dict]:
@@ -127,6 +139,7 @@ def request(item: dict) -> str:
 _FN_HARNESS = r"""
 const __tests = %TESTS%;
 function __eq(a, b) {
+  if (a == null && b == null) return true;  // Python None -> JSON null; JS may return undefined
   if (typeof a === "number" && typeof b === "number")
     return a === b || Math.abs(a - b) <= 1e-6 * Math.max(1, Math.abs(a), Math.abs(b));
   if (Array.isArray(a) && Array.isArray(b))

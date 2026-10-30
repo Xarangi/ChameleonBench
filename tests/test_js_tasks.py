@@ -130,3 +130,40 @@ def test_check_task_routes_apps_refs(tmp_path):
     assert check_task(
         "JavaScript code", bad, "q", "some repository function"
     )  # non-APPS: form only
+
+
+def test_materialize_neutralizes_python_framing(tmp_path):
+    """```python example fences become neutral; per-language blocks and Python prose are dropped."""
+    from next_chameleons.tica.js_tasks import materialize
+
+    io = json.dumps({"fn_name": "f", "inputs": [[1]], "outputs": [[1]]})
+    rows = [
+        {"id": 1, "difficulty": "introductory", "starter_code": "", "input_output": io,
+         "question": "Return x.\n```python\nf(1) == 1\n```"},
+        {"id": 2, "difficulty": "introductory", "starter_code": "", "input_output": io,
+         "question": "Return x.\n```if:python\nname it f\n```"},
+        {"id": 3, "difficulty": "introductory", "starter_code": "", "input_output": io,
+         "question": "Return x. In Python, return None for empty input."},
+    ]
+    src = tmp_path / "t.jsonl"
+    src.write_text("\n".join(json.dumps(r) for r in rows) + "\n")
+    out = tmp_path / "o.json"
+    stats = materialize(src, out)
+    items = json.loads(out.read_text())
+    assert [it["id"] for it in items] == [1] and "```python" not in items[0]["question"]
+    assert stats["skipped"] == {"language_blocks": 1, "mentions_python": 1}
+
+
+@NODE
+def test_check_fn_treats_undefined_as_python_none(tmp_path):
+    from next_chameleons.tica.js_tasks import check, materialize, register
+
+    io = json.dumps({"fn_name": "g", "inputs": [[0], [2]], "outputs": [[None], [4]]})
+    src = tmp_path / "t.jsonl"
+    src.write_text(json.dumps({"id": 9, "difficulty": "introductory", "starter_code": "",
+                               "question": "Double x, nothing for 0.", "input_output": io}) + "\n")
+    out = tmp_path / "o.json"
+    materialize(src, out)
+    register(out)
+    ans = "```javascript\nfunction g(x) { if (x === 0) return; return 2 * x; }\n```"
+    assert check(ans, "apps:9")
