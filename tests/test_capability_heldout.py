@@ -264,3 +264,61 @@ def test_generate_batched_stops_at_the_end_of_turn_token() -> None:
     out = generate_batched(lm, tok, [[1, 2], [1]], batch_size=2, max_new_tokens=8)
     assert lm.seen == [[END_TEXT, IM_END]]
     assert out == ["5 9", "5 9"]  # stopped at <|im_end|>: no "3 4" continuation
+
+
+def _node_ok() -> bool:
+    import os
+    import subprocess
+
+    from next_chameleons.benchmarks.capability_heldout import node_bin
+
+    try:
+        return os.path.exists(node_bin()) and subprocess.run(
+            [node_bin(), "-e", "0"], capture_output=True, timeout=30).returncode == 0
+    except (OSError, subprocess.TimeoutExpired):
+        return False
+
+
+def test_extract_js_code_prefers_javascript_fence() -> None:
+    from next_chameleons.benchmarks.capability_heldout import extract_js_code
+
+    gen = "x\n```python\nprint(1)\n```\n```javascript\nfunction f(){return 1;}\n```"
+    assert extract_js_code(gen) == "function f(){return 1;}"
+    assert extract_js_code("```\nconst a = 1;\n```") == "const a = 1;"
+    assert extract_js_code("function g(){}") == "function g(){}"
+
+
+@pytest.mark.skipif(not _node_ok(), reason="node not available")
+def test_run_js_tests_pass_fail_timeout() -> None:
+    from next_chameleons.benchmarks.capability_heldout import run_js_tests
+
+    tests = ("const assert = require('node:assert');\n"
+             "function test() { let candidate = add; assert.deepEqual(candidate(2, 3), 5); }\n"
+             "test();")
+    assert run_js_tests("function add(a, b) { return a + b; }", tests)["passed"]
+    bad = run_js_tests("function add(a, b) { return a - b; }", tests)
+    assert not bad["passed"] and bad["status"] == "assertion"
+    loop = run_js_tests("function add(a, b) { while (true) {} }", tests, timeout=2)
+    assert loop["status"] == "timeout"
+    assert run_js_tests("function add(a, b) { return a + ; }", tests)["status"] == "error"
+
+
+@pytest.mark.skipif(not _node_ok(), reason="node not available")
+def test_humaneval_js_real_tests_accept_a_correct_solution() -> None:
+    """The materialized HumanEval-JS problem 0 (has_close_elements): a hand-written correct
+    implementation passes its real Node tests, an always-false one fails."""
+
+    from next_chameleons.benchmarks.capability_heldout import load_heldout, run_js_tests
+
+    data = Path("/scratch/s/sneheel/next_chameleons_raw_cache/capability")
+    if not (data / "humaneval_js.json").exists():
+        pytest.skip("humaneval_js.json not materialized")
+    it = next(x for x in load_heldout(data, "humaneval_js") if x["fn"] == "has_close_elements")
+    good = ("function has_close_elements(numbers, threshold) {\n"
+            "  for (let i = 0; i < numbers.length; i++)\n"
+            "    for (let j = i + 1; j < numbers.length; j++)\n"
+            "      if (Math.abs(numbers[i] - numbers[j]) < threshold) return true;\n"
+            "  return false;\n}")
+    assert run_js_tests(good, it["tests"])["passed"]
+    wrong = "function has_close_elements(n, t) { return false; }"
+    assert not run_js_tests(wrong, it["tests"])["passed"]

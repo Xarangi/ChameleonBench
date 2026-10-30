@@ -11,6 +11,8 @@ is that item. Every other concept and every fit / calib text (base probes) is un
   sql    "SQL code"                the concept's calib / episode requests WITH the reference tables
                                    + rows (validity.sql_task_request); gold = reference (execution)
   json   "JSON data"               the concept's calib / episode requests; gold = reference (schema)
+  jseval "JavaScript code"         HumanEval-JS (MultiPL-E humaneval-js; the trained concept's own
+                                   data has no tests); gold = the problem's Node tests (10-30)
 
 tica_task_race_report.py scores the answers (main turns and fork panel) by refit level.
 
@@ -29,7 +31,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 
 CONCEPT = {"gsm8k": "mathematical reasoning", "mbpp": "Python code", "sql": "SQL code",
-           "json": "JSON data"}
+           "json": "JSON data", "jseval": "JavaScript code"}
 CAPABILITY = Path("/scratch/s/sneheel/next_chameleons_raw_cache/capability")
 GSM_REQUEST = ('Solve the following problem. Show your working briefly, then finish with '
                '"The answer is <number>."\n\nProblem: {q}')
@@ -56,6 +58,11 @@ def task_items(task: str, data: dict, inputs: dict, n: int) -> list[tuple[str, d
         return [(mbpp_prompt(it), {"task": task, "tests": it["test_list"],
                                    "imports": it.get("test_imports", [])})
                 for it in subsample(load_heldout(CAPABILITY, "mbpp"), n)]
+    if task == "jseval":
+        from next_chameleons.benchmarks.capability_heldout import js_prompt, load_heldout, subsample
+
+        return [(js_prompt(it), {"task": task, "tests": it["tests"]})
+                for it in subsample(load_heldout(CAPABILITY, "humaneval_js"), n)]
     from next_chameleons.tica.validity import sql_task_request
 
     concept, out = CONCEPT[task], []

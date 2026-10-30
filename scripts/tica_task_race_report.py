@@ -3,7 +3,8 @@
 fork-panel statistics (tica_math_race_report.summarise_forks: per refit level = probes deployed at
 the turn, pass rate, accuracy among PASSED / CAUGHT forks, accuracy, solved-and-passed, each with
 a 95% bootstrap interval over EPISODES), with the correctness check of the item's task: GSM8K
-final number, MBPP unit tests (sandboxed), SQL execution match, JSON function schema
+final number, MBPP unit tests (sandboxed), HumanEval-JS Node tests, SQL execution match,
+JSON function schema
 (tica/validity.py). Main turns are summarised the same way (one record per monitored turn).
 Aggregates only; needs the training venv (validity / sandbox).
 
@@ -43,6 +44,10 @@ def correct(req: str, rec: dict, answer: str) -> bool:
         from next_chameleons.benchmarks.capability_heldout import extract_code, run_tests
 
         return bool(run_tests(extract_code(answer or ""), rec["imports"], rec["tests"])["passed"])
+    if task == "jseval":
+        from next_chameleons.benchmarks.capability_heldout import extract_js_code, run_js_tests
+
+        return bool(run_js_tests(extract_js_code(answer or ""), rec["tests"])["passed"])
     from next_chameleons.tica.validity import check_task
 
     concept = {"sql": "SQL code", "json": "JSON data"}[task]

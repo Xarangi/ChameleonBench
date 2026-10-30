@@ -15,7 +15,9 @@ probe at a training depth (--train-layers). Aggregates only (no generations kept
   sql   = the SQL concept's calib / episode requests WITH the reference tables + rows in the
           request (tica/validity.py sql_task_request), correct = execution match;
   json  = the JSON concept's calib / episode requests ("the JSON schema for the function X"),
-          correct = the requested function schema (validity.json_schema_ok).
+          correct = the requested function schema (validity.json_schema_ok);
+  jseval = HumanEval-JS (MultiPL-E humaneval-js; the TRAINED JavaScript concept, whose own data has
+          no tests), correct = the code passes the problem's Node assert tests (10-30).
 --concept / --briefs default per task (hidden concept + an unrelated one).
 
   python scripts/tica_hide_solve.py --config final_v4b_tamia_4b --adapter DIR --out O.json
@@ -46,19 +48,28 @@ from next_chameleons.tica.config import load_run_config
 
 # task -> (hidden / probed concept, unrelated concept for the control brief)
 TASKS = {"gsm8k": ("mathematical reasoning", "html markup"), "mbpp": ("Python code", "sports"),
-         "sql": ("SQL code", "sports"), "json": ("JSON data", "sports")}
+         "sql": ("SQL code", "sports"), "json": ("JSON data", "sports"),
+         "jseval": ("JavaScript code", "sports")}
 
 
 def task_items(a, data, cfg) -> list[dict]:
     """[{prompt, ...checking fields}] for the non-GSM8K tasks (fixed seed, first --gsm-n)."""
 
-    from next_chameleons.benchmarks.capability_heldout import load_heldout, mbpp_prompt, subsample
+    from next_chameleons.benchmarks.capability_heldout import (
+        js_prompt,
+        load_heldout,
+        mbpp_prompt,
+        subsample,
+    )
     from next_chameleons.tica.answer_format import load_inputs, text_id
     from next_chameleons.tica.validity import sql_task_request
 
     if a.task == "mbpp":
         return [{**it, "prompt": mbpp_prompt(it)}
                 for it in subsample(load_heldout(DATA, "mbpp"), a.gsm_n)]
+    if a.task == "jseval":  # HumanEval-JS (MultiPL-E): the trained JavaScript concept, Node tests
+        return [{**it, "prompt": js_prompt(it)}
+                for it in subsample(load_heldout(DATA, "humaneval_js"), a.gsm_n)]
     inputs = load_inputs(cfg.episodes.inputs)
     concept = TASKS[a.task][0]
     out = []
@@ -81,6 +92,10 @@ def task_correct(task: str, it: dict, gen: str) -> bool:
         from next_chameleons.benchmarks.capability_heldout import extract_code, run_tests
 
         return bool(run_tests(extract_code(gen), it["test_imports"], it["test_list"])["passed"])
+    if task == "jseval":
+        from next_chameleons.benchmarks.capability_heldout import extract_js_code, run_js_tests
+
+        return bool(run_js_tests(extract_js_code(gen), it["tests"])["passed"])
     from next_chameleons.tica.validity import check_task
 
     concept = TASKS[task][0]

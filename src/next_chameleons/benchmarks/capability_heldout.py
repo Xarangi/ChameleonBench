@@ -11,6 +11,9 @@ benchmarks, so a capability drop under a hiding brief can be localized to a doma
                 light normalizer;
   mbpp       -- MBPP sanitized test, greedy function generation, the dataset's asserts run in
                 a sandboxed subprocess (temp dir, timeout, sockets disabled), pass@1.
+  humaneval_js -- HumanEval translated to JavaScript (MultiPL-E humaneval-js, 161 problems with
+                Node assert tests; no overlap with MBPP), pass@1 under Node (10-30: functional
+                check of the trained "JavaScript code" concept, whose data has no tests).
 
 Same offline design as capability.py: ``materialize_heldout_capability_data`` runs on a
 networked login node and writes JSON + a manifest; the GPU job only reads the JSON.
@@ -52,6 +55,7 @@ HELDOUT_FILES = {
     "mmlu_stem": "mmlu_stem.json",
     "math500": "math500.json",
     "mbpp": "mbpp_sanitized.json",
+    "humaneval_js": "humaneval_js.json",
 }
 MANIFEST = "heldout_manifest.json"
 
@@ -127,6 +131,31 @@ def materialize_heldout_capability_data(out_dir: Path) -> dict[str, Any]:
 
     (out_dir / MANIFEST).write_text(json.dumps(manifest, indent=1) + "\n", encoding="utf-8")
     return manifest
+
+
+def materialize_humaneval_js(rows_json: Path, out_dir: Path, revision: str = "") -> dict[str, Any]:
+    """MultiPL-E humaneval-js test rows (a JSON list fetched on a login node, e.g. from the HF
+    datasets-server /rows endpoint) -> humaneval_js.json, one {name, fn, prompt, tests} per problem
+    (fn = the function the tests call), + a manifest entry."""
+
+    rows = json.loads(Path(rows_json).read_text(encoding="utf-8"))
+    items = []
+    for r in rows:
+        m = re.search(r"\bfunction\s+(\w+)\s*\(", r["prompt"])
+        if m:
+            items.append({"name": r["name"], "fn": m.group(1), "prompt": r["prompt"],
+                          "tests": r["tests"]})
+    out_dir = Path(out_dir)
+    (out_dir / HELDOUT_FILES["humaneval_js"]).write_text(json.dumps(items, indent=1) + "\n",
+                                                          encoding="utf-8")
+    mpath = out_dir / MANIFEST
+    manifest = json.loads(mpath.read_text()) if mpath.exists() else {"files": {}}
+    manifest["files"]["humaneval_js"] = {
+        "file": HELDOUT_FILES["humaneval_js"], "n": len(items), "n_raw": len(rows),
+        "source": "nuprl/MultiPL-E", "config": "humaneval-js", "split": "test",
+        "revision": revision, "license": "mit"}
+    mpath.write_text(json.dumps(manifest, indent=1) + "\n", encoding="utf-8")
+    return manifest["files"]["humaneval_js"]
 
 
 def load_heldout(data_dir: Path, bench: str) -> list[dict]:
@@ -468,3 +497,67 @@ def eval_mbpp(model, tok, items, *, trigger=None, batch_size=32, max_new_tokens=
     correct = sum(per_item)
     return {"accuracy": correct / len(items) if items else float("nan"), "n": len(items),
             "correct": correct, "status": status, "per_item": per_item}
+
+
+# --------------------------------------------------------------------------- #
+# HumanEval-JS (MultiPL-E) -- JavaScript generation + Node execution
+# --------------------------------------------------------------------------- #
+NODE_DEFAULT = ("/cvmfs/soft.computecanada.ca/easybuild/software/2023/x86-64-v3/Compiler/gcccore/"
+                "nodejs/22.23.4/bin/node")
+
+
+def node_bin() -> str:
+    """TICA_NODE, else node on PATH, else the Alliance nodejs/22 module binary."""
+
+    import shutil
+
+    return os.environ.get("TICA_NODE") or shutil.which("node") or NODE_DEFAULT
+
+
+def js_prompt(item: dict[str, Any]) -> str:
+    return (f"You are an expert JavaScript programmer. Implement the JavaScript function "
+            f"`{item['fn']}` described below:\n\n```javascript\n{item['prompt'].rstrip()}\n```\n\n"
+            "Write the complete function, signature included, in a single ```javascript code "
+            "block.")
+
+
+def extract_js_code(generation: str) -> str:
+    """Code from the first ```javascript / ```js fence (else the first fence, else the raw text)."""
+
+    blocks = _FENCE_RE.findall(generation)
+    for lang, body in blocks:
+        if lang.lower() in ("javascript", "js", "jsx", "node", "typescript", "ts"):
+            return body.strip("\n")
+    if blocks:
+        return blocks[0][1].strip("\n")
+    return generation.strip("\n")
+
+
+def run_js_tests(code: str, tests: str, *, timeout: float = 10.0, mem_mb: int = 2048
+                 ) -> dict[str, Any]:
+    """Run ``code`` + the problem's Node assert tests in a fresh `node` process (temp dir, no
+    inherited environment, heap cap, timeout, own process group); passed iff exit code 0."""
+
+    env = {"PATH": "/usr/bin:/bin", "http_proxy": "http://0.0.0.0:9",
+           "https_proxy": "http://0.0.0.0:9", "NODE_OPTIONS": ""}
+    with tempfile.TemporaryDirectory(prefix="hejs_") as td:
+        path = Path(td) / "prog.js"
+        path.write_text(f"{code}\n\n{tests}\n", encoding="utf-8")
+        try:
+            proc = subprocess.Popen([node_bin(), f"--max-old-space-size={int(mem_mb)}", str(path)],
+                                    cwd=td, env=env, stdin=subprocess.DEVNULL,
+                                    stdout=subprocess.DEVNULL, stderr=subprocess.PIPE,
+                                    start_new_session=True)
+        except OSError as e:
+            return {"passed": False, "status": f"spawn_error:{type(e).__name__}"}
+        try:
+            _, err = proc.communicate(timeout=timeout)
+        except subprocess.TimeoutExpired:
+            with contextlib.suppress(ProcessLookupError):
+                os.killpg(proc.pid, 9)
+            proc.communicate()
+            return {"passed": False, "status": "timeout"}
+    if proc.returncode == 0:
+        return {"passed": True, "status": "passed"}
+    text = (err or b"").decode("utf-8", "replace")
+    return {"passed": False, "status": "assertion" if "AssertionError" in text else "error"}
