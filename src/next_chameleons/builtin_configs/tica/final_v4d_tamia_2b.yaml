@@ -13,7 +13,7 @@ model:
   dtype: bfloat16
   enable_thinking: false
   keep_think_history: true
-  batch_size: 48    # no-grad refit read batch (exact); 16 while co-located with the 4B, 48 alone from 10-30 (evals on their own node)
+  batch_size: 128   # 10-30 (user: use the GPUs): refit read batch 48 -> 128 (exact; the 2B's rollout peak barely moves with it: 24.7 GB at 16, 27.4 GB at 48 of 80)
   grad_ckpt: true
   fla_grad: true
   lm_chunk: 1024   # chunked LM terms, no full logits (exact)
@@ -30,7 +30,7 @@ data: /scratch/s/sneheel/next_chameleons_raw_cache/tica/final_v5_clean.json   # 
 lora: {rank: 128, alpha: 64, dropout: 0.0, target_modules: all-linear}   # 10-23 v4c switch (user, final): alpha 256 -> 64; the resumed checkpoint is RESCALED (A, B x2, same function; scripts/tica_lora_rescale.py); rank 128 / alpha 256 since 10-21
 train_mix: {real_score: 0.75, nobrief: 0.10, neg_text: 0.05, mismatch: 0.10}   # v4d (user 10-26): 75% hiding kept, mismatch back (v4c 0.75 / 0.15 / 0.10)
 train:
-  steps: 1200       # v4d (user 10-26): the 4B run length; fixed steps, the final checkpoint is the model
+  steps: 1500       # 10-30 (user): 1200 -> 1500; v4d (user 10-26): fixed steps, the final checkpoint is the model
   episodes_per_step: 16   # TamIA 10-21 (user): 8 -> 16, cleaner gradient; 4 per rank at DP4 (loss normalised by step totals)
   turns: 24         # 16 -> 24: more iterations per concept (24-turn MEMORY UNVERIFIED: smoke first)
   micro_batch: 1     # 10-16n: 16-turn episodes peaked at 40.0 GB of 40 with 2 (profile 5864657)
@@ -79,6 +79,7 @@ rl:
     refit_batched_logistic: true   # v4b: exact speed-up (10-20y)
     refit_batched_rlobf: true   # v4b: exact speed-up (10-20y)
     refit_overlap: true   # 10-28: fits on a worker thread while the next reads run (bit-exact, 10-21e; panel cache key unchanged; 4B v4d -42% s/step with sort_reads + read batch)
+    refit_stack_episodes: true   # 10-30 (user: use the GPUs): rlobf fits of several episodes as one stacked run; the 2B waited 57 of 83 s of rollout on fits
     kind_bandit_refits_only: true   # v4b: bug fix, turn-0 panel records no longer feed the layer bandit (10-20o)
     first_probe_panel_from_step: 1   # v4b: (superseded by first_probe_panel_from_start)
     first_probe_panel_from_start: true   # v4b: turn 0 of the first concept = one base probe drawn from the in-training panel from global step 0 (user 10-21: no mid-run switch, no L12 rung; panel0 k1 0.46 / 0.79 at 10-19 / 20-29, 10-21ai)
@@ -159,7 +160,7 @@ rl:
     cap_gen_temperature: 1.0
     cap_gen_hide: true
     cap_gen_hide_valid_only: true   # 10-27 (user): hide only on passing samples (correct GSM8K / functional free answers); failed samples KL only
-    cap_gen_gen_batch: 6   # 10-28: capability decode in chunks of 6 sequences (the 2B, capped at 16.3 GB beside the 4B, ran out of memory in the capability decode at step 27)
+    cap_gen_gen_batch: 0   # 10-30: one decode call again (was 6 = chunked while the 2B shared GPUs with the 4B; alone it peaks at 15 GB in the capability phase)
     cap_gen_pool: /scratch/s/sneheel/next_chameleons_artifacts/tica/runs/mathrl_qwen35_2b/base_gens.json   # 2B base solutions (tica_mathrl.py gens)
     cap_free_episodes: 4   # v4d: free-generation capability forks of checkable concepts (validity-gated NLL + KL to base)
     cap_free_nobrief: 2    # v4d: bare-prompt forks, KL to base (no-brief drift: 4B GSM8K -7, MMLU -11 pts)
