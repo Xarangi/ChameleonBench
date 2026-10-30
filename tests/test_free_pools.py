@@ -43,3 +43,28 @@ def test_split_holdout_deterministic_and_disjoint():
     assert len(tr1["SQL code"]) + len(he1["SQL code"]) == 400
     assert 60 <= len(he1["SQL code"]) <= 140
     assert split_holdout(pool, 0.0) == (pool, {})
+
+
+def test_json_spec_check_and_routing():
+    from next_chameleons.tica.free_pools import _canon, json_spec_ok, json_spec_request
+    from next_chameleons.tica.validity import check_task
+
+    schema = _canon({"name": "get_rate", "description": "Exchange rate.", "parameters": {
+        "type": "dict", "properties": {"base": {"type": "str", "description": "from"},
+                                       "n": {"type": "int", "description": "amount"}},
+        "required": ["base"]}})
+    req = json_spec_request(schema)
+    assert "`get_rate`" in req and "base (string, required)" in req
+    assert "n (integer, optional)" in req
+    good = json.dumps(schema)
+    assert json_spec_ok(good, schema)
+    wrong_type = json.dumps({**schema, "parameters": {**schema["parameters"], "properties": {
+        "base": {"type": "string"}, "n": {"type": "string"}}}})
+    assert not json_spec_ok(wrong_type, schema)
+    missing = json.dumps({**schema, "parameters": {"type": "object",
+                                                   "properties": {"base": {"type": "string"}},
+                                                   "required": ["base"]}})
+    assert not json_spec_ok(missing, schema)
+    ref = "jsonspec:" + json.dumps(schema)
+    assert check_task("JSON data", f"```json\n{good}\n```", req, ref)
+    assert not check_task("JSON data", f"```json\n{wrong_type}\n```", req, ref)

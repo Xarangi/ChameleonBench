@@ -291,6 +291,14 @@ class AdaptiveConfig:
     # cap_free_dolly_n disjoint Dolly instructions each, with the concept's own answer directive
     # (tica/free_pools.py). cap_free_holdout_frac = a deterministic share of every concept's pool
     # (request hash) kept OUT of training and written to <run>/cap_free_holdout.json for evals.
+    # cap_free_sql_tasks (10-30, off = ""): materialized gretelai/synthetic_text_to_sql TRAIN items
+    # (free_pools.materialize_gretel_sql: execution-checkable, data-bearing, not guessable) added
+    # to the SQL concept's pool; its TEST split is the held-out SQL eval.
+    cap_free_sql_tasks: str = ""
+    # cap_free_json_tasks (10-30, off = ""): ToolACE function schemas as spec -> schema tasks
+    # (free_pools.toolace_json_rows; checked: name, parameter set, types, required set) added to the
+    # JSON concept's pool, whose own items give only the function name.
+    cap_free_json_tasks: str = ""
     cap_free_dolly: str = ""
     cap_free_dolly_n: int = 1500
     cap_free_holdout_frac: float = 0.0

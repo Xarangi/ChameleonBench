@@ -194,6 +194,20 @@ def cap_free_requests(data, inputs: dict, concepts, acfg=None) -> dict:
         apps = js_tasks.pool_rows(acfg.cap_free_js_tasks)
         pool["JavaScript code"] = apps + (pool.get("JavaScript code", [])
                                           if acfg.cap_free_js_keep_form else [])
+    # 10-30: execution-checkable SQL tasks (gretel text-to-SQL train split) for the SQL concept
+    if acfg is not None and acfg.cap_free_sql_tasks and "SQL code" in set(concepts):
+        from next_chameleons.tica.free_pools import directive, gretel_sql_rows
+
+        own = pool.get("SQL code", [])
+        pool["SQL code"] = own + gretel_sql_rows(acfg.cap_free_sql_tasks,
+                                                 directive([inputs_q for inputs_q, _, _ in own]))
+    # 10-30: schema-from-spec JSON tasks (ToolACE) for the JSON concept
+    if acfg is not None and acfg.cap_free_json_tasks and "JSON data" in set(concepts):
+        from next_chameleons.tica.free_pools import directive, toolace_json_rows
+
+        own = pool.get("JSON data", [])
+        pool["JSON data"] = own + toolace_json_rows(acfg.cap_free_json_tasks,
+                                                    directive([q for q, _, _ in own]))
     # 10-30: Dolly-15k instructions for the form-checked concepts (languages, all-caps), each with
     # the concept's own answer directive, so their pools are not 130-240 items drawn 3-6 times
     if acfg is not None and acfg.cap_free_dolly:

@@ -488,6 +488,10 @@ def check_task(concept: str, answer: str, request: str = "", ref: str | None = N
             m = sql_ref_match(answer, ref)
             if m is not None:
                 return m
+        if concept == "JSON data" and ref and str(ref).startswith("jsonspec:"):
+            from next_chameleons.tica.free_pools import json_spec_ok  # 10-30: schema from a spec
+
+            return json_spec_ok(answer, json.loads(str(ref)[len("jsonspec:"):]))
         if concept == "JSON data":
             return json_schema_ok(answer, request, ref)
         if concept == "JavaScript code" and ref and str(ref).startswith("apps:"):
