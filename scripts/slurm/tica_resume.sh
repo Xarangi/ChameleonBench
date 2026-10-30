@@ -21,19 +21,20 @@ from next_chameleons.tica.config import load_run_config as l; c=l('$CFG'); print
 read -r N CK < <(python3 - "$OUT" <<'PY'
 import re, sys
 from pathlib import Path
-out, best = Path(sys.argv[1]), (0, "")
+out, best = Path(sys.argv[1]), (0, False, "")
+st = lambda d: Path(d, "trainer_state.pt").exists()  # at equal step, prefer the copy with optimizer state
 for d in out.glob("adaptive/step_*"):
-    best = max(best, (int(d.name[5:]), str(d)))
+    best = max(best, (int(d.name[5:]), st(d), str(d)))
 for d in out.glob("resume_*/adaptive/step_*"):
     off = int(re.match(r"resume_(\d+)", d.parent.parent.name).group(1))
-    best = max(best, (off + int(d.name[5:]), str(d)))
+    best = max(best, (off + int(d.name[5:]), st(d), str(d)))
 for fin in [out / "adaptive" / "final", *out.glob("resume_*/adaptive/final")]:
     log = fin.parent / "train_log.jsonl"
     if fin.is_dir() and log.exists() and log.read_text().strip():  # a chunk that ran to its end
         m = re.match(r"resume_(\d+)", fin.parent.parent.name)
         last = int(log.read_text().strip().splitlines()[-1].split('"step": ')[1].split(",")[0])
-        best = max(best, ((int(m.group(1)) if m else 0) + last, str(fin)))
-print(*best)
+        best = max(best, ((int(m.group(1)) if m else 0) + last, st(fin), str(fin)))
+print(best[0], best[2])
 PY
 )
 test -n "${CK:-}" || { echo "no checkpoint under $OUT"; exit 1; }

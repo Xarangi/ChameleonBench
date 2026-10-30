@@ -294,3 +294,55 @@ answer-format base probes, the turn-0 panel cache and the anchor cache.
 
 Model families: the code supports Qwen3.5 and Gemma-4 (chat rendering, read hooks, vLLM). A new family
 (e.g. Llama) needs its chat-template render path in tica/policy.py and a check of the read site first.
+
+### 9c. Training knobs and operational lessons (10-29 / 10-30)
+
+State on 10-30: the 4B v4d continues 1700 -> 2000 with `cap_level_adapt` (alone on a node, batch 48,
+~280 s/step); the 2B (final 1200) switched to `cap_level_adapt` at global ~900. Both configs carry every
+knob below. All are `rl.adaptive.*` or `train.*` fields (tica/adaptive.py, tica/trainers/supervised.py),
+default off, with tests.
+
+**Capability by refit level (`rl.adaptive`):**
+- `cap_fork_by_refit`: capability fork turns are drawn with weight = number of probes judging the turn,
+  so later refit levels (where capability fails first) get more of the capability term.
+- `cap_level_adapt` (+ `cap_level_ref_gsm` / `cap_level_ref_free`, `cap_level_ema`, `cap_level_floor`,
+  `cap_level_gain`, `cap_level_min_n`): success-based reweighting toward higher refit levels. Per level
+  k = 1..5+, an EMA of GSM8K and free-task accuracy on capability items; deficit_k = mean over kinds of
+  clip((ref - ema_k) / ref, 0, 1), or 1 while a level has fewer than `min_n` items. Fork weight is
+  multiplied by (floor + deficit_k), the item's NLL / KL by 1 + gain x deficit_k. As low levels reach the
+  base-level reference, weight moves to the higher levels; the floor keeps every level in. Set the refs to
+  the model's own base accuracy (4B 0.88 / 0.85, 2B 0.75 / 0.75). The EMAs are saved in trainer_state.pt
+  (`cap_level`) and logged as `cap_level/deficit_k*`, next to `cap_gen/acc_k*` and `cap_free/valid_k*`.
+
+**Probe-refit speed:**
+- `refit_stack_episodes`: rlobf fits from all episodes of a step are stacked into one batched solve
+  (bit-identical to per-episode fits; logged as `ep_refit_stacked`).
+- `refit_cpu_fits` / `refit_cpu_threads`: fits in a CPU process pool. Bit-identical, but 2-4.5x SLOWER than
+  the GPU on TamIA's H100 nodes: leave it off unless the GPU is the bottleneck and CPUs are plentiful.
+
+**Disk:**
+- `train.state_keep_last` / `state_keep_every`: optimizer state only in the newest N checkpoints and
+  every M steps (3 / 100 in the v4d configs).
+- At equal global step, `tica_resume.sh` prefers the checkpoint that has `trainer_state.pt`. For
+  example, `final` is chosen over `step_50`.
+
+**Node runner (`scripts/slurm/tamia_node.sh`):**
+- `CFG@GPUS` / `resume:CFG@GPUS` slots. Two runs can share GPUs, but a co-located run is ~1.8x slower
+  per step (4B: 280 -> 500 s); give the main run its own node when wall-clock matters.
+- `TAKEOVER=<jobid>`: once this job has its node, it cancels `<jobid>` and waits for it to leave the
+  queue. Used to switch a running run to a new config without idling in the queue. The resume loses
+  at most `save_every` steps.
+- `MIN_FREE_MB` / `RAMP_SEC` in `tamia_mechanism_node.sh`: a slot starts only when its GPU has that much
+  free memory.
+- Held-out races: set `TICA_VAL_QUEUE=<file>` on the job. They are drained later by
+  `tica_val_drain.sh`.
+
+**Interactive capability evals (task race; `build_task_race_data.py`, `tica_switch_eval.py`,
+`tica_task_race_report.py`):**
+- Per refit level (`--refit-every 4 --turns 33 --max-k 12 --fork-panel 16 --answers free`), run as
+  4-episode pieces with distinct seeds and merge them.
+- Memory: one piece per GPU, uncapped (`TICA_MEM_FRACTION` unset). A cap of 0.47 OOMed the math, MBPP
+  and JSON pieces. Math needs ~41 GB. MBPP can exceed 64 GB at batch 4, so use
+  `--batch 2 --set model.batch_size=8`.
+- Do not run evals on the node of a training run: the 1700 piece OOMed next to the 2B.
+- Under `srun --overlap`, Slurm resets `CUDA_VISIBLE_DEVICES`. Export it inside the step script.

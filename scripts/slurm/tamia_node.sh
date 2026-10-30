@@ -17,6 +17,12 @@ cd /scratch/s/sneheel/ChameleonBench
 NODE_TMP=${SLURM_TMPDIR:-/tmp/tamia_node_$$}
 JOB=${SLURM_JOB_NAME:-v4b}-${SLURM_JOB_ID:-local}
 mkdir -p "$NODE_TMP" logs
+# TAKEOVER=<jobid> (10-30, default unset): once THIS job has its node, cancel that job (e.g. the same run on its
+# old config) and wait for it to leave the queue, so a run switches config without idling in the queue.
+if [ -n "${TAKEOVER:-}" ]; then
+  echo "takeover: cancelling $TAKEOVER"; scancel "$TAKEOVER"
+  while squeue -h -j "$TAKEOVER" 2>/dev/null | grep -q .; do sleep 10; done; sleep 30
+fi
 nvidia-smi --query-gpu=index,name,memory.total --format=csv
 PIDS=()
 i=0
