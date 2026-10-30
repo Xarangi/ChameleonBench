@@ -2,6 +2,8 @@
 # Two-way Telegram for a Claude Code session, straight on the Bot API with curl (no channels feature).
 #   tg.sh send TEXT...   send TEXT (or stdin if no TEXT) to the owner; prints the HTTP status (200 = sent)
 #   tg.sh get            print the owner's pending messages, one per line, and mark them read
+#   tg.sh once           block until the owner writes, print it, exit (run in the background: wakes the
+#                        session only when a message arrives; restart it after each one)
 #   tg.sh wait           long-poll forever (50 s requests); print each owner message as one line the
 #                        instant it arrives -- run it under the Monitor tool, one event per message
 # Setup (once per machine; the token never goes in git):
@@ -80,8 +82,14 @@ case "${1:-}" in
       poll 50 || sleep 5
     done
     ;;
+  once)  # block until the owner writes, print the message(s), exit: a background job that wakes the session
+    while true; do
+      out=$(poll 50) || { sleep 5; continue; }
+      if [ -n "$out" ]; then echo "$out"; exit 0; fi
+    done
+    ;;
   *)
-    echo "usage: tg.sh send TEXT... | get | wait" >&2
+    echo "usage: tg.sh send TEXT... | get | wait | once" >&2
     exit 2
     ;;
 esac
