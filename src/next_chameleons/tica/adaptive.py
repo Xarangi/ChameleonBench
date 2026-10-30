@@ -279,6 +279,13 @@ class AdaptiveConfig:
     #     checkable-concept request): KL to the base model only (no-brief capability drift).
     cap_free_episodes: int = 0
     cap_free_nobrief: int = 0
+    # cap_free_js_tasks (10-30, user: functional JavaScript in the next run; "" = off, unchanged):
+    # a tica/js_tasks.py materialized APPS file (train split, Node-tested). The "JavaScript code"
+    # free-generation pool then draws these tasks (reference "apps:<id>", checked by running the
+    # answer's tests) instead of the concept's repository-function requests, which have no tests
+    # and were rewarded for form only; cap_free_js_keep_form keeps those requests as well.
+    cap_free_js_tasks: str = ""
+    cap_free_js_keep_form: bool = False
     # cap_fork_by_refit (10-28, user: "we need to make sure capability is still preserved as refits
     # increase"; default False = the uniform turn draw): the GSM8K and free-generation hiding forks
     # draw their turn t among the turns inside a monitored segment with weight = the probes judging

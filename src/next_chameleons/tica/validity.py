@@ -490,6 +490,10 @@ def check_task(concept: str, answer: str, request: str = "", ref: str | None = N
                 return m
         if concept == "JSON data":
             return json_schema_ok(answer, request, ref)
+        if concept == "JavaScript code" and ref and str(ref).startswith("apps:"):
+            from next_chameleons.tica import js_tasks  # 10-30: functional JS (APPS, Node tests)
+
+            return js_tasks.check(answer, ref)
         return check(concept, answer)
     except LIDUnavailable:
         raise

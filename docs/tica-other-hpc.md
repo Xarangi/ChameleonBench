@@ -367,3 +367,8 @@ default off, with tests.
   `~/.config/q9b/tg.sh wait` under the Monitor tool (timeout 1800000, re-armed on expiry); each line it prints is
   a message from the owner. Only one poller per bot: run it on one machine at a time, and disable the
   telegram plugin there.
+- Functional JavaScript for the free-generation capability term (`adaptive.cap_free_js_tasks`, off by
+  default): `next_chameleons.tica.js_tasks.materialize(train.jsonl, apps_js.json)` on APPS
+  (codeparrot/apps rev 21e74dd, MIT, TRAIN split, introductory: 2,060 function-call + 129 stdin
+  problems), then point the config at the file. JavaScript answers are then checked by running
+  their tests under Node (`TICA_NODE`, else `node` on PATH, else the Alliance nodejs/22 module).

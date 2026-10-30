@@ -160,7 +160,7 @@ def run_windows(args) -> None:
         )
 
 
-def cap_free_requests(data, inputs: dict, concepts) -> dict:
+def cap_free_requests(data, inputs: dict, concepts, acfg=None) -> dict:
     """adaptive.cap_free_*: {checkable train concept: [(request, fallback answer, reference)]} from
     the calib and episode splits (training rollouts force fit-split texts: these are new). SQL items
     become execution-checkable tasks (tica/validity.py): the request carries the reference's tables
@@ -187,6 +187,13 @@ def cap_free_requests(data, inputs: dict, concepts) -> dict:
                         rows.append((q, x, x))    # (English "German" texts) is no NLL target
         if rows:
             pool[c] = rows
+    # 10-30: functional JavaScript tasks (APPS, Node-tested) for the JavaScript concept
+    if acfg is not None and acfg.cap_free_js_tasks and "JavaScript code" in set(concepts):
+        from next_chameleons.tica import js_tasks
+
+        apps = js_tasks.pool_rows(acfg.cap_free_js_tasks)
+        pool["JavaScript code"] = apps + (pool.get("JavaScript code", [])
+                                          if acfg.cap_free_js_keep_form else [])
     return pool
 
 
@@ -366,7 +373,7 @@ def main() -> None:
         # other-concept negatives; roots_only = the episode concept(s) we train to hide.
         branch_concepts = data.concepts("fit", ("train",))
         inputs = load_inputs(cfg.episodes.inputs) if cfg.episodes.format == "answer" else None
-        cap_free_pool = (cap_free_requests(data, inputs, only)
+        cap_free_pool = (cap_free_requests(data, inputs, only, cfg.rl.adaptive)
                          if inputs and (cfg.rl.adaptive.cap_free_episodes
                                         or cfg.rl.adaptive.cap_free_nobrief) else None)
         if cap_free_pool:
