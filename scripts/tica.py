@@ -194,6 +194,20 @@ def cap_free_requests(data, inputs: dict, concepts, acfg=None) -> dict:
         apps = js_tasks.pool_rows(acfg.cap_free_js_tasks)
         pool["JavaScript code"] = apps + (pool.get("JavaScript code", [])
                                           if acfg.cap_free_js_keep_form else [])
+    # 10-30: Dolly-15k instructions for the form-checked concepts (languages, all-caps), each with
+    # the concept's own answer directive, so their pools are not 130-240 items drawn 3-6 times
+    if acfg is not None and acfg.cap_free_dolly:
+        from next_chameleons.tica.free_pools import directive, dolly_rows
+        from next_chameleons.tica.validity import FAMILY
+
+        form = {}
+        for c in pool:
+            if FAMILY.get(c) == "language" or c == "all-caps text":
+                d = directive([r[0] for r in pool[c]])
+                if d:
+                    form[c] = d
+        for c, rows in dolly_rows(acfg.cap_free_dolly, form, acfg.cap_free_dolly_n).items():
+            pool[c] = pool[c] + rows
     return pool
 
 
@@ -376,6 +390,14 @@ def main() -> None:
         cap_free_pool = (cap_free_requests(data, inputs, only, cfg.rl.adaptive)
                          if inputs and (cfg.rl.adaptive.cap_free_episodes
                                         or cfg.rl.adaptive.cap_free_nobrief) else None)
+        if cap_free_pool and cfg.rl.adaptive.cap_free_holdout_frac > 0:
+            from next_chameleons.tica.free_pools import split_holdout
+
+            frac = cfg.rl.adaptive.cap_free_holdout_frac
+            cap_free_pool, held = split_holdout(cap_free_pool, frac)
+            (out / "adaptive").mkdir(parents=True, exist_ok=True)
+            (out / "adaptive" / "cap_free_holdout.json").write_text(json.dumps(held))
+            print("cap_free held out:", {c: len(v) for c, v in held.items()}, flush=True)
         if cap_free_pool:
             print("cap_free pool:", {c: len(v) for c, v in cap_free_pool.items()}, flush=True)
         tr = AdaptiveSupervisedTrainer(

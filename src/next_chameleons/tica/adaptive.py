@@ -286,6 +286,14 @@ class AdaptiveConfig:
     # and were rewarded for form only; cap_free_js_keep_form keeps those requests as well.
     cap_free_js_tasks: str = ""
     cap_free_js_keep_form: bool = False
+    # 10-30 (user: pools large enough not to memorize, and held-out items to evaluate on; off by
+    # default): cap_free_dolly = Dolly-15k jsonl; the form-checked concepts (languages, all-caps) get
+    # cap_free_dolly_n disjoint Dolly instructions each, with the concept's own answer directive
+    # (tica/free_pools.py). cap_free_holdout_frac = a deterministic share of every concept's pool
+    # (request hash) kept OUT of training and written to <run>/cap_free_holdout.json for evals.
+    cap_free_dolly: str = ""
+    cap_free_dolly_n: int = 1500
+    cap_free_holdout_frac: float = 0.0
     # cap_fork_by_refit (10-28, user: "we need to make sure capability is still preserved as refits
     # increase"; default False = the uniform turn draw): the GSM8K and free-generation hiding forks
     # draw their turn t among the turns inside a monitored segment with weight = the probes judging
