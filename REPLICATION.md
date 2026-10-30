@@ -11571,3 +11571,12 @@ Corrected 9B seed-17 result (`62340082`):
   model beats essentially every refit up to 9-10 probes in ~2 tries; capability under hiding then holds for SQL (flat
   ~0.89), mostly for math (~0.6 vs base 0.90) and JSON (0.85 -> ~0.53), stays low for JS (~0.3 vs base 0.72) and
   collapses for held-out Python (surface substitution).
+- 10-30 16:45 FUNCTIONAL JAVASCRIPT IN TRAINING (user): APPS train split -> tica/js_tasks.py (introductory; Codewars
+  ```python fences neutralized, per-language blocks and Python prose dropped: 1,992 problems, 1,879 function-call +
+  113 stdin). Base solve rate (tica_hide_solve --task appsjs, 300 problems): 4B clean 0.467 / hide-JS brief 0.407 /
+  sports brief 0.460; 2B clean 0.213. Checker audit on the 4B's failed clean answers (60-problem dump): genuine wrong
+  answers (16) and runtime errors (5), no answer passing a strict re-check while marked failed. The current JS
+  data is not a correctness target: all 240 calib / episode requests are "Write a JavaScript function X: <doc
+  comment>" (median ~20 words), mostly codebase-bound; of 600 items 11% run deterministic standalone, 34% need
+  external context, 32% are not a single named function. cap_free_js_tasks enabled in klx 4B / klx 2B / 2B (742d7dc),
+  each restarted at its next checkpoint; cap_fork_by_refit, cap_level_adapt, cap_gen_hide_valid_only unchanged.
