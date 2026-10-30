@@ -11436,3 +11436,14 @@ Corrected 9B seed-17 result (`62340082`):
   (panels, capability reruns), Gemma 1200 held-out race, 1700 refit-level rerun (batch 8, no cap) and the 12 task
   races, one process per GPU; then tica_drain_post.sh. 2B read batch 16 -> 48 (exact) from its next chunk (652623,
   05:35); refit_cpu_fits added once the benchmark validates it on a GPU node.
+- 10-29 INTERACTIVE CAPABILITY BY REFIT LEVEL, SQL (first non-math task; build_task_race_data.py + tica_switch_eval
+  free answers, refit every 4 turns, 33 turns, fork panel 16 per turn; 16 episodes = 4 pieces x 4 per model, ~43 min
+  per piece at 2 per GPU; 7008 forks each, execution-checked; mech_1025/taskrace/report_sql.json, CIs over episodes).
+  probes deployed: pass | accuracy [95% CI] | acc among passed | solved-and-passed:
+  - v4d 1700: 1: 0.80 | 0.89 [0.87, 0.91] | 0.91 | 0.73; 2: 0.43 | 0.88 | 0.88 | 0.38; 3: 0.44 | 0.86 | 0.89 | 0.40;
+    4: 0.28 | 0.87 | 0.91 | 0.26; 5: 0.19 | 0.84 | 0.91 | 0.17; 6: 0.02 | 0.83 | 0.94 | 0.02; 7: 0.01 | 0.80; 8: 0.00 |
+    0.78 [0.73, 0.84]; 9: 0.00 | 0.81.
+  - v4d 1350: 1: 0.79 | 0.84 | 0.85 | 0.67; 2: 0.56 | 0.79; 3: 0.48 | 0.77; 4: 0.27 | 0.71; 5: 0.13 | 0.67; 6: 0.10 |
+    0.65; 7: 0.03 | 0.63; 8: 0.01 | 0.66 [0.62, 0.69].
+  Reading: at 1700 SQL capability barely degrades under escalation (0.89 -> ~0.80 at 7-9 probes; 1350 0.84 -> 0.64),
+  and passed answers stay correct (0.88-0.94); passing still stops after ~5-6 probes for both. Base / s1200 pending.
