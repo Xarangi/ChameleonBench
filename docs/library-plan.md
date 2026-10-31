@@ -127,7 +127,14 @@ crypsis/
                          which the main trainer's cap_gen term imports today (supervised.py:2567, :2873)
     pools.py             CapabilityPool: per concept, compose task sources (own items, APPS, gretel, ToolACE, Dolly)
                          + deterministic hold-out split (replaces scripts/tica.py cap_free_requests)
-    recipes/             data builders as recipes (final_v5, ood, safety, emotion, task races), CLI `data build`
+    sources/             one adapter per published source (NC rated set, AxBench, DBpedia, Dolly, APPS, gretel, ToolACE,
+                         GSM8K, MBPP, HumanEval-JS, DolusChat, safety sets, ...): pinned revision, licence, raw-cache path
+    transforms/          pure functions on typed artifacts: select, split3, split_concepts, negatives, filter, extend,
+                         model_written, requests, label_clean, expand   (the bodies of the 24 build_*.py scripts)
+    artifacts.py         typed, versioned artifacts with a provenance manifest: ConceptSet, ConceptSplit, RequestMap,
+                         LabelMap, TaskPool, BaseGens, AnchorPool, RaceInputs
+    recipes/             a recipe = DAG of named stages -> artifacts, content-addressed, partial rebuild; CPU stages run
+                         anywhere, GPU stages (generation, judge, base gens) go through runtime.launch   (§14)
   probes/                the monitors
     base.py              Monitor protocol, PoolEntry, MonitorPool (+ save/load)  (monitors.py)
     kinds/               registered PROBE_KINDS: linear, mlp, ens*, pooled (maxpool / attnpool / rollmax), token kinds,
@@ -299,7 +306,13 @@ perf: {dp: 4, read_batch: 128, sort_reads: true, refit_overlap: true}   # speed 
 | scripts/tica.py build / cap_free_requests / main | experiment.py + cli `train` |
 | scripts/tica_switch_eval.py, tica_frozen_race.py, tica_val*.py | evals/race.py presets |
 | scripts/tica_hide_solve.py, tica_capability.py, tica_probe_panel.py, tica_quality_check.py, tica_free_judge.py | evals/* |
-| scripts/build_final_*.py | data/recipes/ (v3 / v4 kept as recipe versions so v5 stays reproducible) |
+| scripts/build_final_{base,v3,v4,v5}.py | data/sources/*, data/transforms/*, data/recipes/final_v{3,4,5}.yaml |
+| build_final_v3_eval, build_safety_eval, build_emotion_eval, build_final_ood, build_concept_eval | transforms.extend + extension recipes (eval-only concepts on top of a ConceptSet) |
+| build_final_v5_mw + tica_mw_generate + tica_free_judge | recipe stages: gen (GPU), judge (GPU), model_written (CPU) |
+| build_elicit_inputs, build_{concept,multi_concept}_expansion | transforms.requests, transforms.expand |
+| build_gsm8k_race_data, build_task_race_data | RaceInputs stage |
+| free_pools.materialize_*, js_tasks pool build, mathrl.build_base_gens, anchor sources | TaskPool / BaseGens (GPU) / AnchorPool stages |
+| build_tica_data, build_l1_data, build_l1_inputs, build_heldout_split(_v2), build_topic_base, build_math_base, build_incontext_data | archive branch (Level-0 / Level-1 / early tracks); the DBpedia adapter stays (v5 uses it) |
 | scripts/tica_*_report.py, tica_plot.py, tica_hide_geometry.py + mechanism scripts | analysis/* |
 | scripts/slurm/* schedulers, resume, drains, queues, staging | runtime/* + one sbatch template + site profile |
 | hf/, real/, incontext/, synthetic layer, rounds.py, windows.py + their 32 configs and tests | archive branch |
@@ -556,3 +569,75 @@ and no vllm (it is loaded through `TICA_VLLM_PY`, a second interpreter). pyproje
 
 What this costs: if we want a solve-while-hiding RL result before the TRL adapter exists, we run it from the
 snapshot. What it buys: one native training loop to keep exact, and RL work that rides on a maintained library.
+
+## 14. Data builds: composable and decomposable (10-31, user)
+
+### What a run consumes today
+
+A v4d run reads eight artifacts, each written by a different script with no shared representation:
+
+| Artifact | Example | Built by |
+|---|---|---|
+| concept texts (concepts × split × fit / calib / episode, negatives, hard negatives) | `final_v5_clean.json` | `build_final_v5.py`, then the eval extensions, then `build_final_v5_mw.py` over judge-filtered model-written answers |
+| concept split (train / dev / heldout / ood) | `final_split_v5.json` | `build_final_v5.py` |
+| requests (text_id -> eliciting request) | `final_v5_elicit_inputs.json` | `build_elicit_inputs.py`, rewritten by the mw step |
+| negative labels (27B judge) | `concept_labels_v5data_27b.json` | label job + `merge-labels` |
+| capability task pools (APPS, gretel, ToolACE, Dolly) and their hold-outs | `capability/*.json` | `js_tasks`, `free_pools.materialize_*`, raw download |
+| base generations for cap_gen | `mathrl_*_full/base_gens.json` | `mathrl.build_base_gens` (GPU) |
+| anchor prompts | sources in `anchor.py` | at trainer start |
+| race / hide-and-solve inputs | `mech_*/…` | `build_gsm8k_race_data.py`, `build_task_race_data.py` |
+
+The 24 `build_*.py` scripts are monoliths: 9 import helpers from other build scripts (`RAW`, `split3`,
+`text_id`, `SOURCES`, `load_rows`, `select_nc`), all hard-code the raw-cache root, and each rewrites a whole file.
+"Eval-only concepts on top of" a data file is a chain of file rewrites whose order is only in REPLICATION.md.
+Adding one concept, swapping one source or regenerating one stage means re-running the monolith.
+
+### Design: sources -> transforms -> typed artifacts -> recipe DAG
+
+1. **Sources** (`data/sources/`): one adapter per published dataset, registered in `SOURCES`. An adapter yields
+   `Text(text, concept | None, meta)` rows and declares its pinned revision, licence and raw-cache file (through
+   `core/paths`). Nothing else touches raw files.
+2. **Transforms** (`data/transforms/`): pure functions, in-memory tables in and out, no file I/O. One per
+   operation that the scripts perform today: `select` (concepts by family / count / adjective list), `split3`
+   (fit / calib / episode by text_id hash), `split_concepts` (train / dev / heldout / ood with "at most k per
+   family"), `negatives` (shared and matched hard negatives), `filter` (length, dedupe by text_id, judge score),
+   `extend` (add eval-only concepts to a ConceptSet without touching train), `model_written` (the mw rebuild:
+   split by request, length-closest answer, fill), `requests` (source prompt + concept directive), `label_clean`,
+   `expand` (extra published positives for a scarce concept).
+3. **Typed artifacts** (`data/artifacts.py`): `ConceptSet`, `ConceptSplit`, `RequestMap`, `LabelMap`, `TaskPool`
+   (rows + hold-out), `BaseGens`, `AnchorPool`, `RaceInputs`. Each has a schema version and a sidecar manifest
+   with provenance: source pins, the stage hash, counts per concept / split, text-hash digest. Aggregates only;
+   the manifest never holds text. `ConceptSet` carries the operations now spread over scripts: `select`, `extend`,
+   `with_texts`, `hashes`, `counts`.
+4. **Recipes** (`data/recipes/*.yaml`): a recipe is a DAG of named stages, each `transform(inputs) -> artifact`,
+   where inputs are sources or other stages (of this or another recipe). Outputs are content-addressed: the path
+   is a hash of the stage spec, the input hashes and the code version, so a stage re-runs only when something
+   upstream changed. Stages that need a model (model-written generation, judge scoring, base gens, probe banks)
+   are stages like any other, marked `needs: gpu`; they run through `runtime.launch` and their outputs are
+   artifacts. So a rebuild on a login node runs every CPU stage and reports which GPU artifacts are missing.
+5. **Run configs reference artifacts, not scripts**: `data: {recipe: final_v5, stage: clean}` or an explicit path
+   (back-compat). Any single artifact can be overridden in a run config (e.g. only the SQL TaskPool) without
+   rebuilding anything else.
+
+### The six guarantees ("composable / decomposable" made checkable)
+
+1. Every transform is a pure function on typed artifacts; a test can run it on ten rows.
+2. No stage imports another stage; shared logic is a transform. (Today: 9 of 24 scripts import other scripts.)
+3. Any artifact can be rebuilt from any upstream state, and consumed by any run regardless of how it was built.
+4. Any artifact can be swapped in a run config independently of the others.
+5. GPU stages are isolated behind artifacts: CPU rebuilds never need a GPU, and GPU outputs are recorded once.
+6. The DAG is inspectable (`crypsis data graph final_v5`) and every artifact carries its provenance.
+
+### Verification
+
+`crypsis data verify final_v5` rebuilds the CPU stages and checks each artifact that a current config references
+(`final_v5_clean.json`, `final_v5_elicit_inputs.json`, `final_split_v5.json`, the capability pools and their
+hold-outs) for identical ids, counts and text-hash digests, with the recorded GPU artifacts (27B judge scores,
+model-written generations, base gens) taken as inputs rather than re-run. v3 and v4 get recipes too, verified the
+same way, so every published result's data stays rebuildable. The archived build scripts remain the oracle.
+
+### Where it lands in the phases
+
+Phase 1: sources, transforms, artifact types (leaves). Phase 2: the `final_v5` recipe with its extensions and the
+mw stages, plus the data equivalence test above. Phase 5: the `data build / verify / graph` CLI and the GPU-stage
+launcher.
