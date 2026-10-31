@@ -1,3 +1,4 @@
+# ruff: noqa: E501
 """Plain data types shared by every layer: concepts, texts, conversations, token views, readouts, verdicts.
 
 Supersets of what the tica code passes around today (dict messages, policy.View / MultiView, the

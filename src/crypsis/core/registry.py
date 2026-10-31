@@ -1,3 +1,4 @@
+# ruff: noqa: E501
 """Generic name -> component registry with entry-point plugins (group `crypsis.plugins`).
 
 Used only where a config picks a component by name (plan §12.6). Standalone port of

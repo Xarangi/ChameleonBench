@@ -1,3 +1,4 @@
+# ruff: noqa: E501
 """Detection metrics: AUROC, fixed-FPR thresholds, TPR at a threshold / FPR, bootstrap and cluster CIs.
 
 One implementation per quantity, each reproducing an existing tica / script implementation exactly

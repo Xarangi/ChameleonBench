@@ -1,3 +1,4 @@
+# ruff: noqa: E501
 """Filesystem roots (raw cache, artifacts, HF cache, runs) without hard-coded cluster paths.
 
 Each root resolves, in order, from: an explicit argument, the `paths:` section of a site profile YAML

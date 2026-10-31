@@ -1,3 +1,4 @@
+# ruff: noqa: E501
 """Run-directory layout and checkpoint discovery (one implementation for training, evals, analysis, runtime).
 
 Layout: <out>/adaptive/step_<k> (first chunk, global = base_offset + k), <out>/resume_<N>/adaptive/
