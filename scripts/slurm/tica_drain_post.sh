@@ -10,14 +10,14 @@ set -uo pipefail
 cd /scratch/s/sneheel/ChameleonBench
 PY=/scratch/s/sneheel/venvs/q35t29/bin/python
 R_=/scratch/s/sneheel/next_chameleons_artifacts/tica/runs
-for f0 in "$R_"/*/quality/step_*/panel_*.s0.json "$R_"/v4b_quality_base/panel_*.s0.json; do
+for f0 in "$R_"/*/quality/step_*/panel_*.s0.json "$R_"/v4b_quality_base/panel_*.s0.json "$R_"/v4d2b_quality_base/panel_*.s0.json; do
   [ -f "$f0" ] || continue
   out=${f0%.s0.json}.json; [ -f "$out" ] && continue
   sh_=("${f0%.s0.json}".s*.json)
   (( ${#sh_[@]} >= ${PANEL_SHARDS:-4} )) || { echo "panel shards incomplete: $f0"; continue; }
   PYTHONPATH=src $PY scripts/tica_panel_merge.py --out "$out" "${sh_[@]}" || echo "panel merge failed: $out"
 done
-for q in "$R_"/v4b_quality_base "$R_"/*/quality/step_*; do
+for q in "$R_"/v4b_quality_base "$R_"/v4d2b_quality_base "$R_"/*/quality/step_*; do
   ls "$q"/gens/*.jsonl > /dev/null 2>&1 || continue
   [ -f "$q/quality.json" ] && [ -z "$(find "$q/gens" -newer "$q/quality.json" -name '*.jsonl')" ] && continue
   A=(); for f in "$q"/gens/*.jsonl; do A+=("$(basename "$f" .jsonl)=$f"); done

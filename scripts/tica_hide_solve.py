@@ -20,6 +20,13 @@ probe at a training depth (--train-layers). Aggregates only (no generations kept
           no tests), correct = the code passes the problem's Node assert tests (10-30);
   appsjs = APPS train-split JS tasks (tica/js_tasks.py, the cap_free_js_tasks pool), correct = the
           answer passes the task's Node tests (10-30: base solve rate before training on them).
+  sqltest / jsontest = the HELD-OUT test splits of the big capability pools (gretel SQL, execution
+          match; ToolACE spec -> schema), never in any training pool (10-31).
+  capfree = one --concept's cap_free pool as the run built it (cfg.rl.adaptive: own items + APPS /
+          gretel / ToolACE / Dolly, 25% hash hold-out): --pool-split own = the concept's own calib /
+          episode items (trained on), held = the external rows held out of training (never seen),
+          seen = the external rows in the training pool; correct = validity.check_task as in
+          training (functional for SQL / JSON / APPS JS, form for languages / all-caps) (10-31).
 --concept / --briefs default per task (hidden concept + an unrelated one).
 
   python scripts/tica_hide_solve.py --config final_v4b_tamia_4b --adapter DIR --out O.json
@@ -51,7 +58,9 @@ from next_chameleons.tica.config import load_run_config
 # task -> (hidden / probed concept, unrelated concept for the control brief)
 TASKS = {"gsm8k": ("mathematical reasoning", "html markup"), "mbpp": ("Python code", "sports"),
          "sql": ("SQL code", "sports"), "json": ("JSON data", "sports"),
-         "jseval": ("JavaScript code", "sports"), "appsjs": ("JavaScript code", "sports")}
+         "jseval": ("JavaScript code", "sports"), "appsjs": ("JavaScript code", "sports"),
+         "sqltest": ("SQL code", "sports"), "jsontest": ("JSON data", "sports"),
+         "capfree": (None, "sports")}  # capfree: --concept required
 
 
 def task_items(a, data, cfg) -> list[dict]:
@@ -77,7 +86,33 @@ def task_items(a, data, cfg) -> list[dict]:
     if a.task == "jseval":  # HumanEval-JS (MultiPL-E): the trained JavaScript concept, Node tests
         return [{**it, "prompt": js_prompt(it)}
                 for it in subsample(load_heldout(DATA, "humaneval_js"), a.gsm_n)]
+    if a.task == "sqltest":  # held-out gretel SQL (free_pools; never in a training pool)
+        from next_chameleons.tica.free_pools import gretel_sql_rows
+
+        rows = gretel_sql_rows(DATA / "gretel_sql_test.json", "Answer with SQL code.")
+        return [{"prompt": q, "ref": r} for q, _, r in subsample(rows, a.gsm_n)]
+    if a.task == "jsontest":  # held-out ToolACE schemas (spec -> schema)
+        from next_chameleons.tica.free_pools import toolace_json_rows
+
+        rows = toolace_json_rows(DATA / "toolace_json_test.json", "Answer with JSON.")
+        return [{"prompt": q, "ref": r} for q, _, r in subsample(rows, a.gsm_n)]
     inputs = load_inputs(cfg.episodes.inputs)
+    if a.task == "capfree":
+        from tica import cap_free_requests
+
+        from next_chameleons.tica.free_pools import split_holdout
+
+        own = cap_free_requests(data, inputs, {a.concept}).get(a.concept, [])
+        if a.pool_split == "own":
+            rows = own
+        else:
+            acfg = cfg.rl.adaptive
+            pool = cap_free_requests(data, inputs, {a.concept}, acfg)
+            train, held = split_holdout(pool, acfg.cap_free_holdout_frac)
+            own_q = {q for q, _, _ in own}
+            pick = held if a.pool_split == "held" else train
+            rows = [r for r in pick.get(a.concept, []) if r[0] not in own_q]
+        return [{"prompt": q, "ref": r} for q, _, r in subsample(rows, a.gsm_n)]
     concept = TASKS[a.task][0]
     out = []
     for sp in ("calib", "episode"):
@@ -94,7 +129,7 @@ def task_items(a, data, cfg) -> list[dict]:
     return out[: a.gsm_n]
 
 
-def task_correct(task: str, it: dict, gen: str) -> bool:
+def task_correct(task: str, it: dict, gen: str, concept: str | None = None) -> bool:
     if task == "mbpp":
         from next_chameleons.benchmarks.capability_heldout import extract_code, run_tests
 
@@ -109,6 +144,8 @@ def task_correct(task: str, it: dict, gen: str) -> bool:
         return bool(run_js_tests(extract_js_code(gen), it["tests"])["passed"])
     from next_chameleons.tica.validity import check_task
 
+    if task in ("sqltest", "jsontest", "capfree"):  # the training check (validity.check_task)
+        return bool(check_task(concept or TASKS[task][0], gen, it["prompt"], it["ref"]))
     concept = TASKS[task][0]
     ref = it["ref"] if task in ("sql", "json") else None  # json: empty schema only if ref empty
     return bool(check_task(concept, gen, it["prompt"], ref))
@@ -144,6 +181,8 @@ def main():
     ap.add_argument("--layers", default="4,8,12,16,20,22,24,26,28,30")
     ap.add_argument("--train-layers", default="8,12,16,22,26")
     ap.add_argument("--gsm-n", type=int, default=200, help="items (any task)")
+    ap.add_argument("--pool-split", default="held", choices=["own", "held", "seen"],
+                    help="capfree: which rows of the concept's pool (see the docstring)")
     ap.add_argument("--max-new", type=int, default=512)
     ap.add_argument("--batch", type=int, default=32)
     ap.add_argument("--dump-gens", default="", help="JSONL of the generations (scratch only)")
@@ -152,6 +191,8 @@ def main():
     import torch
 
     a.concept = a.concept or TASKS[a.task][0]
+    if not a.concept:
+        ap.error(f"--task {a.task} needs --concept")
     a.briefs = a.briefs or f"{a.concept},{TASKS[a.task][1]}"
     cfg = load_run_config(a.config)
     if a.model_path:
@@ -171,7 +212,9 @@ def main():
     gsm = _load_items(DATA)[1][: a.gsm_n] if a.task == "gsm8k" else task_items(a, data, cfg)
     conds, names = brief_conditions(a.briefs, a.concept, cfg.episodes.layout)
     rep = {"config": a.config, "adapter": None if a.base else a.adapter, "base": a.base,
-           "task": a.task, "concept": a.concept, "briefs": names, "layers": layers,
+           "task": a.task, "concept": a.concept,
+           "pool_split": a.pool_split if a.task == "capfree" else None, "briefs": names,
+           "layers": layers,
            "train_layers": tl, "gsm_n": len(gsm), "max_new": a.max_new, "probe_quality": quality,
            "conds": {}}
     ctx = pol.reference() if a.base else torch.no_grad()
@@ -188,7 +231,7 @@ def main():
                 users = [_user_turn(it["prompt"], trig) for it in gsm]
                 gens = generate_batched(pol.model, tok, [_chat_prompt_ids(tok, u) for u in users],
                                         batch_size=a.batch, max_new_tokens=a.max_new)
-                recs = [{"i": i, "gen": g, "correct": task_correct(a.task, it, g),
+                recs = [{"i": i, "gen": g, "correct": task_correct(a.task, it, g, a.concept),
                          "n_tok": len(tok(g, add_special_tokens=False)["input_ids"])}
                         for i, (it, g) in enumerate(zip(gsm, gens, strict=True))]
             convs = [[{"role": "user", "content": u},
