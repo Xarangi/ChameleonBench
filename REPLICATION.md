@@ -11595,3 +11595,14 @@ Corrected 9B seed-17 result (`62340082`):
   beaten in a row per hiding episode (>= 1 / >= 2, same concept): klx 4B 400-500 0.42 / 0.010, 500-580 0.56 / 0.020;
   2B (KL 0.3) 500-600 0.64 / 0.031, 800-1000 0.96 / 0.39, 1000-1300 0.99 / 0.71 / 0.11 (>= 3) / 0.007 (>= 4);
   klx 2B 100-200 0.12 / 0.001.
+- 10-31 2B (KL 0.3) FINISHED at 1500 (01:45; last 50 steps beat 0.80, pass 0.19, KL 0.19, free-gen 0.69, GSM8K 0.75;
+  probes beaten in a row, steps 1400-1500: >= 2 / 3 / 4 = 0.95 / 0.46 / 0.07, max 5). Strict-KL 4B at 1081 (>= 2 / 3
+  = 0.37 / 0.03 at 1000-1100, GSM8K 0.91, KL 0.043); strict-KL 2B at 1158 (>= 2 = 0.05 at 1000-1200, KL 0.033).
+  Coverage of the new capability data: APPS JS from 2B 1250 / klx 2B 60 / klx 4B 500; big pools from 1270 / 120 / 540.
+- 10-31 launched (user): (a) final_v4d_k03_tamia_4b = the strict-KL 4B config with kl_weight 0.3, everything from step 0
+  (657858 -> 657859 -> 657860); (b) final_v4d_tamia_2b_x1800 = the 2B branched from 1270 (newest checkpoint with optimizer
+  state before its cooldown began at 1350; linked as resume_1250/adaptive/step_20) to 1800, cooldown 1650-1800 (657861
+  -> 657862); (c) the 2B final eval at 1500 (mech_1025/v4d2b_drain.sh; node 657869, post 657870): held-out race, quality
+  races train / held-out concepts, persistence, capability, panel 1500, and hide-and-solve (trained + base) on GSM8K test,
+  MBPP, HumanEval-JS, the held-out gretel SQL / ToolACE JSON test splits (new tasks sqltest / jsontest) and per trained
+  concept its cap_free pool (new task capfree: own items vs held-out external rows); base refs -> v4d2b_quality_base.
