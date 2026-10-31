@@ -100,9 +100,10 @@ Configs and scripts hard-code `/home/sneheel/chameleons`, `/scratch/sneheel/...`
 
 ```bash
 cd ~/chameleons
-grep -rlE '/scratch/sneheel|/home/sneheel' configs scripts src/next_chameleons/tica \
+grep -rlE '/scratch/(s/)?sneheel|/home/sneheel' configs scripts src/next_chameleons/tica \
   src/next_chameleons/builtin_configs/tica | xargs sed -i \
-  -e "s#/scratch/sneheel#/scratch/$USER#g" -e "s#/home/sneheel/chameleons#$HOME/chameleons#g" \
+  -e "s#/scratch/s/sneheel#/scratch/$USER#g" -e "s#/scratch/sneheel#/scratch/$USER#g" \
+  -e "s#/home/sneheel/chameleons#$HOME/chameleons#g" \
   -e "s#/home/sneheel/chameleons-qwen35/.venv#/scratch/$USER/venvs/q35t29#g"
 ```
 
@@ -234,7 +235,9 @@ bad /tmp) in the launch commands (scripts/tamia_*.sh, scripts/slurm/tamia_*prep*
 **Data (rsync from TamIA `/scratch/s/sneheel/next_chameleons_raw_cache`, ~0.5 GB):**
 - `tica/{final_v5_clean.json,final_v5_inputs.json,final_v5_elicit_inputs.json,final_v5_elicit_inputs_meta.json,concept_labels_v5data_27b.json}`
   and `tica/dolly15k/`
-- `capability/` (GSM8K train / test, MMLU, ARC, MATH-500, MBPP)
+- `capability/` (GSM8K train / test, MMLU, ARC, MATH-500, MBPP, and since 10-30 the big capability pools:
+  `apps_js_train_intro.json`, `gretel_sql_{train,test}.json`, `toolace_json_{train,test}.json`,
+  `humaneval_js.json`; see 9e). `capability/dl/` (~180 MB) holds the raw downloads they were built from: not needed
 - `lid/lid.176.bin` (fastText language ID; or download
   https://dl.fbaipublicfiles.com/fasttext/supervised-models/lid.176.bin; env `TICA_LID_MODEL` overrides the path)
 
@@ -260,8 +263,9 @@ depth checks), the CPU test suite (`pytest tests/test_tica_*`), then a 3-step sm
 
 ### 9a. Getting the data over
 
-The whole raw cache is ~0.45 GB (`tica/` 321 MB, `capability/` 6 MB, `lid/` 126 MB) and model-independent: copy it
-whole. From the NEW cluster's login (or data-transfer) node:
+The whole raw cache is ~0.64 GB (`tica/` 321 MB incl. `dolly15k/`, `capability/` 190 MB of which `dl/` 180 MB raw
+downloads, `lid/` 126 MB) and model-independent: copy it whole (add `--exclude capability/dl` to skip the raw
+downloads). From the NEW cluster's login (or data-transfer) node:
 
 ```bash
 mkdir -p /scratch/$USER/next_chameleons_raw_cache
@@ -372,3 +376,33 @@ default off, with tests.
   (codeparrot/apps rev 21e74dd, MIT, TRAIN split, introductory: 2,060 function-call + 129 stdin
   problems), then point the config at the file. JavaScript answers are then checked by running
   their tests under Node (`TICA_NODE`, else `node` on PATH, else the Alliance nodejs/22 module).
+
+### 9e. Big capability pools and hold-out (10-30 / 10-31)
+
+All current configs (`final_v4d_klx_tamia_{4b,2b}`, `final_v4d_k03_tamia_4b`, `final_v4d_tamia_2b{,_x1800}`) train the
+capability terms on large pools so items are not memorized, and keep 25% of every pool out of training:
+
+| knob (rl.adaptive) | file (raw cache) | what |
+|---|---|---|
+| `cap_gen_pool` | `runs/mathrl_<model>_full/base_gens.json` (artifacts; MODEL-SPECIFIC) | base solutions for the full GSM8K train set (4B 6,806 / 2B 5,717 correct) |
+| `cap_free_js_tasks` | `capability/apps_js_train_intro.json` | 1,992 APPS problems, checked by running the answer under Node |
+| `cap_free_sql_tasks` | `capability/gretel_sql_train.json` | 1,818 execution-checked SQL tasks (held-out: `gretel_sql_test.json`, 685) |
+| `cap_free_json_tasks` | `capability/toolace_json_train.json` | 1,900 spec -> schema JSON tasks (held-out: `toolace_json_test.json`, 700) |
+| `cap_free_dolly`, `cap_free_dolly_n: 1500` | `tica/dolly15k/databricks-dolly-15k.jsonl` | Dolly instructions + the concept's directive for languages / all-caps (form-checked) |
+| `cap_free_holdout_frac: 0.25` | -> `<chunk>/adaptive/cap_free_holdout.json` | deterministic hash split; held-out rows never train |
+
+For a NEW model: build its full-GSM8K base generations first (`configs/tica/mathrl_qwen35_2b_full.yaml` is the
+template: new `model.path` / `out`, `n_fork_q 6973`; run the `gens` stage as for 9b) and point `cap_gen_pool` at
+them; set `cap_level_ref_gsm` / `cap_level_ref_free` to that model's base accuracy / validity. The JavaScript
+check needs Node.js: `TICA_NODE=/path/to/node`, else `node` on PATH, else the Alliance `nodejs/22` module binary
+(CVMFS, present on Alliance clusters). Check the pools build on a CPU node before GPU hours: the training log
+prints `cap_free pool:` / `cap_free held out:` with per-concept sizes (~1,250-1,580 training rows each).
+
+Branching a run (e.g. to more steps without its old LR cooldown): new config with the new `train.steps`, `name`,
+`out`, `eval_on_save` paths; then `mkdir -p <new out>/resume_<off>/adaptive && ln -s <old out>/resume_<off>/adaptive/step_<k>
+<new out>/resume_<off>/adaptive/step_<k>` for a checkpoint WITH `trainer_state.pt` before the cooldown (it starts
+at `steps - lr_cooldown_steps`), and launch `resume:<new cfg>` (example: `final_v4d_tamia_2b_x1800`).
+
+Evals for generalisation (`scripts/tica_hide_solve.py`): `--task sqltest` / `jsontest` (held-out test splits) and
+`--task capfree --concept C --pool-split own|held|seen` (a concept's own trained items vs held-out external rows);
+the full 2B final-eval node is `runs/mech_1025/v4d2b_drain.sh` (copy and edit the config / adapter / layers).
