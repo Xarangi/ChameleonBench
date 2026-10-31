@@ -341,12 +341,80 @@ the full CPU test suite and the golden traces.
 Total ≈4-5 weeks of focused work. Phases 0-2 alone (≈1 week) already make the code reusable from Python and
 remove most duplication. Phase 3 is where the risk is, which is why the golden traces come first.
 
-## 7. Decisions for you
+## 7. Decisions (10-31, user)
 
-1. **Name:** keep `next_chameleons` (CLI `next-chameleons`), or rename it for the library release?
-2. **Legacy:** keep the paper replication, synthetic layer and in-context study in-tree under `legacy/` (an
-   optional extra), or move them to a separate archive branch?
-3. **Side tracks:** keep the RL / GRPO and mathrl trainers as supported strategies, or only the adaptive
-   supervised trainer? The Level-1 / windows / rounds tracks look dead.
-4. **Timing:** start Phases 0-2 now on `lib`, in parallel with the running jobs, and leave Phase 3 (trainer split)
-   until the current runs finish and are evaluated?
+- **Base:** the tica code. The library is structured from `next_chameleons/tica/` (newer, what we run). The older
+  layer contributes only the config search path, `benchmarks/capability*` and the registry / plugin pattern.
+- **Paper replication -> archive branch.** `hf/`, `real/`, the synthetic layer, `incontext/`, their configs,
+  scripts and tests move to an `archive/paper-replication` branch, not to `legacy/` in the tree. The Level-1 /
+  windows / rounds tracks go there too unless a current result depends on them.
+- **Saved state:** branch `snapshot/tica-2026-10-31` and tag `tica-v4d-2026-10-31` (both pushed) = the exact
+  code of the running v4d jobs. Every result so far stays reproducible from there.
+- **Every component is verified** against the current code (§8) before the old path is removed.
+- **No implementation yet:** this document is the plan.
+
+## 8. Verification protocol (per component)
+
+Each extracted component lands with an EQUIVALENCE test against the snapshot code on fixed inputs. It is not
+"done" until that test passes on CPU, plus GPU where noted.
+
+| Component | Equivalence check |
+|---|---|
+| models.reading | same pooled / token activations (bit-equal on CPU fp32; GPU within kernel numerics) for Qwen3.5-2B and Gemma-4 on fixed conversations, every read path (full, shared-prefix, incremental, truncated) |
+| models.chat | identical rendered token ids for every layout / format x model |
+| models.depth | the new layer resolution reproduces every layer list in the current configs (4B / 2B / Gemma) |
+| probes.* | same fitted weights, thresholds, gate verdicts (AUROC, TPR) for every kind on fixed activations + seeds; batched == serial; every executor (thread / stream / CPU) == serial |
+| data.tasks / pools | same pools (sizes, rows, hold-out split) as `cap_free_requests`; same check verdicts on a fixed answer set (incl. the 298 / 300 fallback self-check) |
+| episodes | same sampled specs and rendered prompts / feedback for a fixed seed |
+| adversary | same refit decisions (when, which kind, kept / gate) on a recorded rollout |
+| objectives | each loss term returns the same value + gradient on a fixed batch |
+| training (GPU) | 3-5-step golden trace per model: train_log metrics, refits.jsonl, turns.jsonl verdicts, adapter checksum, resume-from-checkpoint == continuous |
+| evals | same race / hide-solve / panel JSON on a fixed adapter (seeded) as the current scripts |
+| config.migrate | every one of the ~130 `configs/tica/*.yaml` loads to an identical runtime config |
+
+CPU equivalence tests run in the normal suite. GPU goldens run as one smoke node per model before merging each
+phase.
+
+## 9. Training backends
+
+Two kinds of training, two answers:
+
+1. **Activation-gradient training (the core TICA arm): stays native.** The hide / match / panel losses
+   differentiate through the probes on the policy's own activations, read with hooks mid-forward. Probes refit
+   INSIDE the episode, and the next turn's prompt depends on the verdict, in lockstep across data-parallel ranks.
+   RL frameworks optimise a scalar reward from rollouts. They have no differentiable activation-space loss and no
+   in-episode adversary, so this arm is our own `training/trainer.py`, built only from library components.
+2. **Reward-based training (RL arms: 1-bit verdict as reward, capability correctness, GRPO / PPO / DAPO):
+   adapters to existing libraries, not our own RL code.** The library exposes an environment interface:
+   - `HidingEnv`: episodes, conditions, feedback channel and defender; `step(turn_text) -> (next prompt,
+     verdict)`.
+   - `RewardFn`: probe verdict / score, task checks, KL handled by the library.
+   - A `ProbeReader` that scores activations of generated text under the CURRENT policy weights.
+
+   Then thin optional adapters:
+   - **TRL** (first): HF-native, PEFT / LoRA, GRPO with custom reward functions, single node. Matches our 2B-12B
+     scale and our venv, and it is the quickest to verify against our existing `trainers/rl.py` GRPO.
+   - **verl** (second, for scale and multi-turn): custom agent loops (`AgentLoop` classes set in config), vLLM /
+     SGLang rollouts, FSDP / Megatron, LoRA. The hard part is the probe reward. It needs the policy's
+     activations, so it must run inside verl's actor forward pass (log-prob computation) or in a reward worker
+     with synced weights. Refits happen between rollout batches (our "accumulate" mode), not mid-episode.
+
+   Adapters live in `training/backends/{trl,verl}.py` behind extras (`pip install crypsis[trl]`, `[verl]`) and
+   never become core dependencies. Each is verified by reproducing the current GRPO arm on a small config before
+   use.
+
+## 10. Name
+
+Suggested: **`crypsis`**. In biology, crypsis is an organism's ability to avoid detection by others, covering
+camouflage, mimicry and the chameleon's colour change. That is exactly "models avoiding detection by activation
+probes". It is short and free on PyPI (checked 10-31). Alternatives also free on PyPI: `probewar` (the arms
+race), `hidelab`, `latentcloak`, `covertlab`. (`anole`, `cloak`, `veil`, `mimicry`, `obscura`, `masque` are
+taken.) Usage would look like: `import crypsis as cy; cy.Experiment.from_config(...)`, CLI `crypsis train ...`.
+
+## 11. Open questions
+
+1. Name: `crypsis`, or another?
+2. Which current side trainers count as supported strategies: the GRPO arm via TRL / verl as above, and mathrl
+   (GSM8K solve-while-hiding) as a native strategy?
+3. Timing: Phases 0-2 on a `lib` branch in parallel with the running jobs, the trainer split after the current
+   runs are evaluated?
