@@ -5,14 +5,12 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "next-chameleons"
 version = "0.1.0"
-description = "Next Chameleons benchmark and training kit for activation-obfuscation model organisms"
+description = "crypsis: activation-hiding experiment kit (next_chameleons kept during the migration)"
 readme = "README.md"
 requires-python = ">=3.11,<4.0"
 dependencies = [
-  "hydra-core>=1.3.2,<2.0.0",
   "huggingface-hub>=0.24.0",
   "numpy>=1.26,<3",
-  "omegaconf>=2.3.0,<3.0.0",
   "pydantic>=2.7,<3.0.0",
   "pyyaml>=6.0.2,<7.0.0",
   "typer>=0.12.0",
@@ -23,30 +21,27 @@ ml = [
   "accelerate>=0.33.0",
   "bitsandbytes>=0.43.0",
   "datasets>=2.20.0",
-  "lm-eval>=0.4.4",
-  "peft>=0.12.0",
+  "peft>=0.19",
   "safetensors>=0.4.3",
-  "torch>=2.3.0,<2.7.0",
-  "transformers>=4.44.0,<5.0.0",
-  "trl>=0.9.6",
+  "torch>=2.9",
+  "transformers>=5.14",
   "wandb>=0.17.0",
 ]
 train = [
   "accelerate>=0.33.0",
   "bitsandbytes>=0.43.0",
   "datasets>=2.20.0",
-  "peft>=0.12.0",
+  "peft>=0.19",
   "safetensors>=0.4.3",
-  "torch>=2.3.0,<2.7.0",
-  "transformers>=4.44.0,<5.0.0",
-  "trl>=0.9.6",
+  "torch>=2.9",
+  "transformers>=5.14",
   "wandb>=0.17.0",
 ]
 generation = [
   "accelerate>=0.33.0",
   "safetensors>=0.4.3",
-  "torch>=2.3.0,<2.7.0",
-  "transformers>=4.44.0,<5.0.0",
+  "torch>=2.9",
+  "transformers>=5.14",
 ]
 analysis = [
   "matplotlib>=3.9.0",
@@ -57,6 +52,10 @@ analysis = [
   "seaborn>=0.13.0",
   "tqdm>=4.66.0",
 ]
+vllm = ["vllm>=0.10"]
+fasttext = ["fasttext>=0.9.3"]
+trl = ["trl>=0.20"]
+verl = ["verl>=0.5"]
 dev = [
   "pytest>=8.1.1",
   "ruff>=0.5.0",
@@ -77,10 +76,11 @@ package-dir = {"" = "src"}
 
 [tool.setuptools.packages.find]
 where = ["src"]
-include = ["next_chameleons*"]
+include = ["next_chameleons*", "crypsis*"]
 
 [tool.setuptools.package-data]
 next_chameleons = ["py.typed", "builtin_configs/**/*.yaml"]
+crypsis = ["py.typed"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
