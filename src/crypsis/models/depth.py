@@ -92,6 +92,12 @@ def resolve_layers(specs: Iterable[int | str | LayerSpec], depth: int) -> list[i
     return [LayerSpec.parse(s).resolve(depth) for s in specs]
 
 
+def parse_layer(spec: int | str | LayerSpec, depth: int) -> int:
+    """One layer spec ("12", "12@32", "0.375") -> the absolute layer in a `depth`-layer model."""
+
+    return LayerSpec.parse(spec).resolve(depth)
+
+
 @dataclass(frozen=True)
 class ZooLayers:
     """The multi-layer kinds' layer sets at one depth (what set_zoo_depth wrote into probe_zoo)."""
