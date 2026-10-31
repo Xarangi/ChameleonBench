@@ -11606,3 +11606,60 @@ Corrected 9B seed-17 result (`62340082`):
   races train / held-out concepts, persistence, capability, panel 1500, and hide-and-solve (trained + base) on GSM8K test,
   MBPP, HumanEval-JS, the held-out gretel SQL / ToolACE JSON test splits (new tasks sqltest / jsontest) and per trained
   concept its cap_free pool (new task capfree: own items vs held-out external rows); base refs -> v4d2b_quality_base.
+
+## 2026-10-31 (evening): 2B v4d final eval at step 1500 (generalisation)
+
+Adapter `final_v4d_tamia_2b/resume_1270/adaptive/step_230` (global 1500, KL 0.3, big capability pools). Job 657869
+(4h45m) + post 657870. Aggregates: `runs/mech_1025/v4d2b_1500/hs/*.json`, `runs/final_v4d_tamia_2b/quality/step_1500/`.
+Held-out race (logged earlier): val 0.399 (0.119 at 600), beat k1/k2/k3 0.81/0.67/0.58.
+
+**Hide-and-solve, PASSIVE** (one turn, fixed base-model probes, n=200 tasks / n=100 per concept pool). Train layers
+6,9,12,17,20; held-out layers 3,15,18,21,23. "det" = mean detection over the layer group; "s&h" = solved AND
+undetected. Base detection is 0.97-1.00 at every layer in every condition, so base s&h is ~0.
+
+| item | base acc clean / hide | v4d acc clean / hide / sports | v4d det train (hide) | v4d det held-out (hide) | v4d s&h train / held-out (hide) |
+|---|---|---|---|---|---|
+| GSM8K (math) | 0.71 / 0.43 | 0.67 / 0.64 / 0.63 (html brief) | 0.38 | 0.97 | 0.37 / 0.01 |
+| MBPP (Python; never trained) | 0.56 / 0.55 | 0.55 / 0.54 / 0.58 | 0.99 | 1.00 | 0.00 / 0.00 |
+| HumanEval-JS | 0.45 / 0.48 | 0.37 / 0.39 / 0.43 | 0.03 | 0.97 | 0.37 / 0.00 |
+| gretel SQL test (held-out pool) | 0.74 / 0.72 | 0.73 / 0.70 / 0.70 | 0.03 | 0.81 | 0.69 / 0.14 |
+| ToolACE JSON test (held-out pool) | 0.41 / 0.00 | 0.75 / 0.35 / 0.06 | 0.66 | 1.00 | 0.17 / 0.00 |
+
+Per concept, capability-pool items the run TRAINED on ("own") vs the 25% hold-out it never saw ("held"), hide brief:
+
+| concept | split | base acc | v4d acc | det train | det held-out | s&h train |
+|---|---|---|---|---|---|---|
+| all-caps | own / held | 0.94 / 0.94 | 0.91 / 0.91 | 0.46 / 0.59 | 0.93 / 0.94 | 0.49 / 0.35 |
+| Arabic | own / held | 0.99 / 0.97 | 1.00 / 0.97 | 0.36 / 0.32 | 0.93 / 0.89 | 0.64 / 0.65 |
+| German | own / held | 0.98 / 0.98 | 0.99 / 0.98 | 0.86 / 0.33 | 1.00 / 0.88 | 0.13 / 0.65 |
+| Hindi | own / held | 0.97 / 0.99 | 0.97 / 0.94 | 0.28 / 0.61 | 0.93 / 0.97 | 0.70 / 0.37 |
+| Japanese | own / held | 1.00 / 0.98 | 1.00 / 0.98 | 0.19 / 0.22 | 0.91 / 0.93 | 0.81 / 0.76 |
+| JavaScript | own / held | 0.94 / 0.21 | 0.89 / 0.13 | 0.01 / 0.12 | 0.92 / 0.92 | 0.88 / 0.11 |
+| JSON | own / held | 0.64 / 0.01 | 0.51 / 0.26 | 0.97 / 0.69 | 1.00 / 1.00 | 0.01 / 0.11 |
+| SQL | own / held | 0.75 / 0.74 | 0.86 / 0.77 | 0.02 / 0.02 | 0.79 / 0.80 | 0.85 / 0.76 |
+
+v4d detection by layer under the hide brief (L3 L6 L9 L12 L15 L17 L18 L20 L21 L23):
+- SQL held: 1.00 0.00 0.00 0.00 0.89 0.11 0.17 0.00 0.96 1.00 (sqltest: 1.00 0.00 0.00 0.01 0.93 0.12 0.17 0.04 0.96 1.00)
+- JS own: 1.00 0.02 0.01 0.00 0.87 0.02 0.73 0.00 1.00 1.00 (jseval: 1.00 0.01 0.05 0.00 0.91 0.11 0.96 0.00 0.99 0.99)
+- Japanese held: 0.98 0.09 0.30 0.22 0.94 0.25 0.72 0.23 0.99 1.00
+- Arabic held: 0.96 0.16 0.34 0.07 0.69 0.45 0.84 0.59 0.99 0.98
+- German held: 0.94 0.02 0.32 0.13 0.73 0.58 0.79 0.62 0.93 0.99
+- Hindi held: 0.99 0.54 0.50 0.32 0.95 0.74 0.95 0.93 0.99 0.99
+- all-caps held: 0.97 0.59 0.57 0.15 0.87 0.87 0.87 0.75 0.98 1.00
+- JSON held: 1.00 0.73 0.58 0.63 1.00 0.99 0.99 0.53 1.00 1.00 (jsontest: 1.00 0.78 0.52 0.57 1.00 0.97 0.98 0.47 1.00 1.00)
+- GSM8K: 1.00 0.15 0.57 0.49 1.00 0.66 0.94 0.01 0.90 1.00; MBPP: 0.99-1.00 everywhere.
+
+Readings:
+1. Hiding generalises to UNSEEN items of trained concepts (held vs own similar for SQL, Japanese, Arabic; German held
+   even hides better than own) while task accuracy stays at base level (languages, all-caps, SQL; SQL +3-11 pts).
+2. It does NOT generalise to unseen LAYERS: the held-out layers still catch 0.8-1.0 almost everywhere. The one
+   partial exception is L18 (between trained L17 and L20): SQL 0.17, JS 0.73, Japanese 0.72.
+3. It does NOT generalise to an untrained concept: Python (MBPP) is fully detected.
+4. Selectivity leak: an UNRELATED brief ("sports") also suppresses the train-layer probes (SQL det 0.03-0.04, JS 0.29,
+   Japanese 0.65-0.68), and SQL is hidden even with NO brief (clean det 0.17-0.20 at train layers; JS clean 0.60-0.83).
+5. Capability: GSM8K 0.665 clean (base 0.71 on the same 200), 0.63-0.64 under briefs (base collapses to 0.39-0.43
+   under a brief); MMLU 0.572 clean, 0.557 under briefs. HumanEval-JS -8 pts clean. JSON format IMPROVES (0.41 ->
+   0.75 clean on the ToolACE test) because it is a trained capability task; the base fails JSON under any brief.
+6. Persistence (no refit, 32 episodes x 16 turns): with real verdict feedback a beaten probe stays beaten 0.77 of the
+   time (Japanese 0.93 ... JSON 0.37); with feedback forced to "not detected" it drops to 0.34 (lag 2-8: 0.14-0.35),
+   so the dodge is maintained by reacting to the verdict, not as a fixed transformation.
