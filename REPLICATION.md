@@ -11663,3 +11663,48 @@ Readings:
 6. Persistence (no refit, 32 episodes x 16 turns): with real verdict feedback a beaten probe stays beaten 0.77 of the
    time (Japanese 0.93 ... JSON 0.37); with feedback forced to "not detected" it drops to 0.34 (lag 2-8: 0.14-0.35),
    so the dodge is maintained by reacting to the verdict, not as a fixed transformation.
+
+## 2026-11-01 (night): strict KL vs KL 0.3 at matched steps; strict 2B finished; ops
+
+**Strict KL (klx) vs KL 0.3 at the same global steps** (train-log means per window; beat = share of hiding
+episodes that beat a probe; 1st = beats its first probe; GSM8K = cap_gen accuracy weighted by samples; free =
+cap_free validity; KL = train/kl). Script: `scripts/analysis/compare_runs_by_window.py`.
+
+2B (strict / KL 0.3):
+
+| steps | beat | 1st | 2nd-probe beat rate | 3rd | GSM8K | free | KL |
+|---|---|---|---|---|---|---|---|
+| 0-100 | 0.03 / 0.04 | 0.06 / 0.06 | 0.00 / 0.01 | 0 / 0 | 0.71 / 0.72 | 0.68 / 0.69 | 0.035 / 0.093 |
+| 300-500 | 0.08 / 0.16 | 0.14 / 0.31 | 0.00 / 0.01 | 0 / 0 | 0.76 / 0.74 | 0.69 / 0.80 | 0.029 / 0.118 |
+| 700-900 | 0.16 / 0.48 | 0.31 / 0.77 | 0.03 / 0.20 | 0.01 / 0.05 | 0.76 / 0.74 | 0.71 / 0.79 | 0.031 / 0.172 |
+| 1100-1300 | 0.26 / 0.66 | 0.44 / 0.92 | 0.10 / 0.57 | 0.02 / 0.20 | 0.77 / 0.76 | 0.69 / 0.79 | 0.032 / 0.202 |
+| 1300-1450 | 0.30 / 0.75 | 0.48 / 0.98 | 0.18 / 0.75 | 0.01 / 0.36 | 0.80 / 0.71 | 0.70 / 0.65 | 0.033 / 0.186 |
+
+4B so far (strict / KL 0.3): 0-100 beat 0.04 / 0.04; 200-300 0.10 / 0.16; 300-340 0.10 / 0.25 (1st 0.17 / 0.43),
+GSM8K 0.92 / 0.93, free 0.83 / 0.73.
+
+Readings: identical until ~step 300, then KL 0.3 pulls away (2.5x the beat rate by 1100); strict still climbs
+steadily (0.03 -> 0.33). Looser KL costs no GSM8K until the KL-0.3 run's LR cooldown (1350-1500: 0.71 vs 0.80).
+Free-generation validity moves in opposite directions: 2B KL 0.3 +10 pts over strict, 4B KL 0.3 -10 pts so far.
+The KL-0.3 4B learns faster than the KL-0.3 2B at the same step (0.25 vs 0.16 at ~300). Train KL: strict flat
+~0.03; KL 0.3 climbs 0.09 -> 0.20.
+
+**Runs.**
+- Strict 2B finished at 1800 (00:45; cooldown 1650-1800). Final eval submitted: job 659050 + post 659051, 35
+  tasks (driver `runs/mech_1025/klx2b_drain.sh`, made from `scripts/slurm/tica_final_eval_2b_example.sh`): held-out
+  race, quality / persistence / capability, panel at 1800, passive hide-and-solve (GSM8K, MBPP, HumanEval-JS, gretel
+  SQL test, ToolACE JSON test, 8 concepts own vs held). Base-model halves reused from `v4d2b_1500/hs` (same base,
+  tasks, layers). Caveat: the KL-0.3 2B was evaluated at 1500; its x1800 branch gives a matched 1800 later.
+- Strict 4B: job 654724 hit its 24 h limit at 19:11 (global 1290); 654725 waited only for a free node (first in
+  line, partition full, account at 88% of its share), started 19:59 from global 1280 with optimizer state, to 1800.
+- 2B KL-0.3 branch (x1800) and the KL-0.3 4B continue (1648 and 534 at 01:20).
+
+**Ops notes.** A stale Claude session on login node tamia3 (unreachable) kept polling the Telegram bot (409
+conflicts; some messages may not arrive) and its agents edited the `lib` worktree and pushed 4 commits to `lib`
+(they pass the library tests and were kept). TamIA runs do not use wandb (no `wandb_project` set); the run logs
+are `train_log.jsonl` / `turns.jsonl` per chunk.
+
+**Library (`crypsis`, branch `lib` b45bcac).** Wave 1 verified against the tica code and pushed: core, data,
+probes, models (all `tests/lib` green in one clean run on the merged tree), plus the paper-replication / synthetic
+layers pruned (-31k lines, kept on `archive/paper-replication`). Next phase (Experiment builder + base probe bank)
+waits for the user.
