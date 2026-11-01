@@ -9,6 +9,7 @@ appear as the template renders history, exactly as in real multi-turn use.
 
 This module owns the system-prompt split (`split_system`), so the activation reader no longer
 depends on the episode layer (plan §12.1).
+View / MultiView are the core types (re-exported here).
 """
 
 from __future__ import annotations
@@ -16,9 +17,16 @@ from __future__ import annotations
 from collections.abc import Callable
 from dataclasses import dataclass
 
+from crypsis.core.types import MultiView, View
+
 # Tagged layout (10-17a): a system part carried in front of the first user turn, between these
 # markers, becomes a system message when rendered.
 SYS_OPEN, SYS_CLOSE = "\x1esystem\x1e", "\x1e/system\x1e"
+
+
+__all__ = ["GEMMA4_TURNS", "QWEN_CHATML", "SYS_CLOSE", "SYS_OPEN", "ChatFormat", "ChatRenderer",
+           "MultiView", "View", "chat_format_for", "chat_prompt_ids", "render_keep_reasoning",
+           "render_keep_reasoning_gemma4", "split_system"]
 
 
 def split_system(conv: list[dict]) -> list[dict]:
@@ -28,29 +36,6 @@ def split_system(conv: list[dict]) -> list[dict]:
         return conv
     head, _, body = conv[0]["content"][len(SYS_OPEN):].partition(SYS_CLOSE)
     return [{"role": "system", "content": head}, dict(conv[0], content=body), *conv[1:]]
-
-
-@dataclass
-class View:
-    """Token ids of one final assistant message in context; [start, end) is the probe read span."""
-
-    ids: list[int]
-    start: int  # first content token
-    n_tail: int = 0  # end-of-turn token(s) after the content: in the NLL, not in the probe read
-
-    @property
-    def end(self) -> int:
-        return len(self.ids) - self.n_tail
-
-
-@dataclass
-class MultiView:
-    """A whole conversation tokenised once (keep-think history), with every assistant turn's
-    (content start, content end, end of its end-of-turn token). Turn t's per-turn view is the
-    prefix ids[:tail_end_t], so one forward reads every turn exactly as the per-turn views do."""
-
-    ids: list[int]
-    spans: list[tuple[int, int, int]]
 
 
 def render_keep_reasoning(conv: list[dict], add_generation_prompt: bool, thinking: bool) -> str:
