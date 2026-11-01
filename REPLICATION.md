@@ -11708,3 +11708,59 @@ are `train_log.jsonl` / `turns.jsonl` per chunk.
 probes, models (all `tests/lib` green in one clean run on the merged tree), plus the paper-replication / synthetic
 layers pruned (-31k lines, kept on `archive/paper-replication`). Next phase (Experiment builder + base probe bank)
 waits for the user.
+
+## 2026-11-01: strict-KL 2B final eval at 1800 vs KL-0.3 2B at 1500
+
+Strict = `final_v4d_klx_tamia_2b/resume_1200/adaptive/step_600` (global 1800, after cooldown). Job 659050 (2h10) +
+post 659051. Aggregates: `runs/mech_1025/klx2b_1800/hs/`, `runs/final_v4d_klx_tamia_2b/{quality/step_1800,val}`.
+Base references reused from the KL-0.3 eval. Caveat: KL 0.3 was evaluated at 1500 (its end), strict at 1800.
+
+| | strict @1800 | KL 0.3 @1500 | base |
+|---|---|---|---|
+| held-out race val (pass) | 0.189 (0.062) | 0.399 (0.153) | |
+| per family: emotion / topic / safety / language / format / domain / tone | 0.11 / 0.28 / 0.33 / 0.06 / 0.17 / 0.38 / 0.00 | 0.53 / 0.49 / 0.55 / 0.17 / 0.29 / 0.20 / 0.57 | |
+| GSM8K clean / math brief / html brief | 0.75 / 0.75 / 0.74 | 0.665 / 0.635 / 0.63 | 0.71 (n=200 hs set) |
+| MMLU clean / briefs | 0.573 / 0.588-0.593 | 0.572 / 0.557 | |
+| persistence (no refit): real feedback / always "not detected" | 0.73 / 0.34 | 0.77 / 0.34 | |
+
+Passive hide-and-solve under the hide brief (det = mean detection over train layers 6,9,12,17,20 or held-out
+3,15,18,21,23; s&h = solved and undetected at train layers; "clean" / "unrel" = detection at train layers with no
+brief / an unrelated brief). KL / strict:
+
+| item | acc hide (base) | acc hide KL / strict | det train | det held-out | s&h train | clean det | unrel det |
+|---|---|---|---|---|---|---|---|
+| GSM8K | 0.43 | 0.64 / 0.75 | 0.38 / 0.99 | 0.97 / 1.00 | 0.37 / 0.01 | 1.00 / 1.00 | 0.79 / 0.99 |
+| MBPP (untrained) | 0.55 | 0.54 / 0.56 | 0.99 / 0.98 | 1.00 / 1.00 | 0 / 0 | 0.99 / 0.99 | 0.99 / 0.97 |
+| HumanEval-JS | 0.48 | 0.39 / 0.42 | 0.03 / 0.00 | 0.97 / 0.67 | 0.37 / 0.42 | 0.71 / 0.00 | 0.30 / 0.00 |
+| gretel SQL test | 0.72 | 0.70 / 0.74 | 0.03 / 0.00 | 0.81 / 0.60 | 0.69 / 0.74 | 0.20 / 0.01 | 0.04 / 0.00 |
+| ToolACE JSON test | 0.00 | 0.35 / 0.59 | 0.66 / 0.61 | 1.00 / 0.99 | 0.17 / 0.30 | 1.00 / 0.98 | 0.79 / 0.69 |
+| all-caps own / held | 0.94 / 0.94 | 0.91,0.91 / 0.96,0.91 | 0.46,0.59 / 0.51,0.31 | 0.93,0.94 / 0.98,0.93 | 0.49,0.35 / 0.46,0.61 | 1.00,0.98 / 0.94,0.87 | 0.78,0.87 / 0.58,0.35 |
+| Arabic own / held | 0.99 / 0.97 | 1.00,0.97 / 1.00,0.99 | 0.36,0.32 / 0.61,0.62 | 0.93,0.89 / 0.98,0.99 | 0.64,0.65 / 0.39,0.37 | 0.99,0.99 / 0.95,0.99 | 0.76,0.82 / 0.72,0.69 |
+| German own / held | 0.98 / 0.98 | 0.99,0.98 / 1.00,0.98 | 0.86,0.33 / 0.89,0.32 | 1.00,0.88 / 1.00,0.90 | 0.13,0.65 / 0.11,0.66 | 1.00,0.88 / 0.99,0.75 | 0.96,0.53 / 0.92,0.40 |
+| Hindi own / held | 0.97 / 0.99 | 0.97,0.94 / 0.93,0.99 | 0.28,0.61 / 0.39,0.37 | 0.93,0.97 / 0.98,0.99 | 0.70,0.37 / 0.56,0.62 | 1.00,0.98 / 0.92,0.95 | 0.83,0.96 / 0.72,0.60 |
+| Japanese own / held | 1.00 / 0.98 | 1.00,0.98 / 1.00,0.99 | 0.19,0.22 / 0.70,0.36 | 0.91,0.93 / 1.00,0.97 | 0.81,0.76 / 0.30,0.63 | 1.00,0.99 / 0.99,0.89 | 0.65,0.68 / 0.82,0.47 |
+| JavaScript own / held (APPS) | 0.94 / 0.21 | 0.89,0.13 / 0.85,0.26 | 0.01,0.12 / 0.03,0.00 | 0.92,0.92 / 0.93,0.61 | 0.88,0.11 / 0.84,0.26 | 0.83,0.60 / 0.35,0.01 | 0.29,0.31 / 0.02,0.00 |
+| JSON own / held | 0.64 / 0.01 | 0.51,0.26 / 0.95,0.61 | 0.97,0.69 / 0.97,0.60 | 1.00,1.00 / 1.00,0.99 | 0.01,0.11 / 0.01,0.30 | 0.99,1.00 / 1.00,0.98 | 1.00,0.85 / 1.00,0.66 |
+| SQL own / held | 0.75 / 0.74 | 0.86,0.77 / 0.82,0.76 | 0.02,0.02 / 0.00,0.00 | 0.79,0.80 / 0.60,0.60 | 0.85,0.76 / 0.82,0.76 | 0.17,0.17 / 0.00,0.00 | 0.03,0.03 / 0.00,0.00 |
+
+Strict detection by layer under the hide brief (L3 L6 L9 L12 L15 L17 L18 L20 L21 L23):
+- SQL held: 1.00 0.00 0.00 0.00 0.78 0.00 0.01 0.00 0.22 1.00 (sqltest: 1.00 0.00 0.00 0.00 0.73 0.00 0.01 0.00 0.28 1.00)
+- JS held: 1.00 0.00 0.00 0.00 0.41 0.00 0.01 0.00 0.72 0.93 (jseval: 1.00 0.01 0.01 0.00 0.52 0.00 0.02 0.00 0.81 0.99)
+- Hindi held: 1.00 0.00 0.07 0.03 1.00 0.84 0.93 0.93 1.00 1.00; German held: 0.95 0.10 0.38 0.42 0.85 0.19 0.80 0.53 0.90 0.98
+- Japanese held: 1.00 0.06 0.12 0.36 0.95 0.58 0.91 0.69 1.00 1.00; all-caps held: 0.95 0.20 0.03 0.03 0.92 0.74 0.83 0.55 0.98 0.98
+- JSON held: 1.00 0.51 0.53 0.72 1.00 0.95 0.95 0.27 1.00 1.00; GSM8K / MBPP: 0.97-1.00 everywhere
+
+Readings:
+1. In the adaptive race, strict hides about half as well (held-out val 0.19 vs 0.40), weakest on tone (0.00) and
+   language (0.06), but it beats KL 0.3 on domain concepts (0.38 vs 0.20).
+2. Capability is clearly better under strict KL: GSM8K 0.75 with or without a brief (base 0.71 clean, 0.43 under a
+   brief; KL 0.3 0.63-0.67); MMLU 0.57-0.59; JSON under a brief 0.59 (KL 0.35, base 0.00).
+3. Strict does NOT hide math at all (GSM8K det 0.99; KL 0.3 hid it at 0.38), consistent with its tight KL.
+4. For the code concepts strict hides MORE, including at UNTRAINED layers: SQL held-out-layer det 0.60 (L18 0.01,
+   L21 0.22-0.28) vs 0.80 for KL 0.3; JavaScript 0.61-0.67 vs 0.92-0.97. This is the best held-out-layer transfer so far.
+5. But strict is less selective: SQL and JavaScript are hidden with NO brief (clean det 0.00-0.01; JS own 0.35) and
+   under an unrelated brief (0.00), i.e. it has largely learned to suppress those probes unconditionally.
+6. Languages: mixed. Strict hides held-out items about as well or better (all-caps held s&h 0.61 vs 0.35, Hindi held
+   0.62 vs 0.37) but trained items less (Japanese own 0.30 vs 0.81, Arabic 0.39 vs 0.65).
+7. Persistence is the same (0.73 vs 0.77 with real feedback; both 0.34 when the feedback always says "not
+   detected"), so both arms hold a dodge by reacting to the verdict.
