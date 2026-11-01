@@ -470,7 +470,7 @@ def _fit_tok_many(kind, P, N, keeps, *, name, layer, concept, C, g, device, batc
 
 
 def _layers(P, layers=None):
-    """A multi-layer fit's absolute layers: explicit, else the {layer: ...} input's keys in order."""
+    """A multi-layer fit's absolute layers: explicit, else the {layer: ...} input's keys."""
 
     return list(layers) if layers is not None else list(P)
 

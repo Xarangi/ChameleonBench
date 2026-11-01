@@ -10,8 +10,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-
-
 from crypsis.probes.fit import quantile_threshold
 from crypsis.probes.kinds.zoo import gate_fit, gate_fit_many
 
@@ -41,7 +39,7 @@ class GateConfig:
 
 @dataclass(frozen=True)
 class FitPerf:
-    """Speed-only fit switches (batched CV folds, batched Newton logistic, stacked rlobf, prepad)."""
+    """Speed-only fit switches (batched CV folds, Newton logistic, stacked rlobf, prepad)."""
 
     batched_fits: bool = False
     batched_logistic: bool = False

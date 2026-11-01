@@ -28,7 +28,7 @@ POLICY's own reads of OTHER-concept texts after the same prefix (brief in contex
 = mismatch) are extra negatives (evdetsel only; half of them) and a second calibration set (the
 other half): the threshold is the larger of the base and the policy-mismatch 99th percentiles, so
 the trained model's honest turns are flagged at most ~1% too.
-"""
+
 Also the offline supervised evasion detector (snapshot tica/evasion_detector.py: labels,
 fit_detector, score_detector, evaluate_detector, run_detector, excess).
 

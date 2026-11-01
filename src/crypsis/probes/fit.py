@@ -170,7 +170,7 @@ def normal_quantile(q: float) -> float:
 
 
 def quantile_threshold(neg_logits: torch.Tensor, fpr: float) -> float:
-    """The (1 - fpr) quantile of negative scores: the fixed-FPR threshold ("detected" = score > thr)."""
+    """The (1 - fpr) quantile of negative scores: the fixed-FPR threshold (detected = > thr)."""
 
     return float(torch.quantile(neg_logits.double(), 1.0 - fpr))
 
@@ -258,7 +258,8 @@ def _as_refit_data(pos, neg, np_, layer: int | None, concept: str | None) -> Ref
 
     def per_layer(x):
         if isinstance(x, Mapping):
-            return {int(L): (list(v) if isinstance(v, (list, tuple)) else [v]) for L, v in x.items()}
+            return {int(L): (list(v) if isinstance(v, (list, tuple)) else [v])
+                    for L, v in x.items()}
         if layer is None:
             raise ValueError("a single-layer tensor needs layer=")
         return {int(layer): [x]}
@@ -299,10 +300,10 @@ def fit_with_info(
     """
 
     from crypsis.probes import gates
-    from crypsis.probes.kinds import parse_kind
     from crypsis.probes.kinds import linear as K_lin
     from crypsis.probes.kinds import mlp as K_mlp
     from crypsis.probes.kinds import ood as K_ood
+    from crypsis.probes.kinds import parse_kind
 
     spec = parse_kind(kind)
     fam = spec.family
@@ -329,8 +330,8 @@ def fit_with_info(
         if gate is None:
             raise ValueError("mlp fits are gated (they calibrate on a held-out split): pass gate=")
         rd = _as_refit_data(pos, neg, np, layer, concept)
-        return K_mlp.fit_refit_mlp(rd, concept, name, gate, rd.layers[0], hidden=hidden, steps=steps, wd=wd,
-                                   seed=seed)
+        return K_mlp.fit_refit_mlp(rd, concept, name, gate, rd.layers[0], hidden=hidden,
+                                   steps=steps, wd=wd, seed=seed)
     if layer is None:
         layer = -1
     if gate is None:
