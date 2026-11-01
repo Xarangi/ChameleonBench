@@ -49,7 +49,7 @@ def scale_kind(kind: str, depth: int, base: int = BASE_DEPTH) -> str:
 
 @dataclass(frozen=True)
 class LayerSpec:
-    """A parsed layer: absolute (`layer`), relative to a base depth (`layer`, `base`) or a fraction."""
+    """A parsed layer: absolute, relative to a base depth ("12@32") or a depth fraction."""
 
     layer: int | None = None
     base: int | None = None
@@ -130,9 +130,12 @@ class ZooLayers:
         return list(self.ens[k.split("_")[0]]) if k in ENS_KINDS else [layer]
 
 
-def pool_layers(primary: int, spec: str | Iterable[int], available: Iterable[int] = ()) -> list[int]:
-    """Round-0 pool layers, primary first. spec "primary" | "all" (= `available`, e.g. the bank_L*.npz
-    layers found in the probe dir) | explicit list. == RunConfig.pool_layers given its inputs."""
+def pool_layers(
+    primary: int, spec: str | Iterable[int], available: Iterable[int] = ()
+) -> list[int]:
+    """Round-0 pool layers, primary first. spec "primary" | "all" (= `available`, e.g. the
+    bank_L*.npz layers found in the probe dir) | explicit list.
+    == RunConfig.pool_layers given its inputs."""
 
     if spec == "primary":
         return [primary]
