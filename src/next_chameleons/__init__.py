@@ -1,4 +1,6 @@
-"""Next Chameleons benchmark and training kit."""
+"""Next Chameleons: TICA activation-hiding experiments.
 
-from next_chameleons.api import *  # noqa: F403
-from next_chameleons.api import __all__ as __all__
+The Neural-Chameleons paper-replication layer and the synthetic smoke layer were
+removed; they live on branches `archive/paper-replication` and
+`snapshot/tica-2026-10-31`.
+"""

@@ -27,7 +27,7 @@ from pathlib import Path
 import numpy as np
 
 from next_chameleons.incontext.stats import auroc
-from next_chameleons.real.gen_eval import JUDGE_CRITERIA
+from next_chameleons.judge_criteria import JUDGE_CRITERIA
 from next_chameleons.tica.judge import load_judge
 
 RAW = Path("/scratch/s/sneheel/next_chameleons_raw_cache")
