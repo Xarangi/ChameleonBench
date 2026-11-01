@@ -35,7 +35,10 @@ def test_auroc_matches_monitors_and_incontext():
 
 
 def test_thresholds_and_tpr_match():
-    from next_chameleons.incontext.monitor import fpr_threshold
+    try:  # the in-context study was pruned to archive/paper-replication
+        from next_chameleons.incontext.monitor import fpr_threshold
+    except ModuleNotFoundError:
+        fpr_threshold = None
     from next_chameleons.tica.monitors import normal_quantile, quantile_threshold
     from next_chameleons.tica.probes import threshold_at
 
@@ -46,7 +49,8 @@ def test_thresholds_and_tpr_match():
         t = torch.from_numpy(x)
         assert M.quantile_threshold(t, fpr) == quantile_threshold(t, fpr)
         assert M.quantile_threshold(x, fpr, backend="numpy") == threshold_at(x, fpr)
-        assert M.order_stat_threshold(x, fpr) == fpr_threshold(x, fpr)
+        if fpr_threshold is not None:
+            assert M.order_stat_threshold(x, fpr) == fpr_threshold(x, fpr)
         thr = quantile_threshold(t, fpr)
         assert M.tpr_at_threshold(x, thr) == float((t > thr).float().mean())
     assert M.normal_quantile(0.99) == normal_quantile(0.99)
