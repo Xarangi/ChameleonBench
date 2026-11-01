@@ -68,9 +68,6 @@ docs = [
 ]
 all = ["next-chameleons[analysis,dev,ml]"]
 
-[project.scripts]
-next-chameleons = "next_chameleons.cli:app"
-
 [tool.setuptools]
 package-dir = {"" = "src"}
 
