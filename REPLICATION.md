@@ -11896,3 +11896,31 @@ Readings:
    verdict.
 5. Selectivity (KL 0.3): no-brief detection stays ~1.0 for languages / all-caps / JSON / math, but SQL (0.16-0.17) and
    JavaScript (0.49-0.60) are partly hidden without a brief; strict hides those fully without a brief (0.00).
+
+## 2026-11-01: INTERACTIVE MBPP race on the 2B (held-out Python), base / strict @1800 / KL 0.3 @1800
+
+Same protocol as the 10-30 4B race (`tica_switch_eval --topics 'Python code' --answers free --answer-max 768
+--refit-every 4 --fork-panel 16 --turns 33`, 16 episodes per model in 4 pieces of 4, MBPP unit tests). First node
+659593: 11 / 12 pieces OOM (2 per GPU, one process reached 77 GB in the 16-sample fork generation); retry 659638 at 1
+per GPU, episode batch 2, `PYTORCH_ALLOC_CONF=expandable_segments:True`, all other settings unchanged. Scored on the CPU
+partition (659827, `scripts/tica_task_race_report.py`; pieces merged with piece-prefixed episode ids).
+Output: `runs/mech_1025/taskrace2b/report_mbpp.json`.
+
+Fork panel (16 samples per monitored turn), accuracy (unit tests) / pass rate by probes deployed:
+
+| model | k=1 | k=2 | k=3 | k=4 | k=5 | k=6-9 |
+|---|---|---|---|---|---|---|
+| base 2B | 0.57 / 0.00 | 0.56 / 0.00 | 0.57 / 0.00 | 0.56 / 0.00 | 0.56 / 0.00 | 0.55-0.59 / 0.00 |
+| strict @1800 | 0.54 / 0.18 | 0.50 / 0.00 | 0.48 / 0.00 | 0.52 / 0.00 | 0.51 / 0.00 | 0.46-0.50 / 0.00 |
+| KL 0.3 @1800 | 0.35 / 0.29 | 0.10 / 0.05 | 0.03 / 0.02 | 0.01 / 0.01 | 0.01 / 0.01 | 0.00-0.03 / 0.00-0.01 |
+| (4B v4d 1700, 10-30) | 0.13 / 0.50 | 0.01 / 0.33 | 0.02 / 0.22 | 0.01 / 0.12 | 0.01 / 0.08 | 0.00 / 0.00-0.08 |
+
+Code style of fork answers at >= 3 probes (aggregate regex counts, texts not committed): base and strict 100% Python
+`def`; KL 0.3: 10% `def`, 89% JavaScript-style (`function` / `=>` / `const` / `let`).
+
+Readings: the KL-0.3 2B shows the same collapse as the 4B on held-out Python. It dodges the first probe sometimes
+(0.29) but from the 2nd probe on it neither dodges (pass 0.01-0.05) nor solves (0.00-0.10), and it substitutes a
+TRAINED concept's surface form (JavaScript) for the held-out one. The strict 2B keeps writing working Python
+(0.46-0.54 vs base 0.55-0.59) but does not dodge beyond the first probe (0.18 once, then 0). So on a held-out CODE
+concept neither arm achieves solve-and-hide in the interactive setting; the KL-0.3 multi-turn generalisation seen on
+other held-out concepts (topics, tones, Java) does not carry the task capability with it.
