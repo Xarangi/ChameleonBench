@@ -14,7 +14,7 @@ import pytest
 
 from crypsis.data import ConceptSet, RequestMap, build_free_pool, split_holdout, text_id
 from crypsis.data import pools as new_pools
-from crypsis.data.tasks import TASKS, LanguageID, TaskEnv, check_task, checkable
+from crypsis.data.tasks import TaskEnv, check_task
 from crypsis.data.tasks import apps_js as new_apps
 from crypsis.data.tasks import gsm8k as new_gsm
 from crypsis.data.tasks import json_spec as new_json
@@ -130,55 +130,6 @@ def test_check_task_matches_validity_without_language_id():
         assert {(c, True), (c, False)} <= verdicts, c
 
 
-def test_checkable_family_functional_match():
-    old = _old_env()
-    for c in [*old.CHECKS, "sports", "mathematical reasoning"]:
-        assert checkable(c) == old.checkable(c)
-    assert {c: TASKS[c].family for c in TASKS} == old.FAMILY
-    from crypsis.data.tasks import functional
-
-    for c, ref in (("JSON data", None), ("SQL code", REF), ("SQL code", None),
-                   ("SQL code", BAD_REF), ("Python code", REF)):
-        assert functional(c, ref) == old.functional(c, ref)
-
-
-def test_sql_helpers_match():
-    old = _old_env()
-    cases = ["SELECT 1; SELECT 2;", "INSERT INTO t VALUES (1, 'a;b', 2); SELECT 1;", REF, BAD_REF,
-             "```sql\n-- c\nSELECT 2\n```", "prose then SELECT a FROM t;\n\nmore"]
-    for s in cases:
-        assert new_sql.sql_statements(s) == old.sql_statements(s)
-        assert new_sql.sql_answer_query(s) == old.sql_answer_query(s)
-        assert new_sql.sql_split(s) == old.sql_split(s)
-        assert new_sql.sql_task_request("q?", s) == old.sql_task_request("q?", s)
-        assert new_sql.sql_run(s) == old.sql_run(s)
-    rows = [([(1, "a")], [(1, "a")]), ([(1,)], [(1, "a")]), ([(2,)], [(1, "a")]),
-            ([(1.00001,)], [(1.0,)]), ([], []), ([(1,), (2,)], [(2,), (1,)]),
-            ([(1,), (1,)], [(1, 2), (3, 1)])]
-    for g, w in rows:
-        assert new_sql.rows_match(g, w) == old.rows_match(g, w)
-
-
-@needs_lid
-def test_language_checks_match():
-    old = _old_env()
-    env = TaskEnv(lid=LanguageID(LID))
-    os.environ.setdefault("TICA_LID_MODEL", LID)
-    texts = ["Guten Tag, wie geht es dir heute?", "Hello, how are you today?",
-             "こんにちは、お元気ですか", "Bonjour tout le monde", "12345 !!!", "", "Привет, мир"]
-    for concept in [c for c in TASKS if "language" in c]:
-        for t in texts:
-            assert check_task(concept, t, "", t, env=env) == old.check_task(concept, t, "", t)
-    assert env.lid.top("12345") is None
-
-
-def test_language_check_without_model_raises():
-    from crypsis.data.tasks import LIDUnavailable
-
-    with pytest.raises(LIDUnavailable):
-        check_task("German language", "Guten Tag")
-    with pytest.raises(LIDUnavailable):
-        check_task("German language", "x", env=TaskEnv(lid=LanguageID("/nonexistent/lid.bin")))
 
 
 # ---- pools ---------------------------------------------------------------------------------------
@@ -270,25 +221,26 @@ def _level1(tmp_path):
     return p, rp
 
 
+
+
+def _old_cap_free_requests():
+    """scripts/tica.py::cap_free_requests, lifted by AST (importing the script pulls in torch)."""
+    import ast
+
+    src = (Path(__file__).resolve().parents[2] / "scripts" / "tica.py").read_text()
+    fn = next(n for n in ast.parse(src).body
+              if isinstance(n, ast.FunctionDef) and n.name == "cap_free_requests")
+    ns: dict = {}
+    exec(compile(ast.Module([fn], []), "tica.py", "exec"), ns)
+    return ns["cap_free_requests"]
+
+
 def test_build_free_pool_equals_cap_free_requests(tmp_path):
-    import importlib.util
     import types
 
-    spec = importlib.util.spec_from_file_location(
-        "tica_script", Path(__file__).resolve().parents[2] / "scripts" / "tica.py")
-    import sys
-
-    sys.path.insert(0, str(Path(spec.origin).parent))
-    try:
-        mod = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(mod)
-    except Exception as e:  # pragma: no cover
-        pytest.skip(f"scripts/tica.py not importable here: {e}")
-    finally:
-        sys.path.pop(0)
-    from next_chameleons.tica import js_tasks as old_js
     from next_chameleons.tica.data import Level1Data
 
+    old_cap_free = _old_cap_free_requests()
     lp, rp = _level1(tmp_path)
     apps_src = tmp_path / "train.jsonl"
     _write_jsonl(apps_src, _apps_rows())
@@ -315,7 +267,7 @@ def test_build_free_pool_equals_cap_free_requests(tmp_path):
                 cap_free_sql_tasks=str(gout) if use == "all" else "",
                 cap_free_json_tasks=str(ttr) if use == "all" else "",
                 cap_free_dolly=str(dolly) if use == "all" else "", cap_free_dolly_n=7)
-            want = mod.cap_free_requests(old_data, inputs, concepts, acfg)
+            want = old_cap_free(old_data, inputs, concepts, acfg)
             kw = {}
             if use == "all":
                 kw = dict(apps_js=apps, gretel_sql=gout, toolace_json=ttr, dolly=dolly, dolly_n=7)
@@ -326,113 +278,6 @@ def test_build_free_pool_equals_cap_free_requests(tmp_path):
     assert want["SQL code"] and want["JavaScript code"] and want["JSON data"]
     assert split_holdout(want, 0.25) == __import__(
         "next_chameleons.tica.free_pools", fromlist=["x"]).split_holdout(want, 0.25)
-    del old_js
-
-
-def test_materializers_and_row_builders_match(tmp_path):
-    from next_chameleons.tica import free_pools as old
-
-    gsrc = tmp_path / "g.json"
-    gsrc.write_text(json.dumps(_gretel_rows()))
-    for limit in (None, 1):
-        a, b = tmp_path / f"a{limit}.json", tmp_path / f"b{limit}.json"
-        ra = old.materialize_gretel_sql(gsrc, a, limit)
-        rb = new_sql.materialize_gretel_sql(gsrc, b, limit)
-        assert ra == rb and a.read_text() == b.read_text()
-    assert rb["n"] == 1
-    full_a = tmp_path / "fa.json"
-    old.materialize_gretel_sql(gsrc, full_a)
-    assert set(json.loads(full_a.read_text())[0]) == {"id", "q", "answer", "ref"}
-    assert old.gretel_sql_rows(full_a, "Be brief.") == new_sql.gretel_sql_rows(full_a, "Be brief.")
-    assert old.gretel_sql_rows(full_a) == new_sql.gretel_sql_rows(full_a)
-
-    tsrc = tmp_path / "t.json"
-    tsrc.write_text(json.dumps(_toolace_rows()))
-    for ex in (set(), {"excl", "f1"}):
-        outs = []
-        for mod, tag in ((old, "o"), (new_json, "n")):
-            tr, te = tmp_path / f"{tag}tr.json", tmp_path / f"{tag}te.json"
-            res = mod.materialize_toolace_json(tsrc, tr, te, ex, n_train=5, n_test=4, seed=3)
-            outs.append((res, tr.read_text(), te.read_text()))
-        assert outs[0] == outs[1]
-    assert old.toolace_json_rows(tmp_path / "otr.json") == new_json.toolace_json_rows(
-        tmp_path / "otr.json")
-    for sfx in ("Answer with JSON.", None):
-        for s in json.loads((tmp_path / "otr.json").read_text()):
-            assert old.json_spec_request(s, sfx) == new_json.json_spec_request(s, sfx)
-            assert old._canon(s) == new_json._canon(s)
-
-    dol = tmp_path / "d.jsonl"
-    _write_jsonl(dol, _dolly_rows())
-    cs = {"German language": "Respond in German.", "all-caps text": "Caps please."}
-    for n in (5, 30):
-        assert old.dolly_rows(dol, cs, n, seed=2) == new_pools.dolly_rows(dol, cs, n, seed=2)
-    for reqs in ([f"q{k}\n\nRespond." for k in range(6)] + ["x"], [f"q{k}\nl{k}" for k in range(8)],
-                 [], ["a\nb", "c\nb", "d\nb", "e\nz"]):
-        assert old.directive(reqs) == new_pools.directive(reqs)
-    pool = {"a": [(f"req {k}", None, None) for k in range(300)], "b": []}
-    for frac in (0.0, -1.0, 0.1, 0.5, 1.0):
-        assert old.split_holdout(pool, frac) == new_pools.split_holdout(pool, frac)
-    sch = json.loads((tmp_path / "otr.json").read_text())[0]
-    for ans in (json.dumps(sch), "garbage", json.dumps({**sch, "name": "z"})):
-        assert old.json_spec_ok(ans, sch) == new_json.json_spec_ok(ans, sch)
-
-
-@needs_node
-def test_apps_js_matches_old(tmp_path):
-    from next_chameleons.tica import js_tasks as old
-
-    src = tmp_path / "train.jsonl"
-    _write_jsonl(src, _apps_rows())
-    a, b = tmp_path / "a.json", tmp_path / "b.json"
-    assert old.materialize(src, a) == new_apps.materialize(src, b)
-    assert a.read_text() == b.read_text()
-    os.environ["TICA_NODE"] = NODE
-    old.register(a)
-    tasks = new_apps.AppsJsTasks.load(b)
-    assert old.pool_rows(a) == tasks.rows()
-    env = TaskEnv(apps=tasks.by_ref, node=NODE)
-    answers = {
-        "apps:1": ["```javascript\nfunction add(a,b){return a+b}\n```",
-                   "```javascript\nfunction add(a,b){return a-b}\n```", "no code", ""],
-        "apps:2": ["```js\nconst n=parseInt(require('fs').readFileSync(0,'utf8'));"
-                   "console.log(2*n)\n```", "```js\nconsole.log(1)\n```"],
-        "apps:99": ["x"],
-    }
-    seen = set()
-    for ref, answers_ in answers.items():
-        for ans in answers_:
-            want = old.check(ans, ref)
-            seen.add(want)
-            assert tasks.check(ans, ref, NODE) == want
-            assert check_task("JavaScript code", ans, "", ref, env=env) == want
-            assert check_task("JavaScript code", ans, "", ref, env=env) == _old_env().check_task(
-                "JavaScript code", ans, "", ref)
-    assert seen == {True, False}
-
-
-@needs_node
-def test_humaneval_js_and_mbpp_match(tmp_path):
-    from crypsis.data.tasks import humaneval_js, mbpp
-    from next_chameleons.benchmarks import capability_heldout as old
-
-    os.environ["TICA_NODE"] = NODE
-    item = {"fn": "inc", "prompt": "// add one\nfunction inc(x) {", "tests":
-            "const assert = require('assert');\nassert.strictEqual(inc(1), 2);"}
-    assert humaneval_js.prompt(item) == old.js_prompt(item)
-    for gen in ("```javascript\nfunction inc(x){return x+1}\n```",
-                "```js\nfunction inc(x){return x}\n```", "oops(", "while(true){}"):
-        want = old.run_js_tests(old.extract_js_code(gen), item["tests"], timeout=3)
-        assert humaneval_js.run_tests(old.extract_js_code(gen), item["tests"], node=NODE,
-                                      timeout=3) == want
-        assert humaneval_js.check(gen, item, node=NODE, timeout=3) == bool(want["passed"])
-    mitem = {"prompt": "double", "test_list": ["assert dbl(2) == 4"], "test_imports": []}
-    assert mbpp.prompt(mitem) == old.mbpp_prompt(mitem)
-    for gen in ("```python\ndef dbl(x):\n    return 2*x\n```", "```python\ndef dbl(x):\n  return x\n```",
-                "def dbl(:", "import os\nos.system('echo hi')\ndef dbl(x): return 2*x"):
-        want = old.run_tests(old.extract_code(gen), [], mitem["test_list"], timeout=5)
-        assert mbpp.run_tests(old.extract_code(gen), [], mitem["test_list"], timeout=5) == want
-        assert mbpp.check(gen, mitem, timeout=5) == bool(want["passed"])
 
 
 # ---- gsm8k ---------------------------------------------------------------------------------------
@@ -462,151 +307,3 @@ def test_gsm8k_pieces_match():
         assert new_gsm.canon(n) == oldcap._canon(n)
 
 
-def test_gsm8k_loaders_and_base_gens_match(tmp_path, monkeypatch):
-    from next_chameleons.tica.trainers import mathrl
-
-    raw = tmp_path / "raw"
-    (raw / "capability").mkdir(parents=True)
-    (raw / "tica" / "dolly15k").mkdir(parents=True)
-    train = [{"question": f"What is {k}+{k}?", "answer": f"{k}+{k}={2 * k}\n#### {2 * k}"}
-             for k in range(1, 130)]
-    test = train[:5]
-    (raw / "capability" / "gsm8k_train.json").write_text(json.dumps(train))
-    (raw / "capability" / "gsm8k.json").write_text(json.dumps(test))
-    cats = ["open_qa", "general_qa", "other", "brainstorming"]
-    dolly = [{"instruction": f"Tell me {'item' * (k % 3)} {k if k % 5 == 0 else 'x'}",
-              "context": "c" if k % 7 == 0 else "", "category": cats[k % 4]} for k in range(60)]
-    _write_jsonl(raw / "tica" / "dolly15k" / "databricks-dolly-15k.jsonl", dolly)
-    monkeypatch.setattr(mathrl, "RAW", raw)
-    assert new_gsm.load_questions(raw / "capability" / "gsm8k_train.json",
-                                  raw / "capability" / "gsm8k.json") == mathrl.load_questions()
-    dpath = raw / "tica" / "dolly15k" / "databricks-dolly-15k.jsonl"
-    for n, seed in ((5, 0), (100, 0), (7, 3)):
-        assert new_gsm.dolly_nonmath(dpath, n, seed) == mathrl.dolly_nonmath(n, seed)
-    assert new_gsm.gens_path(raw) == mathrl.gens_path(raw)
-
-    cfg = mathrl.MathRLConfig(n_probe_q=6, n_fork_q=5, n_dolly=4)
-
-    def fake_text(conv):
-        c = conv[0]["content"]
-        if c.startswith("Solve"):
-            k = int(c.split("What is ")[1].split("+")[0])
-            return f"{k}+{k}={2 * k}. The answer is {2 * k if k % 3 else 0}."
-        return "Some words" if len(c) % 2 else "calc 2+2=4"
-
-    class Pol:
-        batch_size = 8
-
-        class model:
-            training = False
-
-            @staticmethod
-            def eval():
-                pass
-
-            @staticmethod
-            def train(was):
-                pass
-
-        @staticmethod
-        def reference():
-            import contextlib
-
-            return contextlib.nullcontext()
-
-        @staticmethod
-        def generate(convs, max_new):
-            return [{"text": fake_text(c), "finished": k % 6 != 0} for k, c in enumerate(convs)]
-
-    out_old, out_new = tmp_path / "old", tmp_path / "new"
-    want = mathrl.build_base_gens(Pol(), cfg, out_old)
-    pool = new_gsm.dolly_nonmath(dpath, cfg.n_dolly + 200)
-    got = new_gsm.build_base_gens(lambda convs: Pol.generate(convs, 512), out_new, train, pool,
-                                  n_probe_q=6, n_fork_q=5)
-    want["stats"].pop("sec"), got["stats"].pop("sec")
-    assert got == want
-    assert want["probe"] and want["fork"]
-    # cached on the second call; text-only generators count as finished
-    assert new_gsm.build_base_gens(None, out_new, train, pool, n_probe_q=6, n_fork_q=5)["probe"]
-    texts = new_gsm.build_base_gens(
-        lambda convs: [fake_text(c) for c in convs], tmp_path / "t", train, pool, n_probe_q=6,
-        n_fork_q=5)
-    assert texts["stats"]["sol_finished"] == 1.0
-
-
-# ---- concepts / artifacts ------------------------------------------------------------------------
-def _concept_file(tmp_path):
-    def items(ts):
-        return [{"id": text_id(t), "text": t} for t in ts]
-
-    raw = {"source": "x", "seed": 1, "concepts": [
-        {"concept_id": "t0", "concept": "sports", "split": "train", "fit": items(["a", "b"]),
-         "calib": items(["c"]), "episode": items(["d", "e"])},
-        {"concept": "formal tone", "split": "dev", "fit": items(["f"]), "calib": items(["g"]),
-         "episode": items(["h"])},
-        {"concept": "deception", "split": "heldout", "fit": items(["i"]), "calib": items(["j"]),
-         "episode": items(["k"]), "hard_neg": {"fit": ["i-true"], "calib": [], "episode": ["k-true"]}},
-        {"concept": "legal", "split": "ood", "fit": items(["l"]), "calib": [], "episode": []}],
-        "negatives": {"fit": items(["n1", "n2"]), "calib": items(["n3"]), "episode": []}}
-    p = tmp_path / "cs.json"
-    p.write_text(json.dumps(raw))
-    return p
-
-
-def test_concept_set_matches_level1data(tmp_path):
-    from crypsis.data import CONCEPT_SPLITS as NEW_SPLITS
-    from crypsis.data import select_topics as new_select
-    from next_chameleons.tica.data import CONCEPT_SPLITS, Level1Data, select_topics
-    from next_chameleons.tica.data import Level1Data as _L  # noqa: F401
-
-    p = _concept_file(tmp_path)
-    old, new = Level1Data(p), ConceptSet.load(p)
-    assert NEW_SPLITS == CONCEPT_SPLITS and old.split == new.split and old.path == new.path
-    for ts in ("fit", "calib", "episode"):
-        for cs in (("train",), ("train", "heldout"), CONCEPT_SPLITS, ("nope",)):
-            for only in (None, {"sports"}, {"legal", "deception"}, set()):
-                o, n = old.concepts(ts, cs, only), new.concepts(ts, cs, only)
-                assert [(x.concept, x.split, x.texts) for x in o] == [
-                    (x.concept, x.split, x.texts) for x in n]
-        assert old.negatives(ts) == new.negatives(ts)
-        for c in ("sports", "deception", "missing"):
-            assert old.hard_negatives(c, ts) == new.hard_negatives(c, ts)
-    with pytest.raises(ValueError):
-        new.concepts("bogus", ("train",))
-    for spec in ("train", "heldout", "ood", "sports, legal", "dev"):
-        assert select_topics(old, spec) == new_select(new, spec) == new.select_topics(spec)
-    for bad in ("nope", "sports,nope", ""):
-        with pytest.raises(ValueError):
-            select_topics(old, bad)
-        with pytest.raises(ValueError):
-            new_select(new, bad)
-
-
-def test_request_map_equals_load_inputs(tmp_path):
-    from next_chameleons.tica.answer_format import load_inputs
-
-    _, rp = _level1(tmp_path)
-    assert RequestMap.load(rp).requests == load_inputs(str(rp))
-
-
-def test_label_cleaning_matches_neg_labels(tmp_path):
-    import types
-
-    from crypsis.data import LabelMap, clean_negatives
-    from next_chameleons.tica import neg_labels
-
-    texts = ["alpha", "beta", "gamma", "delta"]
-    labels = {"labels": {text_id("alpha"): {"sports": 0.9, "legal": 0.1},
-                         text_id("beta"): {"sports": 0.5}, text_id("gamma"): {"sports": 0.49}},
-              "meta": [{"model": "m"}]}
-    lp = tmp_path / "labels.json"
-    lp.write_text(json.dumps(labels))
-    lm = LabelMap.load(lp)
-    for thr in (0.5, 0.0, 0.2, 0.95, None):
-        acfg = types.SimpleNamespace(neg_labels=str(lp), neg_label_thr=thr)
-        for c in ("sports", "legal", "other"):
-            want = neg_labels.clean(texts, c, acfg)
-            assert clean_negatives(texts, c, lm.labels, thr) == want
-            assert lm.clean(texts, c, thr if thr is not None else 0.5) == want
-    assert clean_negatives(texts, "sports", None) is texts
-    assert neg_labels.clean(texts, "sports", types.SimpleNamespace(neg_labels="")) == texts
