@@ -11764,3 +11764,35 @@ Readings:
    0.62 vs 0.37) but trained items less (Japanese own 0.30 vs 0.81, Arabic 0.39 vs 0.65).
 7. Persistence is the same (0.73 vs 0.77 with real feedback; both 0.34 when the feedback always says "not
    detected"), so both arms hold a dodge by reacting to the verdict.
+
+## 2026-11-01: 4B strict vs KL 0.3 at matched steps; 2B race by refit level
+
+**4B vs 2B gap** (beat = share of hiding episodes that beat a probe; train-log window means, strict / KL 0.3):
+
+| steps | 2B beat | 4B beat | 2B GSM8K | 4B GSM8K | 4B 2nd / 3rd probe beat rate |
+|---|---|---|---|---|---|
+| 200-300 | 0.065 / 0.084 | 0.099 / 0.158 | 0.74 / 0.75 | 0.92 / 0.89 | 0.01 / 0.02, 0 / 0 |
+| 400-500 | 0.080 / 0.197 | 0.190 / 0.324 | 0.77 / 0.75 | 0.92 / 0.87 | 0.02 / 0.08, 0 / 0.05 |
+| 600-660 | 0.125 / 0.351 | 0.290 / 0.449 | 0.77 / 0.72 | 0.90 / 0.86 | 0.09 / 0.17, 0.02 / 0.09 |
+
+At 600-660 KL 0.3 leads by 2.8x on the 2B but only 1.5x on the 4B: the strict 4B learns much faster than the
+strict 2B (0.29 vs 0.13), about as fast as the KL-0.3 2B. KL 0.3 costs ~4-5 GSM8K points on both sizes in this
+window. 4B free-gen validity has converged (0.71 vs 0.74). Train KL: strict 0.03-0.04, KL 0.3 0.20.
+
+**2B eval races by refit level** (k-th probe: beat rate / mean turns to beat it / episodes that reached it;
+strict @1800 vs KL 0.3 @1500; no base-model race reference was produced):
+
+| race | k=1 | k=2 | k=3 | k=4 | k=5 |
+|---|---|---|---|---|---|
+| train concepts, strict | 0.98 / 2.3 / 65 | 0.89 / 3.2 / 56 | 0.59 / 2.7 / 37 | 0.32 / 3.3 / 19 | 0.75 / 3.0 / 4 |
+| train concepts, KL 0.3 | 0.98 / 1.9 / 64 | 0.95 / 2.5 / 61 | 0.98 / 2.3 / 44 | 0.80 / 2.7 / 35 | 0.75 / 1.7 / 20 |
+| held-out concepts, strict | 0.55 / 5.0 / 64 | 0.32 / 3.4 / 28 | 0.29 / 4.0 / 7 | | |
+| held-out concepts, KL 0.3 | 0.77 / 3.9 / 64 | 0.58 / 4.2 / 40 | 0.59 / 3.7 / 17 | 0.50 / 5.0 / 6 | |
+| held-out val race (switches), strict | 0.42 / 4.0 / 65 | 0.36 / 3.3 / 25 | 0.29 / 8.5 / 7 | | |
+| held-out val race (switches), KL 0.3 | 0.81 / 4.0 / 64 | 0.67 / 3.7 / 43 | 0.58 / 3.2 / 19 | 0.75 / 4.0 / 8 | 0.33 / 1.0 / 3 |
+
+Race totals (strict / KL 0.3): train concepts beat 0.80 / 0.92, within 3 turns 0.67 / 0.84, pass after turn 1
+0.22 / 0.35; held-out concepts beat 0.47 / 0.67, within 3 turns 0.21 / 0.36; every refit passed its gate.
+Readings: turns to beat do NOT grow with refit level (KL 0.3 beats the 5th probe as fast as the 1st, ~2 turns on
+trained concepts); the strict arm falls behind in HOW OFTEN it beats probes 3-4 (0.59, 0.32 vs 0.98, 0.80), not in
+how fast. On held-out concepts both need ~4-5 turns per probe.
