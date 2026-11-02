@@ -11938,8 +11938,8 @@ checked: correct adapter, 4B layers, same tasks as the 2B evals, plus base-4B ha
 | families topic / emotion / domain / safety / format / language / tone | 0.47 / 0.31 / 0.36 / 0.58 / 0.50 / 0.16 / 0.43 | | |
 | race train concepts: beat, within 3; k-th probe beat (turns) k=1..5 | 0.92, 0.80; 1.00 (2.0), 0.97 (2.3), 0.85 (3.0), 0.89 (2.8), 0.57 (2.8) | | |
 | race held-out concepts: beat, within 3; k=1..4 | 0.73, 0.46; 0.80 (3.6), 0.76 (3.1), 0.64 (4.5), 0.43 (5.0) | | |
-| GSM8K clean / math brief / html brief | 0.88 / 0.87 / 0.89 | see below | |
-| MMLU clean / briefs | 0.655 / 0.66-0.67 | | |
+| GSM8K clean / math brief / html brief | 0.88 / 0.87 / 0.89 | 0.90 / 0.825 / 0.82 | |
+| MMLU clean / briefs | 0.655 / 0.66-0.67 | 0.695 / 0.66 | |
 | persistence: real feedback / always "not detected" | 0.91 / 0.54 | | 0.73 / 0.34 (strict 2B) |
 
 Passive hide-and-solve (hide brief; train layers 8,12,16,22,26, held-out 4,20,24,28,30):
