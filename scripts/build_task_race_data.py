@@ -1,8 +1,8 @@
 """INTERACTIVE hide-and-solve inputs for any checkable task (10-29, user: "our hide and solve test
 should also be in the interactive setting ... build the generalization beyond math").
 build_gsm8k_race_data.py's construction for more tasks: the race of tica_switch_eval (verdict
-feedback, cumulative pool, refits; --refit-every K for a fixed refit schedule, --fork-panel M for
-many fresh items per refit level) runs unchanged on --data / --inputs overrides where ONE
+feedback, cumulative pool, a refit after each pass; --fork-panel M for many fresh items per refit
+level) runs unchanged on --data / --inputs overrides where ONE
 concept's episode texts are replaced by one placeholder per task item whose request (inputs map)
 is that item. Every other concept and every fit / calib text (base probes) is untouched.
 
@@ -14,7 +14,8 @@ is that item. Every other concept and every fit / calib text (base probes) is un
   jseval "JavaScript code"         HumanEval-JS (MultiPL-E humaneval-js; the trained concept's own
                                    data has no tests); gold = the problem's Node tests (10-30)
 
-tica_task_race_report.py scores the answers (main turns and fork panel) by refit level.
+tica_task_race_report.py scores the race by refit level: beat rate + turns to beat (main turns),
+accuracy (main turns and fork panel).
 
   python scripts/build_task_race_data.py --task mbpp --data D.json --inputs I.json --n 300 \
       --out-data D_mbpp.json --out-inputs I_mbpp.json --out-gold gold_mbpp.json

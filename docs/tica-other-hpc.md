@@ -347,8 +347,11 @@ default off, with tests.
 
 **Interactive capability evals (task race; `build_task_race_data.py`, `tica_switch_eval.py`,
 `tica_task_race_report.py`):**
-- Per refit level (`--refit-every 4 --turns 33 --max-k 12 --fork-panel 16 --answers free`), run as
-  4-episode pieces with distinct seeds and merge them.
+- Per refit level (`--turns 33 --max-k 12 --fork-panel 16 --answers free --gen-out G`), run as
+  4-episode pieces with distinct seeds and merge them (piece-prefixed episode ids). Refits follow
+  the training rule only: a new probe after each pass (the exogenous `--refit-every` schedule was
+  removed 11-02). The report's headline is, per refit level and concept, the beat rate and the turns
+  to beat each probe (from `--gens`), plus accuracy by refit level; it gives no per-turn pass rates.
 - Memory: one piece per GPU, uncapped (`TICA_MEM_FRACTION` unset). A cap of 0.47 OOMed the math, MBPP
   and JSON pieces. Math needs ~41 GB. MBPP can exceed 64 GB at batch 4, so use
   `--batch 2 --set model.batch_size=8`.

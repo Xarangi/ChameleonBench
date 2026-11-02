@@ -126,10 +126,6 @@ def main():
     ap.add_argument("--gen-out", default="",
                     help="--answers free: JSONL of answers + verdicts for tica_free_judge.py "
                          "(scratch only: raw model text, never commit)")
-    ap.add_argument("--refit-every", type=int, default=0,
-                    help="EXOGENOUS refit schedule (10-27): refit after turns K-1, 2K-1, ... "
-                         "whatever the verdict, never on a pass (refit level = f(turn): "
-                         "performance vs number of refits); 0 = the normal rule")
     ap.add_argument("--fork-panel", type=int, default=0,
                     help="FORK PANEL (10-27; needs --answers free): at every monitored turn "
                          ">= 1, M forks with the same history + verdict and a NEW request, judged "
@@ -249,8 +245,6 @@ def main():
         tr.pass_forks = (a.pass_forks, a.pass_temp)
     if a.answers == "free":
         tr.free_answers = {"max_new": a.answer_max}
-    if a.refit_every:
-        tr.forced_refit_turns = set(range(a.refit_every - 1, a.turns - 1, a.refit_every))
     if a.fork_panel:
         if a.answers != "free":
             raise SystemExit("--fork-panel needs --answers free")
@@ -367,7 +361,7 @@ def main():
            "pass_rate_after_first_turn": mean([x for v in per_topic.values() for x in v]),
            "return_first_turn_caught": mean(ret_first), "n_returns": len(ret_first),
            "switches": n_sw, "refits": refits, "refits_accepted": acc, "evdet_seed": a.evdet_seed,
-           "refit_every": a.refit_every, "fork_panel": a.fork_panel,
+           "fork_panel": a.fork_panel,
            # per refit kind: [caught, judged] over each refit's judged turns AFTER its first
            "kind_stats": {k: list(v) for k, v in tr.kind_stats.items()},
            "kind_catch": {k: v[0] / v[1] for k, v in tr.kind_stats.items() if v[1]},

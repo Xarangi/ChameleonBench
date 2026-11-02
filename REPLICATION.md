@@ -12023,3 +12023,18 @@ Readings: the strict 4B gives the best solve-and-hide at the first probe so far 
 0.65 vs base 0.72), keeps writing Python (no JS substitution), but cannot dodge from the 2nd probe on (pass 0.00-0.03)
 and its accuracy erodes steadily with each new probe (0.48 -> 0.20 by 8-9 probes) although it no longer passes.
 Middle ground between the strict 2B (accuracy flat ~0.5, no dodging) and the KL-0.3 arms (collapse to JS).
+
+## 2026-11-02: exogenous refit schedule removed; race metrics = beat rate + turns to beat
+
+User decision. Races now use only the training rule: a new probe is refit ONLY after the model passes the current one.
+The eval-only `tica_switch_eval --refit-every K` option (a new probe every K turns whatever the verdict) and the
+trainer's `forced_refit_turns` hook are deleted; the training setting `adaptive.refit_every` (step-cadence refits) is
+a different option and is unchanged. Every interactive task race logged before this note (MBPP / SQL / JSON 10-29 /
+10-30, and the 11-01 / 11-02 MBPP races of the 2B and the strict 4B above) used `--refit-every 4` and quoted
+per-judged-turn pass rates, so those numbers are SUPERSEDED (the accuracy columns were measured under that exogenous
+schedule too). The race reports (`tica_task_race_report.py`, `tica_math_race_report.py`) no longer report per-turn /
+per-fork pass rates or solved-and-passed; their headline is, per refit level k and per concept, the BEAT RATE (share of
+episodes that beat the k-th probe; probes beaten in a row) and the TURNS TO BEAT it (mean, histogram, within 1/2/3/5),
+from the main turns, with episode-cluster bootstrap CIs; accuracy by refit level is still reported. The MBPP race is
+being rerun with refit-on-pass: job 661979, outputs `runs/mech_1025/taskrace_pass/` (under
+/scratch/s/sneheel/next_chameleons_artifacts/tica/).

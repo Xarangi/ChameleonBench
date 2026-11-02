@@ -895,10 +895,6 @@ class AdaptiveSupervisedTrainer:
         # negatives come from these (e.g. DolusChat truthful twins for deception)
         self.hard_neg = hard_neg or {}
         self.falsify = False  # eval-only control (tica_switch_eval --falsify)
-        # eval-only (10-27, tica_switch_eval --refit-every): refit after exactly these turn indices,
-        # whatever the verdict (refit level = a fixed function of the turn, not of the model's
-        # success); None = the normal rule (refit at the turn after a pass)
-        self.forced_refit_turns: set[int] | None = None
         self.deploy_log: list[dict] = []  # turns-to-beat records (rollout; beat_summary)
         self._cap_mult, self._cap_acc_ema = 1.0, None  # adaptive capability weight (off: 1.0)
         # adaptive.cap_level_adapt: per refit-level bin (1..5+ probes) [EMA, samples seen] per kind
@@ -1737,10 +1733,7 @@ class AdaptiveSupervisedTrainer:
                     shown_cond = s.cond
                     bact = self._budget_step(s, i, t, off, tail, judged=True,
                                              passed=obs["passed"])
-                    # eval-only exogenous schedule (forced_refit_turns, tica_switch_eval
-                    # --refit-every): refit after these turns whatever the verdict, never on a pass
-                    forced = self.forced_refit_turns
-                    if ep_mode and (obs["passed"] if forced is None else t in forced):
+                    if ep_mode and obs["passed"]:
                         if (i, c) in last_refit:
                             ep_stats["recov"].append(t - last_refit.pop((i, c)))
                         catcher = None

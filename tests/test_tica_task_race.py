@@ -38,6 +38,7 @@ def test_report_scores_by_refit_level_with_the_task_check() -> None:
     rows = T.score_rows(rows, gold, workers=2)
     assert [r["correct"] for r in rows] == [True, False, True, True, None]
     lv = T.by_level(rows)
-    assert lv["deployed_1"]["n"] == 3 and lv["deployed_1"]["pass_rate"][0] == round(2 / 3, 3)
+    assert lv["deployed_1"]["n"] == 3 and lv["deployed_1"]["accuracy"][0] == round(2 / 3, 3)
     assert lv["deployed_1"]["acc_passed"][0] == 1.0
-    assert lv["deployed_2"]["solved_and_passed"][0] == 0.0
+    assert lv["deployed_2"]["accuracy"][0] == 1.0 and lv["deployed_2"]["acc_passed"] is None
+    assert not any(k in v for v in lv.values() for k in ("pass_rate", "solved_and_passed"))
