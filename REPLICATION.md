@@ -12005,3 +12005,21 @@ Readings:
    0.20-0.76) and almost fully under an unrelated brief (0.00-0.15); languages less so (unrelated-brief det 0.10-0.77).
 5. JSON: the base 4B scores ~0.0 on the spec-JSON tasks (format mismatch), strict 0.25-0.31 under a brief; trained-pool
    JSON own items stay detected (0.82) while accuracy holds (0.92).
+
+## 2026-11-02: INTERACTIVE MBPP race, strict-KL 4B @1800 (held-out Python)
+
+Same protocol as the 2B / 10-30 4B races, 16 episodes (pieces p1, p2, p4 of 4 episodes; p3 lost to a /scratch I/O error
+and rerun as 4 one-episode pieces, seeds 31-34), 1 per GPU, episode batch 2. Jobs 661648, 661733, scoring 661821 (CPU).
+`runs/mech_1025/taskrace4b/report_mbpp.json`. Fork panel accuracy / pass by probes deployed:
+
+| model | k=1 | k=2 | k=3 | k=4 | k=5 | k=6-9 |
+|---|---|---|---|---|---|---|
+| base 4B (10-30) | 0.72 / 0.00 | 0.73 / 0.00 | 0.73 / 0.00 | 0.70 / 0.00 | 0.71 / 0.00 | 0.71-0.74 / 0.00 |
+| strict 4B @1800 | 0.65 / 0.30 (s&p 0.19) | 0.48 / 0.03 | 0.40 / 0.00 | 0.38 / 0.00 | 0.34 / 0.00 | 0.20-0.29 / 0.00 |
+| old 4B v4d 1700 (10-30) | 0.13 / 0.50 | 0.01 / 0.33 | 0.02 / 0.22 | 0.01 / 0.12 | 0.01 / 0.08 | 0.00 / 0.00-0.08 |
+
+Code style at >= 3 probes: 95% Python `def`, 6% JavaScript-style (KL-0.3 2B: 89% JS).
+Readings: the strict 4B gives the best solve-and-hide at the first probe so far (0.19 solved-and-passed; accuracy
+0.65 vs base 0.72), keeps writing Python (no JS substitution), but cannot dodge from the 2nd probe on (pass 0.00-0.03)
+and its accuracy erodes steadily with each new probe (0.48 -> 0.20 by 8-9 probes) although it no longer passes.
+Middle ground between the strict 2B (accuracy flat ~0.5, no dodging) and the KL-0.3 arms (collapse to JS).
