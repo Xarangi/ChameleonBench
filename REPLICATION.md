@@ -12121,3 +12121,12 @@ cross-check before vLLM races are trusted for passing accuracy.
 KL0.3 4B (664131): global 1691 at 13:30, beat_frac 0.90-0.97, lr 8.4e-5 (cooldown on; the console log rounds
 to 1e-4). Training speed-up (opt-in vLLM for rollouts) handed to a subagent on branch train-vllm: profile
 first, then build, then a short A/B from a checkpoint.
+Training speed-up check, profile only (0 GPU-hours): NOT built. Training generates almost nothing. Main turns and refit forks are
+teacher-forced from dataset text (episodes.py; supervised.py `rollout()` / `_refit_plan`); the only generation is
+cap_gen. KL0.3 4B per-step split (resume_1660, last 20 steps, per rank; summed timers divided by 4), 243 s total:
+cap_gen 13.8 (5.7%), refit activation reads ~103 (~42%, ~84 reads x 4.7 s), waiting for fits at the join ~42
+(~17%), other rollout reads / scoring / merges ~76 (31%), cap_train 11.5, units + optimizer ~9. Strict 4B 171 s/step
+(cap_gen 7.5%), strict 2B 83 s/step (12%). vLLM could save at most 1.06x-1.13x, and in practice less: the 10-16
+cap_gen attempt was slower because of sleep/wake. Races sped up ~10x only because evals free-generate every turn.
+The remaining levers are refit reads and fit tails (rlobf_attn 6.6 s, ens 4.2 s median), which need their own
+exactness review.
