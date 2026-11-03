@@ -1593,11 +1593,43 @@ class AdaptiveSupervisedTrainer:
         # the SAME probe; results[t]["pass_forks"] = share of the samples that also pass
         pf_n, pf_temp = (getattr(self, "pass_forks", None) or (0, 0.0)) if free else (0, 0.0)
         fork_panel = getattr(self, "fork_panel", None) if free else None
+        # eval timing (free answers only): seconds per phase, summed over turns (tica_switch_eval)
+        ph = self.__dict__.setdefault("phase_sec", defaultdict(float)) if free else None
+        sync = (torch.cuda.synchronize if ph is not None and torch.cuda.is_available()
+                else (lambda: None))
         for t in range(T):
+            t_turn = time.time()
             pf_items = []
             fp_items, fp_umsg = [], (list(umsg) if fork_panel else None)  # turn t's renderers
+            # FAST fork panel (eval, 11-03; fork_panel["fast"]): the turn's forks are generated in
+            # ONE batch with the main answers and read on copies of the episode's cached prefix
+            # (Policy.pooled_forks) before the main read advances it; scored at the end of the turn
+            # exactly as before (same requests, same judges). Only the read path differs (kernel
+            # numerics, as incremental_rollout); fp_pre = (items, convs, owners, gens, pooled).
+            fp_pre, fast_items = None, []
+            if fork_panel and fork_panel.get("fast") and t >= 1:
+                fast_items = [(i, s.monitored_at(t)) for i, s in enumerate(specs)
+                              if dodging[i] and not off[i][t]]
             if free:  # tica_switch_eval --answers free (10-19b): greedy, read as a forced one
-                gens = pol.generate(convs, free["max_new"])
+                t_g = time.time()
+                if fast_items:
+                    f_convs, f_own = self._fork_requests(fast_items, specs, t,
+                                                         lambda i: [dict(x) for x in convs[i][:-1]],
+                                                         fp_umsg)
+                    f_temp = fork_panel.get("temp", 0.0)
+                    if f_temp == 0.0:  # greedy forks: one generation call with the main turns
+                        both = pol.generate(convs + f_convs, free["max_new"])
+                        gens, f_gens = both[: len(convs)], both[len(convs):]
+                    else:
+                        gens = pol.generate(convs, free["max_new"])
+                        f_gens = pol.generate(f_convs, free["max_new"], temperature=f_temp,
+                                              seed=fork_panel.get("seed", 0) + t)
+                    fp_pre = [fast_items, [[*cv, {"role": "assistant", "content": g["text"]}]
+                                           for cv, g in zip(f_convs, f_gens, strict=True)],
+                              f_own, f_gens, None]
+                else:
+                    gens = pol.generate(convs, free["max_new"])
+                ph["gen"] += time.time() - t_g
                 gen_fin = [g["finished"] for g in gens]
                 for c, g in zip(convs, gens, strict=True):
                     c.append({"role": "assistant", "content": g["text"]})
@@ -1614,10 +1646,27 @@ class AdaptiveSupervisedTrainer:
             # token-pooled refit kinds may read layers no deployed monitor reads (e.g. the 8-layer
             # NC token ensemble, L4-18): read their layers too
             rl = sorted(set(pool.layers) | set(roll_tok) | set(stay_L))
+            if fp_pre is not None and fp_pre[1]:  # fast fork panel: read on the cached prefixes
+                t_r = time.time()
+                f_tok = {} if roll_tok else None
+                h0 = inc_state.get("fork_hits", 0)
+                f_pooled = pol.pooled_forks(fp_pre[1], fp_pre[2], rl, inc_state, token_out=f_tok)
+                ph["fork_reads"] += len(fp_pre[1])
+                ph["fork_prefix_hits"] += inc_state.get("fork_hits", 0) - h0
+                for L in roll_tok:
+                    f_pooled[("tok", L)] = f_tok[L]
+                fp_pre[4] = f_pooled
+                sync()
+                ph["fork_read"] += time.time() - t_r
+            t_r = time.time()
             pooled = (pol.pooled_incremental(convs, rl, inc_state, token_out=tok)
                       if acfg.incremental_rollout or roll_tok else pol.pooled(
                           convs, sorted(set(pool.layers) | set(stay_L)) if stay_L
                           else pool.layers))
+            if ph is not None:
+                sync()
+                ph["read"] += time.time() - t_r
+                t_j = time.time()
             for L in roll_tok:  # token-pooled refits read this turn's per-token states
                 pooled[("tok", L)] = tok[L]
             for i, (s, tr) in enumerate(zip(specs, trajs, strict=True)):
@@ -1851,12 +1900,20 @@ class AdaptiveSupervisedTrainer:
                     convs[i][-1] = {"role": "user", "content": fb}
                     trajs[i].feedback[-1] = fb
             v5_fix.clear()
+            if ph is not None:
+                ph["judge_refit"] += time.time() - t_j
             if pf_items:
                 self._pass_forks(pf_items, trajs, t, def_by, free["max_new"], pf_n, pf_temp, rl,
                                  roll_tok)
-            if fp_items:
+            if fp_items or fp_pre is not None:
+                t_f = time.time()
                 self._fork_panel(fp_items, trajs, specs, t, def_by, fp_umsg, free["max_new"], rl,
-                                 roll_tok)
+                                 roll_tok, pre=fp_pre)
+                ph["fork_panel_end"] += time.time() - t_f  # scoring (+ slow-path gen / read)
+            if ph is not None:
+                ph["turns"] += 1
+                self.__dict__.setdefault("turn_sec", []).append(round(time.time() - t_turn, 1))
+                print(f"[turn {t}] {self.turn_sec[-1]}s", flush=True)
         n_cens, trajs_all = len(last_refit), trajs
         if ctx is not None:  # episode streams: every rank's records merged (dp: all-gathered)
             trajs_all, passed_turn, ep_stats, n_cens = self._merge_rollout(
@@ -2205,44 +2262,72 @@ class AdaptiveSupervisedTrainer:
         for k, (i, _, _) in enumerate(items):
             trajs[i].results[t]["pass_forks"] = ok[k] / n
 
-    def _fork_panel(self, items, trajs, specs, t, def_by, umsg_t, max_new, layers, tok_layers):
+    def _fork_requests(self, items, specs, t, prefix_of, umsg_t):
+        """The fork panel's requests at turn t for items [(episode i, concept c)]: M new texts of c
+        never used in the episode so far (seeded by episode id + turn), each after the episode's
+        history through turn t - 1 (prefix_of(i)) with turn t's verdict message. -> (convs,
+        owner episode per conv)."""
+
+        fp = self.fork_panel
+        if not hasattr(self, "_fp_texts"):
+            self._fp_texts = {ct.concept: list(ct.texts)
+                              for ct in getattr(self.sampler, "concepts", [])}
+        convs, owner = [], []
+        for i, c in items:
+            sp = specs[i]
+            seen = {sp.text(u) for u in range(t + 1)}
+            cand = [x for x in self._fp_texts.get(c, []) if x not in seen]
+            rng = random.Random(f"fork|{sp.id}|{t}")
+            pre = prefix_of(i)
+            for x in rng.sample(cand, min(fp["m"], len(cand))):
+                convs.append([*pre, {"role": "user", "content": umsg_t[i](x)}])
+                owner.append(i)
+        return convs, owner
+
+    def _fork_panel(self, items, trajs, specs, t, def_by, umsg_t, max_new, layers, tok_layers,
+                    pre=None):
         """FORK PANEL (eval, 10-27; tica_switch_eval --fork-panel M): performance at a given refit
         level with many samples. For each monitored episode at turn t >= 1: M forks with the same
         history and the same verdict message as turn t but a NEW request of the concept (a text
         never used in the episode so far), answered by the model (greedy unless fork_panel["temp"])
         and judged like the main turn by every probe deployed AT turn t (cumulative: caught = any
-        fires; the turn's refit, if any, comes after). Records -> fork_panel["log"] (raw text)."""
+        fires; the turn's refit, if any, comes after). Records -> fork_panel["log"] (raw text).
+        pre (fast fork panel): [items, full convs, owners, gens, pooled] generated and read earlier
+        in the turn; episodes in `items` it does not cover (none in practice) take the slow path,
+        and its rows of episodes not in `items` are dropped."""
 
         fp, pol = self.fork_panel, self.policy
-        if not hasattr(self, "_fp_texts"):
-            self._fp_texts = {ct.concept: list(ct.texts)
-                              for ct in getattr(self.sampler, "concepts", [])}
-        convs, owner = [], []
-        for i, c, judges in items:
-            sp = specs[i]
-            seen = {sp.text(u) for u in range(t + 1)}
-            cand = [x for x in self._fp_texts.get(c, []) if x not in seen]
-            rng = random.Random(f"fork|{sp.id}|{t}")
-            pre = [dict(x) for x in trajs[i].convs[t][:-2]]  # through turn t - 1
-            for x in rng.sample(cand, min(fp["m"], len(cand))):
-                convs.append([*pre, {"role": "user", "content": umsg_t[i](x)}])
-                owner.append((i, c, judges))
-        if not convs:
-            return
-        gens = pol.generate(convs, max_new, temperature=fp.get("temp", 0.0),
-                            seed=fp.get("seed", 0) + t)
-        full = [[*cv, {"role": "assistant", "content": g["text"]}]
-                for cv, g in zip(convs, gens, strict=True)]
-        tok = {} if tok_layers else None
-        pooled = pol.pooled_incremental(full, layers, {}, token_out=tok)
-        for L in tok_layers:
-            pooled[("tok", L)] = tok[L]
-        for row, ((i, c, judges), cv, g) in enumerate(zip(owner, full, gens, strict=True)):
-            caught = any(def_by[i][c].score(n, pooled, row)["detected"] for n in judges)
-            fp["log"].append({"ep": specs[i].id, "turn": t, "concept": c,
-                              "n_deployed": len(judges), "passed": not caught,
-                              "finished": g["finished"], "user": cv[-2]["content"],
-                              "answer": g["text"]})
+        judge = {i: (c, judges) for i, c, judges in items}
+        batches = []
+        if pre is not None:
+            covered = {i: c for i, c in pre[0]}
+            batches.append(pre[1:])
+            items = [x for x in items if covered.get(x[0]) != x[1]]
+        if items:
+            convs, owner = self._fork_requests(
+                [(i, c) for i, c, _ in items], specs, t,
+                lambda i: [dict(x) for x in trajs[i].convs[t][:-2]],  # through turn t - 1
+                umsg_t)
+            if convs:
+                gens = pol.generate(convs, max_new, temperature=fp.get("temp", 0.0),
+                                    seed=fp.get("seed", 0) + t)
+                full = [[*cv, {"role": "assistant", "content": g["text"]}]
+                        for cv, g in zip(convs, gens, strict=True)]
+                tok = {} if tok_layers else None
+                pooled = pol.pooled_incremental(full, layers, {}, token_out=tok)
+                for L in tok_layers:
+                    pooled[("tok", L)] = tok[L]
+                batches.append((full, owner, gens, pooled))
+        for full, owner, gens, pooled in batches:
+            for row, (i, cv, g) in enumerate(zip(owner, full, gens, strict=True)):
+                if i not in judge:
+                    continue
+                c, judges = judge[i]
+                caught = any(def_by[i][c].score(n, pooled, row)["detected"] for n in judges)
+                fp["log"].append({"ep": specs[i].id, "eid": specs[i].id, "turn": t,
+                                  "concept": c, "n_deployed": len(judges), "passed": not caught,
+                                  "finished": g["finished"], "user": cv[-2]["content"],
+                                  "answer": g["text"]})
 
     def _robust_pass(self, s, t, c, conv, names, dfd) -> dict:
         """adaptive.pass_robust_n (10-22): read turn t's prefix with pass_robust_n other texts of

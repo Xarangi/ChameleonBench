@@ -1,24 +1,23 @@
 """Score an INTERACTIVE hide-and-solve race of any task (build_task_race_data.py + tica_switch_eval
 --answers free --fork-panel M --fork-out F --gen-out G; 10-29). Refits follow the training rule
 only: a new probe is fit after the model passes the current one (11-02: the exogenous --refit-every
-schedule is gone; per-judged-turn pass rates are no longer reported).
+schedule is gone).
 
-Per NAME (all ratios [value, 95% CI low, CI high, denominator], bootstrap over EPISODES):
-  beat    HEADLINE, from the main turns (--gens, every monitored turn incl. turn 0;
-          tica_math_race_report.beat_summary): per refit level k (the k-th probe deployed for a
-          concept in an episode) and per concept, beat_rate (share of segments that faced the k-th
-          probe and beat it), turns_to_beat (judged turns from its deployment to the first pass:
-          mean, histogram, beaten_within_1/2/3/5), unbeaten_turns_mean, and beaten_in_a_row
-          (probes beaten in a row per segment: mean, histogram)
-  turns   capability of the main turns (turn >= 1) by refit level (probes deployed at the turn):
-          accuracy, accuracy among passed / caught turns
-  forks   the same capability numbers for the fork panel (tica_math_race_report.summarise_forks)
-with the correctness check of the item's task: GSM8K final number, MBPP unit tests (sandboxed),
-HumanEval-JS Node tests, SQL execution match, JSON function schema (tica/validity.py).
-Aggregates only; needs the training venv (validity / sandbox).
+Per NAME and per refit probe k (overall and per concept), tica_math_race_report.race_summary:
+faced, beaten, beat_rate, turns to beat (mean + histogram), probes beaten in a row, the accuracy of
+the PASSING solution (the task check on the main answer that beat probe k) and the FLUKE CHECK
+(share of the fork panel at that pass turn -- same history + verdict, new problems, same probe pool
+-- that also beats the probe: mean and per pass). Only the passing answers are checked, so a report
+runs few unit tests. No per-judged-turn numbers (11-03, user): no pass rates and no accuracy over
+all turns / caught turns / all forks. Ratios: [value, 95% CI low, CI high, denominator], bootstrap
+over EPISODES.
+Task checks: GSM8K final number, MBPP unit tests (sandboxed), HumanEval-JS Node tests, SQL
+execution match, JSON function schema (tica/validity.py). Aggregates only; needs the training venv
+(validity / sandbox).
 
-  python scripts/tica_task_race_report.py --gold gold_mbpp.json --forks p1f=P_forks.jsonl \
-      base=B_forks.jsonl --gens p1f=P.jsonl --out report_mbpp.json
+  python scripts/tica_task_race_report.py --gold gold_mbpp.json \
+      --race strict4b='RUN/strict4b_p*.jsonl' strict2b='RUN/strict2b_p*.jsonl' --out report.json
+  (each main X.jsonl pairs with X_forks.jsonl; merged files: --gens N=G.jsonl --forks N=F.jsonl)
 """
 
 from __future__ import annotations
@@ -26,13 +25,12 @@ from __future__ import annotations
 import argparse
 import json
 import sys
-from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
-from tica_math_race_report import beat_summary, cluster_ci, pred
+from tica_math_race_report import add_run_args, load_runs, pred, race_summary
 
 
 def gold_for(user: str, gold: dict) -> tuple[str, dict] | None:
@@ -66,67 +64,48 @@ def correct(req: str, rec: dict, answer: str) -> bool:
         return False
 
 
-def score_rows(rows: list[dict], gold: dict, workers: int) -> list[dict]:
-    """rows + {"correct"} (None if the request is not a task item); unit tests run in parallel."""
+def make_correct(gold: dict, workers: int):
+    """correct(row) for race_summary, memoised; prefetch(rows) runs the checks in parallel first."""
 
-    keyed = [(r, gold_for(r.get("user", ""), gold)) for r in rows]
-    jobs = [(r, g) for r, g in keyed if g is not None]
-    with ThreadPoolExecutor(max_workers=workers) as ex:
-        res = list(ex.map(lambda rg: correct(rg[1][0], rg[1][1], rg[0].get("answer", "")), jobs))
-    for (r, _), ok in zip(jobs, res, strict=True):
-        r["correct"] = ok
-    for r, g in keyed:
-        if g is None:
-            r["correct"] = None
-    return rows
+    memo: dict = {}
 
+    def key(r):
+        return (r.get("user", ""), r.get("answer", ""))
 
-def by_level(rows: list[dict], key_ep: str = "ep") -> dict:
-    """Capability by refit level (probes deployed at the turn): accuracy, among passed / caught."""
+    def one(r):
+        g = gold_for(r.get("user", ""), gold)
+        return None if g is None else correct(g[0], g[1], r.get("answer", ""))
 
-    by = defaultdict(lambda: defaultdict(list))
-    for r in rows:
-        if r.get("correct") is None or r.get("n_deployed") is None:
-            continue
-        by[r["n_deployed"]][r[key_ep]].append({"passed": bool(r["passed"]),
-                                                "correct": r["correct"]})
-    out = {}
-    for k in sorted(by):
-        grp = by[k]
-        out[f"deployed_{k}"] = {
-            "n": sum(len(v) for v in grp.values()), "episodes": len(grp),
-            "accuracy": cluster_ci(grp, lambda r: r["correct"], lambda r: 1),
-            "acc_passed": cluster_ci(grp, lambda r: r["passed"] and r["correct"],
-                                     lambda r: r["passed"]),
-            "acc_caught": cluster_ci(grp, lambda r: (not r["passed"]) and r["correct"],
-                                     lambda r: not r["passed"])}
-    return out
+    def prefetch(rows):
+        todo = {key(r): r for r in rows if key(r) not in memo}
+        with ThreadPoolExecutor(max_workers=workers) as ex:
+            for k, ok in zip(todo, ex.map(one, todo.values()), strict=True):
+                memo[k] = ok
+
+    def fn(r):
+        if key(r) not in memo:
+            memo[key(r)] = one(r)
+        return memo[key(r)]
+
+    fn.prefetch = prefetch
+    return fn
 
 
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--gold", required=True)
-    ap.add_argument("--forks", nargs="+", default=[], help="NAME=FORKS.jsonl (fork panel)")
-    ap.add_argument("--gens", nargs="+", default=[], help="NAME=GENS.jsonl (main turns)")
+    add_run_args(ap)
     ap.add_argument("--workers", type=int, default=8)
     ap.add_argument("--out", required=True)
     a = ap.parse_args()
     gold = json.loads(Path(a.gold).read_text())
+    correct_fn = make_correct(gold, a.workers)
     res: dict = {}
-    for kind, specs in (("forks", a.forks), ("turns", a.gens)):
-        for spec in specs:
-            name, path = spec.split("=", 1)
-            rows = [json.loads(x) for x in Path(path).read_text().splitlines() if x.strip()]
-            if kind == "turns":  # HEADLINE: beat rate + turns to beat per refit level / concept
-                res.setdefault(name, {})["beat"] = beat_summary(rows)
-                print(name, "beat", json.dumps(res[name]["beat"]), flush=True)
-                # capability: monitored hiding turns >= 1 (task items only, via score_rows)
-                rows = [r for r in rows if not r.get("off") and r.get("turn", 0) >= 1
-                        and r.get("cond") in ("real_score", "real_verdict")]
-            rows = score_rows(rows, gold, a.workers)
-            res.setdefault(name, {})[kind] = {
-                "n_scored": sum(r["correct"] is not None for r in rows), **by_level(rows)}
-            print(name, kind, json.dumps(res[name][kind]), flush=True)
+    for name, (rows, frows) in load_runs(a.race, a.gens, a.forks).items():
+        correct_fn.prefetch([r for r in rows if r.get("passed")])  # passing answers only
+        res[name] = race_summary(rows, frows, correct_fn)
+        print(name, json.dumps({k: v for k, v in res[name].items() if k != "by_concept"}),
+              flush=True)
     Path(a.out).write_text(json.dumps(res, indent=1))
 
 

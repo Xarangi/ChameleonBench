@@ -811,6 +811,46 @@ class Policy:
                     token_out[L].append(_keep_tokens(tok, token_keep))
         return {L: torch.cat(x) for L, x in parts.items()}
 
+    @torch.no_grad()
+    def pooled_forks(
+        self, convs: list[list[dict]], owners: list[int], layers: list[int], state: dict,
+        token_out: dict | None = None, token_keep: int | None = None,
+    ) -> dict[int, torch.Tensor]:
+        """pooled() for FORKS of lockstep conversations (eval fork panel, 11-03): conversation j
+        extends the cached tokens of conversation owners[j] in `state` (a pooled_incremental state)
+        and runs only its own suffix on a COPY of that cache, so the state is unchanged and the
+        owner's next pooled_incremental call still extends it. A fork that does not extend its
+        owner's cache is read from scratch. Same reads as pooled() up to kernel numerics (as
+        pooled_incremental). state["fork_hits"] counts the reuses."""
+
+        import copy
+
+        d = self.device
+        parts: dict[int, list[torch.Tensor]] = {L: [] for L in layers}
+        if token_out is not None:
+            for L in layers:
+                token_out.setdefault(L, [])
+        for conv, i in zip(convs, owners, strict=True):
+            v = self.view(conv)
+            prev = state.get(i)
+            n, cache = 0, None
+            if prev is not None:
+                pids, pcache = prev
+                if len(pids) <= v.start and v.ids[: len(pids)] == pids:
+                    n, cache = len(pids), copy.deepcopy(pcache)
+                    state["fork_hits"] = state.get("fork_hits", 0) + 1
+            store: dict[int, torch.Tensor] = {}
+            with self._hooks(layers, store, keep_grad=False):
+                self.model(input_ids=torch.tensor([v.ids[n:]], device=d),
+                           past_key_values=cache, use_cache=True, logits_to_keep=1)
+            del cache
+            for L in layers:
+                tok = store[L][0, v.start - n : v.end - n]
+                parts[L].append(tok.float().mean(0, keepdim=True))
+                if token_out is not None:
+                    token_out[L].append(_keep_tokens(tok, token_keep))
+        return {L: torch.cat(x) for L, x in parts.items()}
+
     @contextmanager
     def reference(self):
         """The base model (LoRA adapters disabled). Without adapters, the model itself. Inside
@@ -915,7 +955,8 @@ class Policy:
         prompts = [self.prompt_ids(c) for c in convs]
         base = getattr(self, "_ref_depth", 0) > 0
         gen = self.vllm
-        torch.cuda.empty_cache()  # give vLLM back the memory training cached
+        if not getattr(gen, "keep_awake", False):
+            torch.cuda.empty_cache()  # give vLLM back the memory training cached
         gen.wake()
         try:
             if base:

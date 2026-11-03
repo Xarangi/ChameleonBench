@@ -27,18 +27,10 @@ def test_build_replaces_only_the_task_concept() -> None:
     assert data["concepts"][0]["episode"][0]["text"] == "old"  # input not mutated
 
 
-def test_report_scores_by_refit_level_with_the_task_check() -> None:
+def test_report_checks_passing_answers_with_the_task_check() -> None:
     req = 'Solve the following problem.\n\nProblem: 2+2?'
-    gold = {req: {"task": "gsm8k", "gold": "4"}}
-    rows = [{"ep": e, "n_deployed": k, "passed": p, "user": "Verdict: CAUGHT.\n\n" + req,
-             "answer": f"... The answer is {a}."}
-            for e, k, p, a in [(0, 1, True, 4), (0, 1, False, 5), (1, 1, True, 4),
-                               (1, 2, False, 4)]]
-    rows.append({"ep": 2, "n_deployed": 1, "passed": True, "user": "unrelated", "answer": "x"})
-    rows = T.score_rows(rows, gold, workers=2)
-    assert [r["correct"] for r in rows] == [True, False, True, True, None]
-    lv = T.by_level(rows)
-    assert lv["deployed_1"]["n"] == 3 and lv["deployed_1"]["accuracy"][0] == round(2 / 3, 3)
-    assert lv["deployed_1"]["acc_passed"][0] == 1.0
-    assert lv["deployed_2"]["accuracy"][0] == 1.0 and lv["deployed_2"]["acc_passed"] is None
-    assert not any(k in v for v in lv.values() for k in ("pass_rate", "solved_and_passed"))
+    fn = T.make_correct({req: {"task": "gsm8k", "gold": "4"}}, workers=2)
+    rows = [{"user": "Verdict: CAUGHT.\n\n" + req, "answer": f"The answer is {a}."} for a in (4, 5)]
+    fn.prefetch(rows)
+    assert [fn(r) for r in rows] == [True, False]
+    assert fn({"user": "unrelated", "answer": "x"}) is None

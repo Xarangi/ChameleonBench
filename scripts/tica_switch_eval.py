@@ -131,6 +131,11 @@ def main():
                          ">= 1, M forks with the same history + verdict and a NEW request, judged "
                          "by the pool deployed at that turn (many samples per refit level)")
     ap.add_argument("--fork-temp", type=float, default=0.0)
+    ap.add_argument("--fast-forks", action="store_true",
+                    help="FAST fork panel (11-03): forks generated in one batch with the main turn "
+                         "and read on copies of the episode's cached prefix (same requests and "
+                         "judges; reads equal up to kernel numerics). Use with TICA_VLLM=1 "
+                         "TICA_VLLM_SLEEP=0 and a large --batch (scripts/race_launch.py)")
     ap.add_argument("--fork-out", default="", help="JSONL of the fork panel (scratch: raw text)")
     ap.add_argument("--evdet-seed", default="",
                     help="generic hiding detector (--kind evdet@L): MODEL_DUMPS;BASE_DUMPS, comma "
@@ -232,7 +237,7 @@ def main():
     out = Path(a.out)
     from next_chameleons.tica.vllm_gen import maybe_attach
     # TICA_VLLM=1: colocated vLLM generation
-    maybe_attach(pol, cfg.model.path, out.parent / (out.stem + "_vllm"))
+    vgen = maybe_attach(pol, cfg.model.path, out.parent / (out.stem + "_vllm"))
     tr = AdaptiveSupervisedTrainer(
         pol, pool, sampler, asc, out.parent / (out.stem + "_work"),
         branch_concepts=data.concepts("fit", splits), branch_negatives=data.negatives("fit"),
@@ -248,7 +253,8 @@ def main():
     if a.fork_panel:
         if a.answers != "free":
             raise SystemExit("--fork-panel needs --answers free")
-        tr.fork_panel = {"m": a.fork_panel, "temp": a.fork_temp, "seed": a.seed, "log": []}
+        tr.fork_panel = {"m": a.fork_panel, "temp": a.fork_temp, "seed": a.seed, "log": [],
+                         "fast": a.fast_forks}
     fork_f = open(a.fork_out, "w") if a.fork_out else None  # noqa: SIM115
     gen_f = open(a.gen_out, "w") if a.gen_out else None  # noqa: SIM115
     # eval only: refits MAY sit at the held-out layers (linear@20 / @24 are held-out probe kinds);
@@ -284,7 +290,8 @@ def main():
                         continue
                     conv = trj.convs[t]
                     gen_f.write(json.dumps({
-                        "ep": b + j, "turn": t, "cond": trj.spec.cond,
+                        # eid = the episode id the fork panel records carry (report join key)
+                        "ep": b + j, "eid": trj.spec.id, "turn": t, "cond": trj.spec.cond,
                         "concept": r.get("concept", trj.spec.monitored),
                         "off": bool(r.get("off")), "detected": bool(r["monitored"]["detected"]),
                         "passed": not r["monitored"]["detected"],
@@ -344,8 +351,10 @@ def main():
                     persist[t - first_pass[key]].append(float(ok))
                 elif ok:
                     first_pass[key] = t
+        ps = getattr(tr, "phase_sec", {})
         print(f"[batch {b // a.batch}] episodes {b + len(specs)} refits {refits} "
-              f"({acc} accepted) {time.time() - t0:.0f}s", flush=True)
+              f"({acc} accepted) {time.time() - t0:.0f}s "
+              + json.dumps({k: round(v, 1) for k, v in ps.items()}), flush=True)
     mean = lambda v: sum(v) / len(v) if v else None  # noqa: E731
     rep = {"config": a.config, "adapter": a.adapter, "base": a.base, "topics": topics,
            "episodes": a.episodes, "turns": a.turns, "switch_prob": a.switch_prob,
@@ -393,7 +402,16 @@ def main():
            "persist_by_lag": {str(k): mean(v) for k, v in sorted(persist.items()) if k <= 8},
            **beat_summary([{"kind": "segment", "turns": n, "beaten": b}
                            for n, b in seg_beat], prefix="segbeat_"),
-           "sec": round(time.time() - t0)}
+           "sec": round(time.time() - t0),
+           # 11-03 speed accounting: seconds per rollout phase (summed over turns and batches;
+           # "turns" = turns run) and the vLLM server's counters (reloads must stay at 1 for an
+           # adapter eval: frozen weights)
+           "phase_sec": {k: round(v, 1) for k, v in getattr(tr, "phase_sec", {}).items()},
+           "turn_sec": getattr(tr, "turn_sec", []),  # wall seconds per turn (batch-major)
+           "hf_peak_alloc_gb": (round(torch.cuda.max_memory_allocated() / 2**30, 1)
+                                if torch.cuda.is_available() else None),
+           "fast_forks": a.fast_forks, "batch": a.batch,
+           "vllm": vgen.summary() if vgen is not None else None}
     if gen_f is not None:
         gen_f.close()
     out.parent.mkdir(parents=True, exist_ok=True)

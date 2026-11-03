@@ -1,6 +1,6 @@
-"""tica_math_race_report: answers are scored against the gold of the request they answered; the fork
-panel summary groups by refit level and gives episode-clustered ratios (accuracy among PASSED forks
-is the key number)."""
+"""tica_math_race_report: answers are scored against the gold of the request they answered; per
+refit probe: beat rate, turns to beat, accuracy of the passing solution and the fork-panel fluke
+check."""
 
 from __future__ import annotations
 
@@ -9,14 +9,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 
-from tica_math_race_report import (
-    beat_summary,
-    cluster_ci,
-    gold_for,
-    pred,
-    summarise,
-    summarise_forks,
-)
+from tica_math_race_report import beat_summary, gold_for, pred, race_summary
 
 
 def test_pred_and_gold():
@@ -25,28 +18,6 @@ def test_pred_and_gold():
     gold = {"Solve ...\n\nProblem: A?": "5", "Solve ...\n\nProblem: B?": "9"}
     assert gold_for("verdict: caught\n\nSolve ...\n\nProblem: B?", gold) == "9"
     assert gold_for("something else", gold) is None
-
-
-def test_forks_by_level_and_ci():
-    gold = {"P1": "1", "P2": "2"}
-    rows = []
-    for ep in range(10):
-        for lvl in (1, 2):
-            for j in range(4):
-                passed = j < (3 if lvl == 1 else 1)
-                correct = passed and j % 2 == 0  # level 1: 2 of 3 passed correct
-                rows.append({"ep": ep, "n_deployed": lvl, "passed": passed, "user": "x P1",
-                             "answer": "The answer is 1" if correct else "The answer is 0"})
-    out = summarise_forks(rows, gold)
-    a1, a2 = out["deployed_1"], out["deployed_2"]
-    assert a1["forks"] == 40 and a1["episodes"] == 10
-    assert "pass_rate" not in a1 and "solved_and_passed" not in a1
-    assert a1["accuracy"][0] == 0.5 and a2["accuracy"][0] == 0.25
-    assert abs(a1["acc_passed"][0] - 2 / 3) < 1e-3 and a2["acc_passed"][0] == 1.0
-    assert a1["acc_passed"][3] == 30  # denominator = passed forks
-    lo, hi = a1["acc_passed"][1], a1["acc_passed"][2]
-    assert lo <= a1["acc_passed"][0] <= hi
-    assert cluster_ci({"a": []}, lambda r: 1, lambda r: 1) is None
 
 
 def _turn(ep, t, k, passed, concept="math", off=False, cond="real_score"):
@@ -84,9 +55,37 @@ def test_beat_rate_and_turns_to_beat_per_refit_level():
     assert lo <= 0.5 <= hi
 
 
-def test_summarise_has_accuracy_but_no_pass_rates():
-    rows = [_turn(0, t, 1 + t // 2, t % 2 == 0) for t in range(4)]
-    out = summarise(rows, {"P1": "1"})
-    assert out["turns_1+"]["accuracy"] == 1.0 and out["deployed_1-1"]["accuracy"] == 1.0
-    assert not any(k in v for v in out.values() if isinstance(v, dict)
-                   for k in ("pass_rate", "solved_and_passed"))
+def test_passing_solution_and_fluke_check_per_probe():
+    gold = {"P1": "1", "P2": "2"}
+
+    def main(ep, t, k, passed, ans, eid=None):
+        r = {**_turn(ep, t, k, passed), "user": "v\n\nP1", "answer": f"The answer is {ans}"}
+        return {**r, "eid": eid} if eid else r
+
+    rows = [main(0, 0, 1, False, 1), main(0, 1, 1, True, 1), main(0, 2, 2, False, 1),
+            main(0, 3, 2, True, 0),  # probe 2 beaten by a wrong answer
+            main(1, 0, 1, True, 1),  # beaten at turn 0: no fork panel there
+            main("x", 1, 1, True, 1, eid="real_score|math|7")]  # new files: eid join
+    # legacy fork ids "cond|concept|N" join main ep N; forks of other turns / levels are ignored
+    forks = [{"ep": "real_score|math|0", "turn": 1, "concept": "math", "n_deployed": 1,
+              "passed": j < 3} for j in range(4)]
+    forks += [{"ep": "real_score|math|0", "turn": 3, "concept": "math", "n_deployed": 2,
+               "passed": j < 1} for j in range(4)]
+    forks += [{"ep": "real_score|math|0", "turn": 2, "concept": "math", "n_deployed": 2,
+               "passed": True}]
+    forks += [{"eid": "real_score|math|7", "ep": "real_score|math|7", "turn": 1,
+               "concept": "math", "n_deployed": 1, "passed": False}]
+
+    def correct(r):
+        g = gold_for(r["user"], gold)
+        return None if g is None else pred(r["answer"]) == g
+
+    out = race_summary(rows, forks, correct)
+    p1, p2 = out["probe_1"], out["probe_2"]
+    assert p1["faced"] == 3 and p1["beaten"] == 3 and p1["passing_correct_n"] == "3/3"
+    assert p1["fluke_share_per_pass"] == [0.0, 0.75] and p1["passes_without_forks"] == 1
+    assert p1["fluke_share_mean"][0] == 0.375 and p1["forks_per_pass"] == 2.5
+    assert p2["passing_correct_n"] == "0/1" and p2["fluke_share_per_pass"] == [0.25]
+    assert p2["turns_to_beat"][0] == 2.0
+    assert out["by_concept"]["math"]["probe_2"]["fluke_share_mean"][0] == 0.25
+    assert not any(k in p1 for k in ("pass_rate", "accuracy", "acc_caught"))

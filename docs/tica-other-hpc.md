@@ -358,6 +358,34 @@ default off, with tests.
 - Do not run evals on the node of a training run: the 1700 piece OOMed next to the 2B.
 - Under `srun --overlap`, Slurm resets `CUDA_VISIBLE_DEVICES`. Export it inside the step script.
 
+**One-command races with vLLM (11-03; `scripts/race_launch.py`):**
+- `python3 scripts/race_launch.py --spec configs/race/mbpp_strict_kl.json` (or flags: `--name --task
+  {mbpp,sql,json,jseval,math} --model NAME=CONFIG:ADAPTER ... --episodes 64 --turns 33 --fork-panel 8
+  --batch 16`; `--dry-run` only writes RUN/pieces.tsv and prints the sbatch lines). It splits each
+  model's episodes into pieces of `--batch` episodes (seeds seed, seed+1, ... shared by all models),
+  submits `scripts/slurm/race_node.sh` (one piece process per GPU; H100 jobs take whole 4-GPU nodes)
+  and a CPU scoring job `afterany` the node job(s): RUN/report.json. A timed-out node resumes by
+  resubmitting the printed node command (finished pieces are skipped).
+- Each piece runs `tica_switch_eval.py --batch 16 --fast-forks` with colocated vLLM:
+  `TICA_VLLM=1 TICA_VLLM_SLEEP=0` (server awake for the whole eval; the merged adapter weights are
+  loaded once), `TICA_VLLM_MEM=0.35` (vLLM's share of the H100) + `TICA_MEM_FRACTION=0.60` (HF cap:
+  an overflow is then an HF OOM error, not a silent vLLM hang as at `--batch 32`),
+  `TICA_VLLM_MAXLEN=32768`. Smoke 11-03 (33 turns, 16 episodes, fork 8): 4B 13.3 min per piece
+  (19.8 s / turn, ~72 episodes per GPU-hour), 2B 10-12 min; peak ~71 GB of 80 (HF 35 GB allocated). `--fast-forks` generates the fork panel in one vLLM batch with the main
+  turns and reads the forks on copies of the episode's cached prefix (`Policy.pooled_forks`): same
+  requests and judges, reads equal up to kernel numerics.
+- vLLM env: `_local_env.sh` unpacks `venvs/$TICA_VLLM_VENV.tar` (default `vllm-latest` = vLLM 0.21,
+  Qwen3.5; `vllm-g4` = vLLM 0.25, needed for Gemma-4) node-locally and sets `TICA_VLLM_PY` /
+  `TICA_VLLM_MODULES`. Compile caches live in `~/.cache/vllm` and `~/.cache/flashinfer` (persistent).
+  The 14-min start of the 2B prep (vLLM 0.25) was a cold FlashInfer GDN JIT (547 s) + torch.compile
+  (131 s); warm starts take ~1-2 min.
+- Report (`tica_task_race_report.py --race NAME='RUN/NAME_p*.jsonl'`; math: `tica_math_race_report.py`):
+  per refit probe k, faced / beaten / beat rate, turns to beat (mean + histogram), accuracy of the
+  PASSING solution and the FLUKE CHECK (share of the fork panel at the pass turn that also beats the
+  probe: mean + per pass). Main and fork records join on `eid` (the episode spec id).
+- Races set `TICA_REPO` so a worktree runs its own code (`tica_switch_eval.sh` defaults to the main
+  checkout).
+
 ### 9d. Strict-KL arm and two-way Telegram (10-30)
 
 - `configs/tica/final_v4d_klx_tamia_4b.yaml`: from-scratch 4B, the current v4d recipe (1-bit, LoRA r128 / alpha

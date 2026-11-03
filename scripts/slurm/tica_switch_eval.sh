@@ -9,13 +9,15 @@
 #SBATCH --output=/scratch/s/sneheel/ChameleonBench/logs/%x-%j.out
 set -euo pipefail
 CFG=$1; OUT=$2; shift 2
+# TICA_REPO: the checkout to run (default the main one; race_node.sh sets its own, e.g. a worktree)
+REPO=${TICA_REPO:-/scratch/s/sneheel/ChameleonBench}
 PY=${PY:-/scratch/s/sneheel/venvs/q35t29/bin/python}
 export TRITON_CACHE_DIR=${SLURM_TMPDIR:-/tmp}/triton
-source /scratch/s/sneheel/ChameleonBench/scripts/slurm/_local_env.sh
+source "$REPO/scripts/slurm/_local_env.sh"
 export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
-SNAP=$(cd /scratch/s/sneheel/ChameleonBench && PYTHONPATH=src $PY -c "
+SNAP=$(cd "$REPO" && PYTHONPATH=src $PY -c "
 from next_chameleons.tica.config import load_run_config as l; print(l('$CFG').model.path)")
 LOCAL=${SLURM_TMPDIR:-/tmp}/$(basename $(dirname $(dirname $SNAP)))
 mkdir -p $LOCAL; cp -rL $SNAP/. $LOCAL/
-cd /scratch/s/sneheel/ChameleonBench
+cd "$REPO"
 env PYTHONPATH=src $PY scripts/tica_switch_eval.py --config "$CFG" --model-path "$LOCAL" --out "$OUT" "$@"

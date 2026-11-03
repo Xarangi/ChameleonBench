@@ -13,6 +13,12 @@ by the Policy (same chat template as training); outputs come back as token ids +
 
 Enable: set TICA_VLLM_PY (the vllm-serving python, e.g. unpacked node-local by the job script)
 and call Policy.attach_vllm(...) (tica.py does this when model.vllm is true).
+
+On TamIA (11-03) scripts/slurm/_local_env.sh does the setup when TICA_VLLM=1: it unpacks
+venvs/$TICA_VLLM_VENV.tar (default vllm-latest = vLLM 0.21, Qwen3.5 OK; vllm-g4 = vLLM 0.25 for
+Gemma-4) node-local and exports TICA_VLLM_PY + TICA_VLLM_MODULES. Evals with frozen weights set
+TICA_VLLM_SLEEP=0: the server stays awake (no wake / sleep per call, and its prefix cache survives
+between turns), so TICA_VLLM_MEM must leave room for the HF model beside it.
 """
 
 from __future__ import annotations
@@ -27,10 +33,10 @@ import urllib.error
 import urllib.request
 from pathlib import Path
 
-# cluster modules for the vllm-serving python; TICA_VLLM_MODULES overrides (TamIA: the vllm-latest venv needs
-# "StdEnv/2023 python/3.11 arrow/24.0.0 cuda/12.6", as paper2_runs/vllm_steer_tp2)
-MODULES = os.environ.get("TICA_VLLM_MODULES",
-                         "StdEnv/2023 gcc/12.3 cuda/12.9 python/3.12 opencv/4.13.0 scipy-stack/2026a")
+# cluster modules for the vllm-serving python; TICA_VLLM_MODULES overrides (_local_env.sh exports
+# the right set per venv). Default = TamIA's vllm-latest set (the Narval default was dead here).
+MODULES_DEFAULT = "StdEnv/2023 python/3.11 arrow/24.0.0 cuda/12.6"
+MODULES = os.environ.get("TICA_VLLM_MODULES", MODULES_DEFAULT)
 
 # Per served checkpoint family (config.json model_type; 10-24 Gemma-4 port). Absent (Qwen3.5) =
 # unchanged.
@@ -78,6 +84,11 @@ def merged_text_state(policy, buffers: tuple[str, ...] = ()) -> dict:
 
     model = policy.model
     base = model.get_base_model() if hasattr(model, "get_base_model") else model
+    # Inside Policy.merged() (adaptive.merged_reads: races run the rollout in it) every adapted
+    # base weight ALREADY holds W0 + scaling * B @ A (the same fp32 merge, cast to bf16): take it as
+    # is. Adding the delta again served W0 + 2 * B @ A (11-03 fix; only vLLM-generation runs whose
+    # first sync fell inside merged() were affected).
+    premerged = bool(getattr(policy, "_merged_active", False))
     lora = {n: m for n, m in base.named_modules()
             if hasattr(m, "lora_A") and "default" in getattr(m, "lora_A", {})}
     out = {}
@@ -88,7 +99,7 @@ def merged_text_state(policy, buffers: tuple[str, ...] = ()) -> dict:
             key = name.replace(".base_layer", "")
             t = p.detach()
             mod = key.rsplit(".", 1)[0]
-            if mod in lora and key.endswith(".weight"):
+            if mod in lora and key.endswith(".weight") and not premerged:
                 m = lora[mod]
                 d = (m.lora_B["default"].weight.float() @ m.lora_A["default"].weight.float())
                 t = (t.float() + d * m.scaling["default"]).to(t.dtype)
@@ -117,7 +128,8 @@ class VLLMGenerator:
     def __init__(self, model_path: str, workdir: Path, *, python: str | None = None,
                  mem: float = 0.4, max_len: int = 8192, max_rank: int = 16,
                  log: Path | None = None, timeout: float = 1500.0, mode: str = "merged",
-                 local: Path | None = None) -> None:
+                 local: Path | None = None, keep_awake: bool = False,
+                 extra_args: str = "") -> None:
         """mode "merged" (default): serve the base architecture and RELOAD the LoRA-merged weights
         on every weights change (vLLM's LoRA decode is ~4x slower than base decode here, 5609973);
         base generations reload the original weights. mode "lora": serve the adapter (slow)."""
@@ -134,6 +146,11 @@ class VLLMGenerator:
         self.sleeping = False
         self.mode = mode
         self.loaded = "base"  # which weights the server holds: "base" or ("policy", version)
+        # keep_awake (TICA_VLLM_SLEEP=0): never sleep -- frozen-weight evals keep the KV / prefix
+        # cache between calls and skip the wake / sleep round trips
+        self.keep_awake = keep_awake
+        self.stats = {"reloads": 0, "calls": 0, "prompts": 0, "gen_tokens": 0, "sec_gen": 0.0,
+                      "sec_reload": 0.0}
         self.local = Path(local or os.environ.get("SLURM_TMPDIR", "/tmp")) / "vllm_merged"
         lora_flags = f"--enable-lora --max-lora-rank {max_rank} --max-loras 1 " if mode == "lora" \
             else ""
@@ -144,7 +161,7 @@ class VLLMGenerator:
                f"--host 127.0.0.1 --port {self.port} --dtype bfloat16 "
                f"--gpu-memory-utilization {mem} --max-model-len {max_len} "
                f"--max-num-seqs {os.environ.get('TICA_VLLM_MAX_SEQS', '256')} "  # vLLM 0.21 default 1024 > Qwen3.5 Mamba blocks (637200)
-               f"{lora_flags}--enable-sleep-mode --enable-prefix-caching")
+               f"{lora_flags}--enable-sleep-mode --enable-prefix-caching {extra_args}")
         env = {**os.environ, "VLLM_SERVER_DEV_MODE": "1",
                "VLLM_ALLOW_RUNTIME_LORA_UPDATING": "True"}
         env.pop("PYTHONPATH", None)  # the training env's src / site dirs must not leak in
@@ -186,7 +203,7 @@ class VLLMGenerator:
 
     # ------------------------------------------------------------------ lifecycle
     def sleep(self) -> None:
-        if not self.sleeping:
+        if not self.sleeping and not self.keep_awake:
             self._post("/sleep?level=1")
             self.sleeping = True
 
@@ -196,8 +213,13 @@ class VLLMGenerator:
             self.sleeping = False
 
     def _reload(self, path: str) -> None:
+        t0 = time.time()
         self._post("/collective_rpc", {"method": "reload_weights",
                                        "kwargs": {"weights_path": path}})
+        if self.keep_awake:  # cached prefixes were computed with the old weights
+            self._post("/reset_prefix_cache")
+        self.stats["reloads"] += 1
+        self.stats["sec_reload"] += time.time() - t0
 
     def use_base(self) -> None:
         if self.mode == "merged" and self.loaded != "base":
@@ -247,11 +269,37 @@ class VLLMGenerator:
                 "prompt": prompt_ids, "max_tokens": max_new_tokens,
                 "temperature": temperature, "top_p": top_p, "seed": seed, "n": 1,
                 "return_token_ids": True, "skip_special_tokens": True}
+        t0 = time.time()
         out = self._post("/v1/completions", body)
         ch = sorted(out["choices"], key=lambda c: c["index"])
+        self.stats["calls"] += 1
+        self.stats["prompts"] += len(prompt_ids)
+        self.stats["gen_tokens"] += sum(len(c.get("token_ids") or []) for c in ch)
+        self.stats["sec_gen"] += time.time() - t0
         return [{"text": c["text"].strip(), "ids": list(c.get("token_ids") or []),
                  "finished": c.get("finish_reason") == "stop", "stop": None}
                 for c in ch]
+
+    def summary(self) -> dict:
+        """Counters (reloads, calls, prompts, generated tokens, seconds) + the server's prefix-cache
+        hit rate (Prometheus /metrics; None if unavailable)."""
+
+        out = {**self.stats, "startup_sec": getattr(self, "startup_sec", None)}
+        out["sec_gen"], out["sec_reload"] = round(out["sec_gen"], 1), round(out["sec_reload"], 1)
+        try:
+            with urllib.request.urlopen(self.url + "/metrics", timeout=10) as r:
+                txt = r.read().decode(errors="replace")
+            tot = {}
+            for line in txt.splitlines():
+                for k in ("prefix_cache_hits", "prefix_cache_queries"):
+                    if line.startswith(f"vllm:{k}_total"):
+                        tot[k] = tot.get(k, 0.0) + float(line.rsplit(" ", 1)[-1])
+            if tot.get("prefix_cache_queries"):
+                out["prefix_cache_hit_rate"] = round(tot["prefix_cache_hits"]
+                                                     / tot["prefix_cache_queries"], 3)
+        except Exception:  # metrics are a diagnostic only
+            pass
+        return out
 
     def close(self) -> None:
         try:
@@ -266,7 +314,8 @@ def maybe_attach(pol, model_path: str, workdir: Path) -> VLLMGenerator | None:
     """Attach a colocated vLLM server to `pol` when TICA_VLLM=1 (job scripts unpack the vLLM env
     and export TICA_VLLM_PY). TICA_VLLM_MEM = its GPU memory fraction while awake (default 0.4;
     0.25 left no room for the KV cache, 5608325). TICA_VLLM_MAXLEN = max context (default 16384:
-    8192 rejected the 24-turn capability forks at k = 23 with HTTP 400, 5623494)."""
+    8192 rejected the 24-turn capability forks at k = 23 with HTTP 400, 5623494). TICA_VLLM_SLEEP=0:
+    never sleep (frozen-weight evals). TICA_VLLM_ARGS: extra server flags."""
 
     if os.environ.get("TICA_VLLM") != "1":
         return None
@@ -276,8 +325,10 @@ def maybe_attach(pol, model_path: str, workdir: Path) -> VLLMGenerator | None:
                         mem=float(os.environ.get("TICA_VLLM_MEM", "0.4")),
                         max_len=int(os.environ.get("TICA_VLLM_MAXLEN", "16384")),
                         mode=os.environ.get("TICA_VLLM_MODE", "merged"),
-                        max_rank=int(os.environ.get("TICA_VLLM_MAX_RANK", "128")))
-    gen.sleep()  # training owns the GPU until the first generation
+                        max_rank=int(os.environ.get("TICA_VLLM_MAX_RANK", "128")),
+                        keep_awake=os.environ.get("TICA_VLLM_SLEEP", "1") == "0",
+                        extra_args=os.environ.get("TICA_VLLM_ARGS", ""))
+    gen.sleep()  # training owns the GPU until the first generation (no-op with keep_awake)
     pol.attach_vllm(gen)
     atexit.register(gen.close)
     print(json.dumps({"vllm": {"startup_sec": gen.startup_sec, "port": gen.port}}), flush=True)
