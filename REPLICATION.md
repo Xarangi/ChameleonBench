@@ -12104,3 +12104,20 @@ Space: thinned finished runs with `scripts/ops/prune_checkpoints.py` (dry-run ma
 50 global steps, each chunk's newest, resume bases, 1640 / 1650, and per run the latest optimizer state plus the
 newest one at or before 1650; skipped final_v4d_k03_tamia_4b, dodgescope_*, mech_1025, races. Deleted 1167 files,
 447 GiB (strict 4B 110, Gemma 12B 110, strict 2B 57, v4b x2 93, v4d 2B 43, v4d 4B 21, x1800 14).
+
+## 2026-11-03: MBPP race on vLLM, 64 episodes (race mbpp_pass64, job 664118; vllm-race branch)
+Settings: batch 16, fork panel 8, --fast-forks, 33 turns, refit only on pass; 4 pieces x 16 episodes per model on
+1 node (1 h 28 min). Per probe k: beaten / faced, mean turns to beat, passing solutions correct, fluke check (share
+of the 8-fork panel at the pass turn that also beats the probe):
+- strict 4B (klx resume_1280/step_520): p1 55/64, 5.9 turns, 19/55 correct (0.35), fluke 0.51; p2 28/54, 9.6
+  turns, 4/28 (0.14), fluke 0.21; p3 7/28, 8.7 turns, 0/7, fluke 0.13; p4 0/7. Turn-0 answer accuracy 0.83.
+- base 4B: p1 1/64 (turn 2, correct, fluke 0.38). Turn-0 accuracy 0.80.
+- strict 2B: only 16 episodes (1 of 4 pieces): p1 11/16, 10.5 turns, 6/11 correct, fluke 0.40; p2 1/11.
+- KL 0.3 2B x1800: no episodes. Two 2B pieces died with a vLLM HTTP `TimeoutError` (kl03_2b_p1, strict2b_p4),
+  and 5 more 2B pieces never started, but the job still reported COMPLETED. Launcher bug, not fixed yet.
+vs the HF race (661979, 16 episodes): turn-0 accuracy matches (0.83 vs 0.81), as do beat rates (p1 0.86 vs 0.88).
+Passing-solution accuracy on p1 is lower (19/55 vs 8/14, p ~0.1). Not significant, but it needs an HF n=64
+cross-check before vLLM races are trusted for passing accuracy.
+KL0.3 4B (664131): global 1691 at 13:30, beat_frac 0.90-0.97, lr 8.4e-5 (cooldown on; the console log rounds
+to 1e-4). Training speed-up (opt-in vLLM for rollouts) handed to a subagent on branch train-vllm: profile
+first, then build, then a short A/B from a checkpoint.
