@@ -12185,3 +12185,21 @@ bit-exact).
   used: worst case ~86 GB reserved (0.9 GB per unit) vs 80 GB cards, an OOM would kill a 24 h chunk at start. Gain
   unmeasured so far: compare rollout/sec_ep_refit_read per refit and sec over 665460's first steps against 1601-1700.
   Strict 2B extension NOT started (user: not yet).
+- 11-03 19:20 RACES v4d_a, SQL + GSM8K math (refit only on pass, vLLM, 33 turns, fork panel 8, 32 episodes per model,
+  complete; scored early by 665986 / 665987; report.json in races/v4d_a_{sql,math}). Per probe k: beaten / faced, mean
+  turns to beat, passing solutions correct, fluke share (panel at the pass turn also beating the probe).
+  SQL. strict 4B (first answer 0.94): p1 32/32 1.4 31/32 .86 | p2 32/32 1.8 28/32 .87 | p3 31/32 2.5 30/31 .81 |
+  p4 31/31 3.3 30/31 .68 | p5 26/31 2.5 23/26 .71 | p6 25/26 2.8 25/25 .62 | p7 23/25 3.5 21/23 .43 | p8 20/23 3.9 19/20
+  .40 | p9 14/19 | p10 7/14 | p11 5/7 | p12 4/5 | p13 1/3 (passing 90-100% correct throughout).
+  strict 2B (0.84): p1 32/32 1.2 27/32 .72 | p2 32/32 1.8 30/32 .70 | p3 31/32 3.2 26/31 .62 | p4 19/31 4.7 16/19 .47 |
+  p5 7/19 | p6 5/7 | p7 2/5 | p8 0/2.
+  KL0.3 2B (0.94): p1 32/32 1.5 30/32 .74 | p2 32/32 2.1 32/32 .82 | p3 29/32 2.6 25/29 .81 | p4 27/29 2.8 25/27 .68 |
+  p5 24/27 2.7 23/24 .59 | p6 19/24 3.4 17/19 .59 | p7 18/18 | p8 15/18 | p9 13/15 | p10 10/13 | p11 6/10 | ... p15 1/2.
+  GSM8K. strict 4B (0.94): p1 32/32 2.2 26/32 .93 | p2 32/32 3.1 24/32 .84 | p3 27/32 4.8 23/27 .54 | p4 3/27 5.0 3/3 .38
+  | p5 0/3. strict 2B (0.69): p1 32/32 2.5 22/32 .68 | p2 26/32 3.7 19/26 .74 | p3 2/26 16.5 1/2 .06. KL0.3 2B (0.59):
+  p1 32/32 1.4 14/32 1.0 | p2 32/32 2.3 17/32 .84 | p3 31/32 2.8 15/31 .77 | p4 27/31 4.0 9/27 .62 | p5 16/27 7.1 2/16 .39
+  | p6 7/16 2/7 | p7 3/6 0/3 | p8 1/2 0/1.
+  Reading: SQL evasion keeps the task (all three models, >85% of passing SQL correct), strict 4B ~12 probes deep.
+  GSM8K: the strict models keep accuracy near their first-answer level while they evade (4B 0.75-0.85, 2B ~0.70) but
+  hit a wall at probe 4 (4B) / 3 (2B); the KL0.3 2B goes 8 deep by giving up the math (passing accuracy 0.44 -> 0.33
+  at p4 -> 0.12 at p5), the same pattern as its broken-code MBPP evasion. n = 32 per model (+-~15 pp).
