@@ -12123,7 +12123,8 @@ to 1e-4). Training speed-up (opt-in vLLM for rollouts) handed to a subagent on b
 first, then build, then a short A/B from a checkpoint.
 Training speed-up check, profile only (0 GPU-hours): NOT built. Training generates almost nothing. Main turns and refit forks are
 teacher-forced from dataset text (episodes.py; supervised.py `rollout()` / `_refit_plan`); the only generation is
-cap_gen. KL0.3 4B per-step split (resume_1660, last 20 steps, per rank; summed timers divided by 4), 243 s total:
+cap_gen (GSM8K capability forks AND the cap_free free-generation forks on the other checkable concepts: JS APPS, SQL
+gretel, JSON ToolACE, Dolly; one batched HF call). KL0.3 4B per-step split (resume_1660, last 20 steps, per rank; summed timers divided by 4), 243 s total:
 cap_gen 13.8 (5.7%), refit activation reads ~103 (~42%, ~84 reads x 4.7 s), waiting for fits at the join ~42
 (~17%), other rollout reads / scoring / merges ~76 (31%), cap_train 11.5, units + optimizer ~9. Strict 4B 171 s/step
 (cap_gen 7.5%), strict 2B 83 s/step (12%). vLLM could save at most 1.06x-1.13x, and in practice less: the 10-16
@@ -12166,3 +12167,17 @@ Exact speed options that exist but stay off (not enabled, for comparability): ad
 fits in CPU worker processes; bit-identical on CPU, but moves the fit device on a GPU node, so not bit-exact here and
 never benchmarked on a GPU node), refit_gpu_procs (10-30 smoke: no gain), refit_overlap_stream (10-23 A/B: not
 bit-exact).
+- 11-03 18:40 PROGRESS + RACE OOM FIX. Strict 4B x2500 (665459) at global 1647, 172 s/step over 1601-1647 = the source
+  run at the same stage (1651-1720: 168 s; 1501-1600: 164 s): steps slow as refits per episode rise (34.3 -> 36.4),
+  not a regression. Why spare memory does not speed it: ~135 of 172 s is the lockstep episode loop (4 episodes per rank,
+  each turn waits for its refit fit); GPU mean ~75%, 45-53 GB reserved of 80. Only more episodes per rank would fill the
+  GPU (changes the recipe; not for this branch). KL0.3 4B (664131) at global 1762 / 1800, lr 2.4e-5, ~224 s/step,
+  ends ~21:00. Race battery v4d_a (665416): SQL and math complete (6 / 6 pieces each); JSON strict4b_p2 OOM; JS pieces
+  still running at the 2:30 limit. Held-out races (665530 / 665531): 11 pieces OOM (pyeval, javaeval, mgsm_fr / ru /
+  th). Cause in every case: the HF scoring process hits its 0.60 cap (47.5 GiB) beside vLLM (29 GiB) on long-text
+  tasks at --batch 16 (sdpa attention allocation 2-6 GiB). Fix: --batch 8 (16 episodes per piece = 2 batches in one
+  process) for json / jseval / mbpp and every held-out task; SQL and math stay at 16 (never OOMed). Resume jobs
+  (finished pieces skipped): 665964 (v4d_a, after 665416), 665965 / 665966 (held-out, after 665530 / 665531); score jobs
+  re-pointed to them. KL0.3 4B races re-submitted with batch 8 and 4:30 limits (665962 battery, 665963 held-out; old
+  665421 / 665537 cancelled, user cannot raise a pending job's limit), scores re-pointed. Policy from the user:
+  no subagents unless asked.
