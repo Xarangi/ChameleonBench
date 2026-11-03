@@ -12130,3 +12130,39 @@ cap_gen 13.8 (5.7%), refit activation reads ~103 (~42%, ~84 reads x 4.7 s), wait
 cap_gen attempt was slower because of sleep/wake. Races sped up ~10x only because evals free-generate every turn.
 The remaining levers are refit reads and fit tails (rlobf_attn 6.6 s, ens 4.2 s median), which need their own
 exactness review.
+
+## 2026-11-03: strict-KL 4B CONTINUATION to 2500 (final_v4d_klx_tamia_4b_x2500; user)
+Branch of final_v4d_klx_tamia_4b (kl_weight 3.0, LoRA r128 / alpha 64, DP4 on one 4 x H100 node) from global 1600,
+its last checkpoint with optimizer state before its cooldown (1650-1800). Done like the KL 0.3 2B x1800 branch:
+`runs/final_v4d_klx_tamia_4b_x2500/resume_1280/adaptive/step_320` is a symlink to
+`final_v4d_klx_tamia_4b/keep/global_1600_precooldown_with_optimizer` (hard-linked to the original resume_1280/step_320),
+so tica_resume.sh finds global 1600 with trainer_state.pt and writes the chunk to `x2500/resume_1600` (900 steps).
+Config `configs/tica/final_v4d_klx_tamia_4b_x2500.yaml` = the source with train.steps 1800 -> 2500 (LR 1e-4 flat to
+2350, cosine to 1e-5 over 2350-2500, the same 150 steps), name / out / eval_on_save paths, and checkpoint bookkeeping
+only: save_every 20 -> 10 (from offset 1600, saving every 20 steps leaves the eval_every=50 adapters at 1650, 1750, ...
+without an optimizer state, and tica_resume picks the newest step with or without one, so a timeout right after one of
+them would restart Adam; with save_every 10 every eval step is a save step), state_keep_last 3 -> 1, state_keep_every
+100 -> 2350 (optimizer state only in each chunk's newest checkpoint plus global 2350). LR checks (exact lr_factor source;
+logged lr = value after sched.step(), the same convention as the source, whose log reads 1e-4 / 5.5e-5 / 1e-5 at
+1650 / 1725 / 1800): 1601 1.0e-4, 2349 1.0e-4, 2350 1.0e-4, 2425 5.5e-5, 2500 1.0e-5. The scheduler is a fresh LambdaLR
+(base lr = cfg.lr, offset = TICA_STEP_OFFSET 1600, steps = 900 remaining) and only Adam moments / bandits / RNG are
+restored, so the old 1650 cooldown does not carry over. Val races: eval_on_save sbatches tica_val.sh with an a100
+gres, which TamIA rejects, so they fail and are only logged, as on x1800; run held-out races separately.
+Jobs (aip-rrabba, tamia_node.sh resume:final_v4d_klx_tamia_4b_x2500@0,1,2,3, 24 h each, afterany chain):
+665459 -> 665460 -> 665461 (the third exits at once if the run is done). ~900 x 165-171 s = 41-43 h plus startup.
+Disk: the trainer writes a ~1.0 GB adapter every 10 steps (90, ~90 GB) plus ~2.0 GB trainer_state.pt in the newest
+checkpoint of each chunk and at 2350 (~8 GB), ~100 GB at most (scratch 1492 / 2048 GiB at launch). Thin it to the
+50-step grid afterwards on a CPU node: `prune_checkpoints.py --runs-root <runs> --every 50 --keep-steps 2340,2350
+--cooldown 2350 --manifest m.tsv` (dry run; these keep / cooldown values are for this run only), then
+`grep -F /final_v4d_klx_tamia_4b_x2500/ m.tsv > m_x2500.tsv` and `--delete m_x2500.tsv`. The resume-base files have 2
+links, so the script never touches them.
+Started 16:21 on tg10901 (665459). The resolved config.json diff against the source's resume_1280/adaptive/config.json
+(206 keys each) is only steps 520 -> 900 (remaining steps), save_every, state_keep_last / state_keep_every and the
+eval_on_save paths. All 4 ranks restored trainer_state.pt at global_step 1600. First 10 steps (1601-1610): lr 1e-4,
+beat_frac 0.68 (0.61-0.75; source 1551-1600: 0.70, 0.58-0.79), anchor KL 0.004, peak memory 43.5 / 46.4 GB alloc /
+reserved (source chunk start 1281-1290: 42.9 / 46.7; nvidia-smi 47-49 GB), 175 s/step (source 1551-1600: 164 s).
+step_10 written with its optimizer state. Expected finish ~11-05 midday if 665460 starts right after 665459.
+Exact speed options that exist but stay off (not enabled, for comparability): adaptive.refit_cpu_fits (pooled-kind
+fits in CPU worker processes; bit-identical on CPU, but moves the fit device on a GPU node, so not bit-exact here and
+never benchmarked on a GPU node), refit_gpu_procs (10-30 smoke: no gain), refit_overlap_stream (10-23 A/B: not
+bit-exact).
