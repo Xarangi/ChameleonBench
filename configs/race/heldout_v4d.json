@@ -1,0 +1,15 @@
+{
+ "name": "heldout_v4d",
+ "task": "pyeval,javaeval,mgsm_fr,mgsm_ru,mgsm_th",
+ "episodes": 32,
+ "turns": 33,
+ "fork_panel": 8,
+ "batch": 16,
+ "min_per_piece": 22,
+ "jobs": 2,
+ "models": {
+  "strict4b": ["final_v4d_klx_tamia_4b", "/scratch/s/sneheel/next_chameleons_artifacts/tica/runs/final_v4d_klx_tamia_4b/resume_1280/adaptive/step_520"],
+  "strict2b": ["final_v4d_klx_tamia_2b", "/scratch/s/sneheel/next_chameleons_artifacts/tica/runs/final_v4d_klx_tamia_2b/resume_1200/adaptive/step_600"],
+  "kl03_2b": ["final_v4d_tamia_2b_x1800", "/scratch/s/sneheel/next_chameleons_artifacts/tica/runs/final_v4d_tamia_2b_x1800/resume_1270/adaptive/step_530"]
+ }
+}

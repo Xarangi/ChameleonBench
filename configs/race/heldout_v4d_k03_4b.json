@@ -1,0 +1,13 @@
+{
+ "name": "heldout_v4d_k034b",
+ "task": "pyeval,javaeval,mgsm_fr,mgsm_ru,mgsm_th",
+ "episodes": 32,
+ "turns": 33,
+ "fork_panel": 8,
+ "batch": 16,
+ "min_per_piece": 22,
+ "dependency": "afterok:664131",
+ "models": {
+  "kl03_4b": ["final_v4d_k03_tamia_4b", "/scratch/s/sneheel/next_chameleons_artifacts/tica/runs/final_v4d_k03_tamia_4b/resume_1660/adaptive/step_140"]
+ }
+}
