@@ -12091,3 +12091,12 @@ Speed: 12 pieces x 4 episodes, 2 episodes at a time per GPU, each pair ~15 min (
 generations, up to 768 tokens). Generation ran on HF `generate` (TICA_VLLM unset; vLLM merged mode exists in
 tica/vllm_gen.py, measured ~5x faster decode in 10-14). Refits are cheap (26 refits, ~11 s each). GPU util ~60%,
 memory ~35 / 80 GB.
+
+## 2026-11-03: KL 0.3 4B crashed at global ~1670 (scratch quota full); resumed from 1660
+
+Job 657860 died 07:02 with `OSError: [Errno 122] Disk quota exceeded` (scratch 2.0 / 2.0 TiB), at resume_1340 step ~330;
+the chained 657924 failed in 7 s (could not write). Last complete checkpoint: resume_1340/adaptive/step_320 = global
+1660 (adapter + trainer_state, 05:45), hard-linked to `final_v4d_k03_tamia_4b/keep/global_1660_precooldown_plus10/`
+so pruning cannot delete it (for a longer-run fork later). Resumed as 664131 (`tamia_node.sh resume:...`), 140 steps left.
+Speed (last 50 steps): 241 s/step = rollout 206 (refit work dominates: per-rank refit read ~100 s, fit ~70 s, summed
+timers) + train 35; generation on HF (no vLLM in training).
