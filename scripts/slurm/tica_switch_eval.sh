@@ -18,6 +18,15 @@ export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
 SNAP=$(cd "$REPO" && PYTHONPATH=src $PY -c "
 from next_chameleons.tica.config import load_run_config as l; print(l('$CFG').model.path)")
 LOCAL=${SLURM_TMPDIR:-/tmp}/$(basename $(dirname $(dirname $SNAP)))
-mkdir -p $LOCAL; cp -rL $SNAP/. $LOCAL/
+# Node-local model copy. Some HF snapshot files are read-only (Qwen3.5-2B: model.safetensors and
+# tokenizer.json are 0440) and cp keeps that mode, so a SECOND piece on the same GPU slot could not
+# overwrite them ("cp: cannot create regular file ... Permission denied"; race mbpp_pass64 / 664118
+# lost 5 2B pieces this way). Copy once per slot (marker written after a full copy), and replace
+# rather than overwrite (--remove-destination) when a copy is redone.
+mkdir -p "$LOCAL"
+if [ ! -f "$LOCAL/.tica_copied" ] || [ "$(cat "$LOCAL/.tica_copied")" != "$SNAP" ]; then
+  rm -f "$LOCAL/.tica_copied"
+  cp -rL --remove-destination "$SNAP/." "$LOCAL/" && echo "$SNAP" > "$LOCAL/.tica_copied"
+fi
 cd "$REPO"
 env PYTHONPATH=src $PY scripts/tica_switch_eval.py --config "$CFG" --model-path "$LOCAL" --out "$OUT" "$@"

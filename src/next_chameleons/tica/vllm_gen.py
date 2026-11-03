@@ -138,8 +138,6 @@ class VLLMGenerator:
             raise RuntimeError("vLLM generation needs TICA_VLLM_PY (the vllm-serving python)")
         self.work = Path(workdir)
         self.work.mkdir(parents=True, exist_ok=True)
-        self.port = _free_port()
-        self.url = f"http://127.0.0.1:{self.port}"
         self.model = model_path
         self.version = None  # Policy.weights_version of the loaded adapter
         self.lora = None  # served adapter name (None = base model)
@@ -158,16 +156,38 @@ class VLLMGenerator:
         lora_flags += self.family.get("flags", "")
         cmd = (f"module --force purge >/dev/null 2>&1; module load {MODULES} >/dev/null 2>&1; "
                f"exec {self.py} -m vllm.entrypoints.openai.api_server --model {model_path} "
-               f"--host 127.0.0.1 --port {self.port} --dtype bfloat16 "
+               f"--host 127.0.0.1 --port {{PORT}} --dtype bfloat16 "
                f"--gpu-memory-utilization {mem} --max-model-len {max_len} "
                f"--max-num-seqs {os.environ.get('TICA_VLLM_MAX_SEQS', '256')} "  # vLLM 0.21 default 1024 > Qwen3.5 Mamba blocks (637200)
                f"{lora_flags}--enable-sleep-mode --enable-prefix-caching {extra_args}")
-        env = {**os.environ, "VLLM_SERVER_DEV_MODE": "1",
-               "VLLM_ALLOW_RUNTIME_LORA_UPDATING": "True"}
-        env.pop("PYTHONPATH", None)  # the training env's src / site dirs must not leak in
+        self.cmd = cmd
+        self.env = {**os.environ, "VLLM_SERVER_DEV_MODE": "1",
+                    "VLLM_ALLOW_RUNTIME_LORA_UPDATING": "True"}
+        self.env.pop("PYTHONPATH", None)  # the training env's src / site dirs must not leak in
         self.log = open(log or self.work / "vllm.log", "w")  # noqa: SIM115
-        self.proc = subprocess.Popen(["bash", "-lc", cmd], env=env, stdout=self.log,
-                                     stderr=subprocess.STDOUT)
+        self.start_timeout = timeout
+        # STALL WATCHDOG (11-03, race mbpp_pass64 / 664118): vLLM 0.21 + Qwen3.5-2B (Mamba 'align'
+        # prefix caching, experimental) sometimes wedges mid-batch -- requests stay Running /
+        # Waiting at 0 tok/s and the engine logs nothing more. With the old 3600 s socket timeout
+        # each stall burned an hour and then killed the piece (kl03_2b_p1, strict2b_p4). Now one
+        # generation call may take TICA_VLLM_CALL_TIMEOUT s (default 300; the slowest whole race
+        # turn, several calls, was 59 s); on a timeout / dropped connection the server is killed,
+        # restarted, given back the weights it served, and the call is retried (TICA_VLLM_RETRIES,
+        # default 2; see _completions).
+        self.call_timeout = float(os.environ.get("TICA_VLLM_CALL_TIMEOUT", "300"))
+        self.retries = int(os.environ.get("TICA_VLLM_RETRIES", "2"))
+        self.stats["restarts"] = 0
+        self._start()
+
+    def _start(self) -> None:
+        """Launch the server (own process group, so close() also kills the EngineCore child) and
+        wait for /health."""
+
+        self.port = _free_port()
+        self.url = f"http://127.0.0.1:{self.port}"
+        cmd = self.cmd.replace("--port {PORT}", f"--port {self.port}")
+        self.proc = subprocess.Popen(["bash", "-lc", cmd], env=self.env, stdout=self.log,
+                                     stderr=subprocess.STDOUT, start_new_session=True)
         t0 = time.time()
         while True:
             if self.proc.poll() is not None:
@@ -179,11 +199,71 @@ class VLLMGenerator:
                         break
             except OSError:
                 pass
-            if time.time() - t0 > timeout:
-                self.close()
+            if time.time() - t0 > self.start_timeout:
+                self._kill()
                 raise RuntimeError("vLLM server did not come up")
             time.sleep(5)
         self.startup_sec = round(time.time() - t0)
+
+    def _kill(self) -> None:
+        """Terminate the server's whole process group (API server + EngineCore)."""
+
+        import contextlib
+        import signal
+
+        for sig, wait in ((signal.SIGTERM, 30), (signal.SIGKILL, 30)):
+            with contextlib.suppress(ProcessLookupError, PermissionError):
+                os.killpg(self.proc.pid, sig)
+            try:
+                self.proc.wait(timeout=wait)
+                break
+            except subprocess.TimeoutExpired:
+                continue
+
+    def restart(self) -> None:
+        """Kill a stalled server, start a fresh one and give it back the weights it served."""
+
+        self._kill()
+        self.log.write(f"\n### TICA watchdog: restarting vLLM server ({time.ctime()})\n")
+        self.log.flush()
+        self.stats["restarts"] += 1
+        self._start()
+        self.sleeping = False
+        if self.mode == "merged":
+            if self.loaded != "base":  # the merged policy weights are still on disk
+                self._reload(str(self.local))
+        elif self.lora is not None:
+            self._post("/v1/load_lora_adapter", {"lora_name": "pol",
+                                                 "lora_path": str(self.work / "adapter_vllm"),
+                                                 "load_inplace": True})
+
+    def _completions(self, body: dict) -> list[dict]:
+        """/v1/completions with the stall watchdog: per-call timeout; on a stall restart the server
+        and retry, the retries in sub-requests of TICA_VLLM_RETRY_CHUNK prompts (default 32; a
+        different batch shape in case the stall depends on it -- every request carries its seed,
+        so the samples do not depend on the batching). Returns the choices in prompt order."""
+
+        prompts = body["prompt"]
+        chunk = max(1, int(os.environ.get("TICA_VLLM_RETRY_CHUNK", "32")))
+        for attempt in range(self.retries + 1):
+            step = len(prompts) if attempt == 0 else chunk
+            try:
+                out = []
+                for i in range(0, len(prompts), max(step, 1)):
+                    res = self._post("/v1/completions", {**body, "prompt": prompts[i : i + step]},
+                                     timeout=self.call_timeout)
+                    out.extend(sorted(res["choices"], key=lambda c: c["index"]))
+                return out
+            except (TimeoutError, ConnectionError, urllib.error.URLError) as err:
+                if isinstance(err, urllib.error.HTTPError) or attempt == self.retries:
+                    raise
+                import sys
+
+                print(json.dumps({"vllm_watchdog": {"attempt": attempt + 1, "prompts": len(prompts),
+                                                    "error": repr(err)[:200]}}),
+                      file=sys.stderr, flush=True)
+                self.restart()
+        raise AssertionError("unreachable")
 
     # ------------------------------------------------------------------ http
     def _post(self, path: str, body: dict | None = None, timeout: float = 3600.0):
@@ -270,8 +350,7 @@ class VLLMGenerator:
                 "temperature": temperature, "top_p": top_p, "seed": seed, "n": 1,
                 "return_token_ids": True, "skip_special_tokens": True}
         t0 = time.time()
-        out = self._post("/v1/completions", body)
-        ch = sorted(out["choices"], key=lambda c: c["index"])
+        ch = self._completions(body)
         self.stats["calls"] += 1
         self.stats["prompts"] += len(prompt_ids)
         self.stats["gen_tokens"] += sum(len(c.get("token_ids") or []) for c in ch)
@@ -303,8 +382,7 @@ class VLLMGenerator:
 
     def close(self) -> None:
         try:
-            self.proc.terminate()
-            self.proc.wait(timeout=30)
+            self._kill()
         except Exception:
             self.proc.kill()
         self.log.close()

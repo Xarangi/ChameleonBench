@@ -37,6 +37,7 @@ from __future__ import annotations
 import argparse
 import json
 import re
+import sys
 from collections import defaultdict
 from pathlib import Path
 
@@ -262,6 +263,16 @@ def _jsonl(path, piece: str = "") -> list[dict]:
     return out
 
 
+PIECES: dict = {}  # NAME -> {"pieces": complete piece stems, "incomplete": skipped stems}
+
+
+def piece_info(name: str) -> dict:
+    """Which pieces of --race NAME entered the report (and which were skipped as unfinished)."""
+
+    v = PIECES.get(name, {"pieces": [], "incomplete": []})
+    return {"pieces": v["pieces"], "pieces_incomplete": v["incomplete"]}
+
+
 def load_runs(race: list[str], gens: list[str], forks: list[str]) -> dict:
     """NAME -> (main rows, fork rows). --race NAME=GLOB: every main X.jsonl (X_forks.jsonl
     excluded) with its fork panel X_forks.jsonl (episode keys carry the piece = X); --gens /
@@ -275,8 +286,18 @@ def load_runs(race: list[str], gens: list[str], forks: list[str]) -> dict:
         files = sorted(f for f in glob.glob(pat) if not f.endswith("_forks.jsonl"))
         if not files:
             raise SystemExit(f"--race {name}: no files match {pat}")
+        info = PIECES.setdefault(name, {"pieces": [], "incomplete": []})
         for f in files:
             stem = f[: -len(".jsonl")]
+            # a piece is complete when tica_switch_eval wrote its aggregate X.json at the end; a
+            # crashed piece leaves a partial (or empty) X.jsonl, which must not enter the report
+            # (11-03: race mbpp_pass64 lost 7 pieces silently)
+            if not Path(stem + ".json").exists():
+                info["incomplete"].append(Path(stem).name)
+                print(f"WARNING --race {name}: {f} has no {Path(stem).name}.json (piece did not "
+                      "finish) -- skipped", file=sys.stderr, flush=True)
+                continue
+            info["pieces"].append(Path(stem).name)
             runs[name][0].extend(_jsonl(f, stem))
             if Path(stem + "_forks.jsonl").exists():
                 runs[name][1].extend(_jsonl(stem + "_forks.jsonl", stem))
@@ -306,7 +327,7 @@ def main() -> None:
         g = gold_for(r.get("user", ""), gold)
         return None if g is None else pred(r.get("answer", "")) == g
 
-    res = {name: race_summary(rows, frows, correct)
+    res = {name: {**race_summary(rows, frows, correct), **piece_info(name)}
            for name, (rows, frows) in load_runs(a.race, a.gens, a.forks).items()}
     for name, v in res.items():
         print(name, json.dumps({k: x for k, x in v.items() if k != "by_concept"}), flush=True)

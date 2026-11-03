@@ -31,7 +31,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
-from tica_math_race_report import add_run_args, load_runs, pred, race_summary
+from tica_math_race_report import add_run_args, load_runs, piece_info, pred, race_summary
 
 
 def gold_for(user: str, gold: dict) -> tuple[str, dict] | None:
@@ -105,7 +105,7 @@ def main() -> None:
     for name, (rows, frows) in load_runs(a.race, a.gens, a.forks).items():
         # passing answers + each episode's turn-0 answer (first_answer_acc)
         correct_fn.prefetch([r for r in rows if r.get("passed") or r.get("turn") == 0])
-        res[name] = race_summary(rows, frows, correct_fn)
+        res[name] = {**race_summary(rows, frows, correct_fn), **piece_info(name)}
         print(name, json.dumps({k: v for k, v in res[name].items() if k != "by_concept"}),
               flush=True)
     Path(a.out).write_text(json.dumps(res, indent=1))
