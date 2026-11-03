@@ -12100,3 +12100,7 @@ the chained 657924 failed in 7 s (could not write). Last complete checkpoint: re
 so pruning cannot delete it (for a longer-run fork later). Resumed as 664131 (`tamia_node.sh resume:...`), 140 steps left.
 Speed (last 50 steps): 241 s/step = rollout 206 (refit work dominates: per-rank refit read ~100 s, fit ~70 s, summed
 timers) + train 35; generation on HF (no vLLM in training).
+Space: thinned finished runs with `scripts/ops/prune_checkpoints.py` (dry-run manifest, then `--delete`): kept every
+50 global steps, each chunk's newest, resume bases, 1640 / 1650, and per run the latest optimizer state plus the
+newest one at or before 1650; skipped final_v4d_k03_tamia_4b, dodgescope_*, mech_1025, races. Deleted 1167 files,
+447 GiB (strict 4B 110, Gemma 12B 110, strict 2B 57, v4b x2 93, v4d 2B 43, v4d 4B 21, x1800 14).
