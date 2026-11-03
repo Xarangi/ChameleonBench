@@ -12038,3 +12038,32 @@ episodes that beat the k-th probe; probes beaten in a row) and the TURNS TO BEAT
 from the main turns, with episode-cluster bootstrap CIs; accuracy by refit level is still reported. The MBPP race is
 being rerun with refit-on-pass: job 661979, outputs `runs/mech_1025/taskrace_pass/` (under
 /scratch/s/sneheel/next_chameleons_artifacts/tica/).
+
+## 2026-11-02 (night): INTERACTIVE MBPP race with REFIT-ON-PASS (supersedes the --refit-every 4 races)
+
+Held-out Python (MBPP unit tests), 16 episodes per model, 33 turns, refit only after a pass (the training rule), fork
+panel 16. Job 661979 (1h39), scoring 662854 (CPU). `runs/mech_1025/taskrace_pass/report_mbpp.json` + per-probe
+`deploy_records`. Base models never beat a probe (base 2B 0/16 earlier; base accuracy 4B 0.72, 2B 0.57).
+
+Probe by probe (faced -> beaten, mean turns to beat; unbeaten probes held for the rest of the episode):
+
+| model | probe 1 (base panel) | probe 2 | probe 3 | probe 4 | beaten in a row (mean; hist 0/1/2/3/4) |
+|---|---|---|---|---|---|
+| strict 4B @1800 | 16 -> 14 (0.88), 5.0 turns | 13 -> 8 (0.61), 7.9 | 8 -> 4 (0.50), 8.2 | 4 -> 0 | 1.6; 2/6/4/4/0 |
+| strict 2B @1800 | 16 -> 9 (0.56), 8.7 | 9 -> 0 | - | - | 0.6; 7/9 |
+| KL 0.3 2B @1800 | 16 -> 15 (0.94), 4.3 | 15 -> 11 (0.73), 8.8 | 11 -> 3 (0.27), 12.3 | 3 -> 1, 19.0 | 1.9; 1/4/8/2/1 |
+
+Refit probes by kind, beaten / deployed (small counts): strict 4B linear 4/4, attnpool 3/4, ensdeep4 3/6, maxpool 1/2,
+rlobf 1/2, ens4_linear 0/6, ens4_mlp 0/2; KL 0.3 2B ensdeep4 7/7, attnpool 2/5, maxpool 2/4, ens4_mlp 1/2, rlobf 1/2,
+ens4_linear 1/4, linear 1/5; strict 2B 0/9 of every kind. By layer: strict 4B L8 3/6, L12 2/2, L16 3/3, L22 1/1; KL 0.3
+2B L6 2/4, L9 3/6, L12 1/1, L17 0/2, L20 0/3.
+
+Accuracy (unit tests) by probes deployed, main turns / forks: strict 4B 0.27-0.45 / 0.32-0.43 (base 0.72); strict 2B
+0.53 / 0.50-0.51 (base 0.57); KL 0.3 2B 0.21 -> 0.00 / 0.21 -> 0.00.
+
+Readings: with the correct protocol all three trained models DO dodge held-out Python probes, including refit ones:
+the strict 4B beats 1.6 probes in a row on average (up to 3; 4 of 16 episodes beat three), KL 0.3 2B 1.9 (up to 4),
+strict 2B only the first probe. It takes longer than on trained concepts (5-9 turns per probe vs ~2-3). The earlier
+"never beats a refit probe" result was an artefact of the removed exogenous schedule. Capability: strict 2B keeps
+near-base accuracy but barely dodges; strict 4B dodges and roughly halves its accuracy (0.27-0.45 vs 0.72); KL 0.3 2B
+dodges most and its code stops working (0.00 from the 2nd probe; JS-style substitution seen before).
