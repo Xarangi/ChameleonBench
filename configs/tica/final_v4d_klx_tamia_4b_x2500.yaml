@@ -31,7 +31,7 @@ model:
   dtype: bfloat16
   enable_thinking: false
   keep_think_history: true
-  batch_size: 64    # 10-30 klx: refit read batch 48 -> 64 (exact; rollout peak ~0.9 GB per unit: 4B v4d 45 / 53 GB median / max at 48 -> ~59 / 67 GB of 80)
+  batch_size: 80    # 11-03 (user: "whatever gets us there faster"): 64 -> 80 from chunk 665460 (exact up to kernel numerics; worst case +16 x 0.9 GB = ~71 GB reserved; 96 could reach ~86 GB); 10-30 klx: refit read batch 48 -> 64 (exact; rollout peak ~0.9 GB per unit: 4B v4d 45 / 53 GB median / max at 48 -> ~59 / 67 GB of 80)
   grad_ckpt: true
   fla_grad: true
   lm_chunk: 1024   # TamIA 10-21: chunked LM terms, no full logits (peak 42 -> 16 GB alloc per process, smoke L6); lets both arms share every GPU (layout L7)

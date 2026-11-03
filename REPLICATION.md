@@ -12181,3 +12181,7 @@ bit-exact).
   re-pointed to them. KL0.3 4B races re-submitted with batch 8 and 4:30 limits (665962 battery, 665963 held-out; old
   665421 / 665537 cancelled, user cannot raise a pending job's limit), scores re-pointed. Policy from the user:
   no subagents unless asked.
+- 11-03 19:00 user: strict 4B x2500 read batch 64 -> 80 from the next chunk (665460; exact up to kernel numerics). 96 not
+  used: worst case ~86 GB reserved (0.9 GB per unit) vs 80 GB cards, an OOM would kill a 24 h chunk at start. Gain
+  unmeasured so far: compare rollout/sec_ep_refit_read per refit and sec over 665460's first steps against 1601-1700.
+  Strict 2B extension NOT started (user: not yet).
