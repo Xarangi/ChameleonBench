@@ -89,3 +89,5 @@ def test_passing_solution_and_fluke_check_per_probe():
     assert p2["turns_to_beat"][0] == 2.0
     assert out["by_concept"]["math"]["probe_2"]["fluke_share_mean"][0] == 0.25
     assert not any(k in p1 for k in ("pass_rate", "accuracy", "acc_caught"))
+    # turn-0 answers, one per episode: ep 0 and ep 1 correct ("x"/eid 7 has no turn 0)
+    assert out["first_answer_acc"][0] == 1.0 and out["first_answer_acc"][3] == 2

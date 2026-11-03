@@ -7,7 +7,8 @@ Per NAME and per refit probe k (overall and per concept), tica_math_race_report.
 faced, beaten, beat_rate, turns to beat (mean + histogram), probes beaten in a row, the accuracy of
 the PASSING solution (the task check on the main answer that beat probe k) and the FLUKE CHECK
 (share of the fork panel at that pass turn -- same history + verdict, new problems, same probe pool
--- that also beats the probe: mean and per pass). Only the passing answers are checked, so a report
+-- that also beats the probe: mean and per pass), plus first_answer_acc (turn-0 answer accuracy,
+one per episode: the capability anchor). Only passing and turn-0 answers are checked, so a report
 runs few unit tests. No per-judged-turn numbers (11-03, user): no pass rates and no accuracy over
 all turns / caught turns / all forks. Ratios: [value, 95% CI low, CI high, denominator], bootstrap
 over EPISODES.
@@ -102,7 +103,8 @@ def main() -> None:
     correct_fn = make_correct(gold, a.workers)
     res: dict = {}
     for name, (rows, frows) in load_runs(a.race, a.gens, a.forks).items():
-        correct_fn.prefetch([r for r in rows if r.get("passed")])  # passing answers only
+        # passing answers + each episode's turn-0 answer (first_answer_acc)
+        correct_fn.prefetch([r for r in rows if r.get("passed") or r.get("turn") == 0])
         res[name] = race_summary(rows, frows, correct_fn)
         print(name, json.dumps({k: v for k, v in res[name].items() if k != "by_concept"}),
               flush=True)
