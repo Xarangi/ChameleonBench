@@ -13,6 +13,15 @@ is that item. Every other concept and every fit / calib text (base probes) is un
   json   "JSON data"               the concept's calib / episode requests; gold = reference (schema)
   jseval "JavaScript code"         HumanEval-JS (MultiPL-E humaneval-js; the trained concept's own
                                    data has no tests); gold = the problem's Node tests (10-30)
+  HELD-OUT concepts with a checkable answer (11-03; configs/tica/final_split_v5.json "heldout"):
+  pyeval   "Python code"           HumanEval-Python (openai_humaneval, 164); gold =
+                                   check(entry_point) in the MBPP sandbox (2nd held-out Python set)
+  javaeval "Java code"             HumanEval-Java (MultiPL-E humaneval-java, 158); gold = the
+                                   MultiPL-E main() asserts under `java -ea` (+ javatuples jar)
+  mgsm_fr / mgsm_ru / mgsm_th      MGSM (juletxara/mgsm test, 250 each) = GSM8K translated into
+     "French / Russian / Thai language"  the held-out language; the request is in that language
+                                   (+ the concept's "Respond in <Lang>." suffix); gold = the number;
+                                   the report also records fastText language-ID (in-language)
 
 tica_task_race_report.py scores the race by refit level: beat rate + turns to beat (main turns),
 accuracy (main turns and fork panel).
@@ -32,7 +41,11 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 
 CONCEPT = {"gsm8k": "mathematical reasoning", "mbpp": "Python code", "sql": "SQL code",
-           "json": "JSON data", "jseval": "JavaScript code"}
+           "json": "JSON data", "jseval": "JavaScript code", "pyeval": "Python code",
+           "javaeval": "Java code", "mgsm_fr": "French language", "mgsm_ru": "Russian language",
+           "mgsm_th": "Thai language"}
+# the training requests of the language concepts end with this suffix (final_v5_elicit_inputs)
+MGSM_SUFFIX = {"fr": "Respond in French.", "ru": "Respond in Russian.", "th": "Respond in Thai."}
 CAPABILITY = Path("/scratch/s/sneheel/next_chameleons_raw_cache/capability")
 GSM_REQUEST = ('Solve the following problem. Show your working briefly, then finish with '
                '"The answer is <number>."\n\nProblem: {q}')
@@ -64,6 +77,33 @@ def task_items(task: str, data: dict, inputs: dict, n: int) -> list[tuple[str, d
 
         return [(js_prompt(it), {"task": task, "tests": it["tests"]})
                 for it in subsample(load_heldout(CAPABILITY, "humaneval_js"), n)]
+    if task == "pyeval":
+        from next_chameleons.benchmarks.capability_heldout import load_heldout, py_prompt, subsample
+
+        return [(py_prompt(it), {"task": task, "fn": it["fn"], "prompt": it["prompt"],
+                                 "test": it["test"]})
+                for it in subsample(load_heldout(CAPABILITY, "humaneval_py"), n)]
+    if task == "javaeval":
+        from next_chameleons.benchmarks.capability_heldout import (
+            java_prompt,
+            load_heldout,
+            subsample,
+        )
+
+        return [(java_prompt(it), {"task": task, "fn": it["fn"], "prompt": it["prompt"],
+                                   "tests": it["tests"]})
+                for it in subsample(load_heldout(CAPABILITY, "humaneval_java"), n)]
+    if task.startswith("mgsm_"):
+        from next_chameleons.benchmarks.capability_heldout import (
+            MGSM_REQUEST,
+            load_heldout,
+            subsample,
+        )
+
+        lang = task.split("_", 1)[1]
+        return [(MGSM_REQUEST[lang].format(q=it["question"].strip()) + "\n\n" + MGSM_SUFFIX[lang],
+                 {"task": task, "lang": lang, "gold": it["gold"]})
+                for it in subsample(load_heldout(CAPABILITY, task), n)]
     from next_chameleons.tica.validity import sql_task_request
 
     concept, out = CONCEPT[task], []

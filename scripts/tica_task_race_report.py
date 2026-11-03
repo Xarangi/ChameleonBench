@@ -13,8 +13,12 @@ runs few unit tests. No per-judged-turn numbers (11-03, user): no pass rates and
 all turns / caught turns / all forks. Ratios: [value, 95% CI low, CI high, denominator], bootstrap
 over EPISODES.
 Task checks: GSM8K final number, MBPP unit tests (sandboxed), HumanEval-JS Node tests, SQL
-execution match, JSON function schema (tica/validity.py). Aggregates only; needs the training venv
-(validity / sandbox).
+execution match, JSON function schema (tica/validity.py); held-out tasks (11-03): HumanEval-Python
+check(entry_point) (MBPP sandbox), HumanEval-Java asserts under `java -ea`, MGSM fr / ru / th final
+number. MGSM also records the answer's fastText language (lid.176): per probe k
+passing_in_language / passing_correct_and_in_language (+ _n), and first_answer_in_language /
+first_answer_correct_and_in_language, next to passing_correct / first_answer_acc (= the number).
+Aggregates only; needs the training venv (validity / sandbox / fasttext).
 
   python scripts/tica_task_race_report.py --gold gold_mbpp.json \
       --race strict4b='RUN/strict4b_p*.jsonl' strict2b='RUN/strict2b_p*.jsonl' --out report.json
@@ -48,6 +52,18 @@ def correct(req: str, rec: dict, answer: str) -> bool:
     task = rec["task"]
     if task == "gsm8k":
         return pred(answer or "") == rec["gold"]
+    if task.startswith("mgsm_"):
+        from next_chameleons.benchmarks.capability_heldout import _norm_number, mgsm_number
+
+        return mgsm_number(answer or "", rec["lang"]) == _norm_number(rec["gold"])
+    if task == "pyeval":
+        from next_chameleons.benchmarks.capability_heldout import extract_code, run_humaneval_py
+
+        return bool(run_humaneval_py(extract_code(answer or ""), rec)["passed"])
+    if task == "javaeval":
+        from next_chameleons.benchmarks.capability_heldout import extract_java_code, run_java_tests
+
+        return bool(run_java_tests(extract_java_code(answer or ""), rec)["passed"])
     if task == "mbpp":
         from next_chameleons.benchmarks.capability_heldout import extract_code, run_tests
 
@@ -65,8 +81,33 @@ def correct(req: str, rec: dict, answer: str) -> bool:
         return False
 
 
-def make_correct(gold: dict, workers: int):
-    """correct(row) for race_summary, memoised; prefetch(rows) runs the checks in parallel first."""
+def in_language(rec: dict, answer: str) -> bool:
+    """MGSM: the answer's most likely language (fastText lid.176) is the item's language."""
+
+    from next_chameleons.benchmarks.capability_heldout import answer_language
+
+    return answer_language(answer or "")[0] == rec["lang"]
+
+
+# extra checks per task family, reported next to the headline check (task correctness)
+EXTRA_CHECKS = {
+    "mgsm": {
+        "in_language": lambda req, rec, ans: in_language(rec, ans),
+        "correct_and_in_language": lambda req, rec, ans: (correct(req, rec, ans)
+                                                          and in_language(rec, ans)),
+    },
+}
+
+
+def extra_checks(gold: dict) -> dict:
+    """{name: check(req, rec, answer)} for the gold's task family (empty for most tasks)."""
+
+    fams = {rec["task"].split("_", 1)[0] for rec in gold.values()}
+    return {k: v for f in sorted(fams) for k, v in EXTRA_CHECKS.get(f, {}).items()}
+
+
+def make_correct(gold: dict, workers: int, check=correct):
+    """check(row) for race_summary, memoised; prefetch(rows) runs the checks in parallel first."""
 
     memo: dict = {}
 
@@ -75,7 +116,7 @@ def make_correct(gold: dict, workers: int):
 
     def one(r):
         g = gold_for(r.get("user", ""), gold)
-        return None if g is None else correct(g[0], g[1], r.get("answer", ""))
+        return None if g is None else check(g[0], g[1], r.get("answer", ""))
 
     def prefetch(rows):
         todo = {key(r): r for r in rows if key(r) not in memo}
@@ -92,6 +133,21 @@ def make_correct(gold: dict, workers: int):
     return fn
 
 
+def add_extra(res: dict, extra: dict) -> None:
+    """Merge an extra check's race_summary into res: per probe k passing_<name> (+ _n) and
+    first_answer_<name>, overall and per concept (the beat statistics are the same rows)."""
+
+    for name, ex in extra.items():
+        for blk, xb in ((res, ex), *((res["by_concept"].get(c, {}), v)
+                                     for c, v in ex.get("by_concept", {}).items())):
+            for k, v in xb.items():
+                if k.startswith("probe_") and isinstance(v, dict) and k in blk:
+                    blk[k][f"passing_{name}"] = v.get("passing_correct")
+                    blk[k][f"passing_{name}_n"] = v.get("passing_correct_n")
+            if "first_answer_acc" in xb:
+                blk[f"first_answer_{name}"] = xb["first_answer_acc"]
+
+
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--gold", required=True)
@@ -101,11 +157,16 @@ def main() -> None:
     a = ap.parse_args()
     gold = json.loads(Path(a.gold).read_text())
     correct_fn = make_correct(gold, a.workers)
+    extras = {k: make_correct(gold, a.workers, v) for k, v in extra_checks(gold).items()}
     res: dict = {}
     for name, (rows, frows) in load_runs(a.race, a.gens, a.forks).items():
         # passing answers + each episode's turn-0 answer (first_answer_acc)
-        correct_fn.prefetch([r for r in rows if r.get("passed") or r.get("turn") == 0])
+        scored = [r for r in rows if r.get("passed") or r.get("turn") == 0]
+        correct_fn.prefetch(scored)
         res[name] = {**race_summary(rows, frows, correct_fn), **piece_info(name)}
+        for fn in extras.values():
+            fn.prefetch(scored)
+        add_extra(res[name], {k: race_summary(rows, frows, fn) for k, fn in extras.items()})
         print(name, json.dumps({k: v for k, v in res[name].items() if k != "by_concept"}),
               flush=True)
     Path(a.out).write_text(json.dumps(res, indent=1))

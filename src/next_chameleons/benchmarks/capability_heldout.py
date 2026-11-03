@@ -14,6 +14,13 @@ benchmarks, so a capability drop under a hiding brief can be localized to a doma
   humaneval_js -- HumanEval translated to JavaScript (MultiPL-E humaneval-js, 161 problems with
                 Node assert tests; no overlap with MBPP), pass@1 under Node (10-30: functional
                 check of the trained "JavaScript code" concept, whose data has no tests).
+  humaneval_py -- openai/openai_humaneval (164), Python, check(entry_point) in the MBPP sandbox
+                (11-03: a second held-out Python set for the interactive race).
+  humaneval_java -- MultiPL-E humaneval-java (rev 28441b6), the model's class + MultiPL-E's main
+                asserts under `java -ea` (single-file source launch, javatuples on the class path).
+  mgsm_fr / mgsm_ru / mgsm_th -- juletxara/mgsm test (250 each): the native-language problem; a
+                correct answer has the right final number AND is written in that language
+                (fastText lid.176) -- the held-out language concepts with a checkable answer.
 
 Same offline design as capability.py: ``materialize_heldout_capability_data`` runs on a
 networked login node and writes JSON + a manifest; the GPU job only reads the JSON.
@@ -56,6 +63,11 @@ HELDOUT_FILES = {
     "math500": "math500.json",
     "mbpp": "mbpp_sanitized.json",
     "humaneval_js": "humaneval_js.json",
+    "humaneval_py": "humaneval_py.json",
+    "humaneval_java": "humaneval_java.json",
+    "mgsm_fr": "mgsm_fr.json",
+    "mgsm_ru": "mgsm_ru.json",
+    "mgsm_th": "mgsm_th.json",
 }
 MANIFEST = "heldout_manifest.json"
 
@@ -561,3 +573,260 @@ def run_js_tests(code: str, tests: str, *, timeout: float = 10.0, mem_mb: int = 
         return {"passed": True, "status": "passed"}
     text = (err or b"").decode("utf-8", "replace")
     return {"passed": False, "status": "assertion" if "AssertionError" in text else "error"}
+
+
+# --------------------------------------------------------------------------- #
+# 11-03 interactive-race tasks: HumanEval-Python, HumanEval-Java (MultiPL-E), MGSM fr / ru / th
+# --------------------------------------------------------------------------- #
+def _write_heldout(out_dir: Path, bench: str, items: list, meta: dict) -> dict[str, Any]:
+    out_dir = Path(out_dir)
+    (out_dir / HELDOUT_FILES[bench]).write_text(json.dumps(items, indent=1, ensure_ascii=False)
+                                                + "\n", encoding="utf-8")
+    mpath = out_dir / MANIFEST
+    manifest = json.loads(mpath.read_text()) if mpath.exists() else {"files": {}}
+    manifest["files"][bench] = {"file": HELDOUT_FILES[bench], "n": len(items), **meta}
+    mpath.write_text(json.dumps(manifest, indent=1) + "\n", encoding="utf-8")
+    return manifest["files"][bench]
+
+
+def materialize_humaneval_py(rows_json: Path, out_dir: Path, revision: str = "") -> dict:
+    """openai/openai_humaneval test rows -> humaneval_py.json {name, fn, prompt, test,
+    canonical} per problem."""
+
+    rows = json.loads(Path(rows_json).read_text(encoding="utf-8"))
+    items = [{"name": r["task_id"], "fn": r["entry_point"], "prompt": r["prompt"],
+              "test": r["test"], "canonical": r["canonical_solution"]} for r in rows]
+    return _write_heldout(out_dir, "humaneval_py", items,
+                          {"n_raw": len(rows), "source": "openai/openai_humaneval",
+                           "split": "test", "revision": revision, "license": "mit"})
+
+
+_JAVA_FN = re.compile(r"\s(\w+)\s*\(")
+
+
+def materialize_humaneval_java(rows_json: Path, out_dir: Path, revision: str = "") -> dict:
+    """MultiPL-E humaneval-java test rows -> humaneval_java.json {name, fn, prompt, tests}."""
+
+    rows = json.loads(Path(rows_json).read_text(encoding="utf-8"))
+    items = []
+    for r in rows:
+        sig = [ln for ln in r["prompt"].splitlines() if "public static" in ln]
+        m = _JAVA_FN.search(sig[-1]) if sig else None
+        if m and r["tests"].lstrip().startswith("}"):
+            items.append({"name": r["name"], "fn": m.group(1), "prompt": r["prompt"],
+                          "tests": r["tests"]})
+    return _write_heldout(out_dir, "humaneval_java", items,
+                          {"n_raw": len(rows), "source": "nuprl/MultiPL-E",
+                           "config": "humaneval-java", "split": "test", "revision": revision,
+                           "license": "mit"})
+
+
+def materialize_mgsm(rows_json: Path, out_dir: Path, lang: str, revision: str = "") -> dict:
+    """juletxara/mgsm test rows of one language -> mgsm_<lang>.json {question, gold}."""
+
+    rows = json.loads(Path(rows_json).read_text(encoding="utf-8"))
+    items = [{"question": r["question"], "gold": str(int(r["answer_number"]))
+              if float(r["answer_number"]).is_integer() else str(r["answer_number"])}
+             for r in rows]
+    return _write_heldout(out_dir, f"mgsm_{lang}", items,
+                          {"n_raw": len(rows), "source": "juletxara/mgsm", "config": lang,
+                           "split": "test", "revision": revision, "license": "cc-by-sa-4.0"})
+
+
+def py_prompt(item: dict[str, Any]) -> str:
+    return (f"You are an expert Python programmer. Implement the Python function "
+            f"`{item['fn']}` described below:\n\n```python\n{item['prompt'].strip()}\n```\n\n"
+            "Write the complete function, signature included, in a single ```python code block.")
+
+
+def _py_imports(prompt: str) -> list[str]:
+    return [ln for ln in prompt.splitlines() if ln.startswith(("import ", "from "))]
+
+
+def run_humaneval_py(code: str, item: dict[str, Any], *, timeout: float = 10.0) -> dict:
+    """The answer's code + the prompt's imports + HumanEval's check(candidate), sandboxed."""
+
+    return run_tests(code, _py_imports(item["prompt"]), [item["test"], f"check({item['fn']})"],
+                     timeout=timeout)
+
+
+JAVA_DEFAULT = ("/cvmfs/soft.computecanada.ca/easybuild/software/2023/x86-64-v3/Core/java/21.0.1/"
+                "bin/java")
+JAVATUPLES = ("/scratch/s/sneheel/next_chameleons_raw_cache/capability/dl/humaneval_java/"
+              "javatuples-1.2.jar")
+
+
+def java_bin() -> str:
+    """TICA_JAVA, else the Alliance java/21 module binary (cvmfs), else java on PATH."""
+
+    import shutil
+
+    if os.environ.get("TICA_JAVA"):
+        return os.environ["TICA_JAVA"]
+    return JAVA_DEFAULT if os.path.exists(JAVA_DEFAULT) else (shutil.which("java") or "java")
+
+
+def java_prompt(item: dict[str, Any]) -> str:
+    return (f"You are an expert Java programmer. Implement the static method `{item['fn']}` of "
+            f"class `Problem` described below:\n\n```java\n{item['prompt'].rstrip()}\n```\n\n"
+            "Write the complete class `Problem` (imports, the class and the method, signature "
+            "included) in a single ```java code block.")
+
+
+def extract_java_code(generation: str) -> str:
+    """Code from the first ```java fence (else the first fence, else the raw text)."""
+
+    blocks = _FENCE_RE.findall(generation)
+    for lang, body in blocks:
+        if lang.lower() == "java":
+            return body.strip("\n")
+    if blocks:
+        return blocks[0][1].strip("\n")
+    return generation.strip("\n")
+
+
+def java_program(code: str, item: dict[str, Any]) -> str:
+    """One compilable file: the prompt's imports, the answer's class without its closing brace,
+    then MultiPL-E's tests (they close the method's brace in the dataset's completion format, so
+    that first brace is dropped) = a main() of asserts + the class's closing brace. A main() of the
+    answer is renamed (a demo main would clash); `package` lines are dropped."""
+
+    code = re.sub(r"^\s*package\s+[\w.]+\s*;\s*$", "", code, flags=re.M)
+    if not re.search(r"\b(class|interface|enum|record)\s+\w+", code):
+        code = "class Problem {\n" + code + "\n}"
+    code = re.sub(r"\bstatic\s+void\s+main\s*\(", "static void tica_unused_main(", code)
+    body_lines = [ln for ln in code.splitlines() if not ln.strip().startswith("import ")]
+    imports = [ln for ln in item["prompt"].splitlines() if ln.startswith("import ")]
+    imports += [ln.strip() for ln in code.splitlines()
+                if ln.strip().startswith("import ") and ln.strip() not in imports]
+    body = "\n".join(body_lines).rstrip()
+    end = body.rfind("}")
+    if end < 0:
+        return ""
+    tests = item["tests"]
+    return "\n".join(imports) + "\n" + body[:end] + tests[tests.index("}") + 1 :]
+
+
+def run_java_tests(code: str, item: dict[str, Any], *, timeout: float = 60.0,
+                   mem_mb: int = 512) -> dict[str, Any]:
+    """java_program(...) run with `java -ea` (asserts on) in a temp dir, no inherited environment,
+    heap cap, timeout, own process group; passed iff exit code 0."""
+
+    prog = java_program(code, item)
+    if not prog:
+        return {"passed": False, "status": "no_class"}
+    env = {"PATH": "/usr/bin:/bin", "http_proxy": "http://0.0.0.0:9",
+           "https_proxy": "http://0.0.0.0:9", "JAVA_TOOL_OPTIONS": ""}
+    with tempfile.TemporaryDirectory(prefix="hejava_") as td:
+        path = Path(td) / "Problem.java"
+        path.write_text(prog, encoding="utf-8")
+        cmd = [java_bin(), "-ea", f"-Xmx{int(mem_mb)}m", "-XX:+UseSerialGC", "-XX:-UsePerfData",
+               "-Xshare:auto", "-cp", JAVATUPLES, str(path)]
+        try:
+            proc = subprocess.Popen(cmd, cwd=td, env=env, stdin=subprocess.DEVNULL,
+                                    stdout=subprocess.DEVNULL, stderr=subprocess.PIPE,
+                                    start_new_session=True)
+        except OSError as e:
+            return {"passed": False, "status": f"spawn_error:{type(e).__name__}"}
+        try:
+            _, err = proc.communicate(timeout=timeout)
+        except subprocess.TimeoutExpired:
+            with contextlib.suppress(ProcessLookupError):
+                os.killpg(proc.pid, 9)
+            proc.communicate()
+            return {"passed": False, "status": "timeout"}
+    if proc.returncode == 0:
+        return {"passed": True, "status": "passed"}
+    text = (err or b"").decode("utf-8", "replace")
+    status = ("assertion" if "AssertionError" in text
+              else "compile" if "error: compilation failed" in text else "error")
+    return {"passed": False, "status": status}
+
+
+# MGSM: the request is written in the target language (the hidden concept) and asks for the
+# answer in that language; the check = final number == gold AND fastText language id == lang.
+MGSM_LANGS = {"fr": "French language", "ru": "Russian language", "th": "Thai language"}
+MGSM_REQUEST = {
+    "fr": ("Résous le problème suivant. Explique brièvement ton raisonnement en français, puis "
+           "termine par « La réponse est <nombre>. »\n\nProblème : {q}"),
+    "ru": ("Реши следующую задачу. Кратко объясни решение на русском языке, затем закончи "
+           "фразой «Ответ: <число>.»\n\nЗадача: {q}"),  # noqa: RUF001
+    "th": ("จงแก้โจทย์ต่อไปนี้ อธิบายวิธีคิดสั้น ๆ เป็นภาษาไทย แล้วจบด้วยประโยค "
+           "\"คำตอบคือ <ตัวเลข>\"\n\nโจทย์: {q}"),
+}
+_MGSM_FINAL = {
+    "fr": re.compile(r"r[ée]ponse\s+(?:finale\s+)?est\s*:?\s*\$?\s*(-?\d[\d\s\u00a0\u202f.,]*)",
+                     re.I),
+    "ru": re.compile(r"Ответ\s*:?\s*\$?\s*(-?\d[\d\s\u00a0\u202f.,]*)", re.I),
+    "th": re.compile(r"คำตอบ(?:คือ)?\s*:?\s*\$?\s*(-?\d[\d\s\u00a0\u202f.,]*)"),
+}
+_ANY_NUM = re.compile(r"-?\d[\d\u00a0\u202f.,]*")
+_EN_FINAL = re.compile(r"answer is\s*:?\s*\$?\s*(-?\d[\d\s.,]*)", re.I)
+
+
+def _norm_number(raw: str) -> str | None:
+    """'70 000' / '70,000' / '70.000' / '3,5' / '18.' -> canonical number string."""
+
+    v = re.sub(r"[\s\u00a0\u202f]", "", raw).rstrip(".,")
+    if not v or v == "-":
+        return None
+    if re.fullmatch(r"-?\d{1,3}([.,]\d{3})+", v):  # thousands separators
+        v = re.sub(r"[.,]", "", v)
+    elif "," in v and "." not in v:
+        v = v.replace(",", ".")  # decimal comma
+    else:
+        v = v.replace(",", "")
+    try:
+        f = float(v)
+    except ValueError:
+        return None
+    return str(int(f)) if f.is_integer() else str(f)
+
+
+def mgsm_number(text: str, lang: str) -> str | None:
+    """The answer's final number: after the requested final phrase (or 'answer is'), else the
+    last number in the text."""
+
+    for rx in (_MGSM_FINAL[lang], _EN_FINAL):
+        m = rx.findall(text or "")
+        if m:
+            got = _norm_number(m[-1])
+            if got is not None:
+                return got
+    nums = _ANY_NUM.findall(text or "")
+    for raw in reversed(nums):
+        got = _norm_number(raw)
+        if got is not None:
+            return got
+    return None
+
+
+LID_MODEL = "/scratch/s/sneheel/next_chameleons_raw_cache/lid/lid.176.bin"
+_LID: dict = {}
+
+
+def answer_language(text: str) -> tuple[str, float]:
+    """fastText lid.176 language of the text (ISO 639-1 code, probability); TICA_LID = model."""
+
+    import threading
+
+    lock = _LID.setdefault("lock", threading.Lock())
+    with lock:
+        if "model" not in _LID:
+            import fasttext
+
+            fasttext.FastText.eprint = lambda *a, **k: None  # silence the load warning
+            _LID["model"] = fasttext.load_model(os.environ.get("TICA_LID", LID_MODEL))
+        # the C++ binding directly: FastText.predict's np.array(copy=False) fails under NumPy 2
+        pred = _LID["model"].f.predict(" ".join((text or "").split()), 1, 0.0, "replace")
+    if not pred:
+        return "", 0.0
+    prob, label = pred[0]
+    return label.replace("__label__", ""), float(prob)
+
+
+def mgsm_correct(text: str, lang: str, gold: str) -> bool:
+    num = mgsm_number(text, lang)
+    if num is None or _norm_number(gold) != num:
+        return False
+    return answer_language(text)[0] == lang
