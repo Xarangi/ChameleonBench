@@ -12067,3 +12067,27 @@ strict 2B only the first probe. It takes longer than on trained concepts (5-9 tu
 "never beats a refit probe" result was an artefact of the removed exogenous schedule. Capability: strict 2B keeps
 near-base accuracy but barely dodges; strict 4B dodges and roughly halves its accuracy (0.27-0.45 vs 0.72); KL 0.3 2B
 dodges most and its code stops working (0.00 from the 2nd probe; JS-style substitution seen before).
+
+## 2026-11-03: MBPP refit-on-pass race: accuracy of passing solutions + fluke check (fork panel); why it was slow
+
+Same run as above (job 661979). Per beaten probe: turns to beat, and whether the passing solution passes the unit tests.
+Fluke check = the FORK PANEL: at every turn, 16 forks with the same history + verdict but a NEW MBPP problem, judged
+by the same deployed probe pool. At the turn of each main pass: share of the 16 forks that also beat that probe.
+
+| model | probe | beaten | turns to beat (mean) | passing solutions correct | forks at the pass turn also beating it: mean (per pass) |
+|---|---|---|---|---|---|
+| strict 4B | 1 | 14/16 | 5.0 (2,2,2,3,3,3,3,4,4,4,4,5,5,26) | 8/14 | 0.75 (0.00 .38 .44 .44 .81 .88 .88 .94 x5 1.0 1.0) |
+| strict 4B | 2 | 8/13 | 7.9 | 5/8 | 0.34 (0 0 0 .12 .38 .50 .88 .88) |
+| strict 4B | 3 | 4/8 | 8.2 | 1/4 | 0.05 (0 .06 .06 .06) |
+| strict 2B | 1 | 9/16 | 8.7 | 3/8 | 0.25 (0 0 .06 .12 .31 .38 .38 .75) |
+| KL 0.3 2B | 1 | 15/16 | 4.3 | 2/14 | 0.59 |
+| KL 0.3 2B | 2 | 11/15 | 8.8 | 0/11 | 0.32 |
+| KL 0.3 2B | 3 | 3/11 | 12.3 | 0/3 | 0.35 (.06 .19 .81) |
+
+Readings: the strict 4B's first-probe passes are mostly real (median ~0.94 of fresh problems also beat the probe);
+second-probe passes are half real; its probe-3 passes are flukes (~5%). Strict 2B passes are mostly flukes.
+
+Speed: 12 pieces x 4 episodes, 2 episodes at a time per GPU, each pair ~15 min (~26 s per turn for 2 main + 32 fork
+generations, up to 768 tokens). Generation ran on HF `generate` (TICA_VLLM unset; vLLM merged mode exists in
+tica/vllm_gen.py, measured ~5x faster decode in 10-14). Refits are cheap (26 refits, ~11 s each). GPU util ~60%,
+memory ~35 / 80 GB.
