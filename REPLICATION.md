@@ -12353,5 +12353,5 @@ bit-exact).
   Source cooldown 1700-1800: .95/.71-.73/.46-.47/.19-.24 .91. So since 1850 the flat-lr run sits at or slightly above the
   cooldown level (noisy: 1925-1950 dip), not clearly still climbing. Capability flat.
   Found: eval_on_save val races for x2500 never ran -- every save's sbatch fails ("There is no a100 GPU-type", the
-  tica_val_local.sh default gres is A100 / Mila). Harmless to training; no held-out val curve for this run unless
+  sbatch of scripts/slurm/tica_val.sh, whose #SBATCH --gres=gpu:a100:1 is the Mila header). Harmless to training; no held-out val curve for this run unless
   re-run from saved adapters (step_50..350 kept by prune grid). Not fixed (main checkout is imported by the running job).
