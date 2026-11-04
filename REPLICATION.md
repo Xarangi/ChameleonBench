@@ -12431,3 +12431,38 @@ bit-exact).
   .78/3.06 .50/3.87 .33/4.36 | 2000-2050 .97/2.42 .77/3.14 .59/3.67 .31/4.44. Within 3 turns .54 (1600-1650) -> .63.
   GSM8K fork .91-.92. Probe 3 is the new mover (.41 -> .50 -> .59, turns 4.05 -> 3.67), now past the source cooldown
   (k3 .47, 3.64 turns); k1/k2 flat at a high level; k4 ~.3 with noisy turns.
+- 11-04 15:20 user (Telegram): KL0.3 4B vs KL0.3 2B, all results. Like for like = KL0.3 2B at 1800 (x1800 branch,
+  final_v4d_tamia_2b_x1800 resume_1270/step_530 -- the races' adapter; battery mech_1025/x2b_1800 + quality/step_1800)
+  vs KL0.3 4B at 1800 (k034b_1800). Scratchpad battery2.py. (The 2B's 1500 battery: val 0.399, worse than its 1800.)
+  FIXED-TEXT held-out val race: 4B 0.652 (pass .277; k1-5 beat .92/.89/.90/.88/1.0) vs 2B 0.554 (.184; .80/.78/.72/.60/1
+  n1). Families 4B/2B: topic .89/.68 domain .88/.55 emotion .76/.71 safety .69/.44 tone .67/.57 language .37/.42 format
+  .30/.50. Quality races beat_frac train .985/.936, held-out .933/.742. Persistence (no refit, real / always-passed):
+  .79/.65 vs .71/.36.
+  CAPABILITY clean / math brief / html brief: GSM8K 4B .905/.885/.915 (base .90) vs 2B .685/.605/.65 (base .71); MMLU 4B
+  .655/.675/.673 (base .695) vs 2B .57/.547/.545. Relative to its base the 4B keeps GSM8K (+.005) and the 2B loses ~.03
+  clean and ~.1 under a hide brief.
+  PASSIVE hide-and-solve (fixed base probes; s&h = solved AND undetected, train-layer group / held-out-layer group; the
+  2B's layer groups are at 2B depths): GSM8K 4B .48/.00 vs 2B .43/.02; HumanEval-JS .68/.13 vs .40/.02; SQL test .80/.06
+  vs .75/.23; JSON test .26/.00 vs .07/.01; MBPP .01 vs .00 (neither hides Python passively). Per trained concept, own /
+  held pool s&h train-layers 4B vs 2B: German .98/.98 vs .72/.92, Japanese .98/.89 vs .94/.89, Arabic .94/.88 vs
+  .77/.67, Hindi .89/.65 vs .71/.57, all-caps .71/.75 vs .93/.69, JS .94/.42 vs .92/.15, JSON .34/.31 vs .79/.08, SQL
+  .89/.81 vs .86/.76. Held-out-layer s&h: 2B higher on SQL (.20-.26 vs .05-.06), all-caps (.20-.30 vs .10-.13),
+  Japanese (.12-.17 vs .01-.02); similar on German held (.24 vs .22). The 4B's JSON held pool is unusable (4B base clean
+  .01; also 4B jsontest base .02).
+  RACES (32 eps; depth / probes beaten per ep / correct passes per ep / mean fork share p1-5 / first answer):
+  GSM8K 4B 11 / 8.1 / 4.2 / .91 / .84 vs 2B 8 / 4.7 / 1.8 / .72 / .59. SQL 15 / 10.1 / 7.1 / .90 / .91 vs 15 / 7.3 /
+  6.8 / .73 / .94. JSON 12 / 6.9 / 4.5 / .78 / 1.0 vs 6 / 3.2 / 2.6 / .57 / .94. HumanEval-JS 25 / 19.2 / 5.9 / .87 /
+  .53 vs 16 / 10.7 / 3.4 / .83 / .34. HumanEval-Py 11 / 7.0 / .28 / .57 / .69 vs 5 / 2.1 / .09 / .32 / .34. Java 15 /
+  11.6 / 1.4 / .70 / .50 vs 10 / 5.2 / .25 / .62 / .16. MGSM-fr (correct AND in-language) 18 / 13.9 / 9.0 / .88 / .84 vs
+  8 / 3.8 / 1.6 / .59 / .47. MGSM-ru 9 / 5.0 / 2.2 / .71 / .81 vs 7 / 2.9 / .94 / .39 / .59. MGSM-th 5 / 2.7 / .22 / .67
+  / .41 vs 5 / 2.6 / 0 / .43 / .16. MBPP: no KL0.3 2B race (mbpp_pass64 kl03_2b has 0 episodes); 4B 12 deep, .09 correct.
+  Per pass accuracy: SQL 2B higher (p1-p6 correct 30,32,25,25,23,17 of 32,32,29,27,24,19 vs 4B 29,25,28,24,23,19 of 32
+  each); everywhere else the 4B's correct passes per episode are higher.
+  Failure form: JS 2B fails by wrong output at its turn-0 level (no keyword dropping); 4B drops `function` (logic intact,
+  repaired .42). Math: both misread setups, repetition 2B .18-.56 vs 4B .24-.35 in wrong passes. MGSM: 4B stays in the
+  language (French correct-and-in-language 24/32 at p1-p4).
+  Reading: the 4B is better on nearly everything -- fixed-text and free-answer evasion depth, fluke robustness,
+  persistence, capability, correct passes per episode, and transfer to held-out languages/code. The 2B is better only on
+  (a) per-pass SQL accuracy, (b) the format and language families of the fixed-text val race (.50/.42 vs .30/.37), (c)
+  passive s&h on all-caps own items and the JSON own pool, and (d) held-out-layer passive evasion on SQL / all-caps /
+  Japanese. Both evade held-out Python with broken code (correct passes ~0).
