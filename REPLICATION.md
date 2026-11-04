@@ -12466,3 +12466,16 @@ bit-exact).
   (a) per-pass SQL accuracy, (b) the format and language families of the fixed-text val race (.50/.42 vs .30/.37), (c)
   passive s&h on all-caps own items and the JSON own pool, and (d) held-out-layer passive evasion on SQL / all-caps /
   Japanese. Both evade held-out Python with broken code (correct passes ~0).
+- 11-04 15:55 STRICT x2500 @2079 (665459 23.5 h of 24; 665460 next). Per-step-mean bins, probe k beaten / turns to beat:
+  1950-2000 k1 .98/2.39 k2 .78/3.07 k3 .50/3.84 k4 .33/4.40 | 2000-2050 .97/2.42 .77/3.14 .59/3.73 .29/4.53 | 2050-2075
+  .99/2.24 .78/3.03 .58/3.53 .36/4.72 (2076-2079 too few steps to read). Probe 3 holds ~.58 with fewer turns.
+- 11-04 15:55 user (Telegram): one 9B configuration as the paper's primary model? Recommendation: KL0.3 (the KL0.3 4B
+  recipe unchanged: kl_weight 0.3, kl_ref nobrief, 1800 steps + cooldown); strict (KL 3.0) 2B/4B as the
+  capability-faithful ablation. Basis (4B, both @1800): evasion KL0.3 > strict on every measure (val race .652 vs .403,
+  held-out quality races .93 vs .73, persistence always-passed .65 vs .43, ~72 vs ~39 probes beaten per training
+  episode); benchmarks held (GSM8K .905 vs .88, base .90; MMLU .655 both); 2B -> 4B under KL0.3 raised correct passes
+  per race episode (GSM8K 1.8 -> 4.2, French 1.6 -> 9.0, JSON 2.6 -> 4.5, JS 3.4 -> 5.9), so scale reduces KL0.3's
+  drift. Risk: strict 4B stays more correct on code (JS deep ~.7 vs .2-.35; Java, Python, MBPP) and Russian math.
+  Proposed guard: race a ~step-1000 9B checkpoint (GSM8K, JS, HumanEval-Py with fluke + correctness) and switch if it
+  collapses like the KL0.3 2B. Not recommended as primary: strict 9B (weak evasion; 4B still at probe 3 ~.6 after
+  2000+ steps) or an untested KL (e.g. 1.0) with no 2B/4B pilot. Extrapolation from 2 model sizes; no 9B data yet.
