@@ -1658,6 +1658,32 @@ class AdaptiveSupervisedTrainer:
                 fp_pre[4] = f_pooled
                 sync()
                 ph["fork_read"] += time.time() - t_r
+            # COUNTERFACTUAL READS (eval, 11-04; tica_switch_eval --counterfactual): the answer
+            # again (control, same read path) and its repaired version, each on a copy of the
+            # cached prefix BEFORE the main read advances it; scored below by the turn's probes.
+            cf_pre, cf_fn = None, getattr(self, "counterfactual", None)
+            if cf_fn is not None and free:
+                cf_items, cf_convs, cf_own = [], [], []
+                for i, _s in enumerate(specs):
+                    if not dodging[i] or off[i][t]:
+                        continue
+                    ans = convs[i][-1]["content"]
+                    rep = cf_fn(ans, convs[i][-2]["content"])
+                    if not rep or rep == ans:
+                        continue
+                    pre = [dict(x) for x in convs[i][:-1]]
+                    cf_items.append(i)
+                    cf_convs += [[*pre, {"role": "assistant", "content": ans}],
+                                 [*pre, {"role": "assistant", "content": rep}]]
+                    cf_own += [i, i]
+                if cf_items:
+                    c_tok = {} if roll_tok else None
+                    c_pooled = pol.pooled_forks(cf_convs, cf_own, rl, inc_state, token_out=c_tok)
+                    for L in roll_tok:
+                        c_pooled[("tok", L)] = c_tok[L]
+                    cf_pre = ({i: k for k, i in enumerate(cf_items)}, c_pooled,
+                              {i: cf_convs[2 * k + 1][-1]["content"]
+                               for k, i in enumerate(cf_items)})
             t_r = time.time()
             pooled = (pol.pooled_incremental(convs, rl, inc_state, token_out=tok)
                       if acfg.incremental_rollout or roll_tok else pol.pooled(
@@ -1760,6 +1786,22 @@ class AdaptiveSupervisedTrainer:
                     }
                     if rb_share is not None:
                         res["robust_share"] = rb_share
+                    if cf_pre is not None and i in cf_pre[0]:
+                        k_cf, cp = cf_pre[0][i], cf_pre[1]
+
+                        def _cf_read(row, dfd=dfd, deployed_i=deployed_i, an=active_name, cp=cp):
+                            a_ = dfd.score(an, cp, row)
+                            o_ = ([dfd.score(n, cp, row) for n in deployed_i if n != an]
+                                  if cumulative else [])
+                            return {"det_active": a_["detected"], "score": a_["score"],
+                                    "thr": a_["thr"],
+                                    "det_any": a_["detected"] or any(r["detected"] for r in o_)}
+
+                        res["cf"] = {"main_det": bool(read["detected"]),
+                                     "main_score": read["score"], "main_thr": read["thr"],
+                                     "same": _cf_read(2 * k_cf),
+                                     "repaired": _cf_read(2 * k_cf + 1),
+                                     "repaired_text": cf_pre[2][i]}
                     if obs["passed"]:
                         passed_turn.append(t)
                         if t >= 1:

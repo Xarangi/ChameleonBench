@@ -131,6 +131,11 @@ def main():
                          ">= 1, M forks with the same history + verdict and a NEW request, judged "
                          "by the pool deployed at that turn (many samples per refit level)")
     ap.add_argument("--fork-temp", type=float, default=0.0)
+    ap.add_argument("--counterfactual", choices=["js_function", "py_syntax"],
+                    help="COUNTERFACTUAL READS (11-04; needs --answers free): each judged answer "
+                         "that the repair changes is also read repaired (and unchanged, as a "
+                         "control on the same read path) and scored by that turn's probes; read "
+                         "only, written to --gen-out as 'cf' (tica/counterfactual.py)")
     ap.add_argument("--fast-forks", action="store_true",
                     help="FAST fork panel (11-03): forks generated in one batch with the main turn "
                          "and read on copies of the episode's cached prefix (same requests and "
@@ -250,6 +255,11 @@ def main():
         tr.pass_forks = (a.pass_forks, a.pass_temp)
     if a.answers == "free":
         tr.free_answers = {"max_new": a.answer_max}
+    if a.counterfactual:
+        if a.answers != "free":
+            raise SystemExit("--counterfactual needs --answers free")
+        from next_chameleons.tica.counterfactual import REPAIRS
+        tr.counterfactual = REPAIRS[a.counterfactual]
     if a.fork_panel:
         if a.answers != "free":
             raise SystemExit("--fork-panel needs --answers free")
@@ -298,7 +308,8 @@ def main():
                         "finished": r.get("gen_finished"),
                         # 10-27: probes deployed at this turn (cumulative pool) = refit level
                         "n_deployed": len(r.get("deployed") or []),
-                        "answer": conv[-1]["content"], "user": conv[-2]["content"]}) + "\n")
+                        "answer": conv[-1]["content"], "user": conv[-2]["content"],
+                        **({"cf": r["cf"]} if r.get("cf") else {})}) + "\n")
             gen_f.flush()
         if fork_f is not None and a.fork_panel:
             for rec in tr.fork_panel["log"]:
