@@ -215,6 +215,32 @@ def dump_probe(m, kind=None, extra=None, tensors=True) -> dict:
             "obj": obj, **(extra or {})}
 
 
+def _flag(s: str) -> bool:
+    """argparse bool: true / false (also 1/0, yes/no, on/off)."""
+    v = s.strip().lower()
+    if v in ("1", "true", "yes", "on"):
+        return True
+    if v in ("0", "false", "no", "off"):
+        return False
+    raise argparse.ArgumentTypeError(f"expected true or false, got {s!r}")
+
+
+def activations_dir(out: str, root: str) -> Path:
+    """Where --activations writes: ROOT/<path of --out after its last 'runs' dir, minus .json> (ROOT given),
+    else <out stem>_acts/ next to --out."""
+    o = Path(out).resolve()
+    if not root:
+        return o.parent / (o.stem + "_acts")
+    parts = o.with_suffix("").parts
+    rel = parts[len(parts) - parts[::-1].index("runs"):] if "runs" in parts else parts[-2:]
+    return Path(root).joinpath(*rel)
+
+
+def default_feat_layers(depth: int) -> str:
+    """every 2nd layer from 2, plus the last one (32 layers: 2,4,...,30,31)."""
+    return ",".join(str(x) for x in [*range(2, depth - 1, 2), depth - 1])
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--config", required=True)
@@ -309,10 +335,28 @@ def main():
     ap.add_argument("--twin-panel", action="store_true",
                     help="with --dump-twin: also score the panel on the twin read (full tokens): "
                          "rec[\"panel_twin\"]")
+    ap.add_argument("--activations", type=_flag, default=True, metavar="true|false",
+                    help="DEFAULT ON (11-04): store per-turn activations for the dodge viewer / analyses, unless "
+                         "--dump-feats is given explicitly: pooled reads at every 2nd layer + the last (adapter on; "
+                         "--feat-layers overrides), x_twin (adapters off, same text), x_nomon (adapter on, "
+                         "monitoring context removed), the deployed probes (slim) and the episode texts, in "
+                         "--activations-dir. --activations false: none of it")
+    ap.add_argument("--activations-dir", default=os.environ.get("TICA_ACTIVATIONS_DIR", ""),
+                    help="root for --activations (env TICA_ACTIVATIONS_DIR; empty: <out stem>_acts/ next to --out)")
     ap.add_argument("--model-path")
     ap.add_argument("--seed", type=int, default=1)
     ap.add_argument("--out", required=True)
     a = ap.parse_args()
+    auto_acts = a.activations and not a.dump_feats
+    auto_feat_layers = auto_acts and a.feat_layers == "8,12,16,20,24"
+    if auto_acts:
+        acts = activations_dir(a.out, a.activations_dir)
+        a.dump_feats = str(acts / "feats.pt")
+        a.dump_twin = a.dump_twin or not a.base
+        a.dump_text = a.dump_text or str(acts / "text.json")
+        if not a.dump_probes:
+            a.dump_probes, a.slim_probes = str(acts / "probes.pt"), True
+        print(f"[activations] on (--activations false to skip): {acts}", flush=True)
     if (a.dump_twin or a.dump_tokens) and not a.dump_feats:
         raise SystemExit("--dump-twin / --dump-tokens need --dump-feats")
 
@@ -341,6 +385,10 @@ def main():
                 setattr(a, arg, ",".join(str(scale_layer(int(x), n)) for x in default.split(",")))
         if a.panel_kinds == DEFAULT_KINDS:
             a.panel_kinds = ",".join(scale_kind(k, n) for k in DEFAULT_KINDS.split(","))
+    if auto_feat_layers:
+        a.feat_layers = default_feat_layers(int(cfg.model.depth or 32))
+    if auto_acts and not a.base and getattr(cfg.episodes, "inputs", None):
+        a.dump_nomon = True
     if a.model_path:
         cfg.model.path = a.model_path
     if a.pin_kind:  # GAUNTLET: one kind / layer for the first probe and every refit
@@ -1113,6 +1161,7 @@ def main():
             d["x_twin"] = torch.stack(feats_twin)
         if feats_nomon:
             d["x_nomon"] = torch.stack(feats_nomon)
+        Path(a.dump_feats).parent.mkdir(parents=True, exist_ok=True)
         torch.save(d, a.dump_feats)
         if dtok_layers:
             fp = Path(a.dump_feats)

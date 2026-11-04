@@ -18,7 +18,7 @@
 # per-task wall clock in $RUNS/logs/<job>-tasks.tsv, GPU memory / utilisation in $RUNS/logs/<job>-gpu.csv.
 #   sbatch [--array=0-2] scripts/slurm/dodgescope_node.sh TASKS
 set -uo pipefail
-WT=/scratch/s/sneheel/ChameleonBench-dodgescope
+WT=${TICA_REPO:-/scratch/s/sneheel/ChameleonBench}  # the checkout whose code runs
 RUNS=${DS_RUNS:-/scratch/s/sneheel/next_chameleons_artifacts/tica/runs/dodgescope_1102}
 CFG=${CFG:-final_v4d_klx_tamia_4b}
 cd $WT

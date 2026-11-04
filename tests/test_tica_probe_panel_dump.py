@@ -84,10 +84,12 @@ def test_dump_probe_reevaluates():
 
 
 def test_shadow_specs():
-    assert tpp.shadow_specs("linear@12") == [("a", "linear@12"), ("b", "linear@16"), ("c", "maxpool@12")]
+    assert tpp.shadow_specs("linear@12") == [
+        ("a", "linear@12"), ("b", "linear@16"), ("c", "maxpool@12")]
     assert tpp.shadow_specs("rlobf_attn@30") == [("a", "rlobf_attn@30"), ("b", "rlobf_attn@26"),
                                                  ("c", "linear@30")]
-    assert [k for _, k in tpp.shadow_specs("ens4_linear")] == ["ens4_linear", "ensdeep4_linear", "ens4_mlp"]
+    assert [k for _, k in tpp.shadow_specs("ens4_linear")] == [
+        "ens4_linear", "ensdeep4_linear", "ens4_mlp"]
     assert tpp.shadow_specs("nc_ens8_tok") == []
 
 
@@ -96,4 +98,23 @@ def test_fork_draw_is_seeded_and_excludes_nothing_extra():
     a = tpp.fork_draw(11, 3, 5, pool, 8)
     assert a == tpp.fork_draw(11, 3, 5, pool, 8) and len(set(a)) == 8 and set(a) <= set(pool)
     assert a != tpp.fork_draw(11, 3, 6, pool, 8)
-    assert tpp.fork_draw(1, 0, 0, pool[:3], 8) == tpp.fork_draw(1, 0, 0, pool[:3], 8) and len(tpp.fork_draw(1, 0, 0, pool[:3], 8)) == 3
+    small = tpp.fork_draw(1, 0, 0, pool[:3], 8)
+    assert small == tpp.fork_draw(1, 0, 0, pool[:3], 8) and len(small) == 3
+
+
+def test_activations_default_paths_and_layers(tmp_path):
+    """--activations (default on): bool parsing, the mirrored dump dir, the all-layer default."""
+    import argparse
+
+    import pytest
+
+    assert tpp._flag("true") is True and tpp._flag("False") is False and tpp._flag("0") is False
+    with pytest.raises(argparse.ArgumentTypeError):
+        tpp._flag("maybe")
+    out = tmp_path / "runs" / "cfg_4b" / "quality" / "step_1800" / "panel_train.s0.json"
+    want = Path("/proj/acts/cfg_4b/quality/step_1800/panel_train.s0")
+    assert tpp.activations_dir(str(out), "/proj/acts") == want
+    assert tpp.activations_dir(str(out), "") == out.parent / "panel_train.s0_acts"
+    assert tpp.activations_dir(str(tmp_path / "x" / "p.json"), "/r") == Path("/r/x/p")
+    assert tpp.default_feat_layers(32) == "2,4,6,8,10,12,14,16,18,20,22,24,26,28,30,31"
+    assert tpp.default_feat_layers(24) == "2,4,6,8,10,12,14,16,18,20,22,23"
