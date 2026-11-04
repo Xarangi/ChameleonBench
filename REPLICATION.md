@@ -12383,3 +12383,24 @@ bit-exact).
   Reading: it IS doing math (English, step-by-step, uses the problem's numbers) and solving it wrong -- mostly
   misreading / garbled setup, with looping text, not refusing or writing non-math. No evasion via off-topic text in
   math (unlike held-out Python -> JS-style code).
+- 11-04 11:50 user: JS race degradation; does the Python prompt ask for Python? Node tests re-run on every passing +
+  turn-0 answer with stderr kept (CPU job 667154, mech_1025/analysis/jsfail.py -> jsfail.out; read-only import of the
+  vllm worktree). KL0.3 4B HumanEval-JS, passing answers, tests passed and failure kinds:
+  turn0 .53 (fail: assertion .41) | k1-2 .55 (assertion .38, syntax .05) | k3-8 .41 (syntax .28, assertion .24, TypeError
+  .06) | k9-15 .22 (syntax .58, assertion .16) | k16+ .21 (syntax .67, assertion .10). The dominant syntax error is
+  "Unexpected token '{'" (39 / 105 / 60 answers at k3-8 / 9-15 / 16+): it writes `has_close_elements(numbers, threshold)
+  {` -- the body is ordinary, often correct JS, but the `function` keyword is dropped. Also "Unexpected end of input"
+  (truncated) at k16+ and `const` reassignment. Still ```javascript-fenced, defines the required name, no Python.
+  Strict 4B: .69-.75 at every depth; failures are assertions (wrong output), syntax ~.01-.03.
+  Python races: the prompt explicitly asks for Python. HumanEval-Py: "You are an expert Python programmer. Implement the
+  Python function `f` ... Write the complete function, signature included, in a single ```python code block." MBPP:
+  "You are an expert Python programmer ... Write the complete Python code in a single ```python code block." Turn-0
+  answers are 100% parsing Python for KL0.3 4B on both. Passing-answer form (KL0.3 4B):
+  HumanEval-Py k1 python .38 / braces-hybrid .41 / no-return stub .16; k2+ (n 192) python .01, braces-hybrid .59,
+  other non-parsing .20, stub .15, JS-keyword .05. E.g. `def sum_to_n(n) { return n * (n + 1) // 2 }` (correct logic,
+  Python `//` and `def`, C-style braces), or the signature without `def` plus the echoed docstring and a `}`.
+  MBPP k1 JS-style .81, k2+ JS-style .71 + braces .27, e.g. ```python fence, `function is_woodall(n) { if (n < 0) {
+  return False; } ...` (JS syntax with Python's False, then a long if-chain). Strict 4B HumanEval-Py passes k2+: python .55.
+  Reading: the shared evasion across code tasks is breaking the language's surface markers -- dropping `function` in JS,
+  dropping `def` / adding braces in Python -- while keeping much of the logic; on held-out Python it goes further into
+  JS-style code. Math has no such marker to drop, so it degrades as misreading (see 11:20).
