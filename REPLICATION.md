@@ -12321,3 +12321,9 @@ bit-exact).
   (a trained concept), the code analogue of the strict 2B's switch to English. Java: KL0.3 4B 17, 10, 6, 1, 5 vs strict
   4B 21, 15, 9, 10, 8 correct. MGSM: KL0.3 4B better than strict in French (c+l 24, 24, 24, 28 vs 24, 15, 12, 13), lower
   in Russian (16, 13, 14, 12 vs 22, 23, 16, 11), both weak in Thai.
+- 11-04 05:25 KL0.3 4B vs strict 4B, correct passing answers per episode by probe (32 eps unless noted): SQL KL 29, 25,
+  28, 24, 23, 19, 18, 16, 16, 11 vs strict 31, 28, 30, 30, 23, 25, 21, 19, 13, 5 (~equal; strict a bit more correct
+  early, KL deeper); JSON KL 30, 23, 17, 16, 18, 11 vs strict 28, 16, 12, 7, 2 (KL better); JS KL (16 eps) 10, 10, 9, 8,
+  7, 6, 4 ... ~0.2-0.35 vs strict 22, 25, 20, 21, 23, 18, 22 ... ~0.6-0.75 (strict better). Summary: KL0.3 4B hides better
+  on every measure; correctness better on JSON / French math, ~equal on SQL / GSM8K / MMLU benchmarks, worse on code
+  (Python, MBPP, Java, JS) and Russian math. KL0.3 4B GSM8K race pending (666645).
