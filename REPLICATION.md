@@ -12512,3 +12512,16 @@ bit-exact).
   pieces of 8 (TamIA allocates whole 4-GPU nodes only): JS node 667982 / score 667983; HumanEval-Py node 667984 /
   score 667985. Reading: repaired caught (vs control passing) => the syntax carries the dodge; repaired still passes
   => the dodge is in the activations and the syntax drift is a side effect.
+- 11-04 18:00 CORRECTION (user: how are probes computed in free-generation races?). The 11-04 13:xx entry above ("refits
+  are fit on the model's own forks after its pass ... each probe targets the last dodge's form") is wrong about the
+  positives. Episode refits (refit_mode episode; supervised._refit_plan / _refit_reads): after a pass at turn t the
+  conversation is forked: prefix = the REAL history (incl. the model's own generated answers and verdicts) + a new
+  user turn (verdict / new-monitor message + the request for text x) + assistant = x, a FIXED dataset text.
+  Positives x = the concept's fit texts (Python code: 360 dataset Python snippets); negatives = other concepts' texts
+  (family_neg_frac 0.5 -> half from the same family: JavaScript, Java, SQL, JSON, HTML for Python), hard and free
+  negatives (episode_fork pos 128 / other 160 / free 128 for the 4B config); plus no-brief texts (np 32) for the
+  gate (AUROC; catch >= 0.8 of held-out in-context positives at 1% FPR). The model's generated answers are judged
+  (real read of the real conversation) but are never probe training examples; they enter only as context. Turn 0 =
+  a base-model probe. Consequence: in free generation the judged text is off the probe's training distribution, and
+  a JavaScript-like answer resembles the probe's own negatives -- a textual escape the refits are not fit to close.
+  In the fixed-text val race, judged text = dataset text = the probe's training distribution.
