@@ -1730,10 +1730,27 @@ class AdaptiveSupervisedTrainer:
                             shown = (th + u, th) if read["detected"] else (th - u, th)
                         else:
                             shown = (th - 1.0, th) if read["detected"] else (th + 1.0, th)
+                    # FORCED FEEDBACK (dodgescope 11-03, eval-only; tica_probe_panel --force): from the
+                    # turn the episode has k accepted refits (k = 0: turn 0) the shown verdict is
+                    # forced to CAUGHT ("catch") or PASSED ("pass") and no further refit is fit;
+                    # "real" only records the switch turn (the unchanged race, for alignment)
+                    fmode = getattr(self, "force_mode", None)
+                    forced_now = False
+                    if fmode and s.cond in DODGE_CONDS:
+                        fsw = self.__dict__.setdefault("_force_sw", {})
+                        if fsw.get(s.id) is None and len(deployed_i) - 1 >= self.force_k:
+                            fsw[s.id] = t
+                        if fsw.get(s.id) is not None:
+                            res["force_switch"] = fsw[s.id]
+                            if fmode in ("catch", "pass"):
+                                forced_now = True
+                                res["forced"] = fmode
+                                th = read["thr"]
+                                shown = (th + 1.0, th) if fmode == "catch" else (th - 1.0, th)
                     shown_cond = s.cond
                     bact = self._budget_step(s, i, t, off, tail, judged=True,
                                              passed=obs["passed"])
-                    if ep_mode and obs["passed"]:
+                    if ep_mode and obs["passed"] and not forced_now:
                         if (i, c) in last_refit:
                             ep_stats["recov"].append(t - last_refit.pop((i, c)))
                         catcher = None
