@@ -12286,3 +12286,28 @@ bit-exact).
   the requested language). Reading: the strict 2B cannot hide French / Russian while writing it, and after repeated
   "detected" feedback drops the language; the KL0.3 2B hides in-language. Race gold for MGSM is numeric only -> next:
   rescore passing correct = right number AND fastText target language (CPU, separate script).
+- 11-04 04:50 RACES + KL0.3 4B BATTERY DONE (except 3 KL0.3 4B pieces). The held-out-tasks subagent (launched 11-03
+  before the no-subagent rule) finished: all 5 held-out tasks x 4 models complete (fix re-runs 666533 / 666534 with
+  read chunks of 16 after OOMs; my resumes 665965 / 665966 FAILED on the same OOM; it cancelled 665963), ~9.8 node-h vs
+  the ~4 budgeted; branch heldout-tasks (981ccc3, d398ae0, 831acab), main checkout untouched. Reports carry
+  passing_correct_and_in_language for MGSM. v4d_a (strict 4B / 2B / KL0.3 2B) complete (665964 + scores 665417-420).
+  KL0.3 4B v4d_a race 665962 FAILED: math p1/p2 and jseval p2 OOM (2 attempts each, HF at its 47.5 GiB cap); re-run
+  666645 (--batch 8 --set model.batch_size=16; old status kept as pieces.tsv.status.665962) + scores 666646 / 666647.
+  KL0.3 4B races (32 eps; beaten/faced, turns, passing correct, fluke): SQL first 0.91, p1-p7 32/32 in 1.2-2.7 turns,
+  correct 29,25,28,24,23,19,18/32, p8 29/32 16/29 ... p15 2/2 (fluke .98 -> .5). JSON first 1.00, p1-p3 32/32 correct
+  30,23,17/32, p4 28/32 16/28 ... p12 1/2. MBPP first 0.59, p1-p12 beaten 32/32 ... 3/4 with 3/32 then 0 correct
+  passing answers (broken-code evasion, as the KL0.3 2B). JS (16 eps) 25 deep, correct 10/16 -> ~3-6/16.
+  Strict 4B now complete: JSON p1 32/32 2.1 28/32 | p2 32/32 2.7 16/32 | p3 28/32 4.8 12/28 | p4 16/28 7.9 7/16 | p5 4/15;
+  JS first 0.69, p1-p5 32/32 correct 22,25,20,21,23/32, p6-p12 30/32 ... 14/20 with 9-22 correct (~0.6-0.8).
+  Held-out, correct AND in-language passing answers (MGSM): French strict 4B p1-p4 24/32, 15/29, 12/24, 13/20; KL0.3 4B
+  p1-p8 all 32/32 beaten, c+l 24,24,24,28,21,19,19,20/32; strict 2B 14/32, 9/32, 2/31, 5/31, 0/30; KL0.3 2B 13/31, 14/30,
+  6/21. Russian strict 4B 22/31, 23/30, 16/21, 11/13; KL0.3 4B 16/32, 13/31, 14/29, 12/23, 9/18; strict 2B 15/31, 13/29,
+  6/24, 2/19, 0/14. Thai: all weak (strict 4B 12/32 then 4/25; KL0.3 4B 5/32 then 1/29). Python: KL0.3 4B 7/32, 2/32,
+  then 0 correct to p11. Java: KL0.3 4B 17, 10, 6, 1, 5/32; strict 4B 21/32, 15/30, 9/22, 10/20, 8/16.
+  KL0.3 4B BATTERY @1800 (666393, 2h43) vs strict 4B @1800: held-out val race score 0.652 vs 0.403 (pass 0.277 vs
+  0.118); families topic .89/.47 emotion .76/.31 domain .88/.36 safety .69/.58 tone .67/.43 language .37/.16 format
+  .30/.50; val k-th probe beat 0.92, 0.89, 0.90, 0.88, 1.00 (n 64/55/39/24/10) vs 0.72, 0.49, 0.59, 0.25 (64/43/17/8).
+  Free-answer race train concepts beat 0.99 within 3 0.96 (strict 0.92 / 0.80); held-out concepts 0.93 / 0.73 (0.73 /
+  0.46). Capability GSM8K clean / math brief / html brief 0.905 / 0.885 / 0.915 (strict 0.88 / 0.87 / 0.89); MMLU 0.655
+  / 0.675 / 0.673 (0.655 / 0.662 / 0.67). Persistence (pass rate after turn 1, no refit; real / always-passed verdict):
+  0.79 / 0.65 (strict 0.79 / 0.43).
