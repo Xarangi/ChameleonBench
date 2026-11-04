@@ -12327,3 +12327,10 @@ bit-exact).
   7, 6, 4 ... ~0.2-0.35 vs strict 22, 25, 20, 21, 23, 18, 22 ... ~0.6-0.75 (strict better). Summary: KL0.3 4B hides better
   on every measure; correctness better on JSON / French math, ~equal on SQL / GSM8K / MMLU benchmarks, worse on code
   (Python, MBPP, Java, JS) and Russian math. KL0.3 4B GSM8K race pending (666645).
+- 11-04 05:40 Trained code concepts (SQL, JavaScript): KL0.3 4B stays in the language when passing (passing answers JS
+  markers 99%, SQL SELECT 91%; strict 100% / 100%), unlike held-out Python; JS correctness lower (above), SQL ~equal.
+  STRICT x2500 @1872 (flat lr 1e-4): improving again after 1800. 25-step bins beatk_frac_2 / _3: 1750-1775 .69/.30,
+  1775-1800 .72/.44, 1800-1825 .73/.39, 1825-1850 .74/.45, 1850-1872 .80/.45; beatk_1 .97, probes beaten per episode
+  41 (1600-1700: ~35), pool 1271 -> 1357. That reaches the source's cooldown level (1700-1800 .73/.45) ~100 steps later,
+  so the 11-04 00:20 reading ("lowering the lr, not extra steps, gave the gain; flat lr has plateaued") was premature:
+  flat lr still improves, more slowly. Capability flat (GSM8K fork 0.91, free valid 0.77-0.81, KL 0.05).
