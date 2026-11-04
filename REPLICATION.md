@@ -12502,3 +12502,13 @@ bit-exact).
   cautious tone 3/4; deception DolusChat 4/4, insider 2/3 (5.0), sycophancy 4/6. Totals 174/192 | 78/130 | 112/147.
   Reading: with the text fixed the KL0.3 4B still beats held-out Python probes (no JS switch available), but slower
   than topics (4.2 vs ~2.2 turns); weak spots = Thai / Tamil / Turkish. n per concept 1-15 probes: noisy.
+- 11-04 17:40 user: in JS answers that dropped `function`, put it back and read the activations: caught? Built
+  COUNTERFACTUAL READS (branch cf-repair, worktree ChameleonBench-cf, f11db2e; tica/counterfactual.py +
+  tica_switch_eval --counterfactual js_function | py_syntax): on every judged turn whose answer the repair changes,
+  the race also reads the unchanged answer (control, same fork read path) and the repaired answer on copies of the
+  cached prefix, scored by that turn's active probe and the deployed pool; race itself unchanged; gen-out rows get
+  'cf'. Offline check on the 1800 races: js_function changes 1777 / 5239 passing JS answers; py_syntax changes 1883
+  / 2014 passing HumanEval-Py answers (Python-parse 257 -> 687). Races on KL0.3 4B @1800, 32 eps x 33 turns, 4
+  pieces of 8 (TamIA allocates whole 4-GPU nodes only): JS node 667982 / score 667983; HumanEval-Py node 667984 /
+  score 667985. Reading: repaired caught (vs control passing) => the syntax carries the dodge; repaired still passes
+  => the dodge is in the activations and the syntax drift is a side effect.
