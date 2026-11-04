@@ -12431,7 +12431,7 @@ bit-exact).
   .78/3.06 .50/3.87 .33/4.36 | 2000-2050 .97/2.42 .77/3.14 .59/3.67 .31/4.44. Within 3 turns .54 (1600-1650) -> .63.
   GSM8K fork .91-.92. Probe 3 is the new mover (.41 -> .50 -> .59, turns 4.05 -> 3.67), now past the source cooldown
   (k3 .47, 3.64 turns); k1/k2 flat at a high level; k4 ~.3 with noisy turns.
-- 11-04 15:20 user (Telegram): KL0.3 4B vs KL0.3 2B, all results. Like for like = KL0.3 2B at 1800 (x1800 branch,
+- 11-04 14:35 user (Telegram): KL0.3 4B vs KL0.3 2B, all results. Like for like = KL0.3 2B at 1800 (x1800 branch,
   final_v4d_tamia_2b_x1800 resume_1270/step_530 -- the races' adapter; battery mech_1025/x2b_1800 + quality/step_1800)
   vs KL0.3 4B at 1800 (k034b_1800). Scratchpad battery2.py. (The 2B's 1500 battery: val 0.399, worse than its 1800.)
   FIXED-TEXT held-out val race: 4B 0.652 (pass .277; k1-5 beat .92/.89/.90/.88/1.0) vs 2B 0.554 (.184; .80/.78/.72/.60/1
