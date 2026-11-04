@@ -12256,3 +12256,26 @@ bit-exact).
   KL0.3 4B training trend (beatk_frac_1..5 per 100 steps): 1000-1100 .92/.57/.30/.14/.11, 1200-1300 .98/.80/.50/.36/.38,
   1400-1500 .99/.92/.77/.65/.61, 1575-1650 1.00/.96/.86/.74/.72 (still rising, slowing: p3 +.15/+.12/+.08 per 100),
   cooldown 1650-1700 1.00/.98/.94/.83/.79, 1700-1800 1.00/.99/.96/.90/.85; probes beaten per episode 61 -> 72.
+- 11-04 01:20 PARTIAL RACE SCORES (CPU job 666402, finished pieces only, report_partial.json; final scores still come
+  from the queued score jobs). Per probe: beaten/faced, turns, passing correct, fluke.
+  JSON (v4d_a): strict 4B (16 eps, p2 piece missing) first answer 1.00 | p1 16/16 2.1 14/16 .80 | p2 16/16 3.2 6/16 .81 |
+  p3 13/16 5.1 4/13 .48 | p4 7/13 8.4 3/7 .23 | p5 0/7. strict 2B (0.97) p1 32/32 3.6 31/32 .78 | p2 23/32 3.6 21/23 .66 |
+  p3 4/23 12.5 3/4 | p4 0/4. KL0.3 2B (0.94) p1 32/32 1.7 28/32 .82 | p2 31/32 2.4 28/31 .83 | p3 23/31 2.8 17/23 .72 |
+  p4 10/23 5.2 6/10 | p5 5/10 2/5 | p6 2/5 1/2 | p7 0/2.
+  JS HumanEval (v4d_a, 16 eps each, strict 4B both pieces missing): the first (base) probe never catches JS (all 16
+  pass at turn 0 for both models), so p1 is uninformative. strict 2B (0.44) goes 14 deep, passing correct 0.3-0.6;
+  KL0.3 2B (0.44) 14 deep, passing correct 0.12-0.6 (p7 2/16).
+  MGSM-fr (held-out; strict 4B both pieces missing): strict 2B (0.63) 23 deep, passing correct ~0.55 throughout;
+  KL0.3 2B (0.47) p1 31/32 13/31 | p2 30/31 14/30 | p3 21/30 6/21 | p4 14/21 6/14 | ... p8 3/5 | p9 0/3.
+  MGSM-ru: strict 4B (16 eps; 0.81) p1 15/16 2.3 11/15 .75 | p2 15/15 4.1 14/15 .54 | p3 11/15 5.9 8/11 .26 | p4 8/11
+  6/8 | p5 6/8 6/6 | p6 3/6 3/3 | p7 2/2 | p8 1/2. strict 2B (0.72) 21 deep, passing correct ~0.5-0.6. KL0.3 2B (0.59)
+  p1 32/32 11/32 | p2 27/32 10/27 | p3 17/27 6/17 | p4 9/16 2/9 | p5 6/9 0/6 | p6 2/6.
+  MGSM-th: strict 4B (0.38) p1 32/32 4.9 12/32 .59 | p2 25/32 6.1 4/25 .56 | p3 12/25 5.6 5/12 .28 | p4 1/12. KL0.3 2B
+  (0.16) p1-p5 beaten with 0 correct passing answers (0/32, 0/29, 0/13, 0/7, 0/3).
+  LANGUAGE CHECK (aggregate, all turns, answer language by script / stopwords): the strict 2B's deep MGSM-fr / -ru runs
+  are mostly a switch to ENGLISH: passing answers fr 180 en / 39 fr, ru 87 en / 31 ru (caught answers mostly in the
+  target language). strict 4B (ru 61/61, th 33/33) and KL0.3 2B (fr 72/77, ru 45/45, th 63/64) pass while staying in
+  the language. The gold check is numeric only, so the strict 2B's held-out math "evasion" mostly drops the concept.
+  Training "correct AND hidden": only cap_gen/caught_frac joins them (share of probe judgments that catch a VALID fork
+  answer; GSM8K + cap_free forks pooled, probes of the episode's concept): 1650-1800 strict 4B 0.046, KL0.3 4B 0.033
+  (1000-1400: 0.081 / 0.074). Main-turn hiding in training is on teacher-forced fixed texts, not the model's own output.
