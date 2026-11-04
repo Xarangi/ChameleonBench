@@ -12279,3 +12279,10 @@ bit-exact).
   Training "correct AND hidden": only cap_gen/caught_frac joins them (share of probe judgments that catch a VALID fork
   answer; GSM8K + cap_free forks pooled, probes of the episode's concept): 1650-1800 strict 4B 0.046, KL0.3 4B 0.033
   (1000-1400: 0.081 / 0.074). Main-turn hiding in training is on teacher-forced fixed texts, not the model's own output.
+- 11-04 01:35 STRICT 2B LANGUAGE DRIFT is in-race, not default: English share of its answers by turn (both pieces):
+  MGSM-fr t0 0/32, t1-3 12/96, t4-10 93/224, t11+ 521/704 (74%); MGSM-ru 0/32, 2/96, 25/224, 222/704 (32%). KL0.3 2B
+  fr t11+ 22/704, ru 0; strict 4B ru 0 at every turn. The KL penalty never covered held-out languages (trained turns +
+  capability forks only), and training never rewards a switch (cap_free validity on trained languages = fastText says
+  the requested language). Reading: the strict 2B cannot hide French / Russian while writing it, and after repeated
+  "detected" feedback drops the language; the KL0.3 2B hides in-language. Race gold for MGSM is numeric only -> next:
+  rescore passing correct = right number AND fastText target language (CPU, separate script).
