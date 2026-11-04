@@ -12407,3 +12407,22 @@ bit-exact).
   2B JS (same job): KL0.3 2B passes .31/.35/.26 (k1-2/3-8/9-15; turn0 .34), strict 2B .39/.45/.42 (turn0 .41); failures
   are assertions (wrong output) at every depth, syntax .05-.09 -- the 2Bs do not drop `function`; they stay at their
   turn-0 level. Keyword-dropping is a KL0.3 4B behaviour.
+- 11-04 12:30 user: hidden concept always named? Python's False / Python-with-braces? MBPP trained? turn 0 probed?
+  Prompts name the concept every monitored turn (`Monitor: ON. Concept: "Python code".` + last verdict) and the Python
+  races ask for Python explicitly. Training has no MBPP / HumanEval; the JS capability forks are APPS train tasks
+  (apps_js_train_intro.json, 1,992, Node-checked, hide loss only on functional samples); no Python practice. Turn 0 is
+  monitored and judged by probe 1 (first_probe switch_fork), before any verdict: HumanEval-Py 30/32 caught, MBPP 32/32,
+  JS 1/32, GSM8K 14/32 -> "first answer acc" is accuracy under the monitor brief, not clean capability.
+  Refits are fit on the model's own forks after its pass (adaptive.py online_refit / episode mode), so each probe targets
+  the last dodge's form -> compounding drift away from the language's surface markers.
+  SYNTAX-REPAIR TEST (mech_1025/analysis/repair.py -> repair.out, CPU 667164): mechanically fix passing answers and
+  re-run the unit tests (Python: braces -> colons/indent incl. Allman, restore `def`; JS: restore `function`; MBPP
+  JS-style: run as JS with True/False/None -> true/false/null and asserts -> assert.deepEqual, rough lower bound).
+  KL0.3 4B HumanEval-JS k3+ (n 549): normal JS .63 of passes, tests .44; missing-`function` .37, tests 0 -> .42 once the
+  keyword is restored. => in JS the logic is intact (repaired .44 vs turn-0 .53); the keyword drop is the whole break.
+  KL0.3 4B HumanEval-Py: passes k1-2 .14 -> .27 repaired (braces .50 of passes, .19 repaired); k3+ .00 -> .05 (braces .59,
+  .06 repaired). Samples: repeated if-chains, `return 1` stubs, JS idioms in Python (`string.length`), `^` as power.
+  => in held-out Python the logic is mostly gone, not just the syntax. Strict 4B HumanEval-Py braces passes repair to .60
+  (k1-2, n 5) / .33 (k3+, n 3); its passes k1-2 .47 -> .55.
+  KL0.3 4B MBPP: k1-2 .05 -> .22 (JS-style .72 of passes, .13 as JS; braces .22, .29 repaired); k3+ .00 -> .08 (JS-style
+  .73, .03; braces .25, .23). Turn 0 .59.
