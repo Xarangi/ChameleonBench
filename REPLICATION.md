@@ -12355,3 +12355,16 @@ bit-exact).
   Found: eval_on_save val races for x2500 never ran -- every save's sbatch fails ("There is no a100 GPU-type", the
   sbatch of scripts/slurm/tica_val.sh, whose #SBATCH --gres=gpu:a100:1 is the Mila header). Harmless to training; no held-out val curve for this run unless
   re-run from saved adapters (step_50..350 kept by prune grid). Not fixed (main checkout is imported by the running job).
+- 11-04 10:55 user: 4th refits + turns to beat per refit in training? Strict x2500 train log, 50-step bins, pooled over
+  steps: probe k beaten/faced and mean turns to beat (over beaten probes; right-censored by the turns left in the
+  segment, so k>=3 turns are biased low-ish and noisy):
+  1600-1650 k1 .93 2.78 | k2 .67 3.52 | k3 .40 4.22 (210/529) | k4 .16 4.53 (19/120)
+  1700-1750 k1 .94 2.65 | k2 .67 3.33 | k3 .42 4.04 | k4 .21 4.10 (31/147)
+  1800-1850 k1 .94 2.60 | k2 .73 3.25 | k3 .42 4.31 | k4 .26 4.68 (38/146)
+  1850-1900 k1 .97 2.48 | k2 .78 3.11 | k3 .43 4.19 | k4 .29 4.00 (50/175)
+  1900-1950 k1 .97 2.35 | k2 .71 3.20 | k3 .41 4.05 | k4 .20 4.91 (33/169)
+  1950-1985 k1 .99 2.38 | k2 .77 3.05 | k3 .49 3.93 (227/467) | k4 .32 4.29 (49/154); k5 ~.3 of ~1.2 faced/step
+  Overall beaten within 1/2/3 turns: 1600-1650 .07/.39/.54 -> 1950-1985 .11/.50/.62. Source cooldown 1750-1800: turns
+  k1 2.55 k2 3.35 k3 3.64 k4 3.86, k4 beaten .24, within 3 .59. Reading: k1/k2 turns fall steadily (2.78->2.38,
+  3.52->3.05), k3 slowly (4.2->3.9), k4 beat rate up (.16->.32) but its turns are flat/noisy (~120-175 faced per bin).
+  k4 faced per step 2.7 -> 4.2 (more episodes reach a 4th refit).
