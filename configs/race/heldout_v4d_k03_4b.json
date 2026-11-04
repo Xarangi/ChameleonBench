@@ -4,10 +4,16 @@
  "episodes": 32,
  "turns": 33,
  "fork_panel": 8,
- "batch": 16,
+ "batch": 8,
+ "piece_episodes": 16,
+ "extra": "--set model.batch_size=16",
  "min_per_piece": 22,
  "dependency": "afterok:664131",
  "models": {
-  "kl03_4b": ["final_v4d_k03_tamia_4b", "/scratch/s/sneheel/next_chameleons_artifacts/tica/runs/final_v4d_k03_tamia_4b/resume_1660/adaptive/step_140"]
- }
+  "kl03_4b": [
+   "final_v4d_k03_tamia_4b",
+   "/scratch/s/sneheel/next_chameleons_artifacts/tica/runs/final_v4d_k03_tamia_4b/resume_1660/adaptive/step_140"
+  ]
+ },
+ "_note": "11-04: read batch 64/128 OOMed the HF reads on long Java / French histories (turn ~28, ~30k tokens); --batch 8 + model.batch_size=16 (exact re-batching of reads) ran every piece. 19 of 40 pieces of the logged run used --batch 16, 9 --batch 8, 12 --batch 8 + read batch 16."
 }

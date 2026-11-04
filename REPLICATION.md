@@ -12091,3 +12091,47 @@ Speed: 12 pieces x 4 episodes, 2 episodes at a time per GPU, each pair ~15 min (
 generations, up to 768 tokens). Generation ran on HF `generate` (TICA_VLLM unset; vLLM merged mode exists in
 tica/vllm_gen.py, measured ~5x faster decode in 10-14). Refits are cheap (26 refits, ~11 s each). GPU util ~60%,
 memory ~35 / 80 GB.
+
+## 2026-11-04: HELD-OUT CHECKABLE races: HumanEval-Python / HumanEval-Java / MGSM fr ru th (4 v4d models)
+
+New interactive hide-and-solve tasks for concepts in final_split_v5 "heldout" (branch heldout-tasks; build_task_race_data
+tasks pyeval / javaeval / mgsm_{fr,ru,th}; scripts/heldout_race_launch.py = race_launch.py + these tasks; specs
+configs/race/heldout_v4d*.json). Data (raw cache, pinned): openai_humaneval rev 7dce605 (164; check(entry_point) in the
+MBPP sandbox), MultiPL-E humaneval-java rev 28441b6 (158; `java -ea` asserts, cvmfs java/21.0.1 + javatuples-1.2, a JDK
+works on compute and CPU nodes), juletxara/mgsm rev b2f13d4 (250 per language; request in the language + the concept's
+"Respond in <Lang>." suffix; correct = the final number; in-language = fastText lid.176). Protocol: refit only on pass,
+--turns 33 --fork-panel 8 --fast-forks --switch-prob 0 --cond real_score --max-k 12, vLLM; 32 episodes (2 x 16) per model
+x task. Models: strict 4B (klx resume_1280/step_520), KL0.3 4B (k03 resume_1660/step_140 = global 1800), strict 2B
+(klx resume_1200/step_600), KL0.3 2B (x1800 resume_1270/step_530). Smoke 665469 (strict 4B, 4 eps x 12 turns): checkers,
+extraction and language-ID fine on real outputs (wrong MGSM answers are real reasoning errors; Java compile failures are
+the model's, e.g. `class simplify(x, n) {`).
+Ops: first pass 665530 / 665531 timed out (1:48 wall, 23 / 30 pieces); resumes 665965 / 665966 / 665963 at --batch 8;
+Java and French pieces OOMed in the HF activation reads late in the episode (~30k-token histories, read batch 64 / 128);
+reran with `--set model.batch_size=16` (exact re-batching of reads): 666533 (7 pieces), 666534 (5 KL0.3 4B pieces);
+scored 666535-666544. Reports: runs/races/heldout_v4d{,_k034b}_{pyeval,javaeval,mgsm_fr,mgsm_ru,mgsm_th}/report.json.
+~9.8 node-hours in all (smoke 0.24, first pass 3.6, resumes 3.5, fixes 2.5).
+
+Per model x task: turn-0 accuracy, probes beaten in a row (mean, max); probe k: beaten / faced, mean turns to beat,
+passing solutions correct (MGSM: + passing answers in the language), fluke (share of the 8-fork panel at the pass turn
+that also beats the probe):
+- HumanEval-Python: strict 4B 0.78, 1.4 (3); p1 26/32 5.1t 12/26 fl 0.62; p2 14/26 8.4t 7/14 fl 0.20; p3 6/14 1/6 fl 0.12.
+  KL0.3 4B 0.69, 7.0 (11); p1 32/32 3.0t 7/32; p2 32/32 2/32; p3+ 0/31 ... (dodges every probe, code stops working).
+  strict 2B 0.50, 0.6 (2); p1 18/32 6.8t 8/18; p2 2/18. KL0.3 2B 0.34, 2.1 (5); p1 29/32 2/29; p2 20/29 1/20; p3 12/19 0/12.
+- HumanEval-Java: strict 4B 0.66, 4.8 (10); p1 32/32 2.3t 21/32 fl 0.74; p2 30/32 15/30; p3 22/30 9/22; p4 20/22 10/20.
+  KL0.3 4B 0.50, 11.6 (15); p1 32/32 2.1t 17/32 fl 0.86; p2 10/32; p3 6/32; p4+ 0-5/32. strict 2B 0.31, 2.8 (9); p1 30/32
+  8/30; p2 28/30 11/28; p3 17/28 3/17. KL0.3 2B 0.16, 5.2 (10); p1 32/32 3/32; p2 31/32 1/31; p3 28/30 2/28.
+- MGSM French: strict 4B 0.88, 5.6 (15); p1 32/32 3.2t 28/32, in French 28/32; p2 29/32 16/29, 27/29; p3 24/29 16/24,
+  20/24. KL0.3 4B 0.84, 13.9 (18); p1-p8 32/32 each, ~1.7 turns, 19-28/32 correct, 30-32/32 in French, fluke 0.83-0.92.
+  strict 2B 0.62, 12.8 (23); p1 32/32 17/32, 26/32 in French; p3 31/32 17/31, 6/31; p5+ ~0 in French (dodges by leaving
+  French). KL0.3 2B 0.47, 3.8 (8); p1 31/32 13/31, 31/31; p2 30/31 14/30, 30/30; p3 21/30 6/21, 21/21.
+- MGSM Russian: strict 4B 0.84, 3.8 (14); p1 31/32 2.8t 23/31, 30/31; p2 30/31 25/30, 28/30; p3 21/30 16/21, 21/21.
+  KL0.3 4B 0.81, 5.0 (9); p1 32/32 16/32, 31/32; p2 31/32 13/31; p3 29/31 14/29. strict 2B 0.72, 6.3 (21); p1 31/32
+  17/31, 25/31; p3 24/29 14/24, 9/24; p5+ 0-1 in Russian. KL0.3 2B 0.59, 2.9 (7); p1 32/32 11/32, 32/32; p3 17/27 6/17.
+- MGSM Thai: strict 4B 0.38, 2.2 (4); p1 32/32 4.9t 12/32, 32/32; p2 25/32 4/25; p3 12/25 5/12. KL0.3 4B 0.41, 2.7 (5);
+  p1 32/32 5/32; p2 29/32 1/29. strict 2B 0.09, 1.3 (3); p1 25/32 3/25. KL0.3 2B 0.16, 2.6 (5); p1 32/32 0/32; p2 0/29.
+Readings: every trained model dodges held-out probes on these tasks, and the KL0.3 4B dodges longest (Java 11.6, French
+13.9 probes in a row). Capability under dodging splits by task: the 4B models keep solving MGSM French / Russian IN the
+language (passing correct 0.5-0.9, in-language ~1.0) and the strict 4B keeps Java about half correct to probe 4, but the
+KL0.3 models' passing code is mostly wrong (KL0.3 4B Python 0/31 from p3; KL0.3 2B Java <= 3/32). The strict 2B's long
+French / Russian streaks are a language switch (passing answers stop being French / Russian from ~p3-p5): the
+in-language column is needed to read the MGSM races. Thai is hard for every model even at turn 0 (0.09-0.41).
