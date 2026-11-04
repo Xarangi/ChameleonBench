@@ -12311,3 +12311,13 @@ bit-exact).
   0.46). Capability GSM8K clean / math brief / html brief 0.905 / 0.885 / 0.915 (strict 0.88 / 0.87 / 0.89); MMLU 0.655
   / 0.675 / 0.673 (0.655 / 0.662 / 0.67). Persistence (pass rate after turn 1, no refit; real / always-passed verdict):
   0.79 / 0.65 (strict 0.79 / 0.43).
+- 11-04 05:10 PYTHON (held-out concept) CODE EVASION = dropping Python. Both Python races are held-out-concept races
+  ("Python code" is in the held-out split): MBPP and HumanEval-Python. Correct passing answers per 32 eps (absolute):
+  HumanEval-Py strict 4B 12, 7, 1 | KL0.3 4B 7, 2, 0, 0 ... (to p11) | KL0.3 2B 2, 1, 0. MBPP KL0.3 4B 3, 0, 0 ... (p12);
+  strict 4B (mbpp_pass64, 64 eps) 19/64, 4/64, 0/64; base 4B beats p1 1/64. First answer (before any verdict): Python
+  strict 4B 0.78 / KL0.3 4B 0.69; MBPP 0.83 / 0.59; Java 0.66 / 0.50. Form of passing answers (aggregate, turn >= 1):
+  KL0.3 4B HumanEval-Py passing answers parse as Python 13% (caught 29%; strict 4B passing 82%), MBPP passing parse 1%,
+  'def' 2%, JS-style 'function(' 84/124 and braces 121/124: it evades the Python probe by writing JavaScript-like code
+  (a trained concept), the code analogue of the strict 2B's switch to English. Java: KL0.3 4B 17, 10, 6, 1, 5 vs strict
+  4B 21, 15, 9, 10, 8 correct. MGSM: KL0.3 4B better than strict in French (c+l 24, 24, 24, 28 vs 24, 15, 12, 13), lower
+  in Russian (16, 13, 14, 12 vs 22, 23, 16, 11), both weak in Thai.
