@@ -12241,3 +12241,9 @@ bit-exact).
   both). Reading: lowering the lr, not extra steps, gave the source's 1700-1800 gain; the x2500 chain's cooldown
   (2350-2500) should give a similar bump; flat lr 1e-4 itself has plateaued since ~1600. Probe pool still smaller
   (1271 vs ~1400) but rebuilding, and the source improved with its larger pool, so the pool does not explain the gap.
+- 11-04 00:35 KL0.3 4B FINAL (training) vs strict 4B, both 1800 steps with the 1650-1800 cooldown. Steps 1700-1800,
+  beatk_frac_1..5: KL0.3 4B 1.00 / .99 / .96 / .90 / .85 (turns p1/p2/p3 1.9-2.0 / 2.4 / 2.5; ~72 probes beaten per
+  episode); strict 4B .95 / .72 / .46 / .22 / .10 (turns 2.6 / 3.3 / 3.8; ~39 per episode). KL0.3 4B rose through its
+  cooldown (p3 .83 -> .86 -> .94 -> .96 over 1500-1800), and its pool reset at the 1660 resume (1438 -> 1004) did not
+  stop it. Cost: KL on trained turns 0.20 vs 0.046; training GSM8K fork acc 0.88-0.90 vs 0.91, free valid 0.75-0.76
+  vs 0.74-0.78 (training capability metric did not catch the KL0.3 2B's race collapse either; races decide).
