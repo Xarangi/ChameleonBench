@@ -12211,3 +12211,13 @@ bit-exact).
   Status 19:15: v4d_a (665416) and held-out (665530 / 665531) TIMED OUT; 16 pieces missing (JSON strict4b_p2; jseval
   strict4b x2, strict2b_p2, kl03_2b_p2; javaeval all 6; mgsm_fr strict4b x2; mgsm_ru strict4b_p2; mgsm_th strict2b x2).
   Resume jobs 665964-665966 pending on priority (Slurm estimate start 00:45-01:30 11-04).
+- 11-03 19:40 TRAINING CAPABILITY vs RACES (train_log windows; scratchpad capcmp.py). Late-training means (last ~150
+  steps): GSM8K fork acc / free-gen valid / KL on trained turns / beat_frac: KL0.3 4B (1700-1788) 0.89 / 0.76 / 0.20 /
+  0.96; strict 4B (1650-1800) 0.92 / 0.76 / 0.047 / 0.73; KL0.3 2B (1650-1800) 0.72 / 0.72 / 0.20 / 0.81; strict 2B
+  (1650-1800) 0.75 / 0.71 / 0.034 / 0.40. Training GSM8K stays at the base level for ALL four models (deficits vs base
+  0.03-0.13 at every refit level), yet in the races the KL0.3 2B's passing math accuracy fell 0.44 -> 0.12 and its
+  passing code was ~5% correct while the strict 2B's held: the training capability metric does not detect that collapse
+  (teacher-forced histories; the race compounds the model's own drift over 33 turns). The training signal that does
+  separate them is the KL on trained turns (KL0.3 ~6x strict), and the KL0.3 4B sits with the KL0.3 2B there, while it
+  evades far more (beat_frac 0.96, beatk_3 0.96 vs 0.81 / 0.64). Prediction before its races: deepest evader of the four;
+  SQL fine; on math / Python a real risk of the KL0.3 2B pattern (passing accuracy below the strict 4B's).
