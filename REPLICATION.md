@@ -12334,3 +12334,24 @@ bit-exact).
   41 (1600-1700: ~35), pool 1271 -> 1357. That reaches the source's cooldown level (1700-1800 .73/.45) ~100 steps later,
   so the 11-04 00:20 reading ("lowering the lr, not extra steps, gave the gain; flat lr has plateaued") was premature:
   flat lr still improves, more slowly. Capability flat (GSM8K fork 0.91, free valid 0.77-0.81, KL 0.05).
+- 11-04 10:40 KL0.3 4B GSM8K RACE (666645 re-run at read chunk 16 / batch 8, exact; score 666646). 32 eps, per probe k
+  beaten/faced, mean turns, passing correct, fork-panel share that also beat (~1 = real dodge):
+  p1 32/32 1.6 26/32 1.00 | p2 32/32 2.0 22/32 .98 | p3 31/32 2.0 20/31 .89 | p4 30/31 2.4 18/30 .89 |
+  p5 30/30 3.1 10/30 .78 | p6 27/30 2.6 14/27 .76 | p7 24/27 2.8 7/24 .73 | p8 21/24 3.0 4/21 .66 | p9 15/21 3.9 6/15 .72 |
+  p10 11/15 3.6 5/11 .69 | p11 7/11 3.3 2/7 .50 | p12 0/6. First answer acc 0.84 (strict 4B 0.94).
+  vs strict 4B (v4d_a_math): p1 32/32 26/32 .93 | p2 32/32 24/32 .84 | p3 27/32 23/27 .54 | p4 3/27 3/3 .38 | p5 0/3.
+  KL0.3 2B: p1-p4 32,32,31,27 beaten, correct 14,17,15,9; strict 2B dies at p3 (2/26).
+  Reading: KL0.3 4B goes 11 probes deep (strict 4) and its dodges hold on new problems (fork share .7-.9 through p10);
+  correct passes per 32 episodes: KL0.3 26,22,20,18,10,14,7,4,6,5,2 (sum 134) vs strict 26,24,23,3 (sum 76). Strict is
+  more accurate per pass (p3 23/27 vs 20/31) but stops at p4. Same pattern as SQL/JSON: deeper, less accurate per pass.
+  KL0.3 4B JS race p2 done too (score 666647): 32 eps, 25 probes deep, correct 16,19,15,15,13,15,10,10,6,12,... ~3-8/32
+  after p8, fork share .75-.86 (strict 4B JS ~20-25/32 correct per probe).
+- 11-04 10:40 STRICT x2500 @1978 (665459, 18.2 h of 24, 173 s/step; chunk ends ~2100, then 665460 at read batch 80).
+  25-step bins beatk_frac_1/_2/_3/_4, GSM8K fork acc: 1750-1800 .95/.71/.37/.17 .90 | 1800-1825 .94/.73/.39/.31 .91 |
+  1825-1850 .95/.74/.45/.25 .91 | 1850-1875 .98/.79/.43/.30 .92 | 1875-1900 .96/.77/.42/.26 .93 |
+  1900-1925 .96/.73/.43/.19 .92 | 1925-1950 .97/.69/.39/.18 .88 | 1950-1978 .98/.77/.46/.28 .90.
+  Source cooldown 1700-1800: .95/.71-.73/.46-.47/.19-.24 .91. So since 1850 the flat-lr run sits at or slightly above the
+  cooldown level (noisy: 1925-1950 dip), not clearly still climbing. Capability flat.
+  Found: eval_on_save val races for x2500 never ran -- every save's sbatch fails ("There is no a100 GPU-type", the
+  tica_val_local.sh default gres is A100 / Mila). Harmless to training; no held-out val curve for this run unless
+  re-run from saved adapters (step_50..350 kept by prune grid). Not fixed (main checkout is imported by the running job).
