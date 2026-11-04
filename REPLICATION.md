@@ -12247,3 +12247,12 @@ bit-exact).
   cooldown (p3 .83 -> .86 -> .94 -> .96 over 1500-1800), and its pool reset at the 1660 resume (1438 -> 1004) did not
   stop it. Cost: KL on trained turns 0.20 vs 0.046; training GSM8K fork acc 0.88-0.90 vs 0.91, free valid 0.75-0.76
   vs 0.74-0.78 (training capability metric did not catch the KL0.3 2B's race collapse either; races decide).
+- 11-04 00:55 KL0.3 4B FINAL EVAL BATTERY @1800 (was never queued; same 35 tasks / args as the strict 4B's
+  klx4b_drain.sh: held-out val race (fixed texts), quality races train / held-out, persistence x2, capability, never-shown
+  panel x8 shards, passive hide-and-solve x21). Base-4B hide-and-solve halves reused (linked from klx4b_1800/hs).
+  Driver runs/mech_1025/k034b_drain.sh; node 666393 (8 h limit; strict took 2h40 with the base halves) + post 666394.
+  No fluke check here: the val race uses fixed texts (nothing sampled to re-draw); the free-answer quality races could
+  take --fork-panel but were not run with it for the strict 4B (kept identical for comparability).
+  KL0.3 4B training trend (beatk_frac_1..5 per 100 steps): 1000-1100 .92/.57/.30/.14/.11, 1200-1300 .98/.80/.50/.36/.38,
+  1400-1500 .99/.92/.77/.65/.61, 1575-1650 1.00/.96/.86/.74/.72 (still rising, slowing: p3 +.15/+.12/+.08 per 100),
+  cooldown 1650-1700 1.00/.98/.94/.83/.79, 1700-1800 1.00/.99/.96/.90/.85; probes beaten per episode 61 -> 72.
