@@ -12231,3 +12231,13 @@ bit-exact).
   1700-1800 at lr 1e-4 is the clean comparison. Resume difference: the probe pool (pool.entries) restarts smaller
   (1320 -> 751, rebuilding: 992 / 1139 / 1156 per 25 steps), as at the source's 1280 resume (1400 -> 607), after which
   the source kept improving.
+- 11-04 00:20 STRICT 4B CONTINUATION vs SOURCE COOLDOWN, same steps (continuation at global 1768, lr flat 1e-4;
+  source lr 1e-4 -> 1e-5 over 1650-1800). beatk_frac_1 / _2 / _3, turns to beat p1. Continuation: 1700-1725
+  .94/.70/.46 2.59, 1725-1750 .94/.64/.38 2.71, 1750-1768 .95/.69/.32 2.76 (pooled 1700-1768 .94/.68/.39 ~2.68).
+  Source cooldown: 1700-1725 .95/.76/.49 2.66, 1725-1750 .96/.71/.43 2.63, 1750-1775 .95/.72/.44 2.54 (pooled
+  .955/.73/.45 2.61). At equal steps the cooldown run is ahead by ~1 / 5 / 6 pp at p1 / p2 / p3 (pooled SE ~0.02 at
+  p3: ~2-3 SE) and beats ~3 more probes per episode (ep_refits_accepted 38.8 vs 36.0); the continuation is still at
+  its 1600-1700 level. Capability equal (GSM8K fork acc 0.90 vs 0.91, free valid 0.73-0.74 vs 0.74-0.78, KL 0.045-0.050
+  both). Reading: lowering the lr, not extra steps, gave the source's 1700-1800 gain; the x2500 chain's cooldown
+  (2350-2500) should give a similar bump; flat lr 1e-4 itself has plateaued since ~1600. Probe pool still smaller
+  (1271 vs ~1400) but rebuilding, and the source improved with its larger pool, so the pool does not explain the gap.
