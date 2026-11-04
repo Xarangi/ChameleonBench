@@ -12203,3 +12203,11 @@ bit-exact).
   GSM8K: the strict models keep accuracy near their first-answer level while they evade (4B 0.75-0.85, 2B ~0.70) but
   hit a wall at probe 4 (4B) / 3 (2B); the KL0.3 2B goes 8 deep by giving up the math (passing accuracy 0.44 -> 0.33
   at p4 -> 0.12 at p5), the same pattern as its broken-code MBPP evasion. n = 32 per model (+-~15 pp).
+- 11-03 19:25 HELD-OUT RACE HumanEval-Python (heldout-tasks branch; same format, 32 eps per model, complete; scored
+  early by 666028). strict 4B (first answer 0.78): p1 26/32 5.1 turns 12/26 correct fluke .62 | p2 14/26 8.4 7/14 .20 |
+  p3 6/14 7.7 1/6 .12 | p4 0/6. strict 2B (0.50): p1 18/32 6.8 8/18 .56 | p2 2/18 10.5 1/2 .19 | p3 0/2. KL0.3 2B
+  (0.34): p1 29/32 5.8 2/29 .60 | p2 20/29 9.1 1/20 .24 | p3 12/19 8.2 0/12 .21 | p4 5/12 0/5 | p5 1/5 0/1. Held-out code
+  is much harder to evade than SQL (p1 needs ~5-7 turns vs ~1.4) and the KL0.3 2B again evades with broken code.
+  Status 19:15: v4d_a (665416) and held-out (665530 / 665531) TIMED OUT; 16 pieces missing (JSON strict4b_p2; jseval
+  strict4b x2, strict2b_p2, kl03_2b_p2; javaeval all 6; mgsm_fr strict4b x2; mgsm_ru strict4b_p2; mgsm_th strict2b x2).
+  Resume jobs 665964-665966 pending on priority (Slurm estimate start 00:45-01:30 11-04).
