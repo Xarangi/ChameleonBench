@@ -12479,3 +12479,15 @@ bit-exact).
   Proposed guard: race a ~step-1000 9B checkpoint (GSM8K, JS, HumanEval-Py with fluke + correctness) and switch if it
   collapses like the KL0.3 2B. Not recommended as primary: strict 9B (weak evasion; 4B still at probe 3 ~.6 after
   2000+ steps) or an untested KL (e.g. 1.0) with no 2B/4B pilot. Extrapolation from 2 model sizes; no 9B data yet.
+- 11-04 16:45 user: commit everything; bundle data for Narval (no models); Python races on intermediate KL0.3 4B
+  checkpoints. (1) Git: every worktree was clean except wt_stack (detached, 10-29 uncommitted refit_stack_episodes WIP)
+  -> branch wip/refit-stack-fits (e80b46c, not merged); activations / dodgescope / wip branches pushed (had no origin
+  branch); analysis readers of 11-03/11-04 -> scripts/analysis/replication_1104/ (8674b27). (2) Narval bundle at
+  /project/aip-rrabba/sneheel/narval_bundle (make_bundle.sh, job 667938): chameleon_data_core.tar.zst 496 MB (raw
+  cache incl. capability pools + race inputs, 4B base probe bank, answer_probe_cache, anchor caches, GSM8K base gens);
+  optional chameleon_panel_probe_cache.tar.zst (73 GB raw, recomputable); venv requirement pins; README =
+  docs/NARVAL_SETUP.md (A100 40 GB vs H100 80 GB: halve read batch; account; HF revisions). (3) KL0.3 4B Python trend
+  races, spec configs/race/k03_4b_py_trend.json via ChameleonBench-heldout heldout_race_launch.py: HumanEval-Py + MBPP,
+  32 eps each, seeds 1-2 (paired with the 1800 races), checkpoints global 600 (step_600), 1000 (resume_800/step_200),
+  1400 (resume_1340/step_60); node 667933 (4 GPU, ~2.5 h), scores 667934 / 667935.
+  Strict x2500: 665459 ended at the 24 h limit (~2090); 665460 pending (nodes down / reserved).

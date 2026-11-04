@@ -1,0 +1,17 @@
+{
+ "name": "k034b_pytrend",
+ "task": "pyeval,mbpp",
+ "episodes": 32,
+ "turns": 33,
+ "fork_panel": 8,
+ "batch": 8,
+ "piece_episodes": 16,
+ "extra": "--set model.batch_size=16",
+ "min_per_piece": 22,
+ "models": {
+  "s600": ["final_v4d_k03_tamia_4b", "/scratch/s/sneheel/next_chameleons_artifacts/tica/runs/final_v4d_k03_tamia_4b/adaptive/step_600"],
+  "s1000": ["final_v4d_k03_tamia_4b", "/scratch/s/sneheel/next_chameleons_artifacts/tica/runs/final_v4d_k03_tamia_4b/resume_800/adaptive/step_200"],
+  "s1400": ["final_v4d_k03_tamia_4b", "/scratch/s/sneheel/next_chameleons_artifacts/tica/runs/final_v4d_k03_tamia_4b/resume_1340/adaptive/step_60"]
+ },
+ "_note": "11-04 (user): KL0.3 4B Python-race trend over training. Same settings and seeds (1, 2) as the step-1800 races (heldout_v4d_k034b_pyeval, v4d_k034b_mbpp) -> paired episodes; global step = resume offset + step. Launch from ChameleonBench-heldout (has pyeval)."
+}
