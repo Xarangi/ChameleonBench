@@ -12368,3 +12368,18 @@ bit-exact).
   k1 2.55 k2 3.35 k3 3.64 k4 3.86, k4 beaten .24, within 3 .59. Reading: k1/k2 turns fall steadily (2.78->2.38,
   3.52->3.05), k3 slowly (4.2->3.9), k4 beat rate up (.16->.32) but its turns are flat/noisy (~120-175 faced per bin).
   k4 faced per step 2.7 -> 4.2 (more episodes reach a 4th refit).
+- 11-04 11:20 user: are the wrong math answers "not doing math" or "doing math wrong"? GSM8K races, answer at the turn
+  that beat probe k (plus turn-0 answer), heuristic classes (scratchpad mathwrong.py / mathrep.py; final = "The answer
+  is N"; problem-number use = share of the problem's numbers appearing in the answer; arithmetic slip = an "a op b = c"
+  with wrong c). KL0.3 4B: turn0 .84 correct; passes k1-2 .75 | k3-5 .53 | k6+ .36 correct (n 64/91/105). Wrong passes at
+  k6+: .38 works the problem with a wrong setup, .12 arithmetic slip, .07 gold number appears but final differs, .04 no
+  final line, .02 off-problem, .01 final number without using the problem. Problem-number use .99 -> .88 (k6+), length
+  136 -> 98 words, all English (ascii 1.00). Strict 4B passes k1-2 .78 / k3-5 .87, wrong ones also wrong setup (.09).
+  KL0.3 2B passes k3-5 .35 (.38 wrong setup, .09 no final line, .05 barely uses problem numbers).
+  Examples (KL0.3 4B, k3+): misreads / invents facts ("Jamal has 4 more apples than Andrea"), drops a step, uses a wrong
+  number (33/3 = 11, then x4 for "12 hours"), answers a sub-question (votes as % instead of count).
+  Repeated identical lines (a degeneration marker): KL0.3 4B wrong passes .25/.35/.24 (k1-2/3-5/6+) vs correct passes
+  .04/.08/.11 and turn-0 .09; strict 4B ~.0-.07 either way; KL0.3 2B wrong .18/.19/.56.
+  Reading: it IS doing math (English, step-by-step, uses the problem's numbers) and solving it wrong -- mostly
+  misreading / garbled setup, with looping text, not refusing or writing non-math. No evasion via off-topic text in
+  math (unlike held-out Python -> JS-style code).
