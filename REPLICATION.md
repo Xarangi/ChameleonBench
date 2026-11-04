@@ -12426,3 +12426,8 @@ bit-exact).
   (k1-2, n 5) / .33 (k3+, n 3); its passes k1-2 .47 -> .55.
   KL0.3 4B MBPP: k1-2 .05 -> .22 (JS-style .72 of passes, .13 as JS; braces .22, .29 repaired); k3+ .00 -> .08 (JS-style
   .73, .03; braces .25, .23). Turn 0 .59.
+- 11-04 16:30 STRICT x2500 @2052 (665459 22.1 h of 24, 176 s/step; chunk ends ~2090, then 665460). 50-step bins, probe k
+  beaten / mean turns to beat (pooled): 1900-1950 k1 .97/2.35 k2 .71/3.20 k3 .41/4.05 k4 .20/4.91 | 1950-2000 .98/2.38
+  .78/3.06 .50/3.87 .33/4.36 | 2000-2050 .97/2.42 .77/3.14 .59/3.67 .31/4.44. Within 3 turns .54 (1600-1650) -> .63.
+  GSM8K fork .91-.92. Probe 3 is the new mover (.41 -> .50 -> .59, turns 4.05 -> 3.67), now past the source cooldown
+  (k3 .47, 3.64 turns); k1/k2 flat at a high level; k4 ~.3 with noisy turns.
