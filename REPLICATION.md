@@ -12404,3 +12404,6 @@ bit-exact).
   Reading: the shared evasion across code tasks is breaking the language's surface markers -- dropping `function` in JS,
   dropping `def` / adding braces in Python -- while keeping much of the logic; on held-out Python it goes further into
   JS-style code. Math has no such marker to drop, so it degrades as misreading (see 11:20).
+  2B JS (same job): KL0.3 2B passes .31/.35/.26 (k1-2/3-8/9-15; turn0 .34), strict 2B .39/.45/.42 (turn0 .41); failures
+  are assertions (wrong output) at every depth, syntax .05-.09 -- the 2Bs do not drop `function`; they stay at their
+  turn-0 level. Keyword-dropping is a KL0.3 4B behaviour.
