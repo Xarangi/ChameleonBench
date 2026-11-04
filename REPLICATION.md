@@ -12221,3 +12221,13 @@ bit-exact).
   separate them is the KL on trained turns (KL0.3 ~6x strict), and the KL0.3 4B sits with the KL0.3 2B there, while it
   evades far more (beat_frac 0.96, beatk_3 0.96 vs 0.81 / 0.64). Prediction before its races: deepest evader of the four;
   SQL fine; on math / Python a real risk of the KL0.3 2B pattern (passing accuracy below the strict 4B's).
+- 11-03 20:05 STRICT 4B PLATEAU CHECK (25-step bins, beatk_frac_1 / _2 / _3). Source run: 1450-1500 .85/.56/.20,
+  1500-1525 .93/.63/.24, 1525-1550 .94/.59/.28, 1550-1575 .92/.64/.31, 1575-1600 .94/.69/.42 (spike), 1600-1625
+  .95/.70/.36, 1625-1650 .95/.68/.40 (same lr 1e-4: flat too), cooldown 1650-1675 .93/.61/.30, 1675-1700 .94/.67/.39,
+  1700-1800 .95-.96/.71-.76/.43-.50. Continuation (lr 1e-4): 1600-1625 .93/.67/.37, 1625-1650 .92/.67/.40, 1650-1675
+  .92/.66/.40, 1675-1700 .93/.67/.34. = the source at the same lr; the "sudden" stop at 1600 is mostly the 1575-1600
+  window being high (p3 SE ~0.03 per 25-step bin) on a slowing trend, with probe 1 saturated at ~0.93-0.95 since 1500.
+  Cooldown vs flat lr cannot be separated yet (the source's cooldown windows are later steps): the continuation's
+  1700-1800 at lr 1e-4 is the clean comparison. Resume difference: the probe pool (pool.entries) restarts smaller
+  (1320 -> 751, rebuilding: 992 / 1139 / 1156 per 25 steps), as at the source's 1280 resume (1400 -> 607), after which
+  the source kept improving.
