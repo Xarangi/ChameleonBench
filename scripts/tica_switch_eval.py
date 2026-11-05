@@ -21,6 +21,7 @@ import contextlib
 import dataclasses
 import itertools
 import json
+import os
 import sys
 import time
 from collections import defaultdict
@@ -30,14 +31,14 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from tica import build
 
 from next_chameleons.tica.answer_format import ask_concept, fit_answer_probes, prompts
-from next_chameleons.tica.config import load_run_config
+from next_chameleons.tica.config import apply_overrides, load_run_config
 from next_chameleons.tica.data import CONCEPT_SPLITS, select_topics
 from next_chameleons.tica.episodes import EpisodeSampler
 from next_chameleons.tica.monitors import MonitorPool
 from next_chameleons.tica.trainers.supervised import beat_summary, probe_index_metrics
 
 
-def pass_fork_summary(trajs, n, m) -> dict:
+def pass_fork_summary(trajs, n, m, max_k: int = 5) -> dict:
     """--pass-forks: share of the re-sampled answers that also pass, per pass event; ROBUST pass =
     >= m of n; by_probe_index recomputed with only robust passes counted as passes."""
 
@@ -55,7 +56,7 @@ def pass_fork_summary(trajs, n, m) -> dict:
             "pass_fork_share_mean": sum(fr) / len(fr) if fr else None,
             "robust_pass_frac": sum(f * n >= m for f in fr) / len(fr) if fr else None,
             "pass_fork_hist": {str(k): sum(round(f * n) == k for f in fr) for k in range(n + 1)},
-            "by_probe_index_robust": probe_index_metrics(robust)}
+            "by_probe_index_robust": probe_index_metrics(robust, max_k)}
 
 
 def main():
@@ -83,8 +84,9 @@ def main():
                          "thr| = the probe's running median): is the score used beyond the bit?")
     ap.add_argument("--feedback", choices=["verdict", "score"],
                     help="override episodes.feedback (arms trained with --set episodes.feedback)")
-    ap.add_argument("--set", action="append", default=[], metavar="KEY=VALUE",
-                    help="override a config field by dotted path, as in tica.py (repeatable)")
+    ap.add_argument("--scramble-score", action="store_true",
+                    help="score feedback: TRUE verdict, random score on its side of the threshold "
+                         "(10-23: does the model use the number beyond the verdict?)")
     ap.add_argument("--always-pass", action="store_true",
                     help="show PASSED every turn (10-22): does the dodge hold without feedback?")
     ap.add_argument("--no-refit", action="store_true",
@@ -96,6 +98,12 @@ def main():
                          "--pass-min / N")
     ap.add_argument("--pass-min", type=int, default=6)
     ap.add_argument("--pass-temp", type=float, default=0.7)
+    ap.add_argument("--gate-auroc", type=float, default=None,
+                    help="override rl.adaptive.refit_min_auroc for every probe incl. the turn-0 "
+                         "panel (10-24: strict-gate eval; panel cache keys on it -> fresh fits)")
+    ap.add_argument("--gate-tpr-ic", type=float, default=None,
+                    help="override rl.adaptive.refit_min_tpr_ic (catch on held-out in-context "
+                         "positives at the 1%% FPR threshold)")
     ap.add_argument("--model-path")
     ap.add_argument("--data", help="override the config's data file (e.g. concept_eval_v1.json)")
     ap.add_argument("--inputs", help="override the config's answer-format inputs map")
@@ -105,6 +113,8 @@ def main():
                     help="override adaptive.first_probe (10-16i: fork = the first probe of every "
                          "concept is fit on the policy's own states at that turn)")
     ap.add_argument("--seed", type=int, default=1)
+    ap.add_argument("--max-k", type=int, default=5,
+                    help="by_probe_index: banks k >= this are pooled (10-23 refit LADDER: 12)")
     ap.add_argument("--turn-budget", default="",
                     help="R,M,S: turn-budget episodes (final.turn_budget, 10-19): every probe gets "
                          ">= R judged turns of runway and stands <= M; first switch by T - S. "
@@ -121,10 +131,27 @@ def main():
     ap.add_argument("--gen-out", default="",
                     help="--answers free: JSONL of answers + verdicts for tica_free_judge.py "
                          "(scratch only: raw model text, never commit)")
+    ap.add_argument("--fork-panel", type=int, default=0,
+                    help="FORK PANEL (10-27; needs --answers free): at every monitored turn "
+                         ">= 1, M forks with the same history + verdict and a NEW request, judged "
+                         "by the pool deployed at that turn (many samples per refit level)")
+    ap.add_argument("--fork-temp", type=float, default=0.0)
+    ap.add_argument("--fork-out", default="", help="JSONL of the fork panel (scratch: raw text)")
+    ap.add_argument("--evdet-seed", default="",
+                    help="generic hiding detector (--kind evdet@L): MODEL_DUMPS;BASE_DUMPS, comma "
+                         "lists of train-concept panel dumps that seed the detector buffer")
+    ap.add_argument("--set", action="append", default=[], metavar="KEY=VALUE",
+                    help="config override, e.g. rl.adaptive.refit_overlap=true (10-29: eval "
+                         "speed-ups: episode_rng, refit_overlap, refit_cpu_fits, model.sort_reads)")
     ap.add_argument("--out", required=True)
     a = ap.parse_args()
 
     import torch
+
+    # TICA_MEM_FRACTION (10-29): cap this process's CUDA caching allocator (an eval sharing GPUs
+    # with a training run runs out of memory itself instead of pushing the run over; as tica.py)
+    if os.environ.get("TICA_MEM_FRACTION") and torch.cuda.is_available():
+        torch.cuda.set_per_process_memory_fraction(float(os.environ["TICA_MEM_FRACTION"]), 0)
 
     from next_chameleons.tica.trainers.supervised import (
         AdaptiveSupervisedConfig,
@@ -135,14 +162,17 @@ def main():
     cfg = load_run_config(a.config)
     if a.feedback:
         cfg.episodes.feedback = a.feedback
-    if a.set:
-        from next_chameleons.tica.config import apply_overrides
-
-        apply_overrides(cfg, a.set)
+    apply_overrides(cfg, a.set)
+    if a.gate_auroc is not None:
+        cfg.rl.adaptive.refit_min_auroc = a.gate_auroc
+    if a.gate_tpr_ic is not None:
+        cfg.rl.adaptive.refit_min_tpr_ic = a.gate_tpr_ic
     if a.model_path:
         cfg.model.path = a.model_path
     if a.kind:
         cfg.rl.adaptive.episode_refit_kind = a.kind
+    if a.evdet_seed:
+        cfg.rl.adaptive.evdet_seed_model, cfg.rl.adaptive.evdet_seed_base = a.evdet_seed.split(";")
     if a.first_probe:
         cfg.rl.adaptive.first_probe = a.first_probe
     if a.fork:
@@ -208,14 +238,14 @@ def main():
                   else cfg.rl.adaptive))
     out = Path(a.out)
     from next_chameleons.tica.vllm_gen import maybe_attach
-
-    maybe_attach(pol, cfg.model.path, out.parent / (out.stem + "_vllm"))  # TICA_VLLM=1: colocated vLLM generation
+    # TICA_VLLM=1: colocated vLLM generation
+    maybe_attach(pol, cfg.model.path, out.parent / (out.stem + "_vllm"))
     tr = AdaptiveSupervisedTrainer(
         pol, pool, sampler, asc, out.parent / (out.stem + "_work"),
         branch_concepts=data.concepts("fit", splits), branch_negatives=data.negatives("fit"),
         roots_only=set(topics), prompts=ask_concept(fmt) if a.ask_concept else fmt,
         hard_neg={c: data.hard_negatives(c, "fit") for c in topics})
-    tr.falsify = "pass" if a.always_pass else a.falsify
+    tr.falsify = "pass" if a.always_pass else ("score_noise" if a.scramble_score else a.falsify)
     if a.pass_forks:
         if a.answers != "free":
             raise SystemExit("--pass-forks needs --answers free")
@@ -223,6 +253,11 @@ def main():
     tr.score_bit = a.score_bit
     if a.answers == "free":
         tr.free_answers = {"max_new": a.answer_max}
+    if a.fork_panel:
+        if a.answers != "free":
+            raise SystemExit("--fork-panel needs --answers free")
+        tr.fork_panel = {"m": a.fork_panel, "temp": a.fork_temp, "seed": a.seed, "log": []}
+    fork_f = open(a.fork_out, "w") if a.fork_out else None  # noqa: SIM115
     gen_f = open(a.gen_out, "w") if a.gen_out else None  # noqa: SIM115
     # eval only: refits MAY sit at the held-out layers (linear@20 / @24 are held-out probe kinds);
     # training excludes them so that they stay held out
@@ -262,8 +297,15 @@ def main():
                         "off": bool(r.get("off")), "detected": bool(r["monitored"]["detected"]),
                         "passed": not r["monitored"]["detected"],
                         "finished": r.get("gen_finished"),
+                        # 10-27: probes deployed at this turn (cumulative pool) = refit level
+                        "n_deployed": len(r.get("deployed") or []),
                         "answer": conv[-1]["content"], "user": conv[-2]["content"]}) + "\n")
             gen_f.flush()
+        if fork_f is not None and a.fork_panel:
+            for rec in tr.fork_panel["log"]:
+                fork_f.write(json.dumps(rec) + "\n")
+            fork_f.flush()
+            tr.fork_panel["log"].clear()
         tr.pool.entries = [e for e in tr.pool.entries if e.monitor.name not in set(tr._transient)]
         tr._transient = []
         for k_, v_ in m.items():
@@ -327,7 +369,8 @@ def main():
            "pass_rate_after_first_turn_by_topic": {c: mean(v) for c, v in per_topic.items()},
            "pass_rate_after_first_turn": mean([x for v in per_topic.values() for x in v]),
            "return_first_turn_caught": mean(ret_first), "n_returns": len(ret_first),
-           "switches": n_sw, "refits": refits, "refits_accepted": acc,
+           "switches": n_sw, "refits": refits, "refits_accepted": acc, "evdet_seed": a.evdet_seed,
+           "fork_panel": a.fork_panel,
            # per refit kind: [caught, judged] over each refit's judged turns AFTER its first
            "kind_stats": {k: list(v) for k, v in tr.kind_stats.items()},
            "kind_catch": {k: v[0] / v[1] for k, v in tr.kind_stats.items() if v[1]},
@@ -335,6 +378,8 @@ def main():
            "episode_fork": cfg.rl.adaptive.episode_fork,
            "first_probe": cfg.rl.adaptive.first_probe,
            "refit_gate": refit_gate,
+           "gate": {"auroc": cfg.rl.adaptive.refit_min_auroc,
+                    "tpr_ic": cfg.rl.adaptive.refit_min_tpr_ic},
            # turns-to-beat: every new probe (refits, by kind) and every new concept segment
            **beat_summary(tr.deploy_log),
            "beat_turns_hist": {str(k): sum(1 for r in tr.deploy_log if r["beaten"]
@@ -349,9 +394,9 @@ def main():
                for k in sorted({r["turns"] for r in tr.deploy_log if not r["beaten"]})},
            "deploy_records": tr.deploy_log,
            # PASS RATE BY PROBE INDEX (10-17u): k-th bank of each concept segment beaten?
-           "by_probe_index": probe_index_metrics(all_trajs),
-           "always_pass": a.always_pass, "no_refit": a.no_refit,
-           **pass_fork_summary(all_trajs, a.pass_forks, a.pass_min),
+           "by_probe_index": probe_index_metrics(all_trajs, a.max_k),
+           "always_pass": a.always_pass, "no_refit": a.no_refit, "scramble_score": a.scramble_score,
+           **pass_fork_summary(all_trajs, a.pass_forks, a.pass_min, a.max_k),
            "persist_pass_rate": mean([x for v in persist.values() for x in v]),
            "persist_n": sum(len(v) for v in persist.values()),
            "persist_by_lag": {str(k): mean(v) for k, v in sorted(persist.items()) if k <= 8},

@@ -25,11 +25,13 @@ from __future__ import annotations
 import json
 import math
 import os
+import queue
 import random
+import threading
 import time
 import zlib
 from collections import defaultdict
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
 from contextlib import nullcontext
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
@@ -74,6 +76,12 @@ class SupervisedConfig:
     # 10-21 (default off): keep trainer_state.pt in EVERY checkpoint instead of the newest only, so
     # a run can be resumed with its optimizer state from any checkpoint (~0.5 GB each at r32).
     save_state_all: bool = False
+    # 10-29 (0 = off: every copy kept): with save_state_all, keep trainer_state.pt only in this
+    # chunk's newest state_keep_last checkpoints plus those at GLOBAL steps divisible by
+    # state_keep_every (0 = none), so long runs can still branch from recent / round steps without
+    # filling the disk (Gemma-12B: 4.2 GB per copy; the scratch quota stopped every job on 10-28).
+    state_keep_last: int = 0
+    state_keep_every: int = 0
     # 10-21v (default off = unchanged): with data-parallel episodes, copy rank 0's trainable
     # weights to every rank before training. A fresh LoRA is initialised unseeded per rank, so
     # from-scratch DP runs otherwise train ranks holding DIFFERENT weights (dp_param_drift).
@@ -299,6 +307,9 @@ from next_chameleons.tica.episodes import (  # noqa: E402
     budget_switch,
     render_feedback,
 )
+from next_chameleons.tica.evdet_defender import CAL_READS as EVDET_CAL  # noqa: E402
+from next_chameleons.tica.evdet_defender import KINDS as DETECTOR_KINDS  # noqa: E402
+from next_chameleons.tica.evdet_defender import EvDetBuffer, fit_evdet  # noqa: E402
 from next_chameleons.tica.level1 import opening  # noqa: E402
 from next_chameleons.tica.monitors import auroc, fit_logistic  # noqa: E402
 from next_chameleons.tica.neg_labels import clean as neg_clean  # noqa: E402
@@ -309,6 +320,7 @@ from next_chameleons.tica.probe_zoo import ENS_KINDS as ZOO_ENS  # noqa: E402
 from next_chameleons.tica.probe_zoo import TOK_KEEP as ZOO_TOK_KEEP  # noqa: E402
 from next_chameleons.tica.probe_zoo import TOKENS_ENS as ZOO_TOKENS_ENS  # noqa: E402
 from next_chameleons.tica.probe_zoo import gate_fit, kind_layers, split_kind  # noqa: E402
+from next_chameleons.tica.validity import check_task as check_valid  # noqa: E402
 
 DODGE_CONDS = ("real_score", "real_verdict")
 
@@ -430,6 +442,11 @@ def _refit_fit(job: dict):
     of _refit_reads (+ "name", "excl"). Reads no trainer state, so adaptive.refit_overlap can run
     it on a worker thread."""
 
+    if job["kind"] in DETECTOR_KINDS:  # generic hiding detectors (tica/evdet_defender.py)
+        mon, info = fit_evdet(job["evdet_buf"], job["L"], job["concept"], job["r_pol"],
+                              job["r_base"], job["r_cal"], job["acfg"], name=job["name"],
+                              kind=job["kind"], mis_rows=job["r_mis"])
+        return mon, {**info, "kind": job["full_kind"], "sec_read": job["sec_read"]}
     kind, L, Ls, L0, picks = job["kind"], job["L"], job["Ls"], job["L0"], job["picks"]
     rl, ft, npl, nt = job["rl"], job["ft"], job["npl"], job["nt"]
     acfg, name, concept = job["acfg"], job["name"], job["concept"]
@@ -456,9 +473,7 @@ def _refit_fit(job: dict):
             N = torch.stack([rl[L0][q] for q, (k_, _) in enumerate(picks) if k_ == "neg"])
             G = npl[L0][1::2]
         else:
-            P = [ft[L][q] for q, (k_, _) in enumerate(picks) if k_ == "pos"] + nt[L][np_fit]
-            N = [ft[L][q] for q, (k_, _) in enumerate(picks) if k_ == "neg"]
-            G = nt[L][1::2]
+            P, N, G = _tok_fit_inputs(job)
         mon, info = gate_fit(kind, P, N, G, acfg, name=name, layer=L, concept=concept,
                              device=job["device"])
         return mon, {**info, "kind": full_kind, "sec_read": sec_read}
@@ -495,12 +510,19 @@ def _rng_eq(a, b) -> bool:
     return a[1] is None or all(torch.equal(x, y) for x, y in zip(a[1], b[1], strict=True))
 
 
-def _iso_fit(job: dict, grad: bool):
+_SIDE = threading.local()  # refit_overlap_stream: one side CUDA stream per worker thread
+
+
+def _iso_fit(job: dict, grad: bool, ready=None):
     """adaptive.refit_overlap's worker: _refit_fit(job) with the caller's grad mode and device,
     the global torch RNG isolated. Fits seed themselves from the probe name (torch.manual_seed +
     module init), so their results do not depend on the state they start from; the state they
     END in does, and the main thread restores the serial one at the join. Returns ((probe, info),
-    RNG end state or None if the fit left the RNG untouched, fit seconds)."""
+    RNG end state or None if the fit left the RNG untouched, fit seconds).
+    ready (adaptive.refit_overlap_stream, 10-23): a CUDA event recorded on the main stream after the
+    job's reads; the fit then runs on this thread's SIDE stream (after the event), so its many small
+    kernels overlap the main thread's next reads instead of queueing behind them on one stream. The
+    side stream is synchronised before returning, so the probe is complete when the future is."""
 
     t0 = time.time()
     dev = job["device"]
@@ -513,11 +535,245 @@ def _iso_fit(job: dict, grad: bool):
     canary = _rng_get()
     try:
         with torch.set_grad_enabled(grad):
-            out = _refit_fit(job)
+            if ready is not None:
+                side = getattr(_SIDE, "s", None)
+                if side is None or side.device != ready_dev(dev):
+                    side = _SIDE.s = torch.cuda.Stream(device=ready_dev(dev))
+                side.wait_event(ready)
+                with torch.cuda.stream(side):
+                    out = _refit_fit(job)
+                side.synchronize()
+            else:
+                out = _refit_fit(job)
         after = _rng_get()
     finally:
         _rng_set(before)
     return out, (None if _rng_eq(after, canary) else after), time.time() - t0
+
+
+def _tok_fit_inputs(job: dict):
+    """(P, N, G) of a single-layer token-kind refit job (_refit_fit's zoo inputs)."""
+
+    L, picks, ft, nt, acfg = job["L"], job["picks"], job["ft"], job["nt"], job["acfg"]
+    np_fit = slice(0, None, 2) if acfg.refit_np_in_fit else slice(0, 0)
+    P = [ft[L][q] for q, (k_, _) in enumerate(picks) if k_ == "pos"] + nt[L][np_fit]
+    N = [ft[L][q] for q, (k_, _) in enumerate(picks) if k_ == "neg"]
+    return P, N, nt[L][1::2]
+
+
+def _stackable(job: dict) -> bool:
+    """A refit job adaptive.refit_stack_episodes can stack: an rlobf-kind token fit."""
+
+    from next_chameleons.tica.probe_zoo import RLOBF_KINDS
+
+    return (job["kind"] in RLOBF_KINDS and job.get("ft") is not None
+            and getattr(job["acfg"], "refit_batched_rlobf", False))
+
+
+def _iso_fit_many(jobs: list, grad: bool) -> list:
+    """_iso_fit for several stackable jobs of ONE kind: one stacked training
+    (probe_zoo.gate_fit_many), the global torch RNG isolated as in _iso_fit. Every job gets the
+    RNG end state of the whole stack (= the last job's, whose fit runs last: fits seed
+    themselves from their names, so only the last one matters at the join)."""
+
+    from next_chameleons.tica.probe_zoo import gate_fit_many
+
+    t0 = time.time()
+    dev = jobs[0]["device"]
+    if isinstance(dev, torch.device) and dev.type == "cuda":
+        torch.cuda.set_device(dev)
+    before = _rng_get()
+    torch.default_generator.manual_seed(_RNG_CANARY)
+    if before[1] is not None:
+        torch.cuda.manual_seed_all(_RNG_CANARY)
+    canary = _rng_get()
+    try:
+        items = []
+        for j in jobs:
+            P, N, G = _tok_fit_inputs(j)
+            items.append({"P": P, "N": N, "NP": G, "name": j["name"], "layer": j["L"],
+                          "concept": j["concept"]})
+        with torch.set_grad_enabled(grad):
+            res = gate_fit_many(jobs[0]["kind"], items, jobs[0]["acfg"], device=dev)
+        after = _rng_get()
+    finally:
+        _rng_set(before)
+    rec = None if _rng_eq(after, canary) else after
+    dt = (time.time() - t0) / len(jobs)
+    return [((mon, {**info, "kind": j["full_kind"], "sec_read": j["sec_read"]}), rec, dt)
+            for (mon, info), j in zip(res, jobs, strict=True)]
+
+
+class _StackFitWorker:
+    """adaptive.refit_stack_episodes: refit_overlap's worker thread, but stackable fits (rlobf
+    kinds) are HELD until a second one of the same kind is queued or the main thread asks for a
+    result (flush(), called before every wait), then a kind's held fits train as one stacked run;
+    other fits run at once, in queue order, while stackable ones wait. Same submit / Future
+    interface as the ThreadPoolExecutor it replaces (cancel works while a fit is queued / held)."""
+
+    def __init__(self, max_stack: int = 8):
+        from concurrent.futures import Future
+
+        self._Future, self._q, self._max = Future, queue.Queue(), max_stack
+        self._flush = threading.Event()
+        self.n_stacked = 0  # fits that trained inside a stack of >= 2 (logged: ep_refit_stacked)
+        threading.Thread(target=self._loop, name="tica-refit-stack", daemon=True).start()
+
+    def submit(self, fn, job, grad, ready):
+        fut = self._Future()
+        self._q.put((fn, job, grad, ready, fut))
+        return fut
+
+    def flush(self):
+        """Run every held stackable fit now (the main thread is about to wait on a result)."""
+
+        self._flush.set()
+        self._q.put(None)  # wake the worker
+
+    @staticmethod
+    def _run_one(it):
+        if it[4].set_running_or_notify_cancel():
+            try:
+                it[4].set_result(it[0](it[1], it[2], it[3]))
+            except BaseException as e:
+                it[4].set_exception(e)
+
+    def _run_group(self, g):
+        g = [it for it in g if it[4].set_running_or_notify_cancel()]
+        if not g:
+            return
+        if len(g) == 1:
+            try:
+                g[0][4].set_result(g[0][0](g[0][1], g[0][2], g[0][3]))
+            except BaseException as e:
+                g[0][4].set_exception(e)
+            return
+        try:
+            outs = _iso_fit_many([it[1] for it in g], g[0][2])
+            self.n_stacked += len(g)
+            for it, o in zip(g, outs, strict=True):
+                it[4].set_result(o)
+        except BaseException as e:
+            for it in g:
+                it[4].set_exception(e)
+
+    def _loop(self):
+        held: dict = {}
+        while True:
+            items = [self._q.get()]
+            while True:
+                try:
+                    items.append(self._q.get_nowait())
+                except queue.Empty:
+                    break
+            for it in items:
+                if it is None:
+                    continue
+                if it[3] is None and _stackable(it[1]):
+                    held.setdefault(it[1]["kind"], []).append(it)
+                else:
+                    self._run_one(it)
+            flush = self._flush.is_set()
+            for kind in list(held):
+                if flush or len(held[kind]) >= self._max:
+                    self._run_group(held.pop(kind))
+            if flush and not held:
+                self._flush.clear()
+
+
+def _cpu_fit_init(threads: int, ens_layers: dict, tok_ens_layers: dict) -> None:
+    """adaptive.refit_cpu_fits worker: torch threads per CPU fit process + the main process's
+    multi-layer kind tables (probe_zoo.set_zoo_depth rescales them for model.depth in the main
+    process only; a spawned worker would otherwise use the 32-layer originals)."""
+
+    from next_chameleons.tica import probe_zoo
+
+    torch.set_num_threads(max(1, int(threads)))
+    probe_zoo.ENS_LAYERS.clear()
+    probe_zoo.ENS_LAYERS.update(ens_layers)
+    probe_zoo.TOKENS_ENS_LAYERS.clear()
+    probe_zoo.TOKENS_ENS_LAYERS.update(tok_ens_layers)
+
+
+def _cpu_fit_ok(job: dict) -> bool:
+    """A refit job whose fit can run in a CPU worker: pooled kinds (no per-token states, no
+    detector buffer)."""
+
+    return (job["kind"] not in DETECTOR_KINDS and job.get("ft") is None
+            and job.get("nt") is None)
+
+
+def _job_to_cpu(job: dict) -> dict:
+    """A copy of a pooled refit job with every tensor on the CPU and device = cpu."""
+
+    def cpu(x):
+        if isinstance(x, torch.Tensor):
+            return x.detach().cpu()
+        if isinstance(x, dict):
+            return {k: cpu(v) for k, v in x.items()}
+        if isinstance(x, list):
+            return [cpu(v) for v in x]
+        return x
+
+    return {**{k: cpu(v) for k, v in job.items()}, "device": torch.device("cpu")}
+
+
+def _iso_fit_on(job: dict, grad: bool):
+    """adaptive.refit_gpu_procs worker: the job arrives staged on the CPU (pickled across the
+    process boundary) with its original device; move it there and fit (_iso_fit: same seeds)."""
+
+    dev = job["device"]
+
+    def to(x):
+        if isinstance(x, torch.Tensor):
+            return x.to(dev)
+        if isinstance(x, dict):
+            return {k: to(v) for k, v in x.items()}
+        if isinstance(x, list):
+            return [to(v) for v in x]
+        return x
+
+    (mon, info), rec, sec = _iso_fit({**{k: to(v) for k, v in job.items()}, "device": dev},
+                                     grad, None)
+    # back across the process boundary on the CPU: a CUDA tensor would be shared by CUDA IPC,
+    # which needs pidfd_getfd (not permitted on TamIA); _OnDevice moves it to the job's device
+    return (None if mon is None else mon.to("cpu"), _cpu_tree(info)), rec, sec
+
+
+def _cpu_tree(x):
+    if isinstance(x, torch.Tensor):
+        return x.detach().cpu()
+    if isinstance(x, dict):
+        return {k: _cpu_tree(v) for k, v in x.items()}
+    if isinstance(x, (list, tuple)):
+        return type(x)(_cpu_tree(v) for v in x)
+    return x
+
+
+class _OnDevice:
+    """A worker-process fit's future (refit_cpu_fits / refit_gpu_procs): the probe comes back on
+    the CPU; result() moves it to the device the serial fit would have left it on."""
+
+    def __init__(self, fut, dev):
+        self._f, self._dev = fut, dev
+
+    def result(self):
+        (mon, info), rec, sec = self._f.result()
+        return (None if mon is None else mon.to(self._dev), info), rec, sec
+
+    def cancel(self):
+        return self._f.cancel()
+
+    def cancelled(self):
+        return self._f.cancelled()
+
+    def done(self):
+        return self._f.done()
+
+
+def ready_dev(dev) -> torch.device:
+    return dev if isinstance(dev, torch.device) and dev.type == "cuda" else torch.device(
+        "cuda", torch.cuda.current_device())
 
 
 def _probe_tensors(obj, depth: int = 0):
@@ -625,7 +881,7 @@ class AdaptiveSupervisedTrainer:
 
     def __init__(self, policy, pool: MonitorPool, sampler, cfg: AdaptiveSupervisedConfig, out_dir,
                  branch_concepts=None, branch_negatives=None, roots_only=None, prompts=None,
-                 inputs=None, hard_neg=None, resume_state=None):
+                 inputs=None, hard_neg=None, resume_state=None, cap_free_pool=None):
         self.policy, self.pool, self.sampler, self.cfg = policy, pool, sampler, cfg
         # trainer_state.pt of the checkpoint this chunk resumes from (SupervisedConfig.save_state)
         self._resume = (Path(resume_state) if resume_state and Path(resume_state).exists()
@@ -633,6 +889,8 @@ class AdaptiveSupervisedTrainer:
         # (opening, render_feedback): repeat format by default; tica/answer_format for "answer".
         self.opening, self.render_feedback = prompts or (opening, render_feedback)
         self.inputs = inputs  # answer format {text_id: request} (capability forks strip it)
+        # adaptive.cap_free_*: {concept: [(request, fallback, reference)]} (scripts/tica.py)
+        self.cap_free_pool = cap_free_pool or {}
         # {concept: matched within-source negatives}: half of a refit fork's other-concept
         # negatives come from these (e.g. DolusChat truthful twins for deception)
         self.hard_neg = hard_neg or {}
@@ -641,6 +899,8 @@ class AdaptiveSupervisedTrainer:
         self._score_bit_hist: dict[str, list[float]] = {}
         self.deploy_log: list[dict] = []  # turns-to-beat records (rollout; beat_summary)
         self._cap_mult, self._cap_acc_ema = 1.0, None  # adaptive capability weight (off: 1.0)
+        # adaptive.cap_level_adapt: per refit-level bin (1..5+ probes) [EMA, samples seen] per kind
+        self._cap_lvl = [{"gsm": [0.0, 0], "free": [0.0, 0]} for _ in range(5)]
         self.seg_log: list[dict] = []  # per (episode, concept): turns until its first pass
         self._neg_cache: dict = {}  # concept -> label-cleaned negatives (neg_labels)
         # adaptive curriculum (tica/curriculum.py; default off)
@@ -752,7 +1012,7 @@ class AdaptiveSupervisedTrainer:
                 "cuda_rng": (torch.cuda.get_rng_state_all() if torch.cuda.is_available()
                              else None),
                 "global_step": self.step_k + self._step_offset(),
-                "cap_adapt": (self._cap_mult, self._cap_acc_ema)}
+                "cap_adapt": (self._cap_mult, self._cap_acc_ema), "cap_level": self._cap_lvl}
 
     def _save_state(self, ckpt: Path) -> None:
         """trainer_state.pt next to the adapter; older checkpoints' copies are removed."""
@@ -764,6 +1024,19 @@ class AdaptiveSupervisedTrainer:
         tmp = ckpt / "trainer_state.pt.tmp"
         torch.save(self._state_dict(), tmp)
         tmp.replace(ckpt / "trainer_state.pt")
+        if self.cfg.save_state_all and self.cfg.state_keep_last > 0:
+            self._prune_states()
+
+    def _prune_states(self) -> None:
+        """SupervisedConfig.state_keep_last / state_keep_every: drop older checkpoints' optimizer
+        states in this chunk (adapters stay)."""
+
+        every, off = self.cfg.state_keep_every, self._step_offset()
+        have = sorted((int(p.parent.name[5:]), p) for p in self.out.glob("step_*/trainer_state.pt")
+                      if p.parent.name[5:].isdigit())
+        for k, p in have[: -self.cfg.state_keep_last]:
+            if not (every and (off + k) % every == 0):
+                p.unlink(missing_ok=True)
 
     def _load_state(self, path: Path) -> None:
         st = torch.load(path, map_location="cpu", weights_only=False)
@@ -775,6 +1048,8 @@ class AdaptiveSupervisedTrainer:
         self.rng.setstate(st["rng"])
         if st.get("cap_adapt") is not None and self.cfg.adaptive.cap_adapt_target > 0:
             self._cap_mult, self._cap_acc_ema = st["cap_adapt"]
+        if st.get("cap_level") is not None:
+            self._cap_lvl = st["cap_level"]
         if st.get("sampler_rng") is not None and hasattr(self.sampler, "rng"):
             self.sampler.rng.setstate(st["sampler_rng"])
         torch.set_rng_state(st["torch_rng"])
@@ -1080,11 +1355,47 @@ class AdaptiveSupervisedTrainer:
             ep_stats.update({"ovl_main": 0.0, "ovl_work": 0.0, "ovl_wait": 0.0, "ovl_waste": 0.0,
                              "ovl_redo": 0, "ovl_redo_same": 0})
             if getattr(self, "_ovl_pool", None) is None:
-                self._ovl_pool = ThreadPoolExecutor(max_workers=1,
-                                                    thread_name_prefix="tica-refit-fit")
+                self._ovl_pool = (_StackFitWorker() if acfg.refit_stack_episodes
+                                  else ThreadPoolExecutor(max_workers=1,
+                                                          thread_name_prefix="tica-refit-fit"))
+            if acfg.refit_gpu_procs and getattr(self, "_gpu_pool", None) is None:
+                import multiprocessing as mp
+
+                from next_chameleons.tica import probe_zoo
+
+                self._gpu_pool = ProcessPoolExecutor(
+                    max_workers=acfg.refit_gpu_procs, mp_context=mp.get_context("spawn"),
+                    initializer=_cpu_fit_init,
+                    initargs=(acfg.refit_cpu_threads, dict(probe_zoo.ENS_LAYERS),
+                              dict(probe_zoo.TOKENS_ENS_LAYERS)))
+            if acfg.refit_cpu_fits and getattr(self, "_cpu_pool", None) is None:
+                import multiprocessing as mp
+
+                from next_chameleons.tica import probe_zoo
+
+                self._cpu_pool = ProcessPoolExecutor(
+                    max_workers=acfg.refit_cpu_fits, mp_context=mp.get_context("spawn"),
+                    initializer=_cpu_fit_init,
+                    initargs=(acfg.refit_cpu_threads, dict(probe_zoo.ENS_LAYERS),
+                              dict(probe_zoo.TOKENS_ENS_LAYERS)))
+
+        side = overlap and acfg.refit_overlap_stream and torch.cuda.is_available()
 
         def ovl_fit(job):
-            return self._ovl_pool.submit(_iso_fit, job, torch.is_grad_enabled())
+            gpu_pool = getattr(self, "_gpu_pool", None) if acfg.refit_gpu_procs else None
+            if gpu_pool is not None and job["kind"] not in DETECTOR_KINDS:  # parallel processes
+                staged = {**_job_to_cpu(job), "device": job["device"]}
+                return _OnDevice(gpu_pool.submit(_iso_fit_on, staged, torch.is_grad_enabled()),
+                                 job["device"])
+            cpu_pool = getattr(self, "_cpu_pool", None) if acfg.refit_cpu_fits else None
+            if cpu_pool is not None and _cpu_fit_ok(job):  # pooled kinds: a CPU worker process
+                fut = cpu_pool.submit(_iso_fit, _job_to_cpu(job), torch.is_grad_enabled(), None)
+                return _OnDevice(fut, job["device"])
+            ready = None
+            if side:  # the job's reads are queued on the main stream: the fit waits for them
+                ready = torch.cuda.Event()
+                ready.record()
+            return self._ovl_pool.submit(_iso_fit, job, torch.is_grad_enabled(), ready)
 
         def np_snap():  # the no-prompt read cache (refit_np_cache) after a read
             cch = getattr(self, "_np_cache", None)
@@ -1113,7 +1424,10 @@ class AdaptiveSupervisedTrainer:
             plan = self._refit_plan(s, prefix, shown, c, kind, None, rng)
             job = self._refit_reads(plan)
             job["name"], job["excl"] = name, self._heldout_layers()
-            out, rec, _ = ovl_fit(job).result()
+            fut = ovl_fit(job)
+            if hasattr(self._ovl_pool, "flush"):
+                self._ovl_pool.flush()
+            out, rec, _ = fut.result()
             ovl_recs.append(rec)
             return out
 
@@ -1132,12 +1446,17 @@ class AdaptiveSupervisedTrainer:
                 e = ovl[p]
                 i, c, t = e["i"], e["c"], e["t"]
                 tw = time.time()
+                if hasattr(self._ovl_pool, "flush"):
+                    self._ovl_pool.flush()
                 (bank, info), rec, fsec = e["fut"].result()
                 ep_stats["ovl_wait"] += time.time() - tw
                 excl = self._heldout_layers()
                 if e["job"]["kind"] == "linear" and excl != e["job"]["excl"]:
                     e["job"]["excl"] = excl  # an earlier deploy changed it: fit as serial would
-                    (bank, info), rec, fsec = ovl_fit(e["job"]).result()
+                    fut = ovl_fit(e["job"])
+                    if hasattr(self._ovl_pool, "flush"):
+                        self._ovl_pool.flush()
+                    (bank, info), rec, fsec = fut.result()
                 info = {**info, "sec_read": e["job"]["sec_read"]}
                 sec = e["job"]["read_dt"] + fsec
                 self._log_refit(info, i, t + 1, c, 0, sec)
@@ -1197,6 +1516,9 @@ class AdaptiveSupervisedTrainer:
         # deployed probes, so a RETURN to an earlier concept is judged by all of its old probes.
         def_by: list[dict] = [{} for _ in specs]
         dep_by: list[dict] = [{} for _ in specs]  # deployed probes per concept
+        v5 = getattr(self.render_feedback, "v5", False)  # layout tagged_v5 (10-23)
+        v5_last: dict = {}  # (episode, concept, probe) -> score shown at its last judged turn
+        v5_fix: list = []  # this turn's v5 messages: "New monitor" re-checked after the refits
 
         def defender(i, s, c):
             if c not in def_by[i]:
@@ -1272,8 +1594,10 @@ class AdaptiveSupervisedTrainer:
         # (same prefix), sample pass_forks[0] answers at pass_forks[1] temperature and score them with
         # the SAME probe; results[t]["pass_forks"] = share of the samples that also pass
         pf_n, pf_temp = (getattr(self, "pass_forks", None) or (0, 0.0)) if free else (0, 0.0)
+        fork_panel = getattr(self, "fork_panel", None) if free else None
         for t in range(T):
             pf_items = []
+            fp_items, fp_umsg = [], (list(umsg) if fork_panel else None)  # turn t's renderers
             if free:  # tica_switch_eval --answers free (10-19b): greedy, read as a forced one
                 gens = pol.generate(convs, free["max_new"])
                 gen_fin = [g["finished"] for g in gens]
@@ -1354,6 +1678,8 @@ class AdaptiveSupervisedTrainer:
                     obs = dfd.observe(read, pooled, i)
                     if pf_n and obs["passed"]:  # eval: re-sample this turn (pass robustness)
                         pf_items.append((i, active_name, c))
+                    if fork_panel and t >= 1:  # eval: fresh-problem forks judged by THIS pool
+                        fp_items.append((i, c, list(deployed_i)))
                     if ep_mode and (i, c) in pending:
                         pending[(i, c)]["turns"] += 1
                         if obs["passed"]:
@@ -1400,6 +1726,10 @@ class AdaptiveSupervisedTrainer:
                         th = read["thr"]
                         if self.falsify == "pass":
                             shown = (th - 1.0, th)
+                        elif self.falsify == "score_noise":  # 10-23: TRUE verdict, random
+                            # score on its side of the threshold (is the NUMBER used?)
+                            u = random.Random(f"noise|{s.id}|{i}|{t}").uniform(1.0, 40.0)
+                            shown = (th + u, th) if read["detected"] else (th - u, th)
                         else:
                             shown = (th - 1.0, th) if read["detected"] else (th + 1.0, th)
                     elif self.score_bit:  # eval control (score feedback): TRUE verdict, no per-turn
@@ -1408,10 +1738,27 @@ class AdaptiveSupervisedTrainer:
                         hist.append(abs(read["score"] - th))
                         m = sorted(hist)[len(hist) // 2]
                         shown = (th + m, th) if read["detected"] else (th - m, th)
+                    # FORCED FEEDBACK (dodgescope 11-03, eval-only; tica_probe_panel --force): from the
+                    # turn the episode has k accepted refits (k = 0: turn 0) the shown verdict is
+                    # forced to CAUGHT ("catch") or PASSED ("pass") and no further refit is fit;
+                    # "real" only records the switch turn (the unchanged race, for alignment)
+                    fmode = getattr(self, "force_mode", None)
+                    forced_now = False
+                    if fmode and s.cond in DODGE_CONDS:
+                        fsw = self.__dict__.setdefault("_force_sw", {})
+                        if fsw.get(s.id) is None and len(deployed_i) - 1 >= self.force_k:
+                            fsw[s.id] = t
+                        if fsw.get(s.id) is not None:
+                            res["force_switch"] = fsw[s.id]
+                            if fmode in ("catch", "pass"):
+                                forced_now = True
+                                res["forced"] = fmode
+                                th = read["thr"]
+                                shown = (th + 1.0, th) if fmode == "catch" else (th - 1.0, th)
                     shown_cond = s.cond
                     bact = self._budget_step(s, i, t, off, tail, judged=True,
                                              passed=obs["passed"])
-                    if ep_mode and obs["passed"]:
+                    if ep_mode and obs["passed"] and not forced_now:
                         if (i, c) in last_refit:
                             ep_stats["recov"].append(t - last_refit.pop((i, c)))
                         catcher = None
@@ -1497,6 +1844,18 @@ class AdaptiveSupervisedTrainer:
                     kw = ({"next_concept": c_next, "next_off": bool(off[i][t + 1])}
                           if getattr(self.render_feedback, "tagged", False)
                           else ({"notice": note} if note else {}))
+                    if v5 and res.get("active_monitor") and not res.get("off"):
+                        # tagged_v5 (10-23): a different probe judges t + 1 (refit / bank switch,
+                        # same concept; serial refits are final here) -> "New monitor"; the score
+                        # change since the last turn judged by the SAME probe
+                        nd = def_by[i].get(c_next)
+                        kw["new_monitor"] = (c_next == c and nd is not None
+                                             and nd.active != res["active_monitor"])
+                        key = (i, c, res["active_monitor"])
+                        kw["prev_score"] = v5_last.get(key)
+                        v5_last[key] = shown[0]
+                        v5_fix.append((i, s, c, c_next, res["active_monitor"], shown_cond, shown,
+                                       nxt, kw))
                     fb = self.render_feedback(shown_cond, c, shown, nxt,
                                               feedback=s.feedback, named=s.named, **kw)
                     umsg[i] = (lambda x, sc=shown_cond, cc=c, sh=shown, kw=kw, s=s:
@@ -1505,8 +1864,23 @@ class AdaptiveSupervisedTrainer:
                     tr.feedback.append(fb)
                     convs[i].append({"role": "user", "content": fb})
             ovl_join()  # refit_overlap: the turn's refits, before the next turn uses them
+            for i, s, c, c_next, name_t, sc, sh, nxt, kw in v5_fix:
+                # tagged_v5 + refit_overlap: a refit finished at the join -> the message already
+                # in the conversation gets its "New monitor" notice (umsg[i] shares kw)
+                nd = def_by[i].get(c_next)
+                want = c_next == c and nd is not None and nd.active != name_t
+                if want != kw["new_monitor"]:
+                    kw["new_monitor"] = want
+                    fb = self.render_feedback(sc, c, sh, nxt, feedback=s.feedback, named=s.named,
+                                              **kw)
+                    convs[i][-1] = {"role": "user", "content": fb}
+                    trajs[i].feedback[-1] = fb
+            v5_fix.clear()
             if pf_items:
                 self._pass_forks(pf_items, trajs, t, def_by, free["max_new"], pf_n, pf_temp, rl,
+                                 roll_tok)
+            if fp_items:
+                self._fork_panel(fp_items, trajs, specs, t, def_by, fp_umsg, free["max_new"], rl,
                                  roll_tok)
         n_cens, trajs_all = len(last_refit), trajs
         if ctx is not None:  # episode streams: every rank's records merged (dp: all-gathered)
@@ -1621,6 +1995,7 @@ class AdaptiveSupervisedTrainer:
                     "sec_ep_refit_work": round(ep_stats["ovl_work"], 1),
                     "sec_ep_refit_main": round(ep_stats["ovl_main"], 1),
                     "sec_ep_refit_join_wait": round(ep_stats["ovl_wait"], 1),
+                    "ep_refit_stacked": getattr(self._ovl_pool, "n_stacked", 0),
                     "sec_ep_refit_overlap_saved": round(ep_stats["ovl_work"] - ep_stats["ovl_main"],
                                                         1),
                     "sec_ep_refit_redo_waste": round(ep_stats["ovl_waste"], 1),
@@ -1855,6 +2230,45 @@ class AdaptiveSupervisedTrainer:
         for k, (i, _, _) in enumerate(items):
             trajs[i].results[t]["pass_forks"] = ok[k] / n
 
+    def _fork_panel(self, items, trajs, specs, t, def_by, umsg_t, max_new, layers, tok_layers):
+        """FORK PANEL (eval, 10-27; tica_switch_eval --fork-panel M): performance at a given refit
+        level with many samples. For each monitored episode at turn t >= 1: M forks with the same
+        history and the same verdict message as turn t but a NEW request of the concept (a text
+        never used in the episode so far), answered by the model (greedy unless fork_panel["temp"])
+        and judged like the main turn by every probe deployed AT turn t (cumulative: caught = any
+        fires; the turn's refit, if any, comes after). Records -> fork_panel["log"] (raw text)."""
+
+        fp, pol = self.fork_panel, self.policy
+        if not hasattr(self, "_fp_texts"):
+            self._fp_texts = {ct.concept: list(ct.texts)
+                              for ct in getattr(self.sampler, "concepts", [])}
+        convs, owner = [], []
+        for i, c, judges in items:
+            sp = specs[i]
+            seen = {sp.text(u) for u in range(t + 1)}
+            cand = [x for x in self._fp_texts.get(c, []) if x not in seen]
+            rng = random.Random(f"fork|{sp.id}|{t}")
+            pre = [dict(x) for x in trajs[i].convs[t][:-2]]  # through turn t - 1
+            for x in rng.sample(cand, min(fp["m"], len(cand))):
+                convs.append([*pre, {"role": "user", "content": umsg_t[i](x)}])
+                owner.append((i, c, judges))
+        if not convs:
+            return
+        gens = pol.generate(convs, max_new, temperature=fp.get("temp", 0.0),
+                            seed=fp.get("seed", 0) + t)
+        full = [[*cv, {"role": "assistant", "content": g["text"]}]
+                for cv, g in zip(convs, gens, strict=True)]
+        tok = {} if tok_layers else None
+        pooled = pol.pooled_incremental(full, layers, {}, token_out=tok)
+        for L in tok_layers:
+            pooled[("tok", L)] = tok[L]
+        for row, ((i, c, judges), cv, g) in enumerate(zip(owner, full, gens, strict=True)):
+            caught = any(def_by[i][c].score(n, pooled, row)["detected"] for n in judges)
+            fp["log"].append({"ep": specs[i].id, "turn": t, "concept": c,
+                              "n_deployed": len(judges), "passed": not caught,
+                              "finished": g["finished"], "user": cv[-2]["content"],
+                              "answer": g["text"]})
+
     def _robust_pass(self, s, t, c, conv, names, dfd) -> dict:
         """adaptive.pass_robust_n (10-22): read turn t's prefix with pass_robust_n other texts of
         concept c (shared-prefix forks; deterministic per global step / episode / turn) and score
@@ -1960,7 +2374,7 @@ class AdaptiveSupervisedTrainer:
 
         fit_src = "".join(inspect.getsource(o) for o in (
             _ad.RefitData, _ad._split, _ad.fit_refit_bank, _ad.MLPMonitor, _ad.fit_refit_mlp))
-        code = hashlib.sha256(b"".join((src / f).read_bytes() for f in (
+        code = acfg.panel_cache_code or hashlib.sha256(b"".join((src / f).read_bytes() for f in (
             "probe_zoo.py", "monitors.py")) + fit_src.encode()).hexdigest()[:16]
         model = Path(str(getattr(getattr(pol.model, "config", None), "_name_or_path", ""))).name
         key = json.dumps({
@@ -1969,8 +2383,14 @@ class AdaptiveSupervisedTrainer:
             "labels": [k for k, _ in plan["picks"]], "forks": plan["forks"],
             "np": plan["np_convs"], "ids0": pol.prompt_ids(plan["forks"][0]),
             "np_ids0": pol.prompt_ids(plan["np_convs"][0]) if plan["np_convs"] else [],
-            "refit": {f.name: getattr(acfg, f.name) for f in dataclasses.fields(acfg)
-                      if f.name.startswith("refit_")}}, sort_keys=True, default=str)
+            # scheduling-only fields (fits run on a worker thread / side stream: same probe) are
+            # keyed at their defaults, so switching them on keeps the precomputed cache (10-27)
+            "refit": {f.name: (False if f.name in ("refit_overlap", "refit_overlap_stream")
+                               else getattr(acfg, f.name)) for f in dataclasses.fields(acfg)
+                      if f.name.startswith("refit_")
+                      and f.name not in ("refit_cpu_fits", "refit_cpu_threads",
+                                         "refit_stack_episodes", "refit_gpu_procs")}},
+            sort_keys=True, default=str)
         d = Path(acfg.first_probe_panel_cache)
         path = d / f"{hashlib.sha256(key.encode()).hexdigest()[:24]}.pt"
         if path.exists():
@@ -2005,6 +2425,20 @@ class AdaptiveSupervisedTrainer:
             name = f"ep_refit_{self.refit_k}"
         job["name"], job["excl"] = name, self._heldout_layers()
         return _refit_fit(job)
+
+    def _evdet_buffer(self, L: int) -> EvDetBuffer:
+        """The run's generic-detector buffer (refit kinds evdet@L / pcares@L), seeded once per layer
+        from adaptive.evdet_seed_model / evdet_seed_base (train-concept panel dumps) when set."""
+
+        if not hasattr(self, "_evdet_buf"):
+            self._evdet_buf, self._evdet_seeded = EvDetBuffer(), {}
+        acfg = self.cfg.adaptive
+        if L not in self._evdet_seeded and acfg.evdet_seed_model:
+            self._evdet_seeded[L] = self._evdet_buf.seed(
+                acfg.evdet_seed_model.split(","), acfg.evdet_seed_base.split(","), L,
+                device=self.policy.device)
+            print(f"[evdet] seeded layer {L}: {self._evdet_seeded[L]} pairs", flush=True)
+        return self._evdet_buf
 
     def _refit_plan(self, s, prefix, shown, concept=None, kind=None, fork_msg=None, rng=None,
                     np_cache=True) -> dict:
@@ -2046,18 +2480,34 @@ class AdaptiveSupervisedTrainer:
             + [("neg", x) for x in rng.sample(free_negs, min(ef["free"], len(free_negs)))]
         )
         pre = [dict(m) for m in prefix]
-        forks = [
-            [*pre,
-             {"role": "user", "content": fork_msg(x) if fork_msg is not None else
-              self.render_feedback(s.cond, concept, shown, x, feedback=s.feedback,
-                                   named=s.named)},
-             {"role": "assistant", "content": x}]
-            for _, x in picks
-        ]
+
+        def fork(x):
+            msg = fork_msg(x) if fork_msg is not None else self.render_feedback(
+                s.cond, concept, shown, x, feedback=s.feedback, named=s.named,
+                **({"new_monitor": True}  # v5: a refit's forks precede it
+                   if getattr(self.render_feedback, "v5", False) else {}))
+            return [*pre, {"role": "user", "content": msg}, {"role": "assistant", "content": x}]
+
+        forks = [fork(x) for _, x in picks]
         full_kind = kind or self._pick_kind(rng=rng)  # e.g. "linear@22": kind at layer 22
         kind, Lo = split_kind(full_kind)
         if Lo is not None:
             L = Lo
+        if kind in DETECTOR_KINDS:  # generic hiding detectors (eval only): the concept's forks
+            keep = [q for q, (k_, _) in enumerate(picks) if k_ == "pos"]
+            # selective kinds: the policy's reads of the other-concept / concept-free follow-ups
+            # under the same brief (nothing to hide) are honest negatives + calibration
+            mis_forks = ([f for f, (k_, _) in zip(forks, picks, strict=True) if k_ == "neg"]
+                         if kind.endswith("sel") else [])
+            picks, forks = [picks[q] for q in keep], [forks[q] for q in keep]
+            used = {x for _, x in picks}
+            rest = [x for x in pos_t if x not in used]
+            cal = rng.sample(rest, min(EVDET_CAL, len(rest)))  # base-only calibration reads
+            cal_forks = [fork(x) for x in cal]
+            return {"t0": t_read0, "concept": concept, "L": L, "kind": kind,
+                    "full_kind": full_kind, "Ls": [L], "picks": picks, "forks": forks,
+                    "cal_forks": cal_forks, "mis_forks": mis_forks, "np_convs": [], "nps": [],
+                    "np_cache": np_cache}
         Ls = kind_layers(kind, L) if kind in ZOO_ENS or kind in ZOO_TOKENS_ENS else [L]
         # No-prompt texts disjoint from the fork positives where possible, so the OOC gate half
         # never shares a text with a positive.
@@ -2081,6 +2531,23 @@ class AdaptiveSupervisedTrainer:
         acfg, pol = self.cfg.adaptive, self.policy
         t_read0 = plan["t0"] if t0 is None else t0
         kind, L, Ls, picks = plan["kind"], plan["L"], plan["Ls"], plan["picks"]
+        if kind in DETECTOR_KINDS:  # the same forks read by the policy and by the base model
+            batch = acfg.episode_fork_batch or None
+            nf = len(plan["forks"])
+            rp = pol.pooled_shared_prefix(plan["forks"] + plan["mis_forks"], [L],
+                                          batch=batch)[L].float()
+            rp, rm = rp[:nf], rp[nf:]
+            with pol.reference():  # forks + calibration forks in one shared-prefix read
+                rb = pol.pooled_shared_prefix(plan["forks"] + plan["cal_forks"], [L],
+                                              batch=batch)[L].float()
+            rb, rc = rb[:nf], rb[nf:]
+            dt = time.time() - t_read0
+            self._refit_read_sec = getattr(self, "_refit_read_sec", 0.0) + dt
+            return {"kind": kind, "full_kind": plan["full_kind"], "L": L, "Ls": [L], "L0": L,
+                    "picks": picks, "concept": plan["concept"], "r_pol": rp, "r_base": rb,
+                    "r_cal": rc, "r_mis": rm if len(rm) else None,
+                    "evdet_buf": self._evdet_buffer(L), "acfg": acfg, "device": pol.device,
+                    "sec_read": round(dt, 2), "read_dt": dt}
         ft = {} if kind in ZOO_TOKEN else None  # per-token fork states (token-pooled kinds)
         keep = ZOO_TOK_KEEP if kind in ZOO_TOKENS_ENS else None
         rall = pol.pooled_shared_prefix(plan["forks"], Ls, token_out=ft, token_keep=keep,
@@ -2137,7 +2604,7 @@ class AdaptiveSupervisedTrainer:
                  if tr.spec.cond in DODGE_CONDS and len(tr.results) > 1]
         for i in self.rng.sample(cands, min(acfg.cap_gen_episodes, len(cands))):
             tr = trajs[i]
-            t = self.rng.randrange(1, len(tr.results))
+            t = self._fork_turn(tr)
             prev, cur = tr.results[t - 1], tr.results[t]
             if prev.get("off") or cur.get("off") or cur.get("concept") != prev.get("concept"):
                 continue  # forks only inside a monitored segment
@@ -2151,8 +2618,13 @@ class AdaptiveSupervisedTrainer:
             names = [n for n in (prev.get("deployed") or []) if n in set(cur.get("deployed") or [])]
             meta.append({"gold": it["answer"], "names": names, "base": it.get("base"),
                          "concept": cur.get("concept", tr.spec.monitored), "msg": bool(msg),
-                         "q": q})
+                         "q": q, "kind": "gsm8k"})
             forks.append(fork)
+        free_forks, free_meta = self._cap_free_forks(trajs)
+        forks, meta = forks + free_forks, meta + free_meta
+        # refit level of the capability forks (10-27): probes deployed at the forked turn (every
+        # rank draws the same forks, so these are step-wide numbers before sharding)
+        fork_probes = [len(m["names"]) for m in meta if m["kind"] != "nobrief"]
         if not forks:
             return {"cap_gen/n_forks": 0}
         gen_seed = None
@@ -2172,7 +2644,7 @@ class AdaptiveSupervisedTrainer:
         if convs:
             was, bs = pol.model.training, pol.batch_size
             pol.model.eval()  # KV cache (HF drops it in train mode with gradient checkpointing)
-            pol.batch_size = len(convs)  # one batched call
+            pol.batch_size = acfg.cap_gen_gen_batch or len(convs)  # one batched call by default
             try:
                 with (pol.merged() if acfg.cap_gen_merged else nullcontext()):  # TamIA 10-21
                     gens = pol.generate(convs, acfg.cap_gen_max_new,
@@ -2187,16 +2659,36 @@ class AdaptiveSupervisedTrainer:
         kl_w = acfg.cap_gen_kl_weight
         items, n_ok, n_work, n_fb = [], 0, 0, 0
         fork_ok = [False] * len(forks)
+        free = {"n": 0, "valid": 0, "nb": 0}  # cap_free_* samples (logged apart from GSM8K)
+        # 10-28 (user: "is capability still preserved as refits increase?"): per refit level of the
+        # fork (probes judging it: 1, 2, 3, 4, 5+) [GSM8K samples, correct, free samples, valid]
+        lvl = [[0, 0, 0, 0] for _ in range(5)]
         for j, g in enumerate(gens):
             m = meta[j // n]
-            ok = g["finished"] and is_correct(g["text"], m["gold"])
-            wk = work_shown(g["text"])
-            n_ok += ok and wk
-            n_work += wk
-            if ok and wk:
+            b = min(max(len(m["names"]), 1), 5) - 1
+            if m["kind"] == "gsm8k":
+                ok = g["finished"] and is_correct(g["text"], m["gold"])
+                wk = work_shown(g["text"])
+                n_ok += ok and wk
+                n_work += wk
+                good = ok and wk
+                lvl[b][0] += 1
+                lvl[b][1] += good
+            elif m["kind"] == "free":  # does the task: functional check (SQL runs, JSON is the
+                # requested function schema) where one exists, else the form check (validity.py)
+                good = bool(g["finished"]
+                            and check_valid(m["concept"], g["text"], m["q"], m.get("ref")))
+                free["n"] += 1
+                free["valid"] += good
+                lvl[b][2] += 1
+                lvl[b][3] += good
+            else:  # "nobrief": KL to the base model only
+                good = False
+                free["nb"] += 1
+            if good:
                 fork_ok[j // n] = True
                 items.append((convs[j] + [{"role": "assistant", "content": g["text"]}], m, True))
-            elif kl_w > 0 and acfg.cap_gen_kl_all and g["text"].strip():
+            elif kl_w > 0 and (acfg.cap_gen_kl_all or m["kind"] == "nobrief") and g["text"].strip():
                 items.append((convs[j] + [{"role": "assistant", "content": g["text"]}], m,
                               False))
         if acfg.cap_gen_log and gens:  # 10-20: the samples, for hand checks (scratch only)
@@ -2206,10 +2698,13 @@ class AdaptiveSupervisedTrainer:
                     m = meta[j // n]
                     fh.write(json.dumps({
                         "step": self.step_k + self._step_offset(), "fork": j // n,
-                        "q": m["q"], "gold": m["gold"], "msg": m["msg"],
+                        "q": m["q"], "gold": m["gold"], "msg": m["msg"], "kind": m["kind"],
                         "verdict_msg": convs[j][-1]["content"][: -len(m["q"])].strip(),
                         "text": g["text"], "finished": g["finished"],
-                        "correct": bool(g["finished"] and is_correct(g["text"], m["gold"])),
+                        "correct": bool(g["finished"] and (
+                            is_correct(g["text"], m["gold"]) if m["kind"] == "gsm8k"
+                            else m["kind"] == "free" and check_valid(
+                                m["concept"], g["text"], m["q"], m.get("ref")))),
                         "work": bool(work_shown(g["text"])), "turn": len(convs[j]) // 2}) + "\n")
         for f, ok in enumerate(fork_ok):  # every sample wrong: train on the base solution
             if not ok and meta[f]["base"]:
@@ -2217,9 +2712,10 @@ class AdaptiveSupervisedTrainer:
                 items.append((forks[f] + [{"role": "assistant", "content": meta[f]["base"]}],
                               meta[f], True))
         ow = self.cfg.objective.hide_weight
+        hv = acfg.cap_gen_hide_valid_only  # hide only on passing samples (flag), else KL only
         n_hide = sum(len([x for x in m["names"]
                           if not getattr(self.pool.get(x), "needs_tokens", False)])
-                     for _, m, _ in items) if acfg.cap_gen_hide else 0
+                     for _, m, f in items if f or not hv) if acfg.cap_gen_hide else 0
         n_flag, n_items = sum(f for _, _, f in items), len(items)
         if shard:  # the step's normalisers: every rank's items
             n_hide, n_flag, n_items = (int(x) for x in dp.sum_floats(
@@ -2251,14 +2747,21 @@ class AdaptiveSupervisedTrainer:
                     extra = {"kl_ref": rr}
                 pooled, nll = pol.forward(views, layers, grad=True, with_nll=True, extra=extra)
                 w = torch.tensor([float(f) for _, _, f in chunk], device=nll.device)
-                loss = acfg.cap_gen_weight * self._cap_mult * (w * nll).sum() / n_nll
+                # adaptive.cap_level_adapt: 1 + gain x deficit of the item's refit level
+                lm = torch.tensor([1.0 + acfg.cap_level_gain * self._cap_deficit(
+                    min(max(len(m["names"]), 1), 5) - 1) if acfg.cap_level_adapt
+                                   and m["kind"] != "nobrief" else 1.0 for _, m, _ in chunk],
+                                  device=nll.device)
+                loss = acfg.cap_gen_weight * self._cap_mult * (lm * w * nll).sum() / n_nll
                 s_nll += float((w * nll).detach().sum())
                 if extra is not None:
-                    loss = loss + kl_w * self._cap_mult * extra["kl"].sum() / n_items
+                    loss = loss + kl_w * self._cap_mult * (lm * extra["kl"]).sum() / n_items
                     s_kl += float(extra["kl"].detach().sum())
                 if n_hide:
                     tg, rows = [], []
-                    for r, (_, m, _) in enumerate(chunk):
+                    for r, (_, m, f) in enumerate(chunk):
+                        if hv and not f:
+                            continue
                         for x in m["names"]:
                             if not getattr(self.pool.get(x), "needs_tokens", False):
                                 tg.append(Target(r, 0, "cap", x, m["concept"], "hide"))
@@ -2279,19 +2782,46 @@ class AdaptiveSupervisedTrainer:
                         s_hide += float((p**2).detach().sum())
                         s_caught += int((p > 0.5).sum())
                 loss.backward()
-        c = {"forks": len(forks), "gens": len(gens), "ok": n_ok, "work": n_work,
-             "fin": sum(g["finished"] for g in gens), "msg": sum(m["msg"] for m in meta),
-             "solved": sum(fork_ok), "fb": n_fb, "items": len(items),
+        gsm = [j for j in range(len(gens)) if meta[j // n]["kind"] == "gsm8k"]
+        c = {"forks": sum(m["kind"] == "gsm8k" for m in meta), "gens": len(gsm), "ok": n_ok,
+             "work": n_work, "fin": sum(gens[j]["finished"] for j in gsm),
+             "msg": sum(m["msg"] for m in meta if m["kind"] == "gsm8k"),
+             "solved": sum(ok for ok, m in zip(fork_ok, meta, strict=True)
+                           if m["kind"] == "gsm8k"), "fb": n_fb, "items": len(items),
              "kl_only": sum(not f for _, _, f in items), "nll": s_nll, "kl": s_kl, "klm": n_klm,
              "hide": s_hide, "caught": s_caught}
         if shard:  # logged: sums over every rank
             c = dict(zip(c, dp.sum_floats(list(c.values())), strict=True))
         g_n, f_n = max(1, c["gens"]), max(1, c["forks"])
+        if shard:
+            free = dict(zip(free, dp.sum_floats(list(free.values())), strict=True))
+            flat = dp.sum_floats([x for row in lvl for x in row])
+            lvl = [flat[4 * k : 4 * k + 4] for k in range(5)]
+        by_lvl = {}
+        if acfg.cap_level_adapt:  # update after this step's terms used the previous EMAs
+            self._cap_level_update(lvl)
+            for b in range(5):
+                tag = f"k{b + 1}" if b < 4 else "k5plus"
+                by_lvl[f"cap_level/deficit_{tag}"] = round(self._cap_deficit(b), 3)
+        for k, (gn, gok, fn, fok) in enumerate(lvl):
+            tag = f"k{k + 1}" if k < 4 else "k5plus"
+            if gn:
+                by_lvl.update({f"cap_gen/acc_{tag}": gok / gn, f"cap_gen/n_{tag}": int(gn)})
+            if fn:
+                by_lvl.update({f"cap_free/valid_{tag}": fok / fn, f"cap_free/n_{tag}": int(fn)})
         info = {"cap_gen/n_forks": n_forks_all, "cap_gen/n_samples": int(c["gens"]),
-                "cap_gen/acc": c["ok"] / g_n, "cap_gen/work": c["work"] / g_n,
-                "cap_gen/finished": c["fin"] / g_n, "cap_gen/msg_found": c["msg"] / f_n,
+                **({"cap_gen/fork_probes_mean": round(sum(fork_probes) / len(fork_probes), 2),
+                    "cap_gen/fork_probes_max": max(fork_probes)} if fork_probes else {}),
+                **({"cap_free/n": int(free["n"]), "cap_free/valid": free["valid"] / free["n"]}
+                   if free["n"] else {}),
+                **({"cap_free/n_nobrief": int(free["nb"])} if free["nb"] else {}),
+                # GSM8K-only rates, logged only when GSM8K samples exist (10-27 review: a step with
+                # free forks alone logged acc 0.0, pulling step averages down)
+                **({"cap_gen/acc": c["ok"] / g_n, "cap_gen/work": c["work"] / g_n,
+                    "cap_gen/finished": c["fin"] / g_n} if c["gens"] else {}),
+                "cap_gen/msg_found": c["msg"] / f_n,
                 "cap_gen/fork_solved": c["solved"] / f_n, "cap_gen/n_fallback": int(c["fb"]),
-                "sec_cap_gen": round(t_gen, 1)}
+                **by_lvl, "sec_cap_gen": round(t_gen, 1)}
         if not c["items"]:
             info["sec_cap_train"] = 0.0
             return info
@@ -2303,6 +2833,98 @@ class AdaptiveSupervisedTrainer:
                      "cap_gen/caught_frac": c["caught"] / max(1, n_hide),
                      "sec_cap_train": round(time.time() - t0 - t_gen, 1)})
         return info
+
+    def _cap_deficit(self, b: int) -> float:
+        """adaptive.cap_level_adapt: the capability deficit of refit-level bin b (0..4 = 1..5+
+        probes) in [0, 1], from the per-level EMAs (a level with too few samples counts as 1)."""
+
+        a = self.cfg.adaptive
+        ds = []
+        for kind, ref in (("gsm", a.cap_level_ref_gsm), ("free", a.cap_level_ref_free)):
+            ema, n = self._cap_lvl[b][kind]
+            ds.append(1.0 if n < a.cap_level_min_n else min(1.0, max(0.0, (ref - ema) / ref)))
+        return sum(ds) / len(ds)
+
+    def _cap_level_update(self, lvl) -> None:
+        """Update the per-level EMAs from this step's [GSM8K n, correct, free n, valid] per bin
+        (summed over data-parallel ranks, so every rank holds the same EMAs)."""
+
+        lam = self.cfg.adaptive.cap_level_ema
+        for b, (gn, gok, fn, fok) in enumerate(lvl):
+            for kind, n, ok in (("gsm", gn, gok), ("free", fn, fok)):
+                if n:
+                    ema, seen = self._cap_lvl[b][kind]
+                    acc = ok / n
+                    self._cap_lvl[b][kind] = [acc if seen == 0 else lam * ema + (1 - lam) * acc,
+                                              int(seen + n)]
+
+    def _fork_turn(self, tr) -> int:
+        """The turn t >= 1 a capability fork branches at: uniform (the original draw), or with
+        adaptive.cap_fork_by_refit one of the turns inside a monitored segment, weighted by the
+        probes judging it (deployed at t-1 and t), so later refit levels get more capability forks.
+        Shared trainer RNG (identical on every rank)."""
+
+        a = self.cfg.adaptive
+        if not (a.cap_fork_by_refit or a.cap_level_adapt):
+            return self.rng.randrange(1, len(tr.results))
+        turns, w = [], []
+        for t in range(1, len(tr.results)):
+            prev, cur = tr.results[t - 1], tr.results[t]
+            if prev.get("off") or cur.get("off") or cur.get("concept") != prev.get("concept"):
+                continue
+            turns.append(t)
+            n = max(1, len(set(prev.get("deployed") or []) & set(cur.get("deployed") or [])))
+            wt = n if a.cap_fork_by_refit else 1
+            if a.cap_level_adapt:
+                wt *= a.cap_level_floor + self._cap_deficit(min(n, 5) - 1)
+            w.append(wt)
+        return self.rng.choices(turns, weights=w)[0] if turns else self.rng.randrange(
+            1, len(tr.results))
+
+    def _cap_free_forks(self, trajs) -> tuple[list, list]:
+        """adaptive.cap_free_*: free-generation capability forks of checkable concepts (see the
+        config docstring). Hiding forks: history through t-1 + that turn's verdict + a NEW request
+        of the episode's (checkable) concept, spliced where the forced text's request was; no-brief
+        forks: the bare prompt alone. Draws use the shared trainer RNG (identical on every rank)."""
+
+        from next_chameleons.tica.answer_format import text_id
+        from next_chameleons.tica.trainers.mathrl import PROMPT
+
+        acfg, pool = self.cfg.adaptive, self.cap_free_pool
+        forks, meta = [], []
+        if not pool or not (acfg.cap_free_episodes or acfg.cap_free_nobrief):
+            return forks, meta
+        cands = [i for i, tr in enumerate(trajs)
+                 if tr.spec.cond in DODGE_CONDS and len(tr.results) > 1]
+        for i in self.rng.sample(cands, len(cands)):
+            if len(forks) >= acfg.cap_free_episodes:
+                break
+            tr = trajs[i]
+            t = self._fork_turn(tr)
+            prev, cur = tr.results[t - 1], tr.results[t]
+            c = cur.get("concept", tr.spec.monitored)
+            if (prev.get("off") or cur.get("off") or c != prev.get("concept") or c not in pool):
+                continue
+            fb = tr.feedback[t - 1]
+            req = self.inputs.get(text_id(tr.spec.text(t)), "")
+            if not req or not fb.endswith(req):
+                continue  # cannot splice a new request into this turn's message
+            q, ans, ref = self.rng.choice(pool[c])
+            names = [x for x in (prev.get("deployed") or []) if x in set(cur.get("deployed") or [])]
+            forks.append([*[dict(m) for m in tr.convs[t - 1]],
+                          {"role": "user", "content": fb[: len(fb) - len(req)] + q}])
+            meta.append({"kind": "free", "gold": None, "names": names, "concept": c, "msg": True,
+                         "q": q, "ref": ref, "base": ans if check_valid(c, ans, q, ref) else None})
+        for k in range(acfg.cap_free_nobrief):
+            if k % 2 == 0 and hasattr(self, "_cap_q"):  # a bare GSM8K problem
+                q, c = PROMPT.format(q=self.rng.choice(self._cap_q)["question"]), "gsm8k"
+            else:
+                c = self.rng.choice(sorted(pool))
+                q = self.rng.choice(pool[c])[0]
+            forks.append([{"role": "user", "content": q}])
+            meta.append({"kind": "nobrief", "gold": None, "names": [], "concept": c,
+                         "msg": False, "q": q, "base": None})
+        return forks, meta
 
     def _share_monitors(self, names: set, to_all: bool = False) -> None:
         """Data-parallel cap_gen: rank 0 (to_all: every rank, cap_gen_shard) needs the probes
@@ -2503,7 +3125,13 @@ class AdaptiveSupervisedTrainer:
             "tpr_ic": None if ti is None or ti != ti else round(float(ti), 4),
             "n_pos": info.get("n_pos"), "n_neg": info.get("n_neg"), "sec": round(sec, 2),
             "sec_read": info.get("sec_read"), "first_probe": bool(info.get("first_probe")),
-            **({"panel_cache": info["panel_cache"]} if "panel_cache" in info else {})})
+            **({"panel_cache": info["panel_cache"]} if "panel_cache" in info else {}),
+            # generic detectors (tica/evdet_defender.py): calibration size, held-out fork FPR, the
+            # buffer's concepts, and their own gate reason (they have no no-prompt TPR)
+            **{k: info[k] for k in ("n_cal", "fpr_heldout_forks", "fpr_policy_mismatch",
+                                    "n_buffer_concepts") if k in info},
+            **({"why": info["why"] or None} if (info.get("kind") or "").split("@")[0]
+               in DETECTOR_KINDS else {})})
 
     def _flush_turn_log(self, trajs) -> None:
         """One compact record per episode turn (no text) to <out>/turns.jsonl: condition, concept,
@@ -2697,7 +3325,7 @@ class AdaptiveSupervisedTrainer:
             return self._g_stay, self._g_concept
         return self._ep_stay, self._ep_concept
 
-    def _stay_prep(self, targets, trajs, keys):
+    def _stay_prep(self, targets, trajs, keys, tick=None):
         """Standalone stay (adaptive.stay_standalone): update the per-(concept, layer) scales from
         the step's judged-turn reads (merged: the same on every rank), then pick this rank's stay
         targets (hide / excused turn t >= 1; t-1 judged the same concept and PASSED; one per
@@ -2712,6 +3340,8 @@ class AdaptiveSupervisedTrainer:
             st = torch.stack(acts).to(self.policy.device)  # [N, n_L, d]
             for j, L in enumerate(self._stay_L):
                 self._stay_state(cc, L).update(st[:, j])
+        if tick is not None:
+            tick("stay_state")
         epc, have = self._ep_concept, set(keys)
         stay_ks, mv_ks, seen = set(), set(), set()
         for k, tg in enumerate(targets):
@@ -2725,8 +3355,12 @@ class AdaptiveSupervisedTrainer:
             seen.add((i_, t_))
             (stay_ks if trajs[i_].results[t_ - 1].get("passed") else mv_ks).add(k)
         n = len(stay_ks)
+        if tick is not None:
+            tick("stay_pick")
         if self.world > 1:  # each rank's term is its share of the step mean
             n = round(dp.sum_floats([float(n)])[0])
+        if tick is not None:
+            tick("stay_sync_wait")  # the first collective after the rollout gather
         return stay_ks, mv_ks, max(1, n)
 
     def _stay_readout(self) -> dict:
@@ -2798,6 +3432,10 @@ class AdaptiveSupervisedTrainer:
             acfg.episode_refit_kind]
         if acfg.first_kind:
             kinds.append(acfg.first_kind)
+        if acfg.first_probe_panel_from_start or acfg.first_probe_panel_from_step:
+            # turn-0 panel probes (10-25 fix): with a single non-token refit kind (eval --kind
+            # linear@28) the panel's token kinds were missing from the reads -> KeyError ("tok", L)
+            kinds += self._panel_kinds()
         out = set()
         for k in kinds:
             base, _ = split_kind(k)
@@ -2930,9 +3568,23 @@ class AdaptiveSupervisedTrainer:
                     acc[f"detho_turn_{r['turn']}"].append(float(r["heldout_det"]))
         return {k: sum(v) / len(v) for k, v in acc.items()}
 
+    def _mem_mark(self, name: str) -> None:
+        """Per-phase GPU peaks (10-26, Gemma OOM hunt): record this phase's peak allocation /
+        reservation, keep the run-long maxima for max_mem_gb / max_mem_reserved_gb, reset."""
+
+        if not torch.cuda.is_available():
+            return
+        a, r = torch.cuda.max_memory_allocated() / 1e9, torch.cuda.max_memory_reserved() / 1e9
+        self._mem_peaks[name] = round(a, 2)
+        self._mem_run = (max(self._mem_run[0], a), max(self._mem_run[1], r))
+        torch.cuda.reset_peak_memory_stats()
+
     def step(self):
         cfg, pol, pool = self.cfg, self.policy, self.pool
         t0 = time.time()
+        self._mem_peaks = {}
+        if not hasattr(self, "_mem_run"):
+            self._mem_run = (0.0, 0.0)
         specs = self.sampler.sample(cfg.episodes_per_step)
         pol.model.eval()
         bank_info = {}
@@ -2944,13 +3596,25 @@ class AdaptiveSupervisedTrainer:
         with (pol.merged() if cfg.adaptive.merged_reads else nullcontext()):  # rollout reads
             trajs, extra = self.rollout(specs)  # this rank's episodes (data-parallel: a share)
         t_roll = time.time() - t0
+        self._mem_mark("rollout")
         dp_info = {}
         if self.world > 1:  # load balance: every rank waits for the slowest rollout
             rolls = dp.gather(round(t_roll, 1))
             dp_info = {"dp/world": self.world, "dp/sec_rollout_max": max(rolls),
                        "dp/sec_rollout_min": min(rolls)}
+        # per-rank timing of the pre-units train phase (10-30, logging only): the intermittent slow
+        # steps are one rank's untimed work here while the others wait in the first collective
+        pre_t, tp = {}, time.time()
+
+        def tick(name):
+            nonlocal tp
+            pre_t[name] = pre_t.get(name, 0.0) + time.time() - tp
+            tp = time.time()
+
         metrics = self._rollout_metrics(self._g_trajs)
+        tick("metrics")
         targets = self._targets(trajs)
+        tick("targets")
         acfg = cfg.adaptive
         # Pursuit: update the running centroid from this step's dodge activations, then the hide
         # targets that have at least one recent-turn activation to be pushed off.
@@ -2964,6 +3628,7 @@ class AdaptiveSupervisedTrainer:
             by_c[epc_all[kk]].append(a)
         for cc, acts in by_c.items():  # one centroid / scale per monitored concept
             self._pstate(cc, plp).update(torch.cat(acts).to(pol.device))
+        tick("pursuit_state")
 
         def same_seg(i_, t_):  # turn t_-1 judged the same concept as t_ (not a switch turn)
             return (i_, t_ - 1) in self._ep_acts and epc.get((i_, t_ - 1)) == epc.get((i_, t_))
@@ -2993,14 +3658,16 @@ class AdaptiveSupervisedTrainer:
                 metrics["turn_move"] = sum(m for m, _ in moves) / len(moves)
                 metrics["turn_move_norm"] = sum(m / max(sc_, 1e-3) for m, sc_ in moves) / len(
                     moves)
+        tick("pursuit_moves")
         keys = sorted({(tg.traj, tg.turn) for tg in targets})
         layers = pool.layers
         stay_on = acfg.stay_standalone
         stay_ks, stay_mv, n_stay, stay_L = set(), {}, 1, self._stay_L
         if stay_on:
-            stay_ks, stay_mv, n_stay = self._stay_prep(targets, trajs, keys)
+            stay_ks, stay_mv, n_stay = self._stay_prep(targets, trajs, keys, tick)
             layers = sorted(set(layers) | set(stay_L))  # the grad forward reads the stay layers
             metrics |= self._stay_readout()
+            tick("stay_readout")
         act_ks, act_L = set(), []
         if acfg.act_anchor_weight > 0:  # 10-23: act-normal turns keep the base model's states
             held = set(self._heldout_layers())
@@ -3014,7 +3681,9 @@ class AdaptiveSupervisedTrainer:
         tok_layers = pool.token_layers
         if tok_layers and not acfg.single_pass:
             raise ValueError("token-pooled monitors need adaptive.single_pass")
+        tick("act_keys")
         chunks, run = self._train_units(trajs, keys, layers, tok_layers)
+        tick("units_build")
         tkey = [(tg.traj, tg.turn) for tg in targets]
         ref = torch.empty(len(targets), device=pol.device)
         ref_acts = {}  # base-model reads at the pursuit layer (stay_offset)
@@ -3037,6 +3706,7 @@ class AdaptiveSupervisedTrainer:
                 if ks:
                     local = [pos[tkey[k]] for k in ks]
                     ref[ks] = probe_prob(pool, pooled, local, [targets[k] for k in ks]).detach()
+        tick("ref_pass")
         totals = {
             "hide": sum(tg.role == "hide" for tg in targets),
             "match": sum(tg.role == "match" for tg in targets),
@@ -3065,9 +3735,28 @@ class AdaptiveSupervisedTrainer:
                       for k, v in zip(tk, tot, strict=False)}
             n_pursuit = max(1, round(tot[len(tk)]))
             n_views, n_targets = totals["views"], round(tot[-1])
+        tick("totals_sync")
+        conv_tok = max((len(mv.ids) for mv in getattr(self, "_unit_mvs", {}).values()),
+                       default=0) if acfg.single_pass else 0
+        # own work = time outside the two collectives (waiting ranks' totals equal the slow one's)
+        pre_tot = sum(v for k, v in pre_t.items() if k not in ("stay_sync_wait", "totals_sync"))
+        if self.world > 1:
+            pts = dp.gather(({k: round(v, 1) for k, v in pre_t.items()}, round(pre_tot, 1),
+                             conv_tok))
+            slow = max(range(len(pts)), key=lambda r: pts[r][1])
+            dp_info |= {"dp/pre_total_max": pts[slow][1],
+                        "dp/pre_total_min": min(pt[1] for pt in pts), "dp/pre_argmax": slow,
+                        "dp/conv_tok_max": max(pt[2] for pt in pts),
+                        "dp/conv_tok_slow_rank": pts[slow][2]}
+            dp_info |= {f"dp/pre_slow_{k}": v for k, v in pts[slow][0].items()}
+            dp_info |= {f"dp/pre_max_{k}": max(pt[0].get(k, 0.0) for pt in pts) for k in pre_t}
+        else:
+            dp_info |= {f"pre/{k}": round(v, 1) for k, v in pre_t.items()}
+            dp_info["pre/conv_tok"] = conv_tok
         n_upd = max(1, int(cfg.updates_per_rollout))
         upd_losses, upd_gnorms = [], []
         hclip = cfg.hide_grad_clip
+        t_units0, rank_t = time.time(), {}  # per-rank train-phase timing (10-28, logging only)
         for u in range(n_upd):
             pol.model.train()
             self.opt.zero_grad(set_to_none=True)
@@ -3171,13 +3860,27 @@ class AdaptiveSupervisedTrainer:
                 loss_sum += float(loss.detach()) + (float(h_term.detach()) if hclip else 0.0)
                 for k2, v in st.items():
                     acc[k2] += v
+            if u == 0:
+                self._mem_mark("train_pre_cap")
+                rank_t["units"] = time.time() - t_units0
             cap_info = (self._cap_gen_step(self._g_trajs)
                         if acfg.cap_gen_weight > 0 or acfg.cap_gen_kl_weight > 0 else {})
+            if u == 0:
+                self._mem_mark("cap")
+                rank_t["cap"] = time.time() - t_units0 - rank_t["units"]
             if u == 0 and acfg.cap_adapt_target > 0 and "cap_gen/acc" in cap_info:
                 cap_info |= self._cap_adapt(cap_info["cap_gen/acc"])
             if acfg.anchor_weight > 0:  # optional retain-set KL anchor (off by default)
                 cap_info |= self._anchor_step()
             if self.world > 1:  # data-parallel: the step's gradient = the sum over ranks
+                if u == 0:  # which rank is slow in the training phase, and where (10-28)
+                    ts = dp.gather((round(rank_t["units"], 1), round(rank_t["cap"], 1)))
+                    dp_info |= {"dp/sec_units_max": max(t[0] for t in ts),
+                                "dp/sec_units_min": min(t[0] for t in ts),
+                                "dp/sec_units_argmax": max(range(len(ts)), key=lambda r: ts[r][0]),
+                                "dp/sec_cap_max": max(t[1] for t in ts),
+                                "dp/sec_cap_min": min(t[1] for t in ts),
+                                "dp/sec_cap_argmax": max(range(len(ts)), key=lambda r: ts[r][1])}
                 dp.allreduce_grads(self.params)
             if hclip:
                 hinfo = self._apply_hide_clip(hclip)
@@ -3202,6 +3905,7 @@ class AdaptiveSupervisedTrainer:
             upd_losses = [sum(x) for x in zip(*(pt["upd"] for pt in parts), strict=True)]
             kl_fb = sum(pt["kl_fb"] for pt in parts)
         t_train = time.time() - t0 - t_roll
+        self._mem_mark("train_rest")
         self.sched.step()
         self.step_k += 1
         # Refit trigger: data-driven (the instant refit_min_each fresh escapes have accrued, the
@@ -3280,11 +3984,14 @@ class AdaptiveSupervisedTrainer:
             "sec_train": round(t_train, 1),
             "sec_refit": round(t_refit, 1),
             "sec_diag": round(t_diag, 1),
-            "max_mem_gb": round(torch.cuda.max_memory_allocated() / 1e9, 2)
-            if torch.cuda.is_available() else None,
+            # run-long maxima (per-phase peaks are reset by _mem_mark; 10-26)
+            "max_mem_gb": (round(max(self._mem_run[0], torch.cuda.max_memory_allocated() / 1e9), 2)
+                           if torch.cuda.is_available() else None),
             # 10-20: allocator reserve (what nvidia-smi sees, minus the CUDA context)
-            "max_mem_reserved_gb": round(torch.cuda.max_memory_reserved() / 1e9, 2)
-            if torch.cuda.is_available() else None,
+            "max_mem_reserved_gb": (round(max(self._mem_run[1],
+                                              torch.cuda.max_memory_reserved() / 1e9), 2)
+                                    if torch.cuda.is_available() else None),
+            **{f"mem_peak_{k}_gb": v for k, v in self._mem_peaks.items()},
             **{f"train/{k}": v for k, v in {"loss": loss_sum, **summarize_stats(acc)}.items()},
             **{f"rollout/{k}": v for k, v in {**metrics, **extra}.items()},
             **pursuit_info,

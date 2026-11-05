@@ -1,0 +1,30 @@
+{
+ "_doc": "Broad, clean topics built from DBpedia Classes L2 classes (REPLICATION 2026-10-14k). family -> topic -> DBpedia L2 classes. Disjointness is verified empirically (scripts/tica_topic_overlap.py) before any split.",
+ "topics": {
+  "sports":                     {"family": "society & people", "classes": ["Athlete", "Boxer", "Coach", "GridironFootballPlayer", "MotorcycleRider", "RacingDriver", "SportsManager", "WinterSportPlayer", "Wrestler", "SportsTeam", "SportsLeague", "SportsTeamSeason", "FootballLeagueSeason", "Tournament", "SportsEvent", "Olympics", "Race"]},
+  "politics and government":    {"family": "society & people", "classes": ["Politician"]},
+  "royalty":                    {"family": "society & people", "classes": ["BritishRoyalty"]},
+  "religion":                   {"family": "society & people", "classes": ["Cleric", "ClericalAdministrativeRegion"]},
+  "law and court cases":        {"family": "society & people", "classes": ["LegalCase"]},
+  "business and companies":     {"family": "society & people", "classes": ["Company"]},
+  "education":                  {"family": "society & people", "classes": ["EducationalInstitution"]},
+  "science and scientists":     {"family": "society & people", "classes": ["Scientist"]},
+  "historical and social events": {"family": "society & people", "classes": ["SocietalEvent"]},
+  "music":                      {"family": "arts & media", "classes": ["MusicalWork", "Song", "Group", "Genre"]},
+  "literature and publishing":  {"family": "arts & media", "classes": ["WrittenWork", "PeriodicalLiterature", "Writer"]},
+  "film, television and broadcasting": {"family": "arts & media", "classes": ["Actor", "Broadcaster", "Presenter"]},
+  "comics and animation":       {"family": "arts & media", "classes": ["Comic", "Cartoon", "FictionalCharacter"]},
+  "visual arts":                {"family": "arts & media", "classes": ["Artist"]},
+  "software":                   {"family": "technology", "classes": ["Software"]},
+  "engines and machines":       {"family": "technology", "classes": ["Engine"]},
+  "transportation":             {"family": "technology", "classes": ["RouteOfTransportation", "Station", "Infrastructure"]},
+  "buildings and architecture": {"family": "places", "classes": ["Building", "Tower", "Venue", "SportFacility", "AmusementParkAttraction"]},
+  "towns and cities":           {"family": "places", "classes": ["Settlement"]},
+  "rivers and lakes":           {"family": "nature", "classes": ["BodyOfWater", "Stream"]},
+  "mountains and landforms":    {"family": "nature", "classes": ["NaturalPlace"]},
+  "astronomy":                  {"family": "nature", "classes": ["CelestialBody", "Satellite"]},
+  "natural disasters":          {"family": "nature", "classes": ["NaturalEvent"]},
+  "animals":                    {"family": "nature", "classes": ["Animal", "Horse"]},
+  "plants":                     {"family": "nature", "classes": ["Plant", "FloweringPlant"]}
+ }
+}

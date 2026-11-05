@@ -46,6 +46,7 @@ from next_chameleons.benchmarks.capability import (
     extract_gsm8k_answer,
 )
 from next_chameleons.benchmarks.capability_heldout import (
+    chat_eos_ids,
     eval_math500,
     eval_mbpp,
     eval_mc,
@@ -57,8 +58,8 @@ from next_chameleons.tica.answer_format import (
     BRIEF_ANSWER,
     SYS_CLOSE,
     SYS_OPEN,
-    SYSTEM_TAGGED,
     monitor_line,
+    system_tagged,
 )
 from next_chameleons.tica.config import load_run_config
 
@@ -95,8 +96,9 @@ def brief_conditions(briefs: str | None, trained: str, layout: str = "legacy") -
             if raw:
                 c = trained if raw == "trained" else BRIEF_CONCEPTS.get(raw.lower(), raw)
                 names[f"brief_{slug(raw)}"] = c
-    if layout == "tagged":  # system prompt + "Monitor: ON. Concept: ..." (answer_format, 10-17a)
-        conds = {"clean": None, **{k: f"{SYS_OPEN}{SYSTEM_TAGGED}{SYS_CLOSE}{monitor_line(c)}"
+    if layout in ("tagged", "tagged_v5"):  # system prompt + "Monitor: ON. Concept: ..." (10-17a)
+        sys_ = system_tagged(layout)
+        conds = {"clean": None, **{k: f"{SYS_OPEN}{sys_}{SYS_CLOSE}{monitor_line(c)}"
                                    for k, c in names.items()}}
     else:
         conds = {"clean": None, **{k: BRIEF_ANSWER.format(c=c) for k, c in names.items()}}
@@ -146,6 +148,7 @@ def eval_gsm8k_batched(model, tok, items, *, trigger, batch_size=32, max_new_tok
             out = model.generate(input_ids=ids.to(device), attention_mask=att.to(device),
                                  max_new_tokens=max_new_tokens, do_sample=False,
                                  pad_token_id=pad, stop_strings=["\nQuestion:", "\n\nQuestion:"],
+                                 eos_token_id=chat_eos_ids(model, tok),  # 10-28: end at <|im_end|>
                                  tokenizer=tok._tok if hasattr(tok, "_tok") else tok)
             for r, i in enumerate(idx):
                 gen = tok.decode(out[r, n:], skip_special_tokens=True)

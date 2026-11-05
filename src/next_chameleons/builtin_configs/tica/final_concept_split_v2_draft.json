@@ -1,0 +1,506 @@
+{
+ "version": 2,
+ "tau_answer": 0.5,
+ "tau_probe": 0.2,
+ "keyword_conflicts": true,
+ "pool": 395,
+ "independent_set": 60,
+ "train": [
+  "mathematical notation and symbols",
+  "playful and onomatopoeic sounds or expressions",
+  "imperative phrases and calls to action",
+  "references to women's employment issues and job market conditions",
+  "instances of the term \"success\"",
+  "expressions of surprise or disbelief",
+  "instances of direct speech or quotation",
+  "non-textual elements or formatting indicators present in a document",
+  "occurrences of the word \"on\"",
+  "references to \"Digital Twins\" and related concepts",
+  "numerical ratings and comparisons related to consumer products or services",
+  "uses of deception or pretense",
+  "references to internet links or URLs",
+  "references to the UAE and related programs or initiatives",
+  "the term \"wide\" in various contexts",
+  "references to canceling or rescheduling appointments",
+  "phrases related to life-saving interventions and their impacts",
+  "terms related to accumulation and buildup of substances",
+  "terms related to outreach and audience engagement",
+  "geographic locations, particularly names of places in West Virginia",
+  "phrases that express awareness or knowledge about a situation",
+  "conversational phrases that indicate problem-solving or assistance",
+  "positive sentiments and descriptions of enjoyable experiences",
+  "references related to the celebration of labor and Workers' Day",
+  "references to database documents and collections",
+  "references to reports, surveys, or studies that include data and conclusions",
+  "specific temperature settings for cooking",
+  "references to government departments or agencies",
+  "phrases related to formal requests and demands",
+  "terms related to mobile communication technology, particularly LTE (Long Term Evolution)",
+  "references to businesses and industries",
+  "references to specific nationalities or ethnic groups",
+  "events related to sports competitions, focusing on the outcomes and scores",
+  "terms related to arid and nutrient-limited environments",
+  "terms related to supply and provision in various contexts",
+  "legal terminology and procedural context in discussions or texts"
+ ],
+ "dev": [
+  "references to concealed or enclosed spaces and protective casings",
+  "elements within structured lists or updates",
+  "references to stress in various contexts",
+  "terms related to Creative Commons licensing",
+  "terms related to eligibility and selection processes",
+  "references to pairs of items or concepts",
+  "specific references to models, brands, or organizational entities",
+  "references to churches and religious institutions"
+ ],
+ "test": [
+  "HTML table elements and their attributes",
+  "references to payment, salaries, and financial arrangements",
+  "references to titles and honors associated with individuals in political or academic contexts",
+  "phrases related to concerns and the consequences of inaction",
+  "the word \"either\" in various contexts",
+  "references to military or strategic operations",
+  "references to changes in rules and policies affecting guidelines or regulations",
+  "references to unspecified or vague concepts and ideas",
+  "promotional offers and discount codes",
+  "specific terms related to technical aspects and functionalities in various contexts",
+  "references to specific television and radio stations",
+  "punctuation marks, particularly periods",
+  "references to dressing or attire",
+  "references to relationships and joint decisions",
+  "references to education and training backgrounds",
+  "terms related to cross-referencing and interdisciplinary connections in research"
+ ],
+ "unused_disjoint": [],
+ "info": {
+  "mathematical notation and symbols": {
+   "type": "format_punct",
+   "weird": false,
+   "cluster": 1,
+   "nn_answer_cos_pool": 0.9844542145729065
+  },
+  "HTML table elements and their attributes": {
+   "type": "code_markup",
+   "weird": false,
+   "cluster": 2,
+   "nn_answer_cos_pool": 0.8685094714164734
+  },
+  "the word \"either\" in various contexts": {
+   "type": "lexical",
+   "weird": true,
+   "cluster": 6,
+   "nn_answer_cos_pool": 0.5396687984466553
+  },
+  "uses of deception or pretense": {
+   "type": "discourse_affect",
+   "weird": true,
+   "cluster": 7,
+   "nn_answer_cos_pool": 0.5372251868247986
+  },
+  "references to canceling or rescheduling appointments": {
+   "type": "domain_topic",
+   "weird": true,
+   "cluster": 10,
+   "nn_answer_cos_pool": 0.5135653614997864
+  },
+  "the term \"wide\" in various contexts": {
+   "type": "lexical",
+   "weird": true,
+   "cluster": 7,
+   "nn_answer_cos_pool": 0.43638649582862854
+  },
+  "references to the UAE and related programs or initiatives": {
+   "type": "domain_topic",
+   "weird": true,
+   "cluster": 8,
+   "nn_answer_cos_pool": 0.5966717004776001
+  },
+  "expressions of surprise or disbelief": {
+   "type": "discourse_affect",
+   "weird": true,
+   "cluster": 6,
+   "nn_answer_cos_pool": 0.608527421951294
+  },
+  "playful and onomatopoeic sounds or expressions": {
+   "type": "discourse_affect",
+   "weird": true,
+   "cluster": 7,
+   "nn_answer_cos_pool": 0.6243898272514343
+  },
+  "promotional offers and discount codes": {
+   "type": "domain_topic",
+   "weird": false,
+   "cluster": 10,
+   "nn_answer_cos_pool": 0.7551506161689758
+  },
+  "references to payment, salaries, and financial arrangements": {
+   "type": "domain_topic",
+   "weird": true,
+   "cluster": 10,
+   "nn_answer_cos_pool": 0.608564019203186
+  },
+  "instances of direct speech or quotation": {
+   "type": "format_punct",
+   "weird": true,
+   "cluster": 6,
+   "nn_answer_cos_pool": 0.5242787003517151
+  },
+  "phrases related to life-saving interventions and their impacts": {
+   "type": "domain_topic",
+   "weird": true,
+   "cluster": 10,
+   "nn_answer_cos_pool": 0.5739895105361938
+  },
+  "terms related to arid and nutrient-limited environments": {
+   "type": "domain_topic",
+   "weird": false,
+   "cluster": 10,
+   "nn_answer_cos_pool": 0.6746304035186768
+  },
+  "phrases related to concerns and the consequences of inaction": {
+   "type": "domain_topic",
+   "weird": true,
+   "cluster": 14,
+   "nn_answer_cos_pool": 0.43586698174476624
+  },
+  "references to women's employment issues and job market conditions": {
+   "type": "domain_topic",
+   "weird": true,
+   "cluster": 8,
+   "nn_answer_cos_pool": 0.5285010933876038
+  },
+  "references related to the celebration of labor and Workers' Day": {
+   "type": "domain_topic",
+   "weird": false,
+   "cluster": 8,
+   "nn_answer_cos_pool": 0.6258212327957153
+  },
+  "references to changes in rules and policies affecting guidelines or regulations": {
+   "type": "domain_topic",
+   "weird": true,
+   "cluster": 13,
+   "nn_answer_cos_pool": 0.5737839341163635
+  },
+  "references to internet links or URLs": {
+   "type": "domain_topic",
+   "weird": true,
+   "cluster": 5,
+   "nn_answer_cos_pool": 0.5283895134925842
+  },
+  "terms related to Creative Commons licensing": {
+   "type": "domain_topic",
+   "weird": true,
+   "cluster": 10,
+   "nn_answer_cos_pool": 0.5487698912620544
+  },
+  "references to \"Digital Twins\" and related concepts": {
+   "type": "lexical",
+   "weird": true,
+   "cluster": 10,
+   "nn_answer_cos_pool": 0.5839821100234985
+  },
+  "references to businesses and industries": {
+   "type": "domain_topic",
+   "weird": false,
+   "cluster": 13,
+   "nn_answer_cos_pool": 0.6377453804016113
+  },
+  "references to government departments or agencies": {
+   "type": "domain_topic",
+   "weird": false,
+   "cluster": 13,
+   "nn_answer_cos_pool": 0.7740912437438965
+  },
+  "references to specific nationalities or ethnic groups": {
+   "type": "entity_place",
+   "weird": false,
+   "cluster": 3,
+   "nn_answer_cos_pool": 0.7066998481750488
+  },
+  "punctuation marks, particularly periods": {
+   "type": "format_punct",
+   "weird": false,
+   "cluster": 9,
+   "nn_answer_cos_pool": 0.7350475788116455
+  },
+  "references to specific television and radio stations": {
+   "type": "domain_topic",
+   "weird": false,
+   "cluster": 3,
+   "nn_answer_cos_pool": 0.635903000831604
+  },
+  "terms related to accumulation and buildup of substances": {
+   "type": "domain_topic",
+   "weird": true,
+   "cluster": 10,
+   "nn_answer_cos_pool": 0.6054739952087402
+  },
+  "terms related to outreach and audience engagement": {
+   "type": "domain_topic",
+   "weird": false,
+   "cluster": 7,
+   "nn_answer_cos_pool": 0.7494860887527466
+  },
+  "references to education and training backgrounds": {
+   "type": "domain_topic",
+   "weird": false,
+   "cluster": 13,
+   "nn_answer_cos_pool": 0.7624779939651489
+  },
+  "non-textual elements or formatting indicators present in a document": {
+   "type": "format_punct",
+   "weird": true,
+   "cluster": 9,
+   "nn_answer_cos_pool": 0.5727476477622986
+  },
+  "numerical ratings and comparisons related to consumer products or services": {
+   "type": "math_numeric",
+   "weird": true,
+   "cluster": 10,
+   "nn_answer_cos_pool": 0.4377020597457886
+  },
+  "references to pairs of items or concepts": {
+   "type": "domain_topic",
+   "weird": false,
+   "cluster": 4,
+   "nn_answer_cos_pool": 0.6595501899719238
+  },
+  "elements within structured lists or updates": {
+   "type": "format_punct",
+   "weird": true,
+   "cluster": 4,
+   "nn_answer_cos_pool": 0.5106611847877502
+  },
+  "references to database documents and collections": {
+   "type": "domain_topic",
+   "weird": false,
+   "cluster": 9,
+   "nn_answer_cos_pool": 0.7590343952178955
+  },
+  "references to relationships and joint decisions": {
+   "type": "domain_topic",
+   "weird": false,
+   "cluster": 7,
+   "nn_answer_cos_pool": 0.6762328147888184
+  },
+  "references to stress in various contexts": {
+   "type": "domain_topic",
+   "weird": true,
+   "cluster": 7,
+   "nn_answer_cos_pool": 0.6046803593635559
+  },
+  "instances of the term \"success\"": {
+   "type": "lexical",
+   "weird": true,
+   "cluster": 7,
+   "nn_answer_cos_pool": 0.6927899122238159
+  },
+  "references to concealed or enclosed spaces and protective casings": {
+   "type": "domain_topic",
+   "weird": true,
+   "cluster": 7,
+   "nn_answer_cos_pool": 0.5702109336853027
+  },
+  "references to unspecified or vague concepts and ideas": {
+   "type": "domain_topic",
+   "weird": true,
+   "cluster": 7,
+   "nn_answer_cos_pool": 0.6185648441314697
+  },
+  "specific references to models, brands, or organizational entities": {
+   "type": "entity_place",
+   "weird": false,
+   "cluster": 3,
+   "nn_answer_cos_pool": 0.7044287919998169
+  },
+  "geographic locations, particularly names of places in West Virginia": {
+   "type": "entity_place",
+   "weird": false,
+   "cluster": 3,
+   "nn_answer_cos_pool": 0.8014266490936279
+  },
+  "positive sentiments and descriptions of enjoyable experiences": {
+   "type": "discourse_affect",
+   "weird": false,
+   "cluster": 7,
+   "nn_answer_cos_pool": 0.7934821844100952
+  },
+  "phrases related to formal requests and demands": {
+   "type": "domain_topic",
+   "weird": false,
+   "cluster": 6,
+   "nn_answer_cos_pool": 0.8049387335777283
+  },
+  "references to reports, surveys, or studies that include data and conclusions": {
+   "type": "domain_topic",
+   "weird": false,
+   "cluster": 12,
+   "nn_answer_cos_pool": 0.710834801197052
+  },
+  "terms related to cross-referencing and interdisciplinary connections in research": {
+   "type": "domain_topic",
+   "weird": false,
+   "cluster": 13,
+   "nn_answer_cos_pool": 0.741691529750824
+  },
+  "references to titles and honors associated with individuals in political or academic contexts": {
+   "type": "domain_topic",
+   "weird": true,
+   "cluster": 13,
+   "nn_answer_cos_pool": 0.5839307308197021
+  },
+  "legal terminology and procedural context in discussions or texts": {
+   "type": "domain_topic",
+   "weird": false,
+   "cluster": 10,
+   "nn_answer_cos_pool": 0.8443431854248047
+  },
+  "terms related to supply and provision in various contexts": {
+   "type": "domain_topic",
+   "weird": false,
+   "cluster": 13,
+   "nn_answer_cos_pool": 0.7071424126625061
+  },
+  "terms related to eligibility and selection processes": {
+   "type": "domain_topic",
+   "weird": false,
+   "cluster": 13,
+   "nn_answer_cos_pool": 0.6850999593734741
+  },
+  "specific terms related to technical aspects and functionalities in various contexts": {
+   "type": "code_markup",
+   "weird": false,
+   "cluster": 13,
+   "nn_answer_cos_pool": 0.8016430139541626
+  },
+  "references to churches and religious institutions": {
+   "type": "domain_topic",
+   "weird": false,
+   "cluster": 7,
+   "nn_answer_cos_pool": 0.7253600358963013
+  },
+  "references to military or strategic operations": {
+   "type": "domain_topic",
+   "weird": true,
+   "cluster": 10,
+   "nn_answer_cos_pool": 0.6157405376434326
+  },
+  "references to dressing or attire": {
+   "type": "domain_topic",
+   "weird": false,
+   "cluster": 7,
+   "nn_answer_cos_pool": 0.680137038230896
+  },
+  "specific temperature settings for cooking": {
+   "type": "domain_topic",
+   "weird": false,
+   "cluster": 10,
+   "nn_answer_cos_pool": 0.6834892630577087
+  },
+  "terms related to mobile communication technology, particularly LTE (Long Term Evolution)": {
+   "type": "domain_topic",
+   "weird": false,
+   "cluster": 10,
+   "nn_answer_cos_pool": 0.7747851610183716
+  },
+  "events related to sports competitions, focusing on the outcomes and scores": {
+   "type": "domain_topic",
+   "weird": false,
+   "cluster": 10,
+   "nn_answer_cos_pool": 0.762725830078125
+  },
+  "imperative phrases and calls to action": {
+   "type": "domain_topic",
+   "weird": true,
+   "cluster": 5,
+   "nn_answer_cos_pool": 0.5083322525024414
+  },
+  "conversational phrases that indicate problem-solving or assistance": {
+   "type": "discourse_affect",
+   "weird": false,
+   "cluster": 6,
+   "nn_answer_cos_pool": 0.7358582019805908
+  },
+  "phrases that express awareness or knowledge about a situation": {
+   "type": "domain_topic",
+   "weird": false,
+   "cluster": 6,
+   "nn_answer_cos_pool": 0.6887857913970947
+  },
+  "occurrences of the word \"on\"": {
+   "type": "lexical",
+   "weird": true,
+   "cluster": 4,
+   "nn_answer_cos_pool": 0.6846404075622559
+  }
+ },
+ "pairs": {
+  "train-train": {
+   "answer_cos_max": 0.49923205375671387,
+   "answer_cos_median": 0.10661254823207855,
+   "probe_cos_max": 0.197185218334198,
+   "probe_cos_median": 0.011531001888215542
+  },
+  "test-test": {
+   "answer_cos_max": 0.4940437376499176,
+   "answer_cos_median": 0.14948168396949768,
+   "probe_cos_max": 0.1635286659002304,
+   "probe_cos_median": 0.0012227143160998821
+  },
+  "dev-dev": {
+   "answer_cos_max": 0.4478086829185486,
+   "answer_cos_median": 0.14278551936149597,
+   "probe_cos_max": 0.1420149803161621,
+   "probe_cos_median": 0.03649748116731644
+  },
+  "train-test": {
+   "answer_cos_max": 0.49771296977996826,
+   "answer_cos_median": 0.14457345008850098,
+   "probe_cos_max": 0.198198601603508,
+   "probe_cos_median": 0.014263376593589783
+  },
+  "train-dev": {
+   "answer_cos_max": 0.4936194121837616,
+   "answer_cos_median": 0.11956280469894409,
+   "probe_cos_max": 0.19804346561431885,
+   "probe_cos_median": 0.010037405416369438
+  },
+  "dev-test": {
+   "answer_cos_max": 0.49427732825279236,
+   "answer_cos_median": 0.1496542990207672,
+   "probe_cos_max": 0.19158291816711426,
+   "probe_cos_median": 0.01609957218170166
+  }
+ },
+ "types": {
+  "train": {
+   "format_punct": 3,
+   "discourse_affect": 5,
+   "domain_topic": 21,
+   "lexical": 4,
+   "math_numeric": 1,
+   "entity_place": 2
+  },
+  "dev": {
+   "domain_topic": 6,
+   "format_punct": 1,
+   "entity_place": 1
+  },
+  "test": {
+   "code_markup": 2,
+   "domain_topic": 12,
+   "lexical": 1,
+   "format_punct": 1
+  }
+ },
+ "weird": {
+  "train": 17,
+  "dev": 4,
+  "test": 7
+ },
+ "clusters": {
+  "train": 11,
+  "dev": 5,
+  "test": 8
+ }
+}

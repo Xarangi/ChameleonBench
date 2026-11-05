@@ -32,8 +32,12 @@ def build(cfg):
     held_out = {int(x) for x in cfg.probes.held_out_layers}
     # Load the training (pool) layers AND the held-out layers (eval-only, e.g. L20 for the
     # generalisation metric) -- pool_layers() does not include held_out_layers on its own.
-    layers = list(cfg.pool_layers())
-    layers += [h for h in held_out if h not in layers]
+    # probes.dir "" (answer format only; 10-24 Gemma-4 port): no Level-1 repeat-format bank. The
+    # answer format refits its base probes on the model itself, so the bank was only ever loaded.
+    layers = []
+    if cfg.probes.dir or cfg.episodes.format != "answer":
+        layers = list(cfg.pool_layers())
+        layers += [h for h in held_out if h not in layers]
     for layer in layers:
         bank = ConceptProbeBank.from_level1_npz(Path(cfg.probes.dir) / f"bank_L{layer}.npz")
         if cfg.probes.pair_gate and layer == cfg.primary_layer():
@@ -57,6 +61,14 @@ def build(cfg):
             keep_think_history=cfg.model.keep_think_history,
         )
         pol.lm_chunk = cfg.model.lm_chunk  # 0 = the full-logits path
+        pol.sort_reads = cfg.model.sort_reads  # length-sorted fork read chunks (10-27)
+        n = len(pol.layers_module)
+        if cfg.model.depth and n != int(cfg.model.depth):
+            raise SystemExit(f"model.depth {cfg.model.depth} but {cfg.model.path} has {n} decoder "
+                             "layers (rescale the config's layers)")
+        if not cfg.model.depth and n != 32:
+            print(f"[warn] {n}-layer model with the 32-layer probe-zoo tables (set model.depth)",
+                  flush=True)
         return pol
 
     return Level1Data(cfg.data), pool, factory
@@ -148,6 +160,71 @@ def run_windows(args) -> None:
         )
 
 
+def cap_free_requests(data, inputs: dict, concepts, acfg=None) -> dict:
+    """adaptive.cap_free_*: {checkable train concept: [(request, fallback answer, reference)]} from
+    the calib and episode splits (training rollouts force fit-split texts: these are new). SQL items
+    become execution-checkable tasks (tica/validity.py): the request carries the reference's tables
+    + rows, the fallback answer is the reference query; items whose reference does not run in
+    sqlite are dropped. Other concepts: the published answer is both fallback and reference."""
+
+    from next_chameleons.tica.answer_format import text_id
+    from next_chameleons.tica.validity import check_task, checkable, sql_split, sql_task_request
+
+    pool = {}
+    for c in sorted(x for x in concepts if checkable(x)):
+        rows = []
+        for sp in ("calib", "episode"):
+            for ct in data.concepts(sp, ("train",), only={c}):
+                for x in ct.texts:
+                    q = inputs.get(text_id(x))
+                    if not q:
+                        continue
+                    if c == "SQL code":
+                        q2 = sql_task_request(q, x)
+                        if q2 is not None:
+                            rows.append((q2, sql_split(x)[1], x))
+                    elif check_task(c, x, q, x):  # 10-27: a reference failing its own check
+                        rows.append((q, x, x))    # (English "German" texts) is no NLL target
+        if rows:
+            pool[c] = rows
+    # 10-30: functional JavaScript tasks (APPS, Node-tested) for the JavaScript concept
+    if acfg is not None and acfg.cap_free_js_tasks and "JavaScript code" in set(concepts):
+        from next_chameleons.tica import js_tasks
+
+        apps = js_tasks.pool_rows(acfg.cap_free_js_tasks)
+        pool["JavaScript code"] = apps + (pool.get("JavaScript code", [])
+                                          if acfg.cap_free_js_keep_form else [])
+    # 10-30: execution-checkable SQL tasks (gretel text-to-SQL train split) for the SQL concept
+    if acfg is not None and acfg.cap_free_sql_tasks and "SQL code" in set(concepts):
+        from next_chameleons.tica.free_pools import directive, gretel_sql_rows
+
+        own = pool.get("SQL code", [])
+        pool["SQL code"] = own + gretel_sql_rows(acfg.cap_free_sql_tasks,
+                                                 directive([inputs_q for inputs_q, _, _ in own]))
+    # 10-30: schema-from-spec JSON tasks (ToolACE) for the JSON concept
+    if acfg is not None and acfg.cap_free_json_tasks and "JSON data" in set(concepts):
+        from next_chameleons.tica.free_pools import directive, toolace_json_rows
+
+        own = pool.get("JSON data", [])
+        pool["JSON data"] = own + toolace_json_rows(acfg.cap_free_json_tasks,
+                                                    directive([q for q, _, _ in own]))
+    # 10-30: Dolly-15k instructions for the form-checked concepts (languages, all-caps), each with
+    # the concept's own answer directive, so their pools are not 130-240 items drawn 3-6 times
+    if acfg is not None and acfg.cap_free_dolly:
+        from next_chameleons.tica.free_pools import directive, dolly_rows
+        from next_chameleons.tica.validity import FAMILY
+
+        form = {}
+        for c in pool:
+            if FAMILY.get(c) == "language" or c == "all-caps text":
+                d = directive([r[0] for r in pool[c]])
+                if d:
+                    form[c] = d
+        for c, rows in dolly_rows(acfg.cap_free_dolly, form, acfg.cap_free_dolly_n).items():
+            pool[c] = pool[c] + rows
+    return pool
+
+
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument(
@@ -189,6 +266,11 @@ def main() -> None:
     # data-parallel episodes (TICA_DP=N in scripts/slurm/tica_l3covert.sh: WORLD_SIZE / RANK set,
     # one visible GPU per process); adaptive only
     data_parallel = dp.init_from_env()
+    # TICA_MEM_FRACTION (10-28): cap this process's CUDA caching allocator at that fraction of its
+    # GPU, so a run SHARING GPUs with another (srun --overlap) runs out of memory itself instead
+    # of pushing the other run over the limit
+    if os.environ.get("TICA_MEM_FRACTION") and torch.cuda.is_available():
+        torch.cuda.set_per_process_memory_fraction(float(os.environ["TICA_MEM_FRACTION"]), 0)
     if data_parallel and args.command != "adaptive":
         raise SystemExit("data-parallel episodes: adaptive only")
     cfg = load_run_config(args.config)
@@ -318,11 +400,25 @@ def main() -> None:
         # Branch-refit (adaptive.refit_mode="branch"): the FULL covered concept set supplies the
         # other-concept negatives; roots_only = the episode concept(s) we train to hide.
         branch_concepts = data.concepts("fit", ("train",))
+        inputs = load_inputs(cfg.episodes.inputs) if cfg.episodes.format == "answer" else None
+        cap_free_pool = (cap_free_requests(data, inputs, only, cfg.rl.adaptive)
+                         if inputs and (cfg.rl.adaptive.cap_free_episodes
+                                        or cfg.rl.adaptive.cap_free_nobrief) else None)
+        if cap_free_pool and cfg.rl.adaptive.cap_free_holdout_frac > 0:
+            from next_chameleons.tica.free_pools import split_holdout
+
+            frac = cfg.rl.adaptive.cap_free_holdout_frac
+            cap_free_pool, held = split_holdout(cap_free_pool, frac)
+            (out / "adaptive").mkdir(parents=True, exist_ok=True)
+            (out / "adaptive" / "cap_free_holdout.json").write_text(json.dumps(held))
+            print("cap_free held out:", {c: len(v) for c, v in held.items()}, flush=True)
+        if cap_free_pool:
+            print("cap_free pool:", {c: len(v) for c, v in cap_free_pool.items()}, flush=True)
         tr = AdaptiveSupervisedTrainer(
             pol, pool, sampler, asc, out / "adaptive",
             branch_concepts=branch_concepts, branch_negatives=data.negatives("fit"),
             roots_only=only, prompts=prompts,
-            inputs=(load_inputs(cfg.episodes.inputs) if cfg.episodes.format == "answer" else None),
+            inputs=inputs, cap_free_pool=cap_free_pool,
             # resume chunks restore optimizer / curriculum / RNG state (train.save_state)
             resume_state=(str(Path(args.adapter) / "trainer_state.pt")
                           if args.adapter and cfg.train.save_state else None),

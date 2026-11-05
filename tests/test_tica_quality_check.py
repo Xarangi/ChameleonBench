@@ -57,3 +57,13 @@ def test_summary_buckets():
     assert j["nobrief"]["finished"] == 0.0
     assert s["by"]["family:format"]["on_all"]["n"] == 2
     assert s["not_checkable_rows"] == {"sports": 1}
+
+
+def test_fence_with_code_on_the_opening_line():
+    """10-26: a bare fence followed by code on the same line ("```<table>...", "```SELECT ...") must
+    not lose that line to the language-tag group; a lone tag line still names the language."""
+    assert qc.check("HTML markup", "```<table><tr><td>Blue</td><td>#0000FF</td></tr></table>```")
+    assert qc.check("SQL code", "```SELECT name FROM users WHERE id = 3;```")
+    assert qc.check("Python code", "```\ndef f(x):\n    return x + 1\n```")
+    assert not qc.check("Java code", "```marshall(p) {\n  return JSON.stringify(p);\n}\n```")
+    assert not qc.check("Python code", "def sort_list(t) { return sorted(t) }")

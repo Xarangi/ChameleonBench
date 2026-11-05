@@ -139,9 +139,13 @@ def main():
             for t in ts:
                 texts.setdefault(t["id"], t["text"])
     if a.skip_labelled:
-        done = set()
-        meta = json.loads(Path(a.skip_labelled).read_text())["meta"]
-        for f in {f for m in (meta if isinstance(meta, list) else [meta]) for f in m["data"]}:
+        old = json.loads(Path(a.skip_labelled).read_text())
+        done = set(old.get("labels", {}))  # ids it labelled (data paths: maybe Narval)
+        meta = old["meta"]
+        files = {f for m in (meta if isinstance(meta, list) else [meta]) for f in m.get("data", [])}
+        for f in files:
+            if not Path(f).exists():
+                continue
             d = json.loads(Path(f).read_text())
             done |= {t["id"] for c in d["concepts"] for p in ("fit", "calib", "episode")
                      for t in c[p]}

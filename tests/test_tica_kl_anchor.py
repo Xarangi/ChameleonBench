@@ -165,3 +165,148 @@ def test_cap_gen_kl_all_trains_wrong_samples_with_kl_only(tmp_path, monkeypatch)
     rec = tr.step()
     assert rec["cap_gen/n_train"] == 4 and rec["cap_gen/n_kl_only"] == 2
     assert rec["cap_gen/kl"] > 0 and rec["cap_gen/kl_misaligned"] == 0
+
+
+def test_cap_free_forks_valid_nll_invalid_kl_nobrief_kl(tmp_path, monkeypatch):
+    """adaptive.cap_free_*: hiding forks splice a NEW concept request into the turn's verdict
+    message; valid samples get NLL (+ hide), invalid ones KL only; bare no-brief forks KL only;
+    cap_gen/acc stays a GSM8K-only number."""
+    from next_chameleons.tica.trainers import mathrl
+    from next_chameleons.tica.trainers import supervised as sup
+
+    tr, pol, _ = _setup(tmp_path, cap_gen_weight=1.0, cap_gen_episodes=1, cap_gen_samples=2,
+                        cap_gen_skip=0, cap_gen_kl_weight=1.0, cap_gen_kl_all=True, kl_topk=5,
+                        cap_free_episodes=2, cap_free_nobrief=2)
+    tr.cap_free_pool = {"cats": [("new cat request A", "VALID A", "VALID A"),
+                                 ("new cat request B", "VALID B", "VALID B")]}
+    monkeypatch.setattr(sup, "check_valid", lambda c, x, request="", ref=None: "VALID" in x)
+    q = [{"question": "1+1?", "answer": "2"}]
+    monkeypatch.setattr(mathrl, "load_questions", lambda: (q * 10, []))
+    seen = []
+
+    def fake_generate(convs, max_new, **kw):
+        out = []
+        for j, c in enumerate(convs):
+            seen.append(c)
+            last = c[-1]["content"]
+            if "1+1" in last:
+                text = "x = 1 + 1 = 2. The answer is 2." if j % 2 == 0 else "The answer is 7."
+            else:
+                text = "VALID answer" if j % 2 == 0 else "broken answer"
+            out.append({"text": text, "finished": True, "ids": [1], "prompt_ids": [1],
+                        "stop": None})
+        return out
+
+    monkeypatch.setattr(pol, "generate", fake_generate)
+    rec = tr.step()
+    free = [c for c in seen if len(c) > 1 and "new cat request" in c[-1]["content"]]
+    bare = [c for c in seen if len(c) == 1]
+    assert len(free) == 4 and all(c[-1]["content"].startswith("verdict on cats\n\n") for c in free)
+    assert len(bare) == 4  # 2 no-brief forks x 2 samples, no brief / history
+    assert rec["cap_free/n"] == 4 and rec["cap_free/valid"] == 0.5
+    assert rec["cap_free/n_nobrief"] == 4
+    assert rec["cap_gen/n_samples"] == 2 and rec["cap_gen/acc"] == 0.5  # GSM8K samples only
+    # items: GSM8K 1 NLL + 1 KL; free 2 NLL + 2 KL; no-brief 4 KL (every sample non-empty)
+    assert rec["cap_gen/n_train"] == 10 and rec["cap_gen/n_kl_only"] == 7
+
+
+def test_cap_gen_hide_valid_only_skips_failed_samples(tmp_path, monkeypatch):
+    """adaptive.cap_gen_hide_valid_only: the hide loss only on samples that pass their check
+    (correct GSM8K / functional free answer); failed samples keep the KL anchor alone."""
+    from next_chameleons.tica.trainers import mathrl
+    from next_chameleons.tica.trainers import supervised as sup
+
+    counts = {}
+    for hv in (False, True):
+        tr, pol, _ = _setup(tmp_path / str(hv), cap_gen_weight=1.0, cap_gen_episodes=1,
+                            cap_gen_samples=2, cap_gen_skip=0, cap_gen_kl_weight=1.0,
+                            cap_gen_kl_all=True, kl_topk=5, cap_free_episodes=2,
+                            cap_gen_hide_valid_only=hv)
+        tr.cap_free_pool = {"cats": [("new cat request A", "VALID A", "VALID A"),
+                                     ("new cat request B", "VALID B", "VALID B")]}
+        monkeypatch.setattr(sup, "check_valid", lambda c, x, request="", ref=None: "VALID" in x)
+        monkeypatch.setattr(mathrl, "load_questions",
+                            lambda: ([{"question": "1+1?", "answer": "2"}] * 10, []))
+
+        def fake_generate(convs, max_new, **kw):
+            return [{"text": ("x = 1 + 1 = 2. The answer is 2." if "1+1" in c[-1]["content"]
+                              else "VALID answer") if j % 2 == 0 else "broken. The answer is 7.",
+                     "finished": True, "ids": [1], "prompt_ids": [1], "stop": None}
+                    for j, c in enumerate(convs)]
+
+        monkeypatch.setattr(pol, "generate", fake_generate)
+        seen, orig = [], sup.probe_prob
+
+        def counting(pool, pooled, rows, tg, seen=seen, orig=orig, **kw):
+            seen.append(sum(t.key == "cap" for t in tg))  # capability-fork hide targets only
+            return orig(pool, pooled, rows, tg, **kw)
+
+        monkeypatch.setattr(sup, "probe_prob", counting)
+        rec = tr.step()
+        assert rec["cap_gen/n_train"] == 6 and rec["cap_gen/n_kl_only"] == 3
+        counts[hv] = sum(seen)
+        monkeypatch.setattr(sup, "probe_prob", orig)
+    # 3 passing + 3 failing samples, the same probes per fork: hide targets halve
+    assert counts[True] >= 1 and counts[False] == 2 * counts[True], counts
+
+
+def test_cap_fork_by_refit_weights_turns_by_probes_judging_them() -> None:
+    """adaptive.cap_fork_by_refit (10-28): capability forks branch inside monitored segments, at
+    turns weighted by the probes judging them; off by default (the original uniform draw)."""
+
+    import random
+    from collections import Counter
+    from types import SimpleNamespace
+
+    from next_chameleons.tica.trainers.supervised import AdaptiveSupervisedTrainer
+
+    res = [{"concept": "a", "deployed": ["p1"]}, {"concept": "a", "deployed": ["p1"]},
+           {"concept": "a", "deployed": ["p1", "p2", "p3"]},
+           {"concept": "a", "deployed": ["p1", "p2", "p3"]},
+           {"concept": "b", "deployed": ["q1"]},
+           {"concept": "b", "deployed": ["q1"], "off": True}]
+    tr = SimpleNamespace(results=res)
+    me = SimpleNamespace(rng=random.Random(0),
+                         cfg=SimpleNamespace(adaptive=SimpleNamespace(cap_fork_by_refit=True,
+                                                                     cap_level_adapt=False)))
+    got = Counter(AdaptiveSupervisedTrainer._fork_turn(me, tr) for _ in range(5000))
+    # eligible: t=1 (1 probe), t=2 (1: only p1 deployed at both), t=3 (3); t=4 switches
+    # concept, t=5 is off
+    assert set(got) == {1, 2, 3}
+    assert abs(got[3] / 5000 - 3 / 5) < 0.03 and abs(got[1] / 5000 - 1 / 5) < 0.03
+    me.cfg.adaptive.cap_fork_by_refit = False
+    me.rng = random.Random(0)
+    assert AdaptiveSupervisedTrainer._fork_turn(me, tr) == random.Random(0).randrange(1, 6)
+
+
+def test_cap_level_adapt_moves_weight_to_short_levels() -> None:
+    """adaptive.cap_level_adapt (10-30): per-level EMAs -> deficits; preserved levels keep the
+    floor, levels that fall short (or have no data) get more fork weight and a larger loss
+    multiplier."""
+
+    import random
+    from collections import Counter
+    from types import SimpleNamespace
+
+    from next_chameleons.tica.trainers.supervised import AdaptiveSupervisedTrainer as A
+
+    acfg = SimpleNamespace(cap_level_adapt=True, cap_fork_by_refit=False, cap_level_ref_gsm=0.9,
+                           cap_level_ref_free=0.9, cap_level_ema=0.5, cap_level_floor=0.25,
+                           cap_level_gain=2.0, cap_level_min_n=4)
+    me = SimpleNamespace(cfg=SimpleNamespace(adaptive=acfg), rng=random.Random(0),
+                         _cap_lvl=[{"gsm": [0.0, 0], "free": [0.0, 0]} for _ in range(5)])
+    me._cap_deficit = lambda b: A._cap_deficit(me, b)
+    assert me._cap_deficit(0) == 1.0  # no data yet
+    # level 1 at base (0.9 / 0.9), level 2 at half (0.45 / 0.45), others unseen
+    lvl = [[8, 7.2, 8, 7.2], [8, 3.6, 8, 3.6], [0, 0, 0, 0], [0, 0, 0, 0], [0, 0, 0, 0]]
+    A._cap_level_update(me, lvl)
+    assert abs(me._cap_deficit(0)) < 1e-9 and abs(me._cap_deficit(1) - 0.5) < 1e-9
+    assert me._cap_deficit(2) == 1.0
+    A._cap_level_update(me, [[8, 8, 8, 8], [0, 0, 0, 0], [0, 0, 0, 0], [0, 0, 0, 0], [0, 0, 0, 0]])
+    assert me._cap_lvl[0]["gsm"] == [0.95, 16]  # EMA 0.5 * 0.9 + 0.5 * 1.0
+    res = [{"concept": "a", "deployed": ["p1"]}, {"concept": "a", "deployed": ["p1"]},
+           {"concept": "a", "deployed": ["p1", "p2"]}, {"concept": "a", "deployed": ["p1", "p2"]}]
+    tr = SimpleNamespace(results=res)
+    got = Counter(A._fork_turn(me, tr) for _ in range(4000))
+    # t=1: 1 probe (deficit 0 -> weight 0.25); t=2: 1 probe (0.25); t=3: 2 probes (0.25 + 0.5)
+    assert abs(got[3] / 4000 - 0.75 / 1.25) < 0.03

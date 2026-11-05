@@ -41,6 +41,23 @@ def render_user(request: str) -> str:
             "<|im_start|>assistant\n<think>\n\n</think>\n\n")
 
 
+NO_SPACE_SCRIPTS = ("Japanese", "Chinese", "Thai")  # word counts mean little: ask for characters
+
+
+def length_hint(concept: str, src_len: int, cap: int | None) -> str:
+    """LENGTH-HINTED regeneration (user 10-24: "a length limit in the prompt, only for the examples
+    that are over long"). Target = the source text's own length, kept under 85% of the concept's
+    length cap so a near-target answer is eligible; asked in words (~6 chars each) or, for scripts
+    without spaces, characters. Appended to the request for GENERATION ONLY: the stored request (and
+    the judge's) stays the published one."""
+
+    target = src_len if cap is None else min(src_len, int(0.85 * cap))
+    if any(k in concept for k in NO_SPACE_SCRIPTS):
+        return ("(Please keep your answer short: at most about "
+                f"{max(40, round(target, -1))} characters.)")
+    return f"(Please keep your answer short: at most about {max(10, round(target / 6))} words.)"
+
+
 def select_concepts(data: dict, spec: str, exclude: list[str]) -> list[dict]:
     """spec: a concept split name ('train', 'heldout') or a '|'-separated list of concept names."""
 
@@ -94,6 +111,11 @@ def main():
     ap.add_argument("--sample-offset", type=int, default=0,
                     help="extra samples for low-keep concepts: indices (gid) start here; use a "
                          "different --seed too")
+    ap.add_argument("--only-src", default="",
+                    help="JSON {src_id: {cap, ...}} (build_final_v5_mw.py needs-regen): "
+                         "generate for these source texts only")
+    ap.add_argument("--length-hint", action="store_true",
+                    help="append length_hint() to the request (generation only; needs --only-src)")
     ap.add_argument("--shard", default="0/1", help="i/n over source texts")
     ap.add_argument("--mem", type=float, default=0.90)
     ap.add_argument("--out", required=True)
@@ -102,6 +124,16 @@ def main():
     data = json.loads(Path(a.data).read_text())
     inputs = json.loads(Path(a.inputs).read_text())
     rows = sources(data, inputs, a.concepts, [x for x in a.exclude.split("|") if x], a.max_src)
+    only = json.loads(Path(a.only_src).read_text()) if a.only_src else None
+    if a.length_hint and only is None:
+        raise SystemExit("--length-hint needs --only-src (the caps)")
+    if only is not None:
+        rows = [r for r in rows if r["src_id"] in only]
+    for r in rows:
+        r["gen_user"] = r["user"]
+        if a.length_hint:
+            hint = length_hint(r["concept"], r["src_len"], only[r["src_id"]].get("cap"))
+            r["gen_user"] = f"{r['user'].strip()}\n\n{hint}"
     si, sn = (int(x) for x in a.shard.split("/"))
     rows = rows[si::sn]
     from transformers import AutoTokenizer
@@ -116,7 +148,7 @@ def main():
     load = round(time.time() - t0)
     prompts, params = [], []
     for r in rows:
-        prompts.append(TokensPrompt(prompt_token_ids=tok.encode(render_user(r["user"]),
+        prompts.append(TokensPrompt(prompt_token_ids=tok.encode(render_user(r["gen_user"]),
                                                                 add_special_tokens=False)))
         seed = (int(hashlib.sha256(r["src_id"].encode()).hexdigest()[:8], 16) + a.seed) % 2**31
         params.append(SamplingParams(n=a.samples, temperature=a.temp, top_p=a.top_p,
@@ -136,11 +168,12 @@ def main():
                                     "sample": k, "concept": r["concept"], "cond": "nobrief",
                                     "turn": 0, "off": False, "detected": None, "passed": None,
                                     "finished": done, "ntok": len(s.token_ids),
-                                    "answer": s.text.strip(), "user": r["user"]}) + "\n")
+                                    "answer": s.text.strip(), "user": r["user"],
+                                    "length_hint": r["gen_user"] != r["user"]}) + "\n")
     meta = {"model": a.model, "data": a.data, "inputs": a.inputs, "concepts": a.concepts,
             "exclude": a.exclude, "samples": a.samples, "max_new": a.max_new, "temp": a.temp,
             "top_p": a.top_p, "top_k": a.top_k, "seed": a.seed, "shard": a.shard,
-            "sample_offset": a.sample_offset,
+            "sample_offset": a.sample_offset, "only_src": a.only_src, "length_hint": a.length_hint,
             "n_src": len(rows), "n_gen": sum(fin.values()), "gen_tokens": n_tok,
             "load_sec": load, "gen_sec": gen_sec,
             "finished": {c: round(fin[(c, True)] / max(1, fin[(c, True)] + fin[(c, False)]), 3)

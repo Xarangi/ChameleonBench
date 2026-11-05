@@ -13,6 +13,11 @@ recorded and the layer skipped). Then N texts of the concept (episode split) are
   base    -- base model on the same late-turn conversation (reference).
 det[layer][cond] = fraction detected. Static probes (no refits): this is the "is it readable at
 layer L at all" map; refit races are the scripts/tica_switch_eval.py side. Aggregates only.
+--lora-off SPEC (10-25 causal localization; user: "where is this hiding exactly?"): zero the LoRA
+scaling of the matching adapted modules before every trained-model read (base reads and the base
+probes are unaffected). SPEC = a layer band "8-15", a module type "attn" / "mlp" (attn = full and
+linear attention), "8-15:mlp", or "!8-15" = every layer EXCEPT the band. If hiding at L16-26 comes
+back with 8-15 off, the edit that hides there is written in 8-15.
 Note: with FORCED texts the first layers are near-lexical (a topic probe there reads the given
 tokens), so low layers are a lexical baseline, not a hiding failure.
 
@@ -35,6 +40,34 @@ from next_chameleons.tica.answer_format import fit_answer_probes, prompts
 from next_chameleons.tica.config import load_run_config
 
 
+def lora_off(model, spec: str) -> int:
+    """Zero the LoRA scaling of adapted modules matching spec (see the module docstring)."""
+
+    import re
+
+    neg = spec.startswith("!")
+    band, _, typ = spec.lstrip("!").partition(":")
+    if band in ("attn", "mlp"):
+        band, typ = "", band
+    lo, hi = (int(x) for x in band.split("-")) if band else (0, 10**6)
+    n = 0
+    for name, mod in model.named_modules():
+        sc = getattr(mod, "scaling", None)
+        if not isinstance(sc, dict) or not hasattr(mod, "lora_A"):
+            continue
+        m = re.search(r"layers\.(\d+)\.", name)
+        if m is None:
+            continue
+        in_band = lo <= int(m.group(1)) <= hi
+        kind = "mlp" if ".mlp." in name else "attn"
+        hit = (not in_band if neg else in_band) and (not typ or kind == typ)
+        if hit:
+            for k in sc:
+                sc[k] = 0.0
+            n += 1
+    return n
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--config", required=True)
@@ -46,6 +79,7 @@ def main():
     ap.add_argument("--model-path")
     ap.add_argument("--data", help="override the config's data file (e.g. final_ood_v1.json)")
     ap.add_argument("--inputs", help="override the config's answer-format inputs map")
+    ap.add_argument("--lora-off", default="", help="zero the LoRA in a band / module type")
     ap.add_argument("--out", required=True)
     a = ap.parse_args()
 
@@ -60,6 +94,11 @@ def main():
         cfg.episodes.inputs = a.inputs
     data, _, factory = build(cfg)
     pol = factory(a.adapter, False)
+    n_off = lora_off(pol.model, a.lora_off) if a.lora_off else 0
+    if a.lora_off:
+        print(f"[lora-off] {a.lora_off}: {n_off} adapted modules zeroed", flush=True)
+        if n_off == 0:
+            raise SystemExit("--lora-off matched no adapted module")
     opening, render = prompts("answer", cfg.episodes.inputs, cfg.episodes.layout)
     fb = cfg.episodes.feedback
     caught, passed = (1.0, 0.0), (-1.0, 0.0)  # (score, threshold) shown in the verdict message
@@ -126,6 +165,7 @@ def main():
               flush=True)
     mean = lambda v: sum(v) / len(v) if v else None  # noqa: E731
     rep = {"config": a.config, "adapter": a.adapter, "split": a.split, "concepts": concepts,
+           "lora_off": a.lora_off, "lora_off_modules": n_off,
            "n_texts": a.n,
            "det_by_layer": {L: {cond: mean(v) for cond, v in d.items()} for L, d in det.items()},
            "per_concept": {L: dict(d) for L, d in per.items()},

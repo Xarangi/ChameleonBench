@@ -69,6 +69,15 @@ class ModelConfig:
     # input in chunks of this many tokens with activation checkpointing (policy._lm_terms), never
     # the full [B, n, V] logits -- the peak-memory spike at 24 turns. Same values up to float order.
     lm_chunk: int = 0
+    # 10-27 (False = unchanged): refit fork reads (pooled_shared_prefix) batch the forks in order of
+    # suffix length (results put back in input order) so a chunk pads to similar lengths, and copy a
+    # chunk's token states to the host once instead of row by row. Same reads up to kernel numerics.
+    sort_reads: bool = False
+    # Decoder depth (10-24 Gemma-4 port; 0 = unset = the 32-layer tables, unchanged). When set,
+    # the probe zoo's fixed multi-layer sets (ens4 / ens8 / ensdeep4 / spread5 / token ensembles)
+    # are rescaled to it (probe_zoo.set_zoo_depth), every layer named in the config must be
+    # < depth, and the loaded model must have exactly this many layers (scripts/tica.py checks).
+    depth: int = 0
 
 
 @dataclass
@@ -108,14 +117,15 @@ class EpisodeStyle:
     format: str = "repeat"
     inputs: str = "/scratch/sneheel/next_chameleons_raw_cache/tica/level1_inputs.json"
     # "legacy" = brief in the first user turn + free-text notices; "tagged" = monitor description
-    # as the system prompt + a status line (ON + concept / OFF) every turn (answer_format, 10-17a)
+    # as the system prompt + a status line (ON + concept / OFF) every turn (answer_format, 10-17a);
+    # "tagged_v5" = tagged + score scale / new-monitor notice / score change (answer_format, 10-23)
     layout: str = "legacy"
 
     def __post_init__(self) -> None:
-        if self.layout not in ("legacy", "tagged"):
+        if self.layout not in ("legacy", "tagged", "tagged_v5"):
             raise ValueError(self.layout)
-        if self.layout == "tagged" and self.format != "answer":
-            raise ValueError("layout 'tagged' needs format 'answer'")
+        if self.layout != "legacy" and self.format != "answer":
+            raise ValueError(f"layout {self.layout!r} needs format 'answer'")
         if self.feedback not in ("score", "verdict"):
             raise ValueError(self.feedback)
         if self.format not in ("repeat", "answer"):
@@ -221,8 +231,19 @@ class RunConfig:
         # Depth hold-out (10-15e): no TRAINED probe kind may read a held-out layer (the static
         # held-out probes' layers, or the layer of any held-out "kind@L"), or the depth axis of the
         # eval would be trained against.
-        from next_chameleons.tica.probe_zoo import kind_layers, split_kind
+        from next_chameleons.tica.probe_zoo import (
+            ZOO_BASE_DEPTH,
+            kind_layers,
+            set_zoo_depth,
+            split_kind,
+        )
 
+        # 10-24: the multi-layer zoo sets at this model's depth, before the checks. Unset depth =
+        # the 32-layer originals (identical values; also undoes a deeper config loaded earlier in
+        # the same process, e.g. in tests).
+        set_zoo_depth(int(self.model.depth) or ZOO_BASE_DEPTH)
+        if self.model.depth:
+            self._check_depth()
         held = {int(x) for x in self.probes.held_out_layers}
         held |= {split_kind(k)[1] for k in f.heldout_refit_kinds if split_kind(k)[1] is not None}
         primary = self.probes.layer if self.probes.layer is not None else 12
@@ -247,6 +268,29 @@ class RunConfig:
                 bad[f"adaptive.first_probe_panel_kinds:{k}"] = kp
         if bad:
             raise ValueError(f"trained probe kinds read held-out layers: {bad}")
+
+    def _check_depth(self) -> None:
+        """model.depth set: every layer the config names must exist (a 32-layer config copied to a
+        deeper / shallower model without rescaling its layers is caught here, not mid-run)."""
+
+        from next_chameleons.tica.probe_zoo import kind_layers
+
+        n, a = int(self.model.depth), self.rl.adaptive
+        named = {"probes.held_out_layers": list(self.probes.held_out_layers),
+                 "probes.layer": [self.probes.layer] if self.probes.layer is not None else [],
+                 "adaptive.kind_layers": list(getattr(a, "kind_layers", []) or []),
+                 "adaptive.panel_layers": list(getattr(a, "panel_layers", []) or []),
+                 "adaptive.stay_layers": list(getattr(a, "stay_layers", []) or []),
+                 "adaptive.act_anchor_layers": list(getattr(a, "act_anchor_layers", []) or [])}
+        primary = self.probes.layer if self.probes.layer is not None else 0
+        for k in (*self.final.train_refit_kinds, *self.final.heldout_refit_kinds,
+                  *(getattr(a, "episode_refit_kinds", []) or []),
+                  *(getattr(a, "first_probe_panel_kinds", []) or [])):
+            named[f"kind:{k}"] = kind_layers(k, primary)
+        bad = {k: [int(x) for x in v if not 0 <= int(x) < n] for k, v in named.items()}
+        bad = {k: v for k, v in bad.items() if v}
+        if bad:
+            raise ValueError(f"layers outside a {n}-layer model (model.depth): {bad}")
 
     def eval_config(self) -> EvalConfig:
         return dataclasses.replace(

@@ -15,7 +15,13 @@ sys.path.insert(0, str(Path(__file__).parent))
 DROP = {"sec", "sec_read"}
 
 
-def _run(tmp_path, monkeypatch, overlap: bool, kinds, switch: int):
+class _Req(dict):  # answer-format inputs: every text id maps to a request
+    def __missing__(self, k):
+        return f"request {k}"
+
+
+def _run(tmp_path, monkeypatch, overlap: bool, kinds, switch: int, v5: bool = False,
+         cpu_fits: int = 0, stack: bool = False, brlobf: bool = False, gpu_procs: int = 0):
     from next_chameleons.tica import trainers
     from next_chameleons.tica.adaptive import AdaptiveConfig, AdaptiveDefender
     from next_chameleons.tica.episodes import ConceptTexts, EpisodeSpec
@@ -45,14 +51,22 @@ def _run(tmp_path, monkeypatch, overlap: bool, kinds, switch: int):
             refit_mode="episode", refit_min_auroc=0.0, refit_min_tpr_np=0.0, refit_C=1.0,
             refit_switch_max=switch, episode_refit_kind="mixed", episode_refit_kinds=kinds,
             episode_kind_sampling="uniform", episode_rng=True, episode_keep=True,
-            refit_np_cache=True, refit_overlap=overlap,
+            refit_np_cache=True, refit_overlap=overlap, refit_cpu_fits=cpu_fits,
+            refit_cpu_threads=torch.get_num_threads(), refit_stack_episodes=stack,
+            refit_batched_rlobf=brlobf, refit_gpu_procs=gpu_procs,
             episode_fork={"pos": 8, "np": 8, "other": 8, "free": 3}))
-    out = tmp_path / ("on" if overlap else "off")
+    out = tmp_path / (("on" if overlap else "off") + ("_v5" if v5 else "")
+                      + (f"_cpu{cpu_fits}" if cpu_fits else "") + ("_stack" if stack else "")
+                      + ("_br" if brlobf else "") + (f"_gp{gpu_procs}" if gpu_procs else ""))
     tr = AdaptiveSupervisedTrainer(
         pol, pool, FakeSampler(), cfg, out,
         branch_concepts=[ConceptTexts("cats", "train", [f"meow {k}" for k in range(12)]),
                          ConceptTexts("dogs", "train", [f"woof {k}" for k in range(12)])],
         branch_negatives=["a b", "c d", "e f", "g h"])
+    if v5:  # layout tagged_v5: the "New monitor" notice must not depend on the overlap
+        from next_chameleons.tica.answer_format import tagged_prompts
+
+        tr.opening, tr.render_feedback = tagged_prompts(_Req(), "tagged_v5")
     (out / "bank").mkdir(parents=True, exist_ok=True)
     monkeypatch.setenv("TICA_DUMP_REFITS", str(out / "dump"))  # every refit's tensors (zoo too)
     orig = AdaptiveDefender.score
@@ -74,6 +88,9 @@ def _run(tmp_path, monkeypatch, overlap: bool, kinds, switch: int):
     banks = {f"{d}/{p.name}": torch.load(p, weights_only=False)
              for d in ("bank", "dump") for p in sorted((out / d).glob("*.pt"))}
     res = [[{k: v for k, v in r.items()} for r in t.results] for t in trajs]
+    if v5:
+        res.append([list(t.feedback) for t in trajs])
+        res.append([[x["content"] for x in t.convs[-1]] for t in trajs])
     return recs, banks, res, m, rng_end
 
 
@@ -87,9 +104,9 @@ def _same_state(a, b):
     return a == b
 
 
-def _check(tmp_path, monkeypatch, kinds, switch):
-    off = _run(tmp_path, monkeypatch, False, kinds, switch)
-    on = _run(tmp_path, monkeypatch, True, kinds, switch)
+def _check(tmp_path, monkeypatch, kinds, switch, v5=False, cpu_fits=0, gpu_procs=0):
+    off = _run(tmp_path, monkeypatch, False, kinds, switch, v5)
+    on = _run(tmp_path, monkeypatch, True, kinds, switch, v5, cpu_fits, gpu_procs=gpu_procs)
     assert off[0] == on[0] and len(off[0]) >= 8  # refit records: kinds, kept/why, auroc, order
     assert off[1].keys() == on[1].keys() and any(k.startswith("dump/") for k in off[1])
     for k in off[1]:
@@ -110,3 +127,83 @@ def test_refit_overlap_exact_with_switch_fallback(tmp_path, monkeypatch):
 
 def test_refit_overlap_exact_no_switch(tmp_path, monkeypatch):
     _check(tmp_path, monkeypatch, ["linear", "rlobf_attn"], switch=0)
+
+
+def test_refit_overlap_exact_with_v5_notices(tmp_path, monkeypatch):
+    """tagged_v5 + refit_overlap (10-23): messages (incl. "New monitor") equal the serial path."""
+    m = _check(tmp_path, monkeypatch, ["linear", "rlobf_attn"], switch=0, v5=True)
+    assert m["ep_refits"] > 0
+
+
+def test_refit_overlap_cpu_fit_pool_exact(tmp_path, monkeypatch):
+    """adaptive.refit_cpu_fits (10-29): pooled-kind fits in spawned CPU worker processes give the
+    same rollout as the serial path (token-level kinds stay on the worker thread)."""
+    m = _check(tmp_path, monkeypatch, ["linear", "rlobf_attn"], switch=0, cpu_fits=2)
+    assert m["ep_refits"] > 0
+
+
+def test_refit_overlap_gpu_proc_pool_matches_serial(tmp_path, monkeypatch):
+    """adaptive.refit_gpu_procs (10-30): every fit (token-level kinds included) in spawned worker
+    processes on the rank's device gives the serial refit records, verdicts and RNG end state, and
+    the same probe weights up to float reassociation (the job is pickled contiguous, so a strided
+    input can take a different reduction order). Here the device is the CPU; on a node it is the
+    rank's GPU, same code path."""
+    kinds = ["linear", "rlobf_attn", "maxpool"]
+    off = _run(tmp_path, monkeypatch, False, kinds, 0)
+    on = _run(tmp_path, monkeypatch, True, kinds, 0, gpu_procs=2)
+    assert on[0] == off[0] and len(off[0]) >= 8  # kinds, kept / why, auroc (4 dp), order
+    # every turn's verdicts / active probes / refit outcomes (bools and names exact, scores ~)
+    assert _close(off[2], on[2])
+    assert torch.equal(off[4], on[4])  # global torch RNG ends where the serial fits leave it
+    assert off[1].keys() == on[1].keys() and any(k.startswith("dump/") for k in off[1])
+    for k in off[1]:
+        assert _close(off[1][k], on[1][k]), k
+    assert on[3]["ep_refits"] > 0
+
+
+def test_cpu_fit_worker_init_mirrors_the_zoo_depth():
+    """A spawned CPU fit worker gets the main process's rescaled multi-layer tables (10-29: the 2B
+    smoke's ens4_mlp fit asked a worker for layer 10 of the 32-layer table)."""
+    from next_chameleons.tica import probe_zoo
+    from next_chameleons.tica.trainers.supervised import _cpu_fit_init
+
+    keep = (dict(probe_zoo.ENS_LAYERS), dict(probe_zoo.TOKENS_ENS_LAYERS), torch.get_num_threads())
+    try:
+        probe_zoo.set_zoo_depth(24)
+        ens, tok = dict(probe_zoo.ENS_LAYERS), dict(probe_zoo.TOKENS_ENS_LAYERS)
+        probe_zoo.set_zoo_depth(32)
+        _cpu_fit_init(1, ens, tok)
+        got_ens, got_tok = dict(probe_zoo.ENS_LAYERS), dict(probe_zoo.TOKENS_ENS_LAYERS)
+        assert got_ens == ens and got_ens["ens4"] == [6, 8, 9, 11]
+        assert got_tok == tok
+    finally:
+        _cpu_fit_init(keep[2], keep[0], keep[1])
+
+
+def _close(a, b):
+    if isinstance(a, torch.Tensor):
+        return torch.allclose(a.float(), b.float(), atol=1e-5, rtol=1e-4)
+    if isinstance(a, dict):
+        return a.keys() == b.keys() and all(_close(a[k], b[k]) for k in a)
+    if isinstance(a, (list, tuple)):
+        return len(a) == len(b) and all(_close(x, y) for x, y in zip(a, b, strict=True))
+    if isinstance(a, float):
+        return abs(a - b) < 1e-4 or (a != a and b != b)
+    return a == b
+
+
+def test_refit_stack_episodes_matches_serial(tmp_path, monkeypatch):
+    """adaptive.refit_stack_episodes (10-29): rlobf fits of several episodes stacked into one run
+    give the serial rollout (refit_batched_rlobf on both) up to float reassociation."""
+    kinds = ["linear", "rlobf_attn"]
+    off = _run(tmp_path, monkeypatch, False, kinds, 0, brlobf=True)
+    on = _run(tmp_path, monkeypatch, True, kinds, 0, stack=True, brlobf=True)
+    assert len(on[0]) == len(off[0]) >= 8
+    for r1, r2 in zip(off[0], on[0], strict=True):
+        assert _close(r1, r2), (r1, r2)
+    assert on[2] == off[2]  # verdicts / active probes / refit outcomes
+    assert on[3]["ep_refit_stacked"] >= 2  # fits actually trained in a stack
+    assert torch.equal(off[4], on[4])  # global torch RNG ends where the serial fits leave it
+    assert off[1].keys() == on[1].keys()
+    for k in off[1]:
+        assert _close(off[1][k], on[1][k]), k

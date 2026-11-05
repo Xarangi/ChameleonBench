@@ -98,3 +98,5 @@ select = ["E", "F", "I", "B", "UP", "SIM", "RUF"]
 # One-off exploratory diagnostics (cited in REPLICATION.md): keep correctness
 # checks but allow terse scratch style (long lines, inline semicolons, lambdas).
 "scripts/diag_*.py" = ["E501", "E702", "E731", "F841", "RUF059"]
+# Dodgescope eval script: long argparse help strings and dump plumbing (11-04).
+"scripts/tica_probe_panel.py" = ["E501"]

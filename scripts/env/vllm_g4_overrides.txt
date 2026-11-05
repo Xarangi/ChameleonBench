@@ -1,0 +1,3 @@
+# opencv-python-headless comes from the opencv module (Alliance wheelhouse has only a dummy wheel that refuses to
+# build); uv does not see module packages, so drop it from resolution. Load opencv/4.13.0 at runtime.
+opencv-python-headless ; python_version < "0"

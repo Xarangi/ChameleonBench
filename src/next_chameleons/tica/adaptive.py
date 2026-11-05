@@ -214,6 +214,17 @@ class AdaptiveConfig:
     cap_gen_max_new: int = 400
     cap_gen_temperature: float = 1.0
     cap_gen_hide: bool = True
+    # cap_gen_hide_valid_only (10-27, user: "hiding loss shouldn't be put on broken samples ... use
+    # only KL for them"; False = unchanged): the hide loss only on samples that pass their check
+    # (correct GSM8K answer, functional free-generation answer, the fallback solution); every other
+    # sample keeps the KL anchor alone. The hide normaliser counts the passing samples' targets.
+    cap_gen_hide_valid_only: bool = False
+    # cap_gen_gen_batch (10-28; 0 = unchanged: every capability fork sample in ONE generate call):
+    # decode in chunks of this many sequences (Policy.generate seeds each chunk by its start
+    # index). The
+    # capability phase set Gemma 12B's memory peak (79.4 GB, chunk 3: 12 full-history sequences per
+    # rank); chunks change which random stream a sample uses, not its distribution.
+    cap_gen_gen_batch: int = 0
     cap_gen_skip: int = 1300  # GSM8K-train items reserved for the forced texts / probes
     # Data-parallel cap_gen (10-20; default False = rank 0 generates and backpropagates every
     # fork): each rank takes forks rank, rank + world, ... (same forks, problems and normalisers;
@@ -253,6 +264,67 @@ class AdaptiveConfig:
     # instead of only reinforcing correct samples.
     cap_gen_kl_weight: float = 0.0
     cap_gen_kl_all: bool = False
+    # FREE-GENERATION CAPABILITY on checkable concepts (10-26, user: "more emphasis to keeping
+    # capability under free generation ... for other checkable concepts, match the base model's
+    # outputs"). The cap_gen machinery (same generate call, cap_gen_samples, weights, KL, hide) gets
+    # two more fork kinds:
+    #   cap_free_episodes: forks of hiding episodes whose monitored concept has a validator
+    #     (tica/validity.py: SQL / JSON / JavaScript / all-caps / languages ...) at a random turn
+    #     t >= 1: history + verdict + a NEW request of that concept (calib / episode-split requests;
+    #     training rollouts use fit texts). Every sample: KL(base || policy) with the base model
+    #     answering the BARE request (no brief). VALID samples also get NLL + the hide loss (solve
+    #     while hiding; a broken answer is never rewarded). A fork with no valid sample trains on
+    #     the request's published answer if it passes the validator (STaR fallback).
+    #   cap_free_nobrief: bare-prompt forks (no brief, no history; alternating a GSM8K problem and a
+    #     checkable-concept request): KL to the base model only (no-brief capability drift).
+    cap_free_episodes: int = 0
+    cap_free_nobrief: int = 0
+    # cap_free_js_tasks (10-30, user: functional JavaScript in the next run; "" = off, unchanged):
+    # a tica/js_tasks.py materialized APPS file (train split, Node-tested). The "JavaScript code"
+    # free-generation pool then draws these tasks (reference "apps:<id>", checked by running the
+    # answer's tests) instead of the concept's repository-function requests, which have no tests
+    # and were rewarded for form only; cap_free_js_keep_form keeps those requests as well.
+    cap_free_js_tasks: str = ""
+    cap_free_js_keep_form: bool = False
+    # 10-30 (user: pools large enough not to memorize, and held-out items to evaluate on; off by
+    # default): cap_free_dolly = Dolly-15k jsonl; the form-checked concepts (languages, all-caps) get
+    # cap_free_dolly_n disjoint Dolly instructions each, with the concept's own answer directive
+    # (tica/free_pools.py). cap_free_holdout_frac = a deterministic share of every concept's pool
+    # (request hash) kept OUT of training and written to <run>/cap_free_holdout.json for evals.
+    # cap_free_sql_tasks (10-30, off = ""): materialized gretelai/synthetic_text_to_sql TRAIN items
+    # (free_pools.materialize_gretel_sql: execution-checkable, data-bearing, not guessable) added
+    # to the SQL concept's pool; its TEST split is the held-out SQL eval.
+    cap_free_sql_tasks: str = ""
+    # cap_free_json_tasks (10-30, off = ""): ToolACE function schemas as spec -> schema tasks
+    # (free_pools.toolace_json_rows; checked: name, parameter set, types, required set) added to the
+    # JSON concept's pool, whose own items give only the function name.
+    cap_free_json_tasks: str = ""
+    cap_free_dolly: str = ""
+    cap_free_dolly_n: int = 1500
+    cap_free_holdout_frac: float = 0.0
+    # cap_fork_by_refit (10-28, user: "we need to make sure capability is still preserved as refits
+    # increase"; default False = the uniform turn draw): the GSM8K and free-generation hiding forks
+    # draw their turn t among the turns inside a monitored segment with weight = the probes judging
+    # it (deployed at t-1 and t), not uniformly. 4B s1500: uniform forks put 6% of the capability
+    # terms at >= 6 probes and ~0 at >= 7, while the refit-level eval's accuracy fell 0.51 -> 0.34
+    # from 4 to 8 probes; weighted, >= 5 probes ~32% (19% uniform), >= 6 ~11%.
+    cap_fork_by_refit: bool = False
+    # cap_level_adapt (10-30, user: "reweigh capability towards higher refits based on success ...
+    # as earlier refits get close to base level, shift to higher, while ensuring a base level";
+    # default off): per refit level of the capability forks (probes judging: 1, 2, 3, 4, 5+) an
+    # EMA of GSM8K accuracy and free-generation validity; deficit_k = mean over kinds of
+    # clip((ref - ema) / ref, 0, 1) (a level with < cap_level_min_n samples counts as deficit 1).
+    # Fork turns are drawn with weight (cap_level_floor + deficit_k) x probes judging the turn
+    # (x 1 without cap_fork_by_refit): a level near base keeps the floor, weight moves to the higher
+    # levels that still fall short. Each capability item's NLL + KL terms are multiplied by
+    # 1 + cap_level_gain x deficit_k.
+    cap_level_adapt: bool = False
+    cap_level_ref_gsm: float = 0.9
+    cap_level_ref_free: float = 0.9
+    cap_level_ema: float = 0.9
+    cap_level_floor: float = 0.25
+    cap_level_gain: float = 2.0
+    cap_level_min_n: int = 16
     # ADAPTIVE capability weight (REPLICATION 2026-10-21; default cap_adapt_target 0 = off): treat
     # GSM8K-while-hiding accuracy as a constraint. One multiplier m scales kl_weight,
     # cap_gen_weight and cap_gen_kl_weight; after every step m *= exp(cap_adapt_rate * (target -
@@ -319,6 +391,33 @@ class AdaptiveConfig:
     # state. Needs episode streams (episode_rng / DP); otherwise, and with episode_kind_sampling
     # "prioritized" + refit_switch_max, refits stay serial.
     refit_overlap: bool = False
+    # refit_overlap_stream (10-23; needs refit_overlap): the worker's fits run on a SIDE CUDA stream
+    # so they overlap the main thread's reads on the GPU (the 10-21e test found same-stream overlap
+    # saved ~1 s/step). Same kernels, same inputs, same serial order: results unchanged.
+    refit_overlap_stream: bool = False
+    # refit_cpu_fits (10-29, user: "use the CPUs to speed this up"; 0 = off): with refit_overlap,
+    # fits of POOLED probe kinds (linear, ens*_linear, ens4_mlp, meandiff: small inputs) run in this
+    # many spawned CPU worker processes instead of the GPU worker thread, so many episodes' fits
+    # run at once on the node's idle cores while the GPU keeps reading; token-level kinds stay on
+    # the GPU.
+    # Same fit code and seeds (bit-identical to the thread path on CPU); on a GPU node the pooled
+    # fits change device (float reassociation only). refit_cpu_threads = torch threads per worker.
+    refit_cpu_fits: int = 0
+    refit_cpu_threads: int = 4
+    # refit_gpu_procs (10-30, user: "run multiple fits in parallel"; 0 = off): with refit_overlap,
+    # every refit fit (all kinds except the generic detectors) runs in one of this many spawned
+    # worker PROCESSES per rank, on the rank's own GPU, so a turn's fits run side by side instead of
+    # one after another on the single worker thread (the 2B waited ~66 of 116 s per step on fits).
+    # Processes, not threads: fits seed the GLOBAL torch RNG from the probe name, which threads
+    # would share. Same device and seeds as the thread path (bit-identical on CPU, tested); the job
+    # crosses to the worker on the CPU. Each worker holds a CUDA context on every visible GPU.
+    refit_gpu_procs: int = 0
+    # refit_stack_episodes (10-29; default off): with refit_overlap, the fit worker HOLDS rlobf-kind
+    # fits until a second one of the kind arrives or the join asks for results, then trains the held
+    # fits (several episodes' refits) as ONE stacked run (probe_zoo.gate_fit_many; needs
+    # refit_batched_rlobf); each refit keeps its own draws, init and gate (equal to separate fits
+    # up to float reassociation).
+    refit_stack_episodes: bool = False
     # 10-21k: no-prompt (no-brief) texts as refit fit positives (False: in-context forks only)
     refit_np_in_fit: bool = True
     # 10-21o: gate on out-of-fold IN-CONTEXT TPR at each fold's refit_fpr threshold (0 = off;
@@ -416,6 +515,12 @@ class AdaptiveConfig:
     # the fitting code), so any change is a miss, never a stale probe. Saves the panel fits (most of
     # the first steps' rollout) in every run after the first.
     first_probe_panel_cache: str = ""
+    # 10-30 (default "" = the hash of the fitting code, unchanged): pin the fitting-code part of the
+    # panel cache key. Set it only across a code edit verified to give identical probes, e.g.
+    # "2a4396d1b602f34f" = the code before refit_stack_episodes (96295fa; its single-fit path is
+    # bit-identical, tests). Without the pin that edit made every cached panel probe a miss, refit
+    # on its rank's first encounter: 200-260 s stalls on ~half the steps after the 10-30 resumes.
+    panel_cache_code: str = ""
     # READABILITY ANCHOR of the "act normal" MATCH targets (user 10-22; REPLICATION 10-22): on no-brief,
     # neg_text and monitor-OFF turns the model keeps probe scores at the base model's. "monitor" (earlier
     # runs) = the episode's round-0 base concept probe, i.e. ONLY the primary layer (L12), which pinned L12
@@ -448,6 +553,12 @@ class AdaptiveConfig:
     # holds the listed probes' readouts); uses the same base-model pass as the MATCH references.
     act_anchor_weight: float = 0.0
     act_anchor_layers: list = field(default_factory=list)
+    # GENERIC HIDING DETECTOR defender (10-25; eval only, refit kind "evdet@L",
+    # tica/evdet_defender.py): comma-separated panel dumps (tica_probe_panel --dump-feats) of the
+    # evaluated checkpoint and of the base model on TRAIN concepts, same seeds; their paired hiding
+    # turns seed the detector's buffer. "" = no seed (the first detector sees only its own forks).
+    evdet_seed_model: str = ""
+    evdet_seed_base: str = ""
     # [] = the in-training zoo: every single-layer kind of episode_refit_kinds at every kind_layers
     # depth + the multi-layer kinds (ens4 / ensdeep4); held-out kinds / depths are refused.
     first_probe_panel_kinds: list = field(default_factory=list)

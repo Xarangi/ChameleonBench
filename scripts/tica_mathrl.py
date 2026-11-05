@@ -3,6 +3,7 @@
   python scripts/tica_mathrl.py train --config mathrl_4b [--resume DIR] [--steps N]
   python scripts/tica_mathrl.py eval  --config mathrl_4b [--adapter DIR | --base] --out OUT.json
                                       [--episodes 8] [--turns 12]
+  python scripts/tica_mathrl.py gens  --config mathrl_gemma4_12b   # base generations only
 
 train: builds (once, cached) the base-model generations and the start probes, then runs the RL
 loop (tica/trainers/mathrl.py). eval: greedy episodes on GSM8K TEST problems with the same refit
@@ -47,7 +48,7 @@ def load(name: str) -> dict:
 
 def main() -> None:
     ap = argparse.ArgumentParser()
-    ap.add_argument("command", choices=["train", "eval"])
+    ap.add_argument("command", choices=["train", "eval", "gens"])
     ap.add_argument("--config", required=True)
     ap.add_argument("--model-path")
     ap.add_argument("--resume", help="train: a step_* dir (adapter + trainer_state.pt)")
@@ -68,6 +69,14 @@ def main() -> None:
     m = d["model"]
     out = Path(d["out"])
     kw = {k: m[k] for k in ("enable_thinking", "batch_size", "keep_think_history") if k in m}
+    if a.command == "gens":  # 10-24: only the cached base generations (a new model's cap_gen_pool)
+        pol = Policy.from_pretrained(a.model_path or m["path"], dtype=m.get("dtype", "bfloat16"),
+                                     trainable=False, fla_grad=m.get("fla_grad", False), **kw)
+        from next_chameleons.tica.vllm_gen import maybe_attach
+
+        maybe_attach(pol, a.model_path or m["path"], out / "vllm")  # TICA_VLLM=1
+        print(json.dumps({"gens": build_base_gens(pol, cfg, out)["stats"]}), flush=True)
+        return
     if a.command == "train":
         lora = None if a.resume else d.get("lora", {"rank": 16, "alpha": 32})
         pol = Policy.from_pretrained(a.model_path or m["path"], dtype=m.get("dtype", "bfloat16"),

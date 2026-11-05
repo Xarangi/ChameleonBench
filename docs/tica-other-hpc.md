@@ -36,13 +36,17 @@ Total to transfer: **~7.2 GB**, nearly all of it the model.
 
 ## 1. Code
 
-Preferred: commit the TICA tree on Narval, then `git clone` on the new cluster. If not committing yet:
+Everything is on GitHub, branch `tamia`. From the new cluster's login node:
 
 ```bash
-# from the new cluster's login node (or a data-transfer node)
-rsync -a --exclude .venv --exclude logs --exclude runs --exclude raw_cache \
-  narval.alliancecan.ca:/home/sneheel/chameleons/ ~/chameleons/
+mkdir -p /scratch/$USER && cd /scratch/$USER
+git clone -b tamia https://github.com/Xarangi/ChameleonBench.git
+cd ChameleonBench && git log --oneline -1   # check it matches the newest tamia commit
 ```
+
+If the repo is private, authenticate first: `gh auth login`, a personal access token as the HTTPS password,
+or `git@github.com:Xarangi/ChameleonBench.git` with an SSH key added to GitHub. Then rewrite the
+`/scratch/sneheel` paths as in section 4 and copy the data as in section 9a.
 
 Never copy `logs/`, `runs/`, `raw_cache/` or checkpoints into git (AGENTS.md guardrails).
 
@@ -96,9 +100,10 @@ Configs and scripts hard-code `/home/sneheel/chameleons`, `/scratch/sneheel/...`
 
 ```bash
 cd ~/chameleons
-grep -rlE '/scratch/sneheel|/home/sneheel' configs scripts src/next_chameleons/tica \
+grep -rlE '/scratch/(s/)?sneheel|/home/sneheel' configs scripts src/next_chameleons/tica \
   src/next_chameleons/builtin_configs/tica | xargs sed -i \
-  -e "s#/scratch/sneheel#/scratch/$USER#g" -e "s#/home/sneheel/chameleons#$HOME/chameleons#g" \
+  -e "s#/scratch/sneheel#/scratch/$USER#g" -e "s#/scratch/sneheel#/scratch/$USER#g" \
+  -e "s#/home/sneheel/chameleons#$HOME/chameleons#g" \
   -e "s#/home/sneheel/chameleons-qwen35/.venv#/scratch/$USER/venvs/q35t29#g"
 ```
 
@@ -206,3 +211,201 @@ memory on H100. Use the node layout so the GPUs are not wasted: e.g.
 - Turn `eval_on_save` into a launcher choice: `sbatch` or `local` (the node slot).
 - Data-parallel episodes (option D): done 10-19 (single node). Multi-node would need a real
   MASTER_ADDR and one launcher per node.
+
+## 9. Moving the TamIA state (10-29: v4d 4B / Qwen3.5-2B / Gemma-4 12B)
+
+Everything code- and config-side is in git (branch `tamia`). Not in git, by design (raw text, model
+weights, environments, checkpoints): the files below. TamIA layout: `/scratch/sneheel/...`; on a new
+cluster mirror it under `/scratch/<letter>/$USER/...` and rewrite paths as in section 4 (pattern
+`/scratch/sneheel`). Also replace `--account=aip-rrabba` and drop `--exclude=tg11105` (a TamIA node with
+bad /tmp) in the launch commands (scripts/tamia_*.sh, scripts/slurm/tamia_*prep*.sh, docs).
+
+**Environments (rebuild, do not copy):**
+- `VENVS=/scratch/$USER/venvs bash scripts/env/q35t29_build.sh` then `tar -cf $VENVS/q35t29.tar -C $VENVS q35t29`
+  (training; now includes fasttext 0.9.3 for the language-ID checks).
+- `VENVS=/scratch/$USER/venvs bash scripts/env/vllm_g4_build.sh` (vLLM 0.25.0 side engine for base
+  generations / evals; frozen reqs in scripts/env/vllm_g4_reqs.txt).
+
+**Models (download on a login node, pinned):**
+- `Qwen/Qwen3.5-4B` @ `851bf6e806efd8d0a36b00ddf55e13ccb7b8cd0a`
+- `Qwen/Qwen3.5-2B` @ `15852e8c16360a2fea060d615a32b45270f8a8fc`
+- `google/gemma-4-12b-it` @ `5926caa4ec0cac5cbfadaf4077420520de1d5205`
+  (`HF_HUB_CACHE=/scratch/$USER/hf/hub hf download <id> --revision <sha>`)
+
+**Data (rsync from TamIA `/scratch/sneheel/next_chameleons_raw_cache`, ~0.5 GB):**
+- `tica/{final_v5_clean.json,final_v5_inputs.json,final_v5_elicit_inputs.json,final_v5_elicit_inputs_meta.json,concept_labels_v5data_27b.json}`
+  and `tica/dolly15k/`
+- `capability/` (GSM8K train / test, MMLU, ARC, MATH-500, MBPP, and since 10-30 the big capability pools:
+  `apps_js_train_intro.json`, `gretel_sql_{train,test}.json`, `toolace_json_{train,test}.json`,
+  `humaneval_js.json`; see 9e). `capability/dl/` (~180 MB) holds the raw downloads they were built from: not needed
+- `lid/lid.176.bin` (fastText language ID; or download
+  https://dl.fbaipublicfiles.com/fasttext/supervised-models/lid.176.bin; env `TICA_LID_MODEL` overrides the path)
+
+**Per-model base generations (cap_gen_pool; rsync, small; or regenerate with `tica_mathrl.py gens`):**
+`next_chameleons_artifacts/tica/runs/{mathrl_4b,mathrl_gemma4_12b,mathrl_qwen35_2b}/base_gens.json`
+
+**Optional caches (regenerated automatically if missing, at a GPU cost):**
+- `next_chameleons_artifacts/tica/panel_probe_cache/` (63 GB; turn-0 panel probes, keyed by model + code
+  hash; else `scripts/slurm/tamia_panel_precompute.sh <CFG>`, ~1 node-hour per config)
+- `next_chameleons_artifacts/tica/answer_probe_cache/` (0.1 GB; answer-format base probes)
+- `runs/<run>/anchor_cache.json` per run (base-model anchor answers; ~2 min to rebuild)
+
+**To CONTINUE a run (not restart it):** copy the run dir's newest checkpoint WITH its `trainer_state.pt`
+(adapter + optimizer / curriculum / RNG) and keep the `resume_<N>/adaptive/step_<k>` layout, so
+`scripts/slurm/tica_resume.sh` finds global step N + k: 4B v4d `runs/final_v4d_tamia_4b/resume_1650/...`,
+2B `runs/final_v4d_tamia_2b/resume_200/...`, Gemma `runs/final_v4d_gemma4_12b_tamia/resume_980/...`
+(newest at the time of copying). Checkpoints keep optimizer state only in the newest 3 + every 100 steps
+(train.state_keep_last / state_keep_every), so these are ~3 GB (4B), ~1.6 GB (2B), ~6.3 GB (Gemma) each.
+
+**Check before GPU hours:** `PYTHONPATH=src $PY scripts/tica.py show --config <CFG>` on a CPU node (paths,
+depth checks), the CPU test suite (`pytest tests/test_tica_*`), then a 3-step smoke
+(scripts/slurm/tamia_2b_prep.sh's smoke stage, or tamia_gemma12b_smoke.sh with SMOKE_SANITY=0).
+
+### 9a. Getting the data over
+
+The whole raw cache is ~0.64 GB (`tica/` 321 MB incl. `dolly15k/`, `capability/` 190 MB of which `dl/` 180 MB raw
+downloads, `lid/` 126 MB) and model-independent: copy it whole (add `--exclude capability/dl` to skip the raw
+downloads). From the NEW cluster's login (or data-transfer) node:
+
+```bash
+mkdir -p /scratch/$USER/next_chameleons_raw_cache
+rsync -avP sneheel@tamia.alliancecan.ca:/scratch/sneheel/next_chameleons_raw_cache/ \
+  /scratch/$USER/next_chameleons_raw_cache/
+```
+
+(Alliance SSH asks for MFA once per connection; rsync is one connection.) Between Alliance clusters, Globus
+(alliancecan endpoints) works too. For a non-Alliance machine without a route to TamIA: on TamIA
+`tar -czf raw_cache.tgz -C /scratch/sneheel next_chameleons_raw_cache`, then `scp` it via your laptop. The
+files are raw text: never commit them (AGENTS.md guardrails).
+
+### 9b. A different model, same recipe (the Qwen3.5-2B port of 10-28 is the template)
+
+Model-SPECIFIC artifacts are not copied; they are rebuilt for the new model: base generations (cap_gen_pool),
+answer-format base probes, the turn-0 panel cache and the anchor cache.
+
+1. Download the model pinned to a revision; note `num_hidden_layers` (L).
+2. `configs/tica/mathrl_<model>.yaml` = `mathrl_qwen35_2b.yaml` with the new `model.path` / `out`.
+3. `configs/tica/final_v4d_<model>.yaml` = `final_v4d_tamia_2b.yaml` (the from-scratch v4d recipe incl.
+   cap_fork_by_refit and state retention) with: `name` / `out` / `anchor_cache` / `cap_gen_pool` / the
+   `eval_on_save` config name and val dir; `model.path`; `model.depth: L`; layers scaled from the 4B's 32 with
+   probe_zoo.scale_layer = floor(l * L / 32 + 0.5): `probes.layer` (12), `probes.held_out_layers` (20, 24),
+   `rl.adaptive.kind_layers` (8 12 16 22 26), `final.heldout_refit_kinds` linear@20/24/28/30 + maxpool@24;
+   `fla_grad` true only for gated-DeltaNet models (Qwen3.5); read batch / lm_chunk for memory.
+   Then `bash scripts/sync_builtin_configs.sh` and `tica.py show --config final_v4d_<model>` on a CPU node
+   (the depth / held-out checks).
+4. Prep + memory smoke on one node: `CFG=final_v4d_<model> MATHRL=mathrl_<model> sbatch --account=<acct>
+   scripts/slurm/tamia_2b_prep.sh` (base generations via vLLM, panel cache, answer probes, 3-step smoke).
+   The answer-format base probes must pass their gate (AUROC >= 0.95 at the primary + held-out layers)
+   or the run refuses to start.
+5. Launch: `sbatch --account=<acct> scripts/slurm/tamia_node.sh final_v4d_<model>@0,1,2,3`, then chain
+   `resume:final_v4d_<model>@0,1,2,3` jobs (afterany).
+
+Model families: the code supports Qwen3.5 and Gemma-4 (chat rendering, read hooks, vLLM). A new family
+(e.g. Llama) needs its chat-template render path in tica/policy.py and a check of the read site first.
+
+### 9c. Training knobs and operational lessons (10-29 / 10-30)
+
+State on 10-30: the 4B v4d continues 1700 -> 2000 with `cap_level_adapt` (alone on a node, batch 48,
+~280 s/step); the 2B (final 1200) switched to `cap_level_adapt` at global ~900. Both configs carry every
+knob below. All are `rl.adaptive.*` or `train.*` fields (tica/adaptive.py, tica/trainers/supervised.py),
+default off, with tests.
+
+**Capability by refit level (`rl.adaptive`):**
+- `cap_fork_by_refit`: capability fork turns are drawn with weight = number of probes judging the turn,
+  so later refit levels (where capability fails first) get more of the capability term.
+- `cap_level_adapt` (+ `cap_level_ref_gsm` / `cap_level_ref_free`, `cap_level_ema`, `cap_level_floor`,
+  `cap_level_gain`, `cap_level_min_n`): success-based reweighting toward higher refit levels. Per level
+  k = 1..5+, an EMA of GSM8K and free-task accuracy on capability items; deficit_k = mean over kinds of
+  clip((ref - ema_k) / ref, 0, 1), or 1 while a level has fewer than `min_n` items. Fork weight is
+  multiplied by (floor + deficit_k), the item's NLL / KL by 1 + gain x deficit_k. As low levels reach the
+  base-level reference, weight moves to the higher levels; the floor keeps every level in. Set the refs to
+  the model's own base accuracy (4B 0.88 / 0.85, 2B 0.75 / 0.75). The EMAs are saved in trainer_state.pt
+  (`cap_level`) and logged as `cap_level/deficit_k*`, next to `cap_gen/acc_k*` and `cap_free/valid_k*`.
+
+**Probe-refit speed:**
+- `refit_stack_episodes`: rlobf fits from all episodes of a step are stacked into one batched solve
+  (bit-identical to per-episode fits; logged as `ep_refit_stacked`).
+- `refit_cpu_fits` / `refit_cpu_threads`: fits in a CPU process pool. Bit-identical, but 2-4.5x SLOWER than
+  the GPU on TamIA's H100 nodes: leave it off unless the GPU is the bottleneck and CPUs are plentiful.
+
+**Disk:**
+- `train.state_keep_last` / `state_keep_every`: optimizer state only in the newest N checkpoints and
+  every M steps (3 / 100 in the v4d configs).
+- At equal global step, `tica_resume.sh` prefers the checkpoint that has `trainer_state.pt`. For
+  example, `final` is chosen over `step_50`.
+
+**Node runner (`scripts/slurm/tamia_node.sh`):**
+- `CFG@GPUS` / `resume:CFG@GPUS` slots. Two runs can share GPUs, but a co-located run is ~1.8x slower
+  per step (4B: 280 -> 500 s); give the main run its own node when wall-clock matters.
+- `TAKEOVER=<jobid>`: once this job has its node, it cancels `<jobid>` and waits for it to leave the
+  queue. Used to switch a running run to a new config without idling in the queue. The resume loses
+  at most `save_every` steps.
+- `MIN_FREE_MB` / `RAMP_SEC` in `tamia_mechanism_node.sh`: a slot starts only when its GPU has that much
+  free memory.
+- Held-out races: set `TICA_VAL_QUEUE=<file>` on the job. They are drained later by
+  `tica_val_drain.sh`.
+
+**Interactive capability evals (task race; `build_task_race_data.py`, `tica_switch_eval.py`,
+`tica_task_race_report.py`):**
+- Per refit level (`--turns 33 --max-k 12 --fork-panel 16 --answers free --gen-out G`), run as
+  4-episode pieces with distinct seeds and merge them (piece-prefixed episode ids). Refits follow
+  the training rule only: a new probe after each pass (the exogenous `--refit-every` schedule was
+  removed 11-02). The report's headline is, per refit level and concept, the beat rate and the turns
+  to beat each probe (from `--gens`), plus accuracy by refit level; it gives no per-turn pass rates.
+- Memory: one piece per GPU, uncapped (`TICA_MEM_FRACTION` unset). A cap of 0.47 OOMed the math, MBPP
+  and JSON pieces. Math needs ~41 GB. MBPP can exceed 64 GB at batch 4, so use
+  `--batch 2 --set model.batch_size=8`.
+- Do not run evals on the node of a training run: the 1700 piece OOMed next to the 2B.
+- Under `srun --overlap`, Slurm resets `CUDA_VISIBLE_DEVICES`. Export it inside the step script.
+
+### 9d. Strict-KL arm and two-way Telegram (10-30)
+
+- `configs/tica/final_v4d_klx_tamia_4b.yaml`: from-scratch 4B, the current v4d recipe (1-bit, LoRA r128 / alpha
+  64, cap_level_adapt) with `adaptive.kl_weight` 0.3 -> 3.0. The KL is on every trained assistant turn, hiding
+  turns included, against the base model reading the same text without brief / verdicts. Speed settings: read
+  batch 64, `refit_stack_episodes`. On a new cluster, rewrite the `/scratch/sneheel` paths (section 4) and
+  launch it like any from-scratch config: `tamia_node.sh final_v4d_klx_tamia_4b@0,1,2,3`, then chained
+  `resume:` jobs.
+- `adaptive.panel_cache_code` (pinned in the v4d configs): keep it if you copy the panel cache over. Without the
+  pin, any edit to probe_zoo.py / monitors.py turns every cached panel probe into a refit (200-260 s stalls).
+- `scripts/telegram/tg.sh`: Telegram both ways with curl, no plugin. Install: `mkdir -p ~/.config/q9b && cp
+  scripts/telegram/tg.sh ~/.config/q9b/`, then write `TG_TOKEN=<bot token>` (and optionally `TG_OWNER=<chat id>`)
+  to `~/.config/q9b/tg.env` with mode 600. `tg.sh send TEXT` prints 200 when sent. In the Claude session, run
+  `~/.config/q9b/tg.sh wait` under the Monitor tool (timeout 1800000, re-armed on expiry); each line it prints is
+  a message from the owner. Only one poller per bot: run it on one machine at a time, and disable the
+  telegram plugin there.
+- Functional JavaScript for the free-generation capability term (`adaptive.cap_free_js_tasks`, off by
+  default): `next_chameleons.tica.js_tasks.materialize(train.jsonl, apps_js.json)` on APPS
+  (codeparrot/apps rev 21e74dd, MIT, TRAIN split, introductory: 2,060 function-call + 129 stdin
+  problems), then point the config at the file. JavaScript answers are then checked by running
+  their tests under Node (`TICA_NODE`, else `node` on PATH, else the Alliance nodejs/22 module).
+
+### 9e. Big capability pools and hold-out (10-30 / 10-31)
+
+All current configs (`final_v4d_klx_tamia_{4b,2b}`, `final_v4d_k03_tamia_4b`, `final_v4d_tamia_2b{,_x1800}`) train the
+capability terms on large pools so items are not memorized, and keep 25% of every pool out of training:
+
+| knob (rl.adaptive) | file (raw cache) | what |
+|---|---|---|
+| `cap_gen_pool` | `runs/mathrl_<model>_full/base_gens.json` (artifacts; MODEL-SPECIFIC) | base solutions for the full GSM8K train set (4B 6,806 / 2B 5,717 correct) |
+| `cap_free_js_tasks` | `capability/apps_js_train_intro.json` | 1,992 APPS problems, checked by running the answer under Node |
+| `cap_free_sql_tasks` | `capability/gretel_sql_train.json` | 1,818 execution-checked SQL tasks (held-out: `gretel_sql_test.json`, 685) |
+| `cap_free_json_tasks` | `capability/toolace_json_train.json` | 1,900 spec -> schema JSON tasks (held-out: `toolace_json_test.json`, 700) |
+| `cap_free_dolly`, `cap_free_dolly_n: 1500` | `tica/dolly15k/databricks-dolly-15k.jsonl` | Dolly instructions + the concept's directive for languages / all-caps (form-checked) |
+| `cap_free_holdout_frac: 0.25` | -> `<chunk>/adaptive/cap_free_holdout.json` | deterministic hash split; held-out rows never train |
+
+For a NEW model: build its full-GSM8K base generations first (`configs/tica/mathrl_qwen35_2b_full.yaml` is the
+template: new `model.path` / `out`, `n_fork_q 6973`; run the `gens` stage as for 9b) and point `cap_gen_pool` at
+them; set `cap_level_ref_gsm` / `cap_level_ref_free` to that model's base accuracy / validity. The JavaScript
+check needs Node.js: `TICA_NODE=/path/to/node`, else `node` on PATH, else the Alliance `nodejs/22` module binary
+(CVMFS, present on Alliance clusters). Check the pools build on a CPU node before GPU hours: the training log
+prints `cap_free pool:` / `cap_free held out:` with per-concept sizes (~1,250-1,580 training rows each).
+
+Branching a run (e.g. to more steps without its old LR cooldown): new config with the new `train.steps`, `name`,
+`out`, `eval_on_save` paths; then `mkdir -p <new out>/resume_<off>/adaptive && ln -s <old out>/resume_<off>/adaptive/step_<k>
+<new out>/resume_<off>/adaptive/step_<k>` for a checkpoint WITH `trainer_state.pt` before the cooldown (it starts
+at `steps - lr_cooldown_steps`), and launch `resume:<new cfg>` (example: `final_v4d_tamia_2b_x1800`).
+
+Evals for generalisation (`scripts/tica_hide_solve.py`): `--task sqltest` / `jsontest` (held-out test splits) and
+`--task capfree --concept C --pool-split own|held|seen` (a concept's own trained items vs held-out external rows);
+the full 2B final-eval node is `runs/mech_1025/v4d2b_drain.sh` (copy and edit the config / adapter / layers).
