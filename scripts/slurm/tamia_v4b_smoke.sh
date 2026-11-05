@@ -5,14 +5,14 @@
 #SBATCH --mem=0
 #SBATCH --time=3:00:00
 #SBATCH --job-name=v4b-smoke
-#SBATCH --output=/scratch/s/sneheel/ChameleonBench/logs/%x-%j.out
+#SBATCH --output=/home/sneheel/chameleons/logs/%x-%j.out
 # 20-step smoke of BOTH TamIA arms in the production layout (scripts/tamia_v4b.sh smoke): final_v4b_4b on GPUs 0-1
 # and final_v4b_score_4b on GPUs 2-3, data-parallel (TICA_DP=2) each, into runs/smoke_tamia/<cfg>. Measures what the
 # Narval smokes could not: 24-turn memory on H100 (max_mem_gb), step time (sec), DP balance (dp/sec_rollout_*).
 set -uo pipefail
-cd /scratch/s/sneheel/ChameleonBench
+cd /home/sneheel/chameleons
 STEPS=${SMOKE_STEPS:-20}
-OUT=/scratch/s/sneheel/next_chameleons_artifacts/tica/runs/smoke_tamia
+OUT=/scratch/sneheel/next_chameleons_artifacts/tica/runs/smoke_tamia
 NODE_TMP=${SLURM_TMPDIR:-/tmp/v4b_smoke_$$}
 nvidia-smi --query-gpu=index,name,memory.total --format=csv
 PIDS=()

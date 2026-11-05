@@ -5,14 +5,14 @@
 #SBATCH --mem=0
 #SBATCH --time=6:00:00
 #SBATCH --job-name=tica-drain
-#SBATCH --output=/scratch/s/sneheel/ChameleonBench/logs/%x-%j.out
+#SBATCH --output=/home/sneheel/chameleons/logs/%x-%j.out
 # Run the held-out races queued by tica_val_local.sh (TICA_VAL_QUEUE) on a whole node, one race per GPU,
 # 4 at a time (TamIA 10-21). A race is done when VALDIR/step_<step>.json exists; done races are skipped, so
 # the drain can be re-run any time (e.g. after every training chunk). Extra commands (one shell line each, e.g.
 # the quality-check evals of scripts/tamia_v4b.sh) can be queued in QUEUE.extra; they run on free GPUs too.
 #   sbatch --account=aip-<pi> scripts/slurm/tica_val_drain.sh QUEUE [QUEUE ...]
 set -uo pipefail
-cd /scratch/s/sneheel/ChameleonBench
+cd /home/sneheel/chameleons
 (( $# >= 1 )) || { echo "usage: tica_val_drain.sh QUEUE [QUEUE ...]"; exit 2; }
 NODE_TMP=${SLURM_TMPDIR:-/tmp/tica_drain_$$}
 mkdir -p "$NODE_TMP" logs
@@ -75,22 +75,22 @@ done
 for p_ in "${BUSY[@]}"; do wait "$p_"; done
 kill $SMI 2>/dev/null
 # sharded panels (10-22): merge panel_<split>.s*.json -> panel_<split>.json once every shard exists
-R_=/scratch/s/sneheel/next_chameleons_artifacts/tica/runs
+R_=/scratch/sneheel/next_chameleons_artifacts/tica/runs
 for f0 in "$R_"/*/quality/step_*/panel_*.s0.json "$R_"/v4b_quality_base/panel_*.s0.json; do
   [ -f "$f0" ] || continue
   out=${f0%.s0.json}.json; [ -f "$out" ] && continue
   sh_=("${f0%.s0.json}".s*.json)
   (( ${#sh_[@]} >= ${PANEL_SHARDS:-4} )) || { echo "panel shards incomplete: $f0"; continue; }
-  PYTHONPATH=src /scratch/s/sneheel/venvs/q35t29/bin/python scripts/tica_panel_merge.py --out "$out" "${sh_[@]}" \
+  PYTHONPATH=src /home/sneheel/chameleons-qwen35/.venv/bin/python scripts/tica_panel_merge.py --out "$out" "${sh_[@]}" \
     || echo "panel merge failed: $out"
 done
 # quality aggregates (CPU): every quality dir with free-generation answers
 if [ -n "${TICA_DRAIN_QUALITY:-}" ]; then
-  R=/scratch/s/sneheel/next_chameleons_artifacts/tica/runs
+  R=/scratch/sneheel/next_chameleons_artifacts/tica/runs
   for q in "$R"/v4b_quality_base "$R"/*/quality/step_*; do
     ls "$q"/gens/*.jsonl > /dev/null 2>&1 || continue
     A=(); for f in "$q"/gens/*.jsonl; do A+=("$(basename "$f" .jsonl)=$f"); done
-    /scratch/s/sneheel/venvs/q35t29/bin/python scripts/tica_quality_check.py --gens "${A[@]}" --out "$q/quality.json" \
+    /home/sneheel/chameleons-qwen35/.venv/bin/python scripts/tica_quality_check.py --gens "${A[@]}" --out "$q/quality.json" \
       || echo "quality summary failed: $q"
   done
 fi

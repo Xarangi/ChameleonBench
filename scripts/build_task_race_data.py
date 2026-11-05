@@ -33,7 +33,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 
 CONCEPT = {"gsm8k": "mathematical reasoning", "mbpp": "Python code", "sql": "SQL code",
            "json": "JSON data", "jseval": "JavaScript code"}
-CAPABILITY = Path("/scratch/s/sneheel/next_chameleons_raw_cache/capability")
+CAPABILITY = Path("/scratch/sneheel/next_chameleons_raw_cache/capability")
 GSM_REQUEST = ('Solve the following problem. Show your working briefly, then finish with '
                '"The answer is <number>."\n\nProblem: {q}')
 

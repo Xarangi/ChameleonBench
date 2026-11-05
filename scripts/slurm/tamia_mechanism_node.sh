@@ -5,7 +5,7 @@
 #SBATCH --mem=0
 #SBATCH --time=14:00:00
 #SBATCH --job-name=mech-node
-#SBATCH --output=/scratch/s/sneheel/ChameleonBench/logs/%x-%j.out
+#SBATCH --output=/home/sneheel/chameleons/logs/%x-%j.out
 # MECHANISM + SCENARIO node (TamIA 10-25, user: "use the full node; robust analyses of the mechanism + interesting evals").
 # One node, SLOTS processes (default 2 per GPU). Two phases:
 #   1. SMOKE: one tiny run per group (2 episodes, few turns) -- every new code path once. A group whose smoke fails
@@ -18,7 +18,7 @@
 #   sbatch scripts/slurm/tamia_mechanism_node.sh SMOKE_FILE FULL_FILE
 set -uo pipefail
 SMOKE=${1:?smoke task file}; FULL=${2:?full task file}
-cd /scratch/s/sneheel/ChameleonBench
+cd /home/sneheel/chameleons
 NG=${NG:-$(nvidia-smi -L | wc -l)}; SLOTS=${SLOTS:-$(( NG * 2 ))}
 NODE_TMP=${SLURM_TMPDIR:-/tmp/mech_$$}; mkdir -p "$NODE_TMP" logs
 JOB=${SLURM_JOB_NAME:-mech}-${SLURM_JOB_ID:-local}

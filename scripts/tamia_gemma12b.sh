@@ -9,13 +9,13 @@
 #   [ARMS="a b"] bash scripts/tamia_gemma12b.sh launch [CHUNKS]   # CHUNKS x 24 h per arm, chained resumes + drains
 #   bash scripts/tamia_gemma12b.sh status
 set -euo pipefail
-cd /scratch/s/sneheel/ChameleonBench
+cd /home/sneheel/chameleons
 ACCT=${ACCT:-aip-rrabba}
 EXCL=${EXCL:---exclude=tg11105}
-R=/scratch/s/sneheel/next_chameleons_raw_cache
-A=/scratch/s/sneheel/next_chameleons_artifacts
+R=/scratch/sneheel/next_chameleons_raw_cache
+A=/scratch/sneheel/next_chameleons_artifacts
 RUNS=$A/tica/runs
-SNAP=/scratch/s/sneheel/hf/hub/models--google--gemma-4-12b-it/snapshots/5926caa4ec0cac5cbfadaf4077420520de1d5205
+SNAP=/scratch/sneheel/hf/hub/models--google--gemma-4-12b-it/snapshots/5926caa4ec0cac5cbfadaf4077420520de1d5205
 QUEUE=${QUEUE:-$RUNS/g4v4c_val_queue.txt}
 JN=${JOBNAME:-g4v4c}
 read -ra ARMS <<< "${ARMS:-final_v4c_gemma4_12b_tamia final_v4c_score_gemma4_12b_tamia}"
@@ -32,7 +32,7 @@ need() {
 
 check() {
   echo "inputs of ${ARMS[*]}:"
-  need /scratch/s/sneheel/venvs/q35t29.tar /scratch/s/sneheel/venvs/vllm-g4/bin/python \
+  need /scratch/sneheel/venvs/q35t29.tar /scratch/sneheel/venvs/vllm-g4/bin/python \
     $SNAP/config.json $SNAP/model.safetensors $SNAP/chat_template.jinja \
     $R/tica/final_v5_clean.json $R/tica/final_v5_elicit_inputs.json $R/tica/concept_labels_v5data_27b.json \
     $R/tica/dolly15k/databricks-dolly-15k.jsonl $R/capability/gsm8k_train.json \

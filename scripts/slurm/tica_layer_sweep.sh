@@ -5,15 +5,15 @@
 #SBATCH --mem=64G
 #SBATCH --time=04:00:00
 #SBATCH --job-name=layer-sweep
-#SBATCH --output=/scratch/s/sneheel/ChameleonBench/logs/%x-%j.out
+#SBATCH --output=/home/sneheel/chameleons/logs/%x-%j.out
 set -euo pipefail
 CFG=$1; OUT=$2; shift 2
-PY=${PY:-/scratch/s/sneheel/venvs/q35t29/bin/python}
-source /scratch/s/sneheel/ChameleonBench/scripts/slurm/_local_env.sh
+PY=${PY:-/home/sneheel/chameleons-qwen35/.venv/bin/python}
+source /home/sneheel/chameleons/scripts/slurm/_local_env.sh
 export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
-SNAP=$(cd /scratch/s/sneheel/ChameleonBench && PYTHONPATH=src $PY -c "
+SNAP=$(cd /home/sneheel/chameleons && PYTHONPATH=src $PY -c "
 from next_chameleons.tica.config import load_run_config as l; print(l('$CFG').model.path)")
 LOCAL=${SLURM_TMPDIR:-/tmp}/$(basename $(dirname $(dirname $SNAP)))
 mkdir -p $LOCAL; cp -rL $SNAP/. $LOCAL/
-cd /scratch/s/sneheel/ChameleonBench
+cd /home/sneheel/chameleons
 env PYTHONPATH=src $PY scripts/tica_layer_sweep.py --config "$CFG" --model-path "$LOCAL" --out "$OUT" "$@"

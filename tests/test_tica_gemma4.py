@@ -40,7 +40,7 @@ from next_chameleons.tica.policy import (  # noqa: E402
 )
 
 ROOT = Path(__file__).resolve().parents[1]
-SNAP = Path("/scratch/s/sneheel/hf/hub/models--google--gemma-4-12b-it/snapshots/"
+SNAP = Path("/scratch/sneheel/hf/hub/models--google--gemma-4-12b-it/snapshots/"
             "5926caa4ec0cac5cbfadaf4077420520de1d5205")
 EOS, PAD, VOCAB = 257, 258, 260
 

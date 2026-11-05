@@ -5,7 +5,7 @@
 #SBATCH --mem=0
 #SBATCH --time=6:00:00
 #SBATCH --job-name=mw-regen
-#SBATCH --output=/scratch/s/sneheel/ChameleonBench/logs/%x-%j.out
+#SBATCH --output=/home/sneheel/chameleons/logs/%x-%j.out
 # LENGTH-HINTED regeneration of the over-long model-written answers (user 10-24: "adding a length limit in the
 # prompt, only for the examples that are over long"), after tamia_mw_build.sh + tamia_mw_finish.sh:
 #   1. needs-regen: source texts with NO eligible answer and >= 1 answer over the p90 cap / cut at max tokens
@@ -20,13 +20,13 @@
 #   sbatch scripts/slurm/tamia_mw_regen.sh MW_ROOT
 set -euo pipefail
 W=${1:?mw root with train/ heldout/ and labels_s*.json}
-T=/scratch/s/sneheel/next_chameleons_raw_cache/tica
-S4=/scratch/s/sneheel/hf/hub/models--Qwen--Qwen3.5-4B/snapshots/851bf6e806efd8d0a36b00ddf55e13ccb7b8cd0a
-S27=/scratch/s/sneheel/hf/hub/models--Qwen--Qwen3.5-27B-FP8/snapshots/97f5941bf617e31c5e237364a8602ce3f03a551a
-VPY=${MW_VPY:-/scratch/s/sneheel/venvs/vllm-latest/bin/python}
+T=/scratch/sneheel/next_chameleons_raw_cache/tica
+S4=/scratch/sneheel/hf/hub/models--Qwen--Qwen3.5-4B/snapshots/851bf6e806efd8d0a36b00ddf55e13ccb7b8cd0a
+S27=/scratch/sneheel/hf/hub/models--Qwen--Qwen3.5-27B-FP8/snapshots/97f5941bf617e31c5e237364a8602ce3f03a551a
+VPY=${MW_VPY:-/scratch/sneheel/venvs/vllm-latest/bin/python}
 NODE_TMP=${SLURM_TMPDIR:-/tmp/mwg_$$}
 G=$W/regen; mkdir -p "$NODE_TMP" "$G"
-cd /scratch/s/sneheel/ChameleonBench
+cd /home/sneheel/chameleons
 source scripts/slurm/_local_env.sh
 t0=$(date +%s)
 L4=$NODE_TMP/models--Qwen--Qwen3.5-4B; L27=$NODE_TMP/models--Qwen--Qwen3.5-27B-FP8

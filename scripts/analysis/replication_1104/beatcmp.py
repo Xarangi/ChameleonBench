@@ -1,5 +1,5 @@
 import json,sys,re,os,glob
-R='/scratch/s/sneheel/next_chameleons_artifacts/tica/runs/'
+R='/scratch/sneheel/next_chameleons_artifacts/tica/runs/'
 K=['lr','rollout/beat_frac','rollout/beatk_frac_1','rollout/beatk_frac_2','rollout/beatk_frac_3','rollout/beatk_turns_1','rollout/ep_refits_accepted','rollout/bank_size','rollout/curriculum_lambda','rollout/ep_first_probe_acc']
 def load(runs):
     g={}

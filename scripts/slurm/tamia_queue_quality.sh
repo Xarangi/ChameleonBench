@@ -13,7 +13,7 @@
 # writes quality.json (aggregates) after its tasks. Login-safe: ls / bash only.
 #   bash scripts/slurm/tamia_queue_quality.sh final_v4b_tamia_4b final_v4b_score_tamia_4b
 set -uo pipefail
-RUNS=/scratch/s/sneheel/next_chameleons_artifacts/tica/runs
+RUNS=/scratch/sneheel/next_chameleons_artifacts/tica/runs
 TR="German language,Japanese language,Arabic language,Hindi language,all-caps text,SQL code,JSON data,JavaScript code"
 HO="Finnish language,French language,Portuguese language,Turkish language,Russian language,Greek language,Thai language,Tamil language,HTML markup,Python code,Java code"
 RACE="--batch 8 --answers free --ask-concept --episodes 32 --turns 24 --switch-prob 1.0 --turn-budget 5,8,8 --cond real_score"  # (--pass-forks 8 --pass-min 6 available, off by default: user 10-22)

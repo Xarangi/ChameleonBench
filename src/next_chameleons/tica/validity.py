@@ -177,7 +177,7 @@ LANG_CODES = {
     "Portuguese language": "pt", "Turkish language": "tr", "Russian language": "ru",
     "Greek language": "el", "Thai language": "th", "Tamil language": "ta",
 }
-LID_MODEL = "/scratch/s/sneheel/next_chameleons_raw_cache/lid/lid.176.bin"
+LID_MODEL = "/scratch/sneheel/next_chameleons_raw_cache/lid/lid.176.bin"
 _LID: list = []
 
 

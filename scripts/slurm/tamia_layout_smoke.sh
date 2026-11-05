@@ -5,7 +5,7 @@
 #SBATCH --mem=0
 #SBATCH --time=2:30:00
 #SBATCH --job-name=v4b-layout
-#SBATCH --output=/scratch/s/sneheel/ChameleonBench/logs/%x-%j.out
+#SBATCH --output=/home/sneheel/chameleons/logs/%x-%j.out
 # Layout smoke (TamIA 10-21): run SLOTS concurrently on one node for SMOKE_STEPS steps and trace the GPUs, to pick
 # the production layout by measurement (docs/tica/TAMIA-V4B.md "Node layout"). A slot is CFG@GPUS[@EXTRA], e.g.
 #   final_v4b_tamia_4b@0,1,2,3                         one arm, data-parallel over the 4 GPUs
@@ -13,10 +13,10 @@
 #   final_v4b_tamia_4b@0,1,2,3@--set~model.batch_size=32          a lever (EXTRA: tica.py args, "~" = space)
 # Output: runs/smoke_tamia/<tag>/<cfg>/adaptive/train_log.jsonl, logs/<job>-<cfg>.out, logs/<job>-gpu.csv.
 set -uo pipefail
-cd /scratch/s/sneheel/ChameleonBench
+cd /home/sneheel/chameleons
 STEPS=${SMOKE_STEPS:-20}
 TAG=${SMOKE_TAG:-layout_${SLURM_JOB_ID:-local}}
-OUT=/scratch/s/sneheel/next_chameleons_artifacts/tica/runs/smoke_tamia/$TAG
+OUT=/scratch/sneheel/next_chameleons_artifacts/tica/runs/smoke_tamia/$TAG
 NODE_TMP=${SLURM_TMPDIR:-/tmp/v4b_layout_$$}
 JOB=${SLURM_JOB_NAME:-layout}-${SLURM_JOB_ID:-local}
 nvidia-smi --query-gpu=index,name,memory.total --format=csv
@@ -24,7 +24,7 @@ mkdir -p logs
 # Seed each config's anchor cache (KL-anchor answers of the BASE model; same anchor settings in every v4b config)
 # from final_v4b_4b's, so concurrent jobs do not generate (and non-atomically write) the same file. Waits <= 60 min
 # for the source; without it the run generates its own as usual.
-RUNS=/scratch/s/sneheel/next_chameleons_artifacts/tica/runs
+RUNS=/scratch/sneheel/next_chameleons_artifacts/tica/runs
 SRC=$RUNS/final_v4b_4b/anchor_cache.json
 for slot in "$@"; do
   cfg=${slot%%@*}; dst=$RUNS/$cfg/anchor_cache.json

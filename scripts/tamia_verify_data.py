@@ -16,7 +16,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 from next_chameleons.tica.config import load_run_config
 
-RAW = Path("/scratch/s/sneheel/next_chameleons_raw_cache")
+RAW = Path("/scratch/sneheel/next_chameleons_raw_cache")
 
 
 def main():

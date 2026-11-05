@@ -3,7 +3,7 @@ Usage: mathwrong.py [examples]   (stdlib; aggregates; optional short examples)""
 import json, re, sys, glob
 from collections import defaultdict, Counter
 
-R = '/scratch/s/sneheel/next_chameleons_artifacts/tica/runs/'
+R = '/scratch/sneheel/next_chameleons_artifacts/tica/runs/'
 gold = json.load(open(R + 'mech_1025/mathrace/gold.json'))
 ANS = re.compile(r"answer is\s*\$?\s*(-?[\d,]*\.?\d+)", re.I)
 NUM = re.compile(r"-?\d[\d,]*\.?\d*")

@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH --account=aip-rrabba
+#SBATCH --account=ctb-liyue_gpu
 #SBATCH --nodes=1
 #SBATCH --gres=gpu:h100:4
 #SBATCH --cpus-per-task=48
@@ -7,7 +7,7 @@
 #SBATCH --time=03:00:00
 #SBATCH --exclude=tg11105
 #SBATCH --job-name=dodgescope
-#SBATCH --output=/scratch/s/sneheel/next_chameleons_artifacts/tica/runs/dodgescope_1102/logs/%x-%A_%a.out
+#SBATCH --output=/scratch/sneheel/next_chameleons_artifacts/tica/runs/dodgescope_1102/logs/%x-%A_%a.out
 # DODGESCOPE (11-02) panel shards on one whole TamIA node (4 x H100), PER_GPU (default 2) processes per GPU. The model snapshot is
 # copied and the venv unpacked ONCE per node into $SLURM_TMPDIR; then slot s (GPU s % 4) runs its task lines in order (the
 # trained half-shard, then the base half-shard of the same concepts with --load-panel = the trained probes).
@@ -18,8 +18,8 @@
 # per-task wall clock in $RUNS/logs/<job>-tasks.tsv, GPU memory / utilisation in $RUNS/logs/<job>-gpu.csv.
 #   sbatch [--array=0-2] scripts/slurm/dodgescope_node.sh TASKS
 set -uo pipefail
-WT=${TICA_REPO:-/scratch/s/sneheel/ChameleonBench}  # the checkout whose code runs
-RUNS=${DS_RUNS:-/scratch/s/sneheel/next_chameleons_artifacts/tica/runs/dodgescope_1102}
+WT=${TICA_REPO:-/home/sneheel/chameleons}  # the checkout whose code runs
+RUNS=${DS_RUNS:-/scratch/sneheel/next_chameleons_artifacts/tica/runs/dodgescope_1102}
 CFG=${CFG:-final_v4d_klx_tamia_4b}
 cd $WT
 Q=$1; [ -n "${SLURM_ARRAY_TASK_ID:-}" ] && Q=$1.$SLURM_ARRAY_TASK_ID

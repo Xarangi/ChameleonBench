@@ -6,7 +6,7 @@ from collections import defaultdict, Counter
 from concurrent.futures import ThreadPoolExecutor
 from next_chameleons.benchmarks.capability_heldout import (extract_code, extract_js_code, run_humaneval_py,
                                                           run_tests, run_js_tests, node_bin)
-R = '/scratch/s/sneheel/next_chameleons_artifacts/tica/runs/'
+R = '/scratch/sneheel/next_chameleons_artifacts/tica/runs/'
 G = {t: json.load(open(R + f'mech_1025/taskrace/gold_{t}.json')) for t in ('pyeval', 'mbpp', 'jseval')}
 RACES = [('HumanEval-Py KL0.3 4B', 'pyeval', 'races/heldout_v4d_k034b_pyeval/kl03_4b_p*.jsonl'),
          ('HumanEval-Py strict 4B', 'pyeval', 'races/heldout_v4d_pyeval/strict4b_p*.jsonl'),

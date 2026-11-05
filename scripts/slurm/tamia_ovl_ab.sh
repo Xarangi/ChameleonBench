@@ -5,15 +5,15 @@
 #SBATCH --mem=0
 #SBATCH --time=2:00:00
 #SBATCH --job-name=ovl-ab
-#SBATCH --output=/scratch/s/sneheel/ChameleonBench/logs/%x-%j.out
+#SBATCH --output=/home/sneheel/chameleons/logs/%x-%j.out
 # Refit overlap + side-stream A/B (TamIA 10-23): the same 3 steps from one checkpoint, serial (zz_ovltest_off) and
 # refit_overlap + refit_overlap_stream (zz_ovltest_stream), interleaved on the same 4 GPUs (the production layout, so
 # both see the same contention). Then compare refits.jsonl / turns.jsonl (step 1 must be identical) and sec.
 #   sbatch scripts/slurm/tamia_ovl_ab.sh ADAPTER
 set -uo pipefail
-cd /scratch/s/sneheel/ChameleonBench
+cd /home/sneheel/chameleons
 AD=${1:?adapter}
-T=/scratch/s/sneheel/next_chameleons_artifacts/tica/runs/ovltest_1023
+T=/scratch/sneheel/next_chameleons_artifacts/tica/runs/ovltest_1023
 rm -rf "$T"; mkdir -p "$T"
 export TICA_VAL_QUEUE=$T/val_queue.txt TICA_STEP_OFFSET=320
 NODE_TMP=${SLURM_TMPDIR:-/tmp/ovl_ab_$$}

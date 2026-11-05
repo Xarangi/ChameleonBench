@@ -5,7 +5,7 @@
 #SBATCH --mem=0
 #SBATCH --time=3:00:00
 #SBATCH --job-name=q2b-prep
-#SBATCH --output=/scratch/s/sneheel/ChameleonBench/logs/%x-%j.out
+#SBATCH --output=/home/sneheel/chameleons/logs/%x-%j.out
 # ONE-NODE prep + memory smoke for the Qwen3.5-2B from-scratch run (10-28; final_v4d_tamia_2b), after
 # tamia_gemma12b_prep.sh:
 #   1. the 2B's own GSM8K base solutions (cap_gen_pool; tica_mathrl.py gens --config mathrl_qwen35_2b) on GPU 0
@@ -20,14 +20,14 @@
 #   sbatch --account=aip-rrabba --exclude=tg11105 scripts/slurm/tamia_2b_prep.sh
 #   CFG=final_v4d_<model> MATHRL=mathrl_<model> sbatch --account=<acct> scripts/slurm/tamia_2b_prep.sh
 set -uo pipefail
-cd /scratch/s/sneheel/ChameleonBench
+cd /home/sneheel/chameleons
 CFG=${CFG:-final_v4d_tamia_2b}
 MATHRL=${MATHRL:-mathrl_qwen35_2b}
 N=8
 NODE_TMP=${SLURM_TMPDIR:-/tmp/q2bprep_$$}
 JOB=${SLURM_JOB_NAME:-q2b-prep}-${SLURM_JOB_ID:-local}
-OUT=/scratch/s/sneheel/next_chameleons_artifacts/tica/runs/panel_precompute/$CFG
-SMOKE=/scratch/s/sneheel/next_chameleons_artifacts/tica/runs/smoke_2b/${SLURM_JOB_ID:-local}
+OUT=/scratch/sneheel/next_chameleons_artifacts/tica/runs/panel_precompute/$CFG
+SMOKE=/scratch/sneheel/next_chameleons_artifacts/tica/runs/smoke_2b/${SLURM_JOB_ID:-local}
 mkdir -p logs "$OUT" "$SMOKE"
 nvidia-smi --query-gpu=timestamp,index,memory.used,utilization.gpu --format=csv -l 60 > "logs/$JOB-gpu.csv" 2>/dev/null &
 SMI=$!
@@ -50,7 +50,7 @@ rc=0
 gens() {  # vllm(0/1)
   ( source scripts/slurm/_local_env.sh
     if [ "$1" = "1" ]; then
-      export TICA_VLLM=1 TICA_VLLM_PY=/scratch/s/sneheel/venvs/vllm-g4/bin/python TICA_VLLM_MEM=0.60 \
+      export TICA_VLLM=1 TICA_VLLM_PY=/scratch/sneheel/venvs/vllm-g4/bin/python TICA_VLLM_MEM=0.60 \
         TICA_VLLM_MODULES="StdEnv/2023 gcc python/3.11 arrow/24.0.0 cuda/12.6 opencv"
     fi
     CUDA_VISIBLE_DEVICES=0 PYTHONPATH=src $PY scripts/tica_mathrl.py gens --config "$MATHRL" \
@@ -64,7 +64,7 @@ else
 fi
 for i in 6 7; do echo "shard $i -> GPU 0"; shard "$i" 0 & PIDS+=($!); done
 for p in "${PIDS[@]}"; do wait "$p" || rc=1; done
-echo "PANEL DONE $(( $(date +%s) - t0 ))s rc=$rc; panel cache keys: $(ls /scratch/s/sneheel/next_chameleons_artifacts/tica/panel_probe_cache | wc -l)"
+echo "PANEL DONE $(( $(date +%s) - t0 ))s rc=$rc; panel cache keys: $(ls /scratch/sneheel/next_chameleons_artifacts/tica/panel_probe_cache | wc -l)"
 # 3. memory / speed smoke at the production shape (anchor cache = the run's own: built once from the base model)
 t1=$(date +%s)
 mkdir -p "$NODE_TMP/train"

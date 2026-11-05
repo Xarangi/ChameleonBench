@@ -1,5 +1,5 @@
 import json,os
-R='/scratch/s/sneheel/next_chameleons_artifacts/tica/runs/'
+R='/scratch/sneheel/next_chameleons_artifacts/tica/runs/'
 M={'2B@1500':dict(run='final_v4d_tamia_2b',step=1500,hs='mech_1025/v4d2b_1500/hs/'),'2B':dict(run='final_v4d_tamia_2b_x1800',step=1800,hs='mech_1025/x2b_1800/hs/'),
    '4B':dict(run='final_v4d_k03_tamia_4b',step=1800,hs='mech_1025/k034b_1800/hs/')}
 J=lambda p: json.load(open(R+p))

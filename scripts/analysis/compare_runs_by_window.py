@@ -1,7 +1,7 @@
 """Two runs side by side over matched global-step windows from their train_log.jsonl chunks (beat rates, pass,
 GSM8K weighted by samples, free-gen validity, train KL). Edit `pairs` / `W` for other runs."""
 import json, glob, re, sys
-R = "/scratch/s/sneheel/next_chameleons_artifacts/tica/runs/"
+R = "/scratch/sneheel/next_chameleons_artifacts/tica/runs/"
 def rows(run, upto=None):
     ch = [(0, R + run + "/adaptive/train_log.jsonl")] + [(int(re.search(r"resume_(\d+)/", p).group(1)), p)
           for p in glob.glob(R + run + "/resume_*/adaptive/train_log.jsonl") if re.search(r"resume_\d+/", p)]

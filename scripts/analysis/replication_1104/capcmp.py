@@ -1,5 +1,5 @@
 import json,sys,re,os,glob
-R='/scratch/s/sneheel/next_chameleons_artifacts/tica/runs/'
+R='/scratch/sneheel/next_chameleons_artifacts/tica/runs/'
 K=['cap_gen/acc','cap_gen/acc_k1','cap_gen/acc_k2','cap_free/valid','cap_free/valid_k2','cap_free/valid_k3',
    'cap_level/deficit_k1','cap_level/deficit_k2','cap_level/deficit_k3','cap_level/deficit_k4','cap_level/deficit_k5plus',
    'cap_gen/kl','train/kl','rollout/beat_frac','rollout/beatk_frac_2','rollout/beatk_frac_3']

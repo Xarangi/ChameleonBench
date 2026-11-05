@@ -15,10 +15,10 @@
 #   Held-out races (eval_every 50, logged only) are QUEUED (TICA_VAL_QUEUE) instead of holding 2 GPUs per arm idle,
 #   and run 4 at a time by scripts/slurm/tica_val_drain.sh after every chunk.
 set -euo pipefail
-cd /scratch/s/sneheel/ChameleonBench
+cd /home/sneheel/chameleons
 ACCT=${ACCT:-aip-rrabba}
-R=/scratch/s/sneheel/next_chameleons_raw_cache
-A=/scratch/s/sneheel/next_chameleons_artifacts
+R=/scratch/sneheel/next_chameleons_raw_cache
+A=/scratch/sneheel/next_chameleons_artifacts
 RUNS=$A/tica/runs
 QUEUE=${QUEUE:-$RUNS/v4b_val_queue.txt}   # override per run set (pilots: their own queue + drain)
 JN=${JOBNAME:-v4b}   # job name prefix (pilots: v4p)
@@ -40,8 +40,8 @@ need() {
 
 check() {
   echo "inputs of ${ARMS[*]}:"
-  need /scratch/s/sneheel/venvs/q35t29.tar \
-    /scratch/s/sneheel/hf/hub/models--Qwen--Qwen3.5-4B/snapshots/851bf6e806efd8d0a36b00ddf55e13ccb7b8cd0a/config.json \
+  need /scratch/sneheel/venvs/q35t29.tar \
+    /scratch/sneheel/hf/hub/models--Qwen--Qwen3.5-4B/snapshots/851bf6e806efd8d0a36b00ddf55e13ccb7b8cd0a/config.json \
     $R/tica/final_v5_clean.json $R/tica/final_v5_elicit_inputs.json $R/tica/concept_labels_v5data_27b.json \
     $R/tica/dolly15k/databricks-dolly-15k.jsonl $R/capability/gsm8k_train.json \
     $RUNS/mathrl_4b/base_gens.json \

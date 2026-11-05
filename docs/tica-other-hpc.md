@@ -46,7 +46,7 @@ cd ChameleonBench && git log --oneline -1   # check it matches the newest tamia 
 
 If the repo is private, authenticate first: `gh auth login`, a personal access token as the HTTPS password,
 or `git@github.com:Xarangi/ChameleonBench.git` with an SSH key added to GitHub. Then rewrite the
-`/scratch/s/sneheel` paths as in section 4 and copy the data as in section 9a.
+`/scratch/sneheel` paths as in section 4 and copy the data as in section 9a.
 
 Never copy `logs/`, `runs/`, `raw_cache/` or checkpoints into git (AGENTS.md guardrails).
 
@@ -102,7 +102,7 @@ Configs and scripts hard-code `/home/sneheel/chameleons`, `/scratch/sneheel/...`
 cd ~/chameleons
 grep -rlE '/scratch/(s/)?sneheel|/home/sneheel' configs scripts src/next_chameleons/tica \
   src/next_chameleons/builtin_configs/tica | xargs sed -i \
-  -e "s#/scratch/s/sneheel#/scratch/$USER#g" -e "s#/scratch/sneheel#/scratch/$USER#g" \
+  -e "s#/scratch/sneheel#/scratch/$USER#g" -e "s#/scratch/sneheel#/scratch/$USER#g" \
   -e "s#/home/sneheel/chameleons#$HOME/chameleons#g" \
   -e "s#/home/sneheel/chameleons-qwen35/.venv#/scratch/$USER/venvs/q35t29#g"
 ```
@@ -215,9 +215,9 @@ memory on H100. Use the node layout so the GPUs are not wasted: e.g.
 ## 9. Moving the TamIA state (10-29: v4d 4B / Qwen3.5-2B / Gemma-4 12B)
 
 Everything code- and config-side is in git (branch `tamia`). Not in git, by design (raw text, model
-weights, environments, checkpoints): the files below. TamIA layout: `/scratch/s/sneheel/...`; on a new
+weights, environments, checkpoints): the files below. TamIA layout: `/scratch/sneheel/...`; on a new
 cluster mirror it under `/scratch/<letter>/$USER/...` and rewrite paths as in section 4 (pattern
-`/scratch/s/sneheel`). Also replace `--account=aip-rrabba` and drop `--exclude=tg11105` (a TamIA node with
+`/scratch/sneheel`). Also replace `--account=aip-rrabba` and drop `--exclude=tg11105` (a TamIA node with
 bad /tmp) in the launch commands (scripts/tamia_*.sh, scripts/slurm/tamia_*prep*.sh, docs).
 
 **Environments (rebuild, do not copy):**
@@ -232,7 +232,7 @@ bad /tmp) in the launch commands (scripts/tamia_*.sh, scripts/slurm/tamia_*prep*
 - `google/gemma-4-12b-it` @ `5926caa4ec0cac5cbfadaf4077420520de1d5205`
   (`HF_HUB_CACHE=/scratch/$USER/hf/hub hf download <id> --revision <sha>`)
 
-**Data (rsync from TamIA `/scratch/s/sneheel/next_chameleons_raw_cache`, ~0.5 GB):**
+**Data (rsync from TamIA `/scratch/sneheel/next_chameleons_raw_cache`, ~0.5 GB):**
 - `tica/{final_v5_clean.json,final_v5_inputs.json,final_v5_elicit_inputs.json,final_v5_elicit_inputs_meta.json,concept_labels_v5data_27b.json}`
   and `tica/dolly15k/`
 - `capability/` (GSM8K train / test, MMLU, ARC, MATH-500, MBPP, and since 10-30 the big capability pools:
@@ -269,13 +269,13 @@ downloads). From the NEW cluster's login (or data-transfer) node:
 
 ```bash
 mkdir -p /scratch/$USER/next_chameleons_raw_cache
-rsync -avP sneheel@tamia.alliancecan.ca:/scratch/s/sneheel/next_chameleons_raw_cache/ \
+rsync -avP sneheel@tamia.alliancecan.ca:/scratch/sneheel/next_chameleons_raw_cache/ \
   /scratch/$USER/next_chameleons_raw_cache/
 ```
 
 (Alliance SSH asks for MFA once per connection; rsync is one connection.) Between Alliance clusters, Globus
 (alliancecan endpoints) works too. For a non-Alliance machine without a route to TamIA: on TamIA
-`tar -czf raw_cache.tgz -C /scratch/s/sneheel next_chameleons_raw_cache`, then `scp` it via your laptop. The
+`tar -czf raw_cache.tgz -C /scratch/sneheel next_chameleons_raw_cache`, then `scp` it via your laptop. The
 files are raw text: never commit them (AGENTS.md guardrails).
 
 ### 9b. A different model, same recipe (the Qwen3.5-2B port of 10-28 is the template)
@@ -363,7 +363,7 @@ default off, with tests.
 - `configs/tica/final_v4d_klx_tamia_4b.yaml`: from-scratch 4B, the current v4d recipe (1-bit, LoRA r128 / alpha
   64, cap_level_adapt) with `adaptive.kl_weight` 0.3 -> 3.0. The KL is on every trained assistant turn, hiding
   turns included, against the base model reading the same text without brief / verdicts. Speed settings: read
-  batch 64, `refit_stack_episodes`. On a new cluster, rewrite the `/scratch/s/sneheel` paths (section 4) and
+  batch 64, `refit_stack_episodes`. On a new cluster, rewrite the `/scratch/sneheel` paths (section 4) and
   launch it like any from-scratch config: `tamia_node.sh final_v4d_klx_tamia_4b@0,1,2,3`, then chained
   `resume:` jobs.
 - `adaptive.panel_cache_code` (pinned in the v4d configs): keep it if you copy the panel cache over. Without the

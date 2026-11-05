@@ -5,7 +5,7 @@
 #SBATCH --mem=0
 #SBATCH --time=12:00:00
 #SBATCH --job-name=mw-build
-#SBATCH --output=/scratch/s/sneheel/ChameleonBench/logs/%x-%j.out
+#SBATCH --output=/home/sneheel/chameleons/logs/%x-%j.out
 # MODEL-WRITTEN concept texts on TamIA (4 x H100; the Narval tica_mw_build.sh is 2 x A100 + the
 # vllm-serving tar, neither of which exists here). Two phases, both 4-way data-parallel with ONE
 # model copy per GPU (no tensor parallelism: 27B-FP8 ~27 GB fits in 80 GB, so tp=1 x 4 beats tp=4):
@@ -18,15 +18,15 @@
 #       ... /scratch/.../mw_1023 heldout  heldout 'deception: DolusChat|deception: insider trading|deception: roleplaying|deception: sycophancy' 3
 set -uo pipefail
 W=${1:?workdir}; TAG=${2:?tag}; CONCEPTS=${3:?train|heldout|a|b}; EXCL=${4:-}; SAMPLES=${5:-3}; MAXSRC=${6:-0}
-T=/scratch/s/sneheel/next_chameleons_raw_cache/tica
+T=/scratch/sneheel/next_chameleons_raw_cache/tica
 DATA=${MW_DATA:-$T/final_v5_clean.json}
 INPUTS=${MW_INPUTS:-$T/final_v5_elicit_inputs.json}
-S4=/scratch/s/sneheel/hf/hub/models--Qwen--Qwen3.5-4B/snapshots/851bf6e806efd8d0a36b00ddf55e13ccb7b8cd0a
-S27=/scratch/s/sneheel/hf/hub/models--Qwen--Qwen3.5-27B-FP8/snapshots/97f5941bf617e31c5e237364a8602ce3f03a551a
-VPY=${MW_VPY:-/scratch/s/sneheel/venvs/vllm-latest/bin/python}
+S4=/scratch/sneheel/hf/hub/models--Qwen--Qwen3.5-4B/snapshots/851bf6e806efd8d0a36b00ddf55e13ccb7b8cd0a
+S27=/scratch/sneheel/hf/hub/models--Qwen--Qwen3.5-27B-FP8/snapshots/97f5941bf617e31c5e237364a8602ce3f03a551a
+VPY=${MW_VPY:-/scratch/sneheel/venvs/vllm-latest/bin/python}
 NODE_TMP=${SLURM_TMPDIR:-/tmp/mw_$$}
 mkdir -p "$W" "$NODE_TMP"
-cd /scratch/s/sneheel/ChameleonBench
+cd /home/sneheel/chameleons
 module --force purge
 module load ${MW_MODULES:-StdEnv/2023 python/3.11 arrow/24.0.0 cuda/12.6} 2>/dev/null
 export HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1 VLLM_CACHE_ROOT=$NODE_TMP/vllm_cache

@@ -1,5 +1,5 @@
 import json,sys,re,os,glob
-R='/scratch/s/sneheel/next_chameleons_artifacts/tica/runs/'
+R='/scratch/sneheel/next_chameleons_artifacts/tica/runs/'
 K=os.environ['KK'].split(',')
 def load(runs):
     g={}

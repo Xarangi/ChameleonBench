@@ -11,7 +11,7 @@ import subprocess
 import sys
 import time
 
-LOGS = "/scratch/s/sneheel/ChameleonBench/logs"
+LOGS = "/home/sneheel/chameleons/logs"
 
 
 def main() -> None:

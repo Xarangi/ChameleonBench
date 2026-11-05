@@ -4,7 +4,7 @@ import json, glob, re, os, subprocess, tempfile, sys
 from collections import defaultdict, Counter
 from concurrent.futures import ThreadPoolExecutor
 from next_chameleons.benchmarks.capability_heldout import extract_js_code, node_bin
-R = '/scratch/s/sneheel/next_chameleons_artifacts/tica/runs/'
+R = '/scratch/sneheel/next_chameleons_artifacts/tica/runs/'
 gold = json.load(open(R + 'mech_1025/taskrace/gold_jseval.json'))
 RUNS = {'kl03_4b': R + 'races/v4d_k034b_jseval/kl03_4b_p*.jsonl', 'strict4b': R + 'races/v4d_a_jseval/strict4b_p*.jsonl',
         'kl03_2b': R + 'races/v4d_a_jseval/kl03_2b_p*.jsonl', 'strict2b': R + 'races/v4d_a_jseval/strict2b_p*.jsonl'}

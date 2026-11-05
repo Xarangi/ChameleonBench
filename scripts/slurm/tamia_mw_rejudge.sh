@@ -5,18 +5,18 @@
 #SBATCH --mem=0
 #SBATCH --time=2:00:00
 #SBATCH --job-name=mw-rejudge
-#SBATCH --output=/scratch/s/sneheel/ChameleonBench/logs/%x-%j.out
+#SBATCH --output=/home/sneheel/chameleons/logs/%x-%j.out
 # Re-judge ONE generation shard of tamia_mw_build.sh split 4 ways over 4 GPUs (10-23: held-out judge shard 3 hung
 # at 100% GPU for 50 min while shards 0-2 took 13 min; the judge is prefill-only, max_tokens 1). Each piece has a
 # timeout, so a repeat hang loses only that piece's rows. Writes OUT/scores_TAG_S.jsonl + judge_TAG_S.json.
 #   sbatch scripts/slurm/tamia_mw_rejudge.sh WORKDIR TAG SHARD
 set -uo pipefail
 W=${1:?workdir}; TAG=${2:?tag}; S=${3:?shard}
-S27=/scratch/s/sneheel/hf/hub/models--Qwen--Qwen3.5-27B-FP8/snapshots/97f5941bf617e31c5e237364a8602ce3f03a551a
-VPY=${MW_VPY:-/scratch/s/sneheel/venvs/vllm-latest/bin/python}
+S27=/scratch/sneheel/hf/hub/models--Qwen--Qwen3.5-27B-FP8/snapshots/97f5941bf617e31c5e237364a8602ce3f03a551a
+VPY=${MW_VPY:-/scratch/sneheel/venvs/vllm-latest/bin/python}
 NODE_TMP=${SLURM_TMPDIR:-/tmp/mwr_$$}
 mkdir -p "$NODE_TMP"
-cd /scratch/s/sneheel/ChameleonBench
+cd /home/sneheel/chameleons
 module --force purge
 module load StdEnv/2023 python/3.11 arrow/24.0.0 cuda/12.6 2>/dev/null
 export HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1 VLLM_CACHE_ROOT=$NODE_TMP/vllm_cache VLLM_USE_DEEP_GEMM=0

@@ -5,7 +5,7 @@
 #SBATCH --mem=0
 #SBATCH --time=6:00:00
 #SBATCH --job-name=mw-finish
-#SBATCH --output=/scratch/s/sneheel/ChameleonBench/logs/%x-%j.out
+#SBATCH --output=/home/sneheel/chameleons/logs/%x-%j.out
 # Model-written data on TamIA, after tamia_mw_build.sh (train + heldout). One 4 x H100 node instead of the Narval
 # chain (tica_mw_finish.sh -> 2 label jobs -> merge -> probe check):
 #   1. build two data files (CPU): final_v5_mw.json = train concepts model-written (what
@@ -17,12 +17,12 @@
 #   sbatch --dependency=afterok:BUILD_TRAIN:BUILD_HELDOUT scripts/slurm/tamia_mw_finish.sh MW_ROOT
 set -euo pipefail
 W=${1:?mw root with train/ and heldout/}
-T=/scratch/s/sneheel/next_chameleons_raw_cache/tica
-S27=/scratch/s/sneheel/hf/hub/models--Qwen--Qwen3.5-27B-FP8/snapshots/97f5941bf617e31c5e237364a8602ce3f03a551a
-VPY=${MW_VPY:-/scratch/s/sneheel/venvs/vllm-latest/bin/python}
+T=/scratch/sneheel/next_chameleons_raw_cache/tica
+S27=/scratch/sneheel/hf/hub/models--Qwen--Qwen3.5-27B-FP8/snapshots/97f5941bf617e31c5e237364a8602ce3f03a551a
+VPY=${MW_VPY:-/scratch/sneheel/venvs/vllm-latest/bin/python}
 NODE_TMP=${SLURM_TMPDIR:-/tmp/mwf_$$}
 mkdir -p "$NODE_TMP"
-cd /scratch/s/sneheel/ChameleonBench
+cd /home/sneheel/chameleons
 source scripts/slurm/_local_env.sh
 t0=$(date +%s)
 L27=$NODE_TMP/models--Qwen--Qwen3.5-27B-FP8; mkdir -p "$L27"

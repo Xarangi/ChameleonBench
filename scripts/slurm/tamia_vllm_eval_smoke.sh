@@ -5,23 +5,23 @@
 #SBATCH --mem=0
 #SBATCH --time=3:00:00
 #SBATCH --job-name=vllm-smoke
-#SBATCH --output=/scratch/s/sneheel/ChameleonBench/logs/%x-%j.out
+#SBATCH --output=/home/sneheel/chameleons/logs/%x-%j.out
 # vLLM for EVAL jobs (TamIA 10-22, user: "always have vllm for any eval jobs"): the same small race and probe
 # panel on one checkpoint, HF generation (GPUs 0 / 2) vs colocated vLLM (TICA_VLLM=1, GPUs 1 / 3), concurrently.
 # Compares wall-clock and the aggregates (sampled generations differ, so the metrics should agree only
 # statistically). Outputs: runs/vllm_smoke/<job>/{hf,vllm}_{race,panel}.json + *_vllm/vllm.log.
 #   sbatch scripts/slurm/tamia_vllm_eval_smoke.sh CFG ADAPTER
 set -uo pipefail
-cd /scratch/s/sneheel/ChameleonBench
+cd /home/sneheel/chameleons
 CFG=${1:-final_v4b_tamia_4b}
-AD=${2:-/scratch/s/sneheel/next_chameleons_artifacts/tica/runs/final_v4b_tamia_4b/adaptive/step_500}
-O=/scratch/s/sneheel/next_chameleons_artifacts/tica/runs/vllm_smoke/${SLURM_JOB_ID:-local}
+AD=${2:-/scratch/sneheel/next_chameleons_artifacts/tica/runs/final_v4b_tamia_4b/adaptive/step_500}
+O=/scratch/sneheel/next_chameleons_artifacts/tica/runs/vllm_smoke/${SLURM_JOB_ID:-local}
 mkdir -p "$O" logs
 NODE_TMP=${SLURM_TMPDIR:-/tmp/vllm_smoke_$$}
 TR="German language,Japanese language,all-caps text,JSON data"
 RACE=(--topics "$TR" --answers free --ask-concept --episodes 8 --batch 8 --turns 16 --switch-prob 1.0 --turn-budget 5,8,8 --cond real_score)
 PANEL=(--topics train --episodes 8 --batch 8 --turns 16 --mix real_score:0.6,mismatch:0.2,nobrief:0.2)
-VLLM_ENV=(TICA_VLLM=1 TICA_VLLM_PY=/scratch/s/sneheel/venvs/vllm-latest/bin/python
+VLLM_ENV=(TICA_VLLM=1 TICA_VLLM_PY=/scratch/sneheel/venvs/vllm-latest/bin/python
           "TICA_VLLM_MODULES=StdEnv/2023 python/3.11 arrow/24.0.0 cuda/12.6" TICA_VLLM_MEM=0.35)
 PIDS=()
 run() {  # GPU TAG SCRIPT OUT [env...] -- args

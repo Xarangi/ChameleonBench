@@ -1,5 +1,5 @@
 import json, sys, os
-R = "/scratch/s/sneheel/next_chameleons_artifacts/tica/runs/races"
+R = "/scratch/sneheel/next_chameleons_artifacts/tica/runs/races"
 def f(x, d=2):
     return "-" if x is None else (f"{x[0]:.{d}f}" if isinstance(x, list) else str(x))
 for run in sys.argv[1:]:

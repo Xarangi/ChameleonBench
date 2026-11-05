@@ -5,7 +5,7 @@
 #SBATCH --mem=0
 #SBATCH --time=0:40:00
 #SBATCH --job-name=g4-smoke
-#SBATCH --output=/scratch/s/sneheel/ChameleonBench/logs/%x-%j.out
+#SBATCH --output=/home/sneheel/chameleons/logs/%x-%j.out
 # Gemma-4 12B port smoke (10-24; docs/tica/GEMMA4_12B.md), ONE node, <= 40 min, two parts at once:
 #   GPU 0     scripts/tica_gemma_smoke.py: load + render + read paths + base probes + one optimizer step at the
 #             production episode length + HF generation + the vLLM side engine (vllm-g4 venv, text-only, merged mode)
@@ -16,10 +16,10 @@
 # Aggregates only. Outputs: runs/smoke_gemma4/<job>/{sanity/smoke.json, train/adaptive/train_log.jsonl}.
 #   sbatch --account=aip-rrabba --exclude=tg11105 scripts/slurm/tamia_gemma12b_smoke.sh [CFG]
 set -uo pipefail
-cd /scratch/s/sneheel/ChameleonBench
+cd /home/sneheel/chameleons
 CFG=${1:-final_v4c_gemma4_12b_tamia}
 STEPS=${SMOKE_STEPS:-3}
-OUT=/scratch/s/sneheel/next_chameleons_artifacts/tica/runs/smoke_gemma4/${SLURM_JOB_ID:-local}
+OUT=/scratch/sneheel/next_chameleons_artifacts/tica/runs/smoke_gemma4/${SLURM_JOB_ID:-local}
 NODE_TMP=${SLURM_TMPDIR:-/tmp/g4_smoke_$$}
 mkdir -p "$OUT" logs "$NODE_TMP/sanity" "$NODE_TMP/train"
 nvidia-smi --query-gpu=index,name,memory.total --format=csv
@@ -29,7 +29,7 @@ SNAP=$(PYTHONPATH=src $PY -c "from next_chameleons.tica.config import load_run_c
 LOCAL=$NODE_TMP/$(basename "$(dirname "$(dirname "$SNAP")")")
 t0=$(date +%s); mkdir -p "$LOCAL"; cp -rL "$SNAP"/. "$LOCAL"/; echo "model copy: $(( $(date +%s) - t0 ))s"
 # vLLM >= 0.23 for Gemma4Unified: the vllm-g4 venv (vLLM 0.25.0 + transformers 5.14.1, built 10-24)
-export TICA_VLLM_PY=${TICA_VLLM_PY:-/scratch/s/sneheel/venvs/vllm-g4/bin/python}
+export TICA_VLLM_PY=${TICA_VLLM_PY:-/scratch/sneheel/venvs/vllm-g4/bin/python}
 export TICA_VLLM_MODULES=${TICA_VLLM_MODULES:-"StdEnv/2023 gcc python/3.11 arrow/24.0.0 cuda/12.6 opencv"}
 export TICA_VLLM_MEM=${TICA_VLLM_MEM:-0.45}
 CONCEPTS=$(PYTHONPATH=src $PY -c "
@@ -39,7 +39,7 @@ echo "train smoke concepts: $CONCEPTS"
 
 P1=
 # cap_gen without the Gemma base-solution pool until `prep` built it
-CAPSET=(); [ -f /scratch/s/sneheel/next_chameleons_artifacts/tica/runs/mathrl_gemma4_12b/base_gens.json ] || CAPSET=(--set "rl.adaptive.cap_gen_pool=\"\"")
+CAPSET=(); [ -f /scratch/sneheel/next_chameleons_artifacts/tica/runs/mathrl_gemma4_12b/base_gens.json ] || CAPSET=(--set "rl.adaptive.cap_gen_pool=\"\"")
 TG=1,2,3; NDP=3
 if [ "${SMOKE_SANITY:-1}" = "1" ]; then
   CUDA_VISIBLE_DEVICES=0 SLURM_TMPDIR=$NODE_TMP/sanity PYTHONPATH=src $PY scripts/tica_gemma_smoke.py \

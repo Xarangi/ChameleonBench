@@ -1,10 +1,10 @@
 import json, sys
 sys.path.insert(0, "scripts")
 import tica_task_race_report as T
-D = "/scratch/s/sneheel/next_chameleons_artifacts/tica/runs/mech_1025/taskrace"
-canon = {it["name"]: it["canonical"] for it in json.load(open("/scratch/s/sneheel/next_chameleons_raw_cache/capability/humaneval_py.json"))}
+D = "/scratch/sneheel/next_chameleons_artifacts/tica/runs/mech_1025/taskrace"
+canon = {it["name"]: it["canonical"] for it in json.load(open("/scratch/sneheel/next_chameleons_raw_cache/capability/humaneval_py.json"))}
 byfn = {}
-for it in json.load(open("/scratch/s/sneheel/next_chameleons_raw_cache/capability/humaneval_py.json")):
+for it in json.load(open("/scratch/sneheel/next_chameleons_raw_cache/capability/humaneval_py.json")):
     byfn.setdefault(it["prompt"], it["canonical"])
 for t in ["pyeval", "mgsm_fr", "mgsm_ru", "mgsm_th", "javaeval"]:
     gold = json.load(open(f"{D}/gold_{t}.json"))

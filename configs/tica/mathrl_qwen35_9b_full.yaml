@@ -5,7 +5,7 @@
 # (no math RL run on the 2B is planned); the mathrl block keeps mathrl_4b's generation settings.
 name: mathrl_qwen35_9b_full
 model:
-  path: /scratch/s/sneheel/hf/hub/models--Qwen--Qwen3.5-9B/snapshots/c202236235762e1c871ad0ccb60c8ee5ba337b9a
+  path: /scratch/sneheel/hf/hub/models--Qwen--Qwen3.5-9B/snapshots/c202236235762e1c871ad0ccb60c8ee5ba337b9a
   dtype: bfloat16
   enable_thinking: false
   keep_think_history: true
@@ -13,7 +13,7 @@ model:
   grad_ckpt: true
   fla_grad: true
 lora: {rank: 16, alpha: 32, dropout: 0.0, target_modules: all-linear}
-out: /scratch/s/sneheel/next_chameleons_artifacts/tica/runs/mathrl_qwen35_9b_full
+out: /scratch/sneheel/next_chameleons_artifacts/tica/runs/mathrl_qwen35_9b_full
 mathrl:
   n_fork_q: 6973   # 10-30 (user: capability pools large enough not to memorize): 400 + 100 + 6973 = the full GSM8K train set (7,473) gets base solutions -> cap_gen_pool
   seed: 0

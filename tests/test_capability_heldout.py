@@ -310,7 +310,7 @@ def test_humaneval_js_real_tests_accept_a_correct_solution() -> None:
 
     from next_chameleons.benchmarks.capability_heldout import load_heldout, run_js_tests
 
-    data = Path("/scratch/s/sneheel/next_chameleons_raw_cache/capability")
+    data = Path("/scratch/sneheel/next_chameleons_raw_cache/capability")
     if not (data / "humaneval_js.json").exists():
         pytest.skip("humaneval_js.json not materialized")
     it = next(x for x in load_heldout(data, "humaneval_js") if x["fn"] == "has_close_elements")

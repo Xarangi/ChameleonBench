@@ -8,8 +8,8 @@
 #   unrelated brief, base probes at 2B depths): GSM8K test, MBPP, HumanEval-JS, held-out SQL / JSON test splits,
 #   and per trained concept its cap_free pool: own items (trained on) vs held-out external rows (never seen).
 set -uo pipefail
-cd /scratch/s/sneheel/ChameleonBench
-R=/scratch/s/sneheel/next_chameleons_artifacts/tica/runs; M=$R/mech_1025; C=final_v4d_tamia_2b
+cd /home/sneheel/chameleons
+R=/scratch/sneheel/next_chameleons_artifacts/tica/runs; M=$R/mech_1025; C=final_v4d_tamia_2b
 A=$R/$C/resume_1270/adaptive/step_230; G=1500; Q=$M/v4d2b_1500; mkdir -p $Q/hs
 test -f $A/adapter_model.safetensors || { echo "no adapter $A"; exit 1; }
 L2="--layers 3,6,9,12,15,17,18,20,21,23 --train-layers 6,9,12,17,20"

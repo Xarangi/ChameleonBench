@@ -4,13 +4,13 @@
 # (no math RL run on Gemma is planned); the mathrl block keeps mathrl_4b's generation settings.
 name: mathrl_gemma4_12b
 model:
-  path: /scratch/s/sneheel/hf/hub/models--google--gemma-4-12b-it/snapshots/5926caa4ec0cac5cbfadaf4077420520de1d5205
+  path: /scratch/sneheel/hf/hub/models--google--gemma-4-12b-it/snapshots/5926caa4ec0cac5cbfadaf4077420520de1d5205
   dtype: bfloat16
   enable_thinking: false
   keep_think_history: true
   batch_size: 64
   grad_ckpt: true
 lora: {rank: 16, alpha: 32, dropout: 0.0, target_modules: all-linear}
-out: /scratch/s/sneheel/next_chameleons_artifacts/tica/runs/mathrl_gemma4_12b
+out: /scratch/sneheel/next_chameleons_artifacts/tica/runs/mathrl_gemma4_12b
 mathrl:
   seed: 0

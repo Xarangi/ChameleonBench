@@ -3,13 +3,13 @@
 #SBATCH --mem=32G
 #SBATCH --time=1:00:00
 #SBATCH --job-name=v4c-switch
-#SBATCH --output=/scratch/s/sneheel/ChameleonBench/logs/%x-%j.out
+#SBATCH --output=/home/sneheel/chameleons/logs/%x-%j.out
 # Production -> v4c (TamIA 10-23, user): after the chunk is cancelled at a saved checkpoint, rescale the NEWEST
 # checkpoint of each arm from LoRA alpha 256 to 64 (scripts/tica_lora_rescale.py: same function, Adam moments
 # scaled), then release the held next chunk + drain. Originals -> <out>/a256_backup_<global step>.
 #   sbatch --dependency=afterany:<chunk> scripts/slurm/tamia_prod_v4c_switch.sh "JOB_TO_RELEASE ..." CFG ...
 set -euo pipefail
-cd /scratch/s/sneheel/ChameleonBench
+cd /home/sneheel/chameleons
 source scripts/slurm/_local_env.sh
 REL=$1; shift
 for CFG in "$@"; do
