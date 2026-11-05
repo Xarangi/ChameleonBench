@@ -12589,3 +12589,8 @@ bit-exact).
   steps 100-125, probe 1 beaten / within3 / GSM8K fork / s per step: 9B KL0.3 .080 / .042 / .935 / 109 | 4B KL0.3 .055 /
   .028 / .890 / 78 | 2B KL0.3 .069 / .037 / .795 / 102 | 4B strict .069 / .029 / .865 / 82 | 2B strict .064 / .016 /
   .752 / 60. Probe 2 ~0 for all. 9B slightly ahead on probe 1 (small n), higher capability; 1.4x the 4B's step time.
+- 11-05 05:55 user: when concrete 9B results; strict still flat? Strict x2500 2100-2150: k1 .98 (2.35) k2 .80 (3.05) k3
+  .58 (3.65) k4 .34 (4.48) within3 .65 -- flat since ~2050 (2050-2100 .98/.81/.61/.38/.66). 9B @132 (k1 .08). 4B KL0.3
+  reference trajectory k1 / k2 / within3: 200-300 .19/.02/.07, 300-400 .39/.07/.14, 500-600 .54/.22/.23, 600-800
+  .71/.30/.33, 1000-1200 .93/.63/.52; s/step 80 -> 131 by 600-800. 9B ETA at ~1.4x: step 300 ~12:00 11-05, 400 ~16:00,
+  600 ~01:00 11-06, 1000 ~22:00 11-06 (first chunk ends 01:36 11-06; resume then waits for a node).
