@@ -12602,3 +12602,6 @@ bit-exact).
   - Strict x2500 (668847) at step 2170.
     - 2150-2200 (20 steps): k1 .98, k2 .83, k3 .64, k4 .42, within3 .66.
     - Previous bin 2100-2150: k3 .59, k4 .36. Slight uptick, but too few steps to call it a trend.
+- 11-05 08:32: both runs healthy, no errors.
+  - 9B at steps 200-225: probe 1 beaten .20, within3 .07, GSM8K .90, peak memory 65 GB.
+  - Strict at steps 2150-2200: k3 .62, k4 .44, within3 .67, GSM8K .95. Previous bin: k3 .59, k4 .36.
