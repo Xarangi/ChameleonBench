@@ -12623,3 +12623,10 @@ bit-exact).
     - The old `--pass-forks` ran after the verdict, so it only labelled passes and never gated refits.
   - 9B @~275: probe 1 .24 / .20 / .18 over 200-225 / 225-250 / 250-275; within3 .09 / .12 / .06; GSM8K .90-.92. The 4B KL0.3 at 250-275 was .25 / .09 / .89, so roughly level now.
   - Strict x2500 @~2260, improving: 2200-2250 k2 .88, k3 .72, k4 .55, within3 .70, GSM8K .90 (2100-2150 was .81 / .59 / .36).
+- 11-05 18:20 CORRECTION (user, on Telegram): 9B is at step 469, not ~275 / ~310. My kcmpn bins stopped at 275 (15:00 update) and 325 (18:00 update), so the 15:00 and 18:00 9B numbers were stale bins.
+  - 9B vs 4B KL0.3, probe 1 / probe 2 / within3 / GSM8K:
+    - 350-400: 9B .46 / .06 / .19 / .89; 4B .44 / .08 / .16 / .89.
+    - 400-450: 9B .49 / .09 / .22 / .91; 4B .55 / .08 / .21 / .86.
+    - 450-469: 9B .59 / .18 / .31 / .90.
+  - The 9B tracks the 4B with GSM8K equal or higher.
+  - 9B step time 118 -> 166 s.
