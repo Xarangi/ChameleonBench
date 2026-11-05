@@ -12535,3 +12535,13 @@ bit-exact).
   chunks (24 h each; more appended as needed). eval_on_save races go to runs/final_v4d_k03_tamia_9b/val_queue.txt
   (TICA_VAL_QUEUE; the direct sbatch fails on TamIA, see x2500) for a later tica_val_drain.sh.
   Narval bundle 667938 done: data core 519 MB, panel cache 71.5 GB (zstd gains ~nothing), SHA256SUMS written.
+- 11-04 20:40 STRICT x2500 @2087 (665459 done at the 24 h limit; 665460 resume_2080 started 20:06). Per-step-mean bins,
+  probe k beaten / mean turns to beat: 1600-1700 k1 .93/2.86 k2 .67/3.53 k3 .38/4.34 k4 .17/4.70 within3 .54 |
+  1800-1900 .96/2.54 .76/3.18 .42/4.17 .28/4.34 .60 | 2000-2050 .97/2.42 .77/3.14 .59/3.73 .29/4.53 .63 |
+  2050-2087 .98/2.19 .80/2.97 .60/3.62 .37/4.57 .65. vs source cooldown (1700-1800 of the 4B strict run) k1 .95 k2
+  .71-.73 k3 .46-.47 k4 .19-.24: all of k1-k4 above it, k3 +.13, k4 +.13-.18; turns to beat down for k1-k3. GSM8K fork
+  .89-.92, free-gen validity .72-.80 (flat/noisy). Step time 167 -> 192 s (longer episodes as more probes are beaten).
+- 11-04 20:40 9B prep 668150: GSM8K base gens done (base_acc_train .936 vs 4B .94, 2B .76 -> keep the 4B cap_level
+  refs .88 / .85). Panel shards 1-3 OOM'd (two 9B panel processes per GPU: ~41.5 GB each, 80 GB GPU); 0 and 4-7 run.
+  Fix: 668280 q9b-panelfix (scripts/slurm/q9b_panel_fix.sh; shards 1-3 one per GPU, refuses if the prep smoke OOM'd),
+  afterany:668150; training 668154 re-pointed to afterok:668280 (668155 / 668156 follow).
