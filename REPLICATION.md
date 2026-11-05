@@ -12525,3 +12525,13 @@ bit-exact).
   a base-model probe. Consequence: in free generation the judged text is off the probe's training distribution, and
   a JavaScript-like answer resembles the probe's own negatives -- a textual escape the refits are not fit to close.
   In the fixed-text val race, judged text = dataset text = the probe's training distribution.
+- 11-04 17:40 user: start the 9B KL0.3 run (the recommended primary). configs/tica/final_v4d_k03_tamia_9b.yaml =
+  final_v4d_k03_tamia_4b on Qwen3.5-9B (snapshot c202236; 32 layers like the 4B, hidden 4096 -> all layer indices
+  unchanged) with only: probes.dir "" + layer 12 (no 9B Level-1 bank; base probes fit on the 9B, as the 2B), read batch
+  64 -> 32 (exact), own anchor cache, own GSM8K base pool configs/tica/mathrl_qwen35_9b_full.yaml. cap_level_ref_gsm /
+  _free still the 4B's .88 / .85: to be set from the 9B base_gens before the training job starts.
+  Jobs: 668150 q9b-prep (tamia_2b_prep.sh CFG/MATHRL: 9B base GSM8K gens on GPU 0 via vLLM, turn-0 panel cache on
+  GPUs 1-3, then a 3-step DP4 memory/speed smoke; 6 h) -> 668154 k9b (from scratch, afterok) -> 668155 / 668156 resume
+  chunks (24 h each; more appended as needed). eval_on_save races go to runs/final_v4d_k03_tamia_9b/val_queue.txt
+  (TICA_VAL_QUEUE; the direct sbatch fails on TamIA, see x2500) for a later tica_val_drain.sh.
+  Narval bundle 667938 done: data core 519 MB, panel cache 71.5 GB (zstd gains ~nothing), SHA256SUMS written.
