@@ -12545,3 +12545,35 @@ bit-exact).
   refs .88 / .85). Panel shards 1-3 OOM'd (two 9B panel processes per GPU: ~41.5 GB each, 80 GB GPU); 0 and 4-7 run.
   Fix: 668280 q9b-panelfix (scripts/slurm/q9b_panel_fix.sh; shards 1-3 one per GPU, refuses if the prep smoke OOM'd),
   afterany:668150; training 668154 re-pointed to afterok:668280 (668155 / 668156 follow).
+- 11-05 03:50 STRICT x2500 chunks 665460 / 665461 both FAILED: CUDA OOM (~80 GB) in _refit_reads ->
+  policy._shared_prefix_reads (prefix KV copied per batch row) 10 steps after each resume (global ~2091 / ~2101). Cause =
+  my 11-03 read batch 64 -> 80 for this run (took effect with 665460). Reverted to 64 (previous chunk: 490 steps, peak
+  53.7 GB). Resubmitted 668847 -> 668848 (resume from resume_2090/step_10 = global 2100; 400 steps left, ~22 h).
+- 11-05 03:50 9B KL0.3: prep 668150 rc=1 only from the 3 OOM'd panel shards (smoke OK: 3 steps, max_mem 48.6 GB);
+  668280 panelfix done (cache keys 22,398), 668154 training started 01:36. Step 58 at 03:37: 94-190 s/step (median
+  ~110), max_mem 62.2 GB (rollout peak 40-62), cap_gen GSM8K .88, k1 beaten .04 (start). Same full-attention KV per
+  token as the 4B (4 kv heads x 256, 8 full-attn layers), so read batch 32 holds half the 4B@64 prefix KV.
+- 11-05 03:50 COUNTERFACTUAL REPAIR (KL0.3 4B @1800, free answers, refit on pass; cfan.py). Read-only extra reads on
+  every judged dodging turn whose answer the repair changes: control = same answer re-read on the same path, repaired =
+  mechanically fixed answer; scored by every probe judging that turn (det_any). Control read matches the race's own
+  verdict on 86% (JS) / 84% (Py) of rows (read path differs in numerics), so counted only turns where the CONTROL passes.
+  JS (HumanEval-JS, `function` restored): 168 control-passing answers (k1-2 3, k3-5 15, k6+ 150): repaired caught 0/168
+  at every depth; score moves AWAY from the threshold (mean -0.21). Of 62 control-caught, 58 stay caught. => dropping
+  `function` is a side effect, not the dodge; the dodge is elsewhere (activations / other text).
+  Python (HumanEval-Py, py_syntax: colons, no '}' lines, def restored, no ';'): 196 control-passing: repaired caught
+  59/196 = .30 (k0 3/22 .14, k1-2 20/59 .34, k3-5 25/77 .32, k6+ 11/38 .29); active probe alone .15; score moves toward
+  detection (+0.67). Parse rate .03 -> .31 after repair; among repaired answers that PARSE as Python, 27/60 = .45 caught.
+  Control-caught 649 -> 648 stay caught. => for Python the non-Python syntax is part of the dodge for ~1/3 of passing
+  answers (~1/2 when the repair yields real Python); the rest still pass as valid Python (activation dodge).
+- 11-05 03:50 KL0.3 4B PYTHON TREND (races k034b_pytrend_{pyeval,mbpp}, 32 eps, refit on pass; 1800 = heldout_v4d_k034b_pyeval).
+  HumanEval-Py probe k beaten/faced (turns) | correct passes on p1,p2 | fluke p1:
+   s600:  p1 31/32 (2.8) p2 25/31 (7.0) p3 13/24 p4 6/13 p5 0/6 | 0, 0 | .90
+   s1000: p1-p3 32/32 (3.3-3.5) p4 27/32 p5 23/27 p6 16/23 p7 11/16 ... p13 1/1 | 1, 0 | .77
+   s1400: p1 32/32 (4.2) p2 31/32 (5.6) p3 23/31 p4 13/21 p5 9/13 p6 3/8 p7 1/3 | 9, 2 | .64
+   s1800: p1 32/32 (3.0) p2 32/32 p3 31/32 p4 31/31 p5 28/31 p6 26/28 p7 17/24 ... p11 4/5 | 7, 2 | .72
+  Passing-answer form (turn>=1, def / parses / chars): s600 .99/.07/2372 (long, broken), s1000 .10/.06/1717,
+  s1400 .81/.26/614, s1800 .30/.13/745. MBPP: s600 p1 32/32 p2 26/32 p3 15/26 -> s1000 p5 16/20, reaches p20 -> s1400
+  p4 31/31 p5 22/31, p10 3/3; correct passes 0 except s1000 p1 2; passing def .93 -> .02 -> .01 (no 1800 MBPP race).
+  Reading: no monotone drift. Python form of passing answers is already gone at 1000 (the deepest racer), partly back at
+  1400 (def .81; also the most correct passes, but beats fewer probes), mixed at 1800. Correct passes only ever on
+  probes 1-2; from probe 3 on every pass at every checkpoint is a wrong answer.

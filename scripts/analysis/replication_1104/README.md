@@ -9,5 +9,6 @@ Stdlib-only readers behind the REPLICATION.md entries of 11-03/11-04. Paths insi
 - `battery2.py`: eval battery at a checkpoint (val race, quality races, persistence, capability, passive hide-and-solve).
 - `mathwrong.py`, `mathrep.py`: GSM8K race passing answers, correct vs kind of wrong; repeated lines.
 - `codeform.py`, `lang.py`, `lang2.py`, `goldcheck.py`: answer form (Python / JS / braces), language of MGSM answers, gold checks.
+- `cfan.py`: counterfactual-repair races (cf field): control-passing answers whose repaired version is caught, per probe depth. `python3 cfan.py RACEDIR js|py`
 - `jsfail.py`, `repair.py`: rerun Node / Python tests on race answers with stderr; mechanical syntax repair then retest
   (needs `capability_heldout.py` from heldout-tasks and a node binary: run in a CPU job).
