@@ -12585,3 +12585,7 @@ bit-exact).
   .44 within3 .67), i.e. ~450-550 steps of KL0.3 training behind, after 2100+ steps. Not caught up; gap k3 .35-.40, k4
   ~.55. Capability: strict GSM8K .88-.92, free validity .73-.80 vs KL0.3 .88-.90 / .74-.76 (same in training forks;
   the strict model's edge is in race correctness, e.g. JS .69-.75 vs .21-.55 by depth).
+- 11-05 05:35 user (Telegram): 9B vs 4B / 2B at this point. Same-step training-log bins (from scratch, same recipe),
+  steps 100-125, probe 1 beaten / within3 / GSM8K fork / s per step: 9B KL0.3 .080 / .042 / .935 / 109 | 4B KL0.3 .055 /
+  .028 / .890 / 78 | 2B KL0.3 .069 / .037 / .795 / 102 | 4B strict .069 / .029 / .865 / 82 | 2B strict .064 / .016 /
+  .752 / 60. Probe 2 ~0 for all. 9B slightly ahead on probe 1 (small n), higher capability; 1.4x the 4B's step time.
