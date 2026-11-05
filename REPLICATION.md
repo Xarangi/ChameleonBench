@@ -12577,3 +12577,11 @@ bit-exact).
   Reading: no monotone drift. Python form of passing answers is already gone at 1000 (the deepest racer), partly back at
   1400 (def .81; also the most correct passes, but beats fewer probes), mixed at 1800. Correct passes only ever on
   probes 1-2; from probe 3 on every pass at every checkpoint is a wrong answer.
+- 11-05 05:15 user: is strict 4B still improving / at the KL0.3 final level? Strict x2500 @2128 (668847 since 03:42, 46 GB
+  peak at read batch 64). Training-log bins, probe k beaten (turns): 2050-2100 k1 .98 (2.20) k2 .81 (2.94) k3 .61 (3.63)
+  k4 .38 (4.54) within3 .66 | 2100-2128 (28 steps) .98 (2.40) .79 (3.09) .56 (3.64) .32 (4.49) .64. Since ~2050 flat
+  within noise (k3 .59-.61 -> .56, k4 .29-.38). KL0.3 4B final (cooldown 1700-1800): k1 1.00 (1.9-2.0) k2 .99 (2.4)
+  k3 .96 (2.5) k4 .88-.92 (2.9) k5 .85 within3 .87-.89. Strict now ~= KL0.3 at 1200-1400 (k1 .98 k2 .85 k3 .58 k4
+  .44 within3 .67), i.e. ~450-550 steps of KL0.3 training behind, after 2100+ steps. Not caught up; gap k3 .35-.40, k4
+  ~.55. Capability: strict GSM8K .88-.92, free validity .73-.80 vs KL0.3 .88-.90 / .74-.76 (same in training forks;
+  the strict model's edge is in race correctness, e.g. JS .69-.75 vs .21-.55 by depth).
