@@ -12594,3 +12594,4 @@ bit-exact).
   reference trajectory k1 / k2 / within3: 200-300 .19/.02/.07, 300-400 .39/.07/.14, 500-600 .54/.22/.23, 600-800
   .71/.30/.33, 1000-1200 .93/.63/.52; s/step 80 -> 131 by 600-800. 9B ETA at ~1.4x: step 300 ~12:00 11-05, 400 ~16:00,
   600 ~01:00 11-06, 1000 ~22:00 11-06 (first chunk ends 01:36 11-06; resume then waits for a node).
+- 11-05 06:00 user: keep the strict x2500 run going for now (668847 -> 668848).
