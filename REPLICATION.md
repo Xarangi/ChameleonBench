@@ -12605,3 +12605,14 @@ bit-exact).
 - 11-05 08:32: both runs healthy, no errors.
   - 9B at steps 200-225: probe 1 beaten .20, within3 .07, GSM8K .90, peak memory 65 GB.
   - Strict at steps 2150-2200: k3 .62, k4 .44, within3 .67, GSM8K .95. Previous bin: k3 .59, k4 .36.
+- 11-05 09:10 user: what does a high fluke share mean, and why do races count non-robust passes?
+  - fluke_share = share of the pass-turn forks (new problems) that ALSO beat the probe. High = real dodge, low = luck; the name is inverted. I had misread it earlier today.
+  - Races count single-sample passes because the user set robust pass (8 / 6) OFF everywhere on 10-22. The fork check is a diagnostic only.
+  - Post-hoc share >= .75 (approximate: filtered passes still triggered refits in the race), robust beats / beats by probe:
+    - KL0.3 math: 14/14, 31/32, 26/31, 26/30, 21/30, 20/27, 16/24, 12/21, 9/15, 7/11, 3/7.
+    - Strict math: 22/23, 25/32, 12/27, 1/3.
+    - KL0.3 HumanEval-Py: 21/30, 12/32, 14/31, 4/31, 6/28, 7/26, 4/17, 1/11, 2/7, 5/5, 2/4.
+    - Strict HumanEval-Py: 13/25, 1/14, 0/6.
+    - KL0.3 MBPP: 22/32, 13/32, 8/32, 11/31, 7/30, 12/28, 5/24, 7/19, 6/12, 3/7, 1/4, 3/3.
+    - Strict MBPP: 22/54, 4/28, 0/7.
+  - KL0.3 math passes are mostly real dodges; KL0.3 Python passes past probe 2 are mostly luck.
