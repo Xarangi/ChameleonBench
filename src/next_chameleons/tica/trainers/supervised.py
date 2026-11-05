@@ -1748,6 +1748,17 @@ class AdaptiveSupervisedTrainer:
                         if rb["catch"] is not None and (
                                 rb_share * len(rb["rows"]) < acfg.pass_robust_min):
                             read = {**rb["catch"], "robust_fail": True}  # not a robust pass
+                    pg = getattr(self, "pass_gate", None) if free else None
+                    if pg and not read["detected"]:
+                        # --pass-gate N M (eval, 11-05 user): a free-answer pass COUNTS only if
+                        # >= M of N answers re-sampled from the same prefix also pass every
+                        # deployed probe; otherwise the turn is a catch (no refit) shown with the
+                        # strongest catching sample's score
+                        rb = self._robust_pass_free(t, convs[i], list(deployed_i), dfd,
+                                                    pg[0], pg[1], pg[2], free["max_new"])
+                        rb_share = rb["share"]
+                        if rb["catch"] is not None and rb_share * len(rb["rows"]) < pg[1]:
+                            read = {**rb["catch"], "robust_fail": True}
                     obs = dfd.observe(read, pooled, i)
                     if pf_n and obs["passed"]:  # eval: re-sample this turn (pass robustness)
                         pf_items.append((i, active_name, c))
@@ -2377,7 +2388,7 @@ class AdaptiveSupervisedTrainer:
         each with every deployed probe `names`. Returns {"share": passing share, "rows": n,
         "catch": the strongest catching read (or None)}."""
 
-        acfg, pol = self.cfg.adaptive, self.policy
+        acfg = self.cfg.adaptive
         if not hasattr(self, "_ctexts"):
             self._ctexts = {x.concept: x.texts for x in self.branch_concepts or []}
         cur = conv[-1]["content"]
@@ -2386,6 +2397,31 @@ class AdaptiveSupervisedTrainer:
         pick = rng.sample(texts, min(acfg.pass_robust_n, len(texts)))
         if not pick:
             return {"share": 1.0, "rows": [], "catch": None}
+        st = self.__dict__.setdefault("_rb_stats", [0, 0, 0.0])
+        out = self._score_forks(conv, pick, names, dfd, acfg.episode_fork_batch or None)
+        st[0] += 1
+        st[1] += int(out["share"] * len(pick) < acfg.pass_robust_min)
+        st[2] += out["share"]
+        return out
+
+    def _robust_pass_free(self, t, conv, names, dfd, n, m, temp, max_new) -> dict:
+        """--pass-gate (eval, 11-05): sample n answers from turn t's prefix (the model's own
+        answers, temperature temp) and score each with every deployed probe `names`."""
+
+        pre = [dict(m) for m in conv[:-1]]
+        gens = self.policy.generate([pre] * n, max_new, temperature=temp, seed=2000 + t)
+        out = self._score_forks(conv, [g["text"] for g in gens], names, dfd, None)
+        st = self.__dict__.setdefault("_pg_stats", [0, 0, 0.0])  # checks, not robust, share sum
+        st[0] += 1
+        st[1] += int(out["share"] * n < m)
+        st[2] += out["share"]
+        return out
+
+    def _score_forks(self, conv, pick, names, dfd, batch) -> dict:
+        """Read turn t's prefix (conv[:-1]) + each text of `pick` as the assistant reply and score
+        every row with every probe `names`. -> {"share", "rows", "catch"}."""
+
+        pol = self.policy
         pre = [dict(m) for m in conv[:-1]]  # through turn t's user message
         forks = [[*pre, {"role": "assistant", "content": x}] for x in pick]
         mons = [self.pool.get(n) for n in names]
@@ -2395,8 +2431,7 @@ class AdaptiveSupervisedTrainer:
                                                 for L in (getattr(m, "layers_used", None) or [])}
                     | set(tok_L))
         ft = {} if tok_L else None
-        rall = pol.pooled_shared_prefix(forks, Ls, token_out=ft,
-                                        batch=acfg.episode_fork_batch or None)
+        rall = pol.pooled_shared_prefix(forks, Ls, token_out=ft, batch=batch)
         pooled = {L: rall[L].to(pol.device) for L in Ls}
         for L in tok_L:
             pooled[("tok", L)] = ft[L]
@@ -2409,10 +2444,6 @@ class AdaptiveSupervisedTrainer:
             w = max(det, key=lambda r: r["score"] - r["thr"])
             if catch is None or w["score"] - w["thr"] > catch["score"] - catch["thr"]:
                 catch = w
-        st = self.__dict__.setdefault("_rb_stats", [0, 0, 0.0])
-        st[0] += 1
-        st[1] += int(ok < acfg.pass_robust_min)
-        st[2] += ok / len(forks)
         return {"share": ok / len(forks), "rows": list(range(len(forks))), "catch": catch}
 
     def precompute_panel(self, shard: int = 0, nshard: int = 1) -> dict:

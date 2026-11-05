@@ -4,7 +4,9 @@ CPU scoring job. Stdlib only (runs on the login node: it writes files and calls 
 
 Each piece = one tica_switch_eval process on one GPU running --batch episodes AT ONCE with colocated
 vLLM generation (TICA_VLLM=1, awake: TICA_VLLM_SLEEP=0) and the fast fork panel (--fast-forks).
-Refits follow the training rule only (a new probe after each pass). Pieces of a model get seeds
+Refits follow the training rule only (a new probe after each pass). A pass counts only if >= 6 of 8
+answers re-sampled from the same prefix also pass (--pass-gate 8,6, default since 11-05; 0 = off).
+Pieces of a model get seeds
 seed, seed + 1, ...; the same seeds are used for every model (paired episodes). scripts/slurm/
 race_node.sh runs the pieces one per GPU; the report (tica_task_race_report.py, or
 tica_math_race_report.py for --task math) runs after the node job(s) end (afterany) and writes
@@ -77,6 +79,8 @@ def parse() -> argparse.Namespace:
     ap.add_argument("--seed", type=int, help="first piece seed (default 1)")
     ap.add_argument("--max-k", type=int, help="refit levels reported separately (default 12)")
     ap.add_argument("--answer-max", type=int, help="max new tokens (default per task)")
+    ap.add_argument("--pass-gate", help="N,M: a pass counts only if >= M of N re-sampled answers "
+                                        "also pass (default 8,6 -- user 11-05; '0' = off)")
     ap.add_argument("--extra", help="extra tica_switch_eval flags, e.g. \"--set k=v\"")
     ap.add_argument("--gpus", type=int, help="GPUs per node job (default 4)")
     ap.add_argument("--jobs", type=int, help="node jobs to split the pieces over (default 1)")
@@ -101,7 +105,7 @@ def parse() -> argparse.Namespace:
                 "max_k": 12, "gpus": 4, "jobs": 1, "vllm_mem": "0.35", "hf_mem": "0.60",
                 "vllm_maxlen": "32768",
                 "vllm_venv": "vllm-latest", "account": "aip-rrabba", "exclude": "tg11105",
-                "root": f"{ART}/races", "extra": ""}
+                "root": f"{ART}/races", "extra": "", "pass_gate": "8,6"}
     for k, v in {**defaults, **spec}.items():
         if k != "models" and getattr(a, k, None) in (None, []):
             setattr(a, k.replace("-", "_"), v)
@@ -161,6 +165,9 @@ def piece_lines(a, task: str, run: Path, env: str) -> list[tuple[str, str]]:
                "--fork-panel", str(a.fork_panel), "--fast-forks", "--episodes", str(eps),
                "--seed", str(seed), "--fork-out", f"{stem}_forks.jsonl",
                "--gen-out", f"{stem}.jsonl"]
+        if str(a.pass_gate) not in ("0", "", "off"):
+            gn, gm = (int(x) for x in str(a.pass_gate).split(","))
+            cmd += ["--pass-gate", str(gn), "--pass-gate-min", str(gm)]
         lines.append((f"{stem}.json", env + " " + " ".join(shlex.quote(x) for x in cmd)
                       + (" " + a.extra if a.extra else "")))
     return lines

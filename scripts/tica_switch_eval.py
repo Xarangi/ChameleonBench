@@ -93,6 +93,12 @@ def main():
                          "--pass-min / N")
     ap.add_argument("--pass-min", type=int, default=6)
     ap.add_argument("--pass-temp", type=float, default=0.7)
+    ap.add_argument("--pass-gate", type=int, default=0,
+                    help="GATE (11-05 user: 6 of 8): a pass counts (verdict PASSED, refit) only if "
+                         ">= --pass-gate-min of N answers re-sampled from the same prefix "
+                         "(T --pass-temp) also pass every deployed probe; else it is a catch. "
+                         "Needs --answers free")
+    ap.add_argument("--pass-gate-min", type=int, default=6)
     ap.add_argument("--gate-auroc", type=float, default=None,
                     help="override rl.adaptive.refit_min_auroc for every probe incl. the turn-0 "
                          "panel (10-24: strict-gate eval; panel cache keys on it -> fresh fits)")
@@ -253,6 +259,10 @@ def main():
         if a.answers != "free":
             raise SystemExit("--pass-forks needs --answers free")
         tr.pass_forks = (a.pass_forks, a.pass_temp)
+    if a.pass_gate:
+        if a.answers != "free":
+            raise SystemExit("--pass-gate needs --answers free")
+        tr.pass_gate = (a.pass_gate, a.pass_gate_min, a.pass_temp)
     if a.answers == "free":
         tr.free_answers = {"max_new": a.answer_max}
     if a.counterfactual:
@@ -408,6 +418,11 @@ def main():
            "by_probe_index": probe_index_metrics(all_trajs, a.max_k),
            "always_pass": a.always_pass, "no_refit": a.no_refit, "scramble_score": a.scramble_score,
            **pass_fork_summary(all_trajs, a.pass_forks, a.pass_min, a.max_k),
+           **({"pass_gate": [a.pass_gate, a.pass_gate_min, a.pass_temp],
+               "pass_gate_checks": pg[0], "pass_gate_rejected": pg[1],
+               "pass_gate_share_mean": pg[2] / pg[0] if pg[0] else None}
+              if (pg := getattr(tr, "_pg_stats", None) or ([0, 0, 0.0] if a.pass_gate else None))
+              else {}),
            "persist_pass_rate": mean([x for v in persist.values() for x in v]),
            "persist_n": sum(len(v) for v in persist.values()),
            "persist_by_lag": {str(k): mean(v) for k, v in sorted(persist.items()) if k <= 8},

@@ -325,6 +325,38 @@ def test_pass_robust_requires_most_forks_to_pass(tmp_path, monkeypatch):
     assert m["robust_checks"] >= len(rs) and m["robust_fail_frac"] == 1.0
 
 
+def test_pass_gate_turns_non_robust_free_passes_into_catches(tmp_path, monkeypatch):
+    """--pass-gate N M (eval, 11-05): with free answers a pass counts only if >= M of N answers
+    re-sampled from the same prefix also pass every deployed probe; else it is a catch."""
+    from next_chameleons.tica.adaptive import AdaptiveDefender
+
+    orig = AdaptiveDefender.score
+    caught = {"gate": True}
+
+    def score(self, name, pooled, row):  # the real turn passes; gate reads (n = 4) per flag
+        r = orig(self, name, pooled, row)
+        n = len(pooled[next(k for k in pooled if isinstance(k, int))])
+        return {**r, "detected": n == 4 and caught["gate"]}
+
+    monkeypatch.setattr(AdaptiveDefender, "score", score)
+    tr, base_name = _trainer(tmp_path, first_probe_panel_from_start=True,
+                             first_probe_panel_kinds=["linear@1"])
+    tr.free_answers = {"max_new": 3}
+    tr.pass_gate = (4, 3, 0.7)
+    trajs, _ = tr.rollout([_spec(base_name, "pg")])
+    rs = [r for r in trajs[0].results if "robust_share" in r]
+    assert rs and all(r["robust_share"] == 0.0 for r in rs)
+    assert all(r["monitored"]["detected"] and r["monitored"].get("robust_fail")
+               and not r["passed"] for r in rs)
+    assert tr._pg_stats[0] >= len(rs) and tr._pg_stats[1] == tr._pg_stats[0]
+    caught["gate"] = False  # every re-sample passes too -> the passes stand
+    del tr._pg_stats
+    trajs, _ = tr.rollout([_spec(base_name, "pg2")])
+    rs = [r for r in trajs[0].results if "robust_share" in r]
+    assert rs and all(r["robust_share"] == 1.0 and not r["monitored"]["detected"] for r in rs)
+    assert any(r["passed"] for r in rs)
+
+
 def test_act_anchor_pulls_act_normal_turns_to_base(tmp_path):
     """adaptive.act_anchor_weight (10-23): no-brief turns add weight * normalised squared distance between
     the policy's and the base model's pooled states (off by default); with policy == base it is 0."""
