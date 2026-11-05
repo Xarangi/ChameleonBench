@@ -12595,3 +12595,10 @@ bit-exact).
   .71/.30/.33, 1000-1200 .93/.63/.52; s/step 80 -> 131 by 600-800. 9B ETA at ~1.4x: step 300 ~12:00 11-05, 400 ~16:00,
   600 ~01:00 11-06, 1000 ~22:00 11-06 (first chunk ends 01:36 11-06; resume then waits for a node).
 - 11-05 06:00 user: keep the strict x2500 run going for now (668847 -> 668848).
+- 11-05 07:35 check-in. Both runs healthy, no errors or OOM.
+  - 9B (668154) at step 185, peak memory flat at 65 GB.
+    - probe 1 beaten .17 at steps 175-200, vs .10 for the 4B KL0.3 at the same steps.
+    - within3 .071 vs .032. GSM8K .85, vs .86 for the 4B.
+  - Strict x2500 (668847) at step 2170.
+    - 2150-2200 (20 steps): k1 .98, k2 .83, k3 .64, k4 .42, within3 .66.
+    - Previous bin 2100-2150: k3 .59, k4 .36. Slight uptick, but too few steps to call it a trend.
