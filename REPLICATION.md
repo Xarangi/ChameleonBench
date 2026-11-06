@@ -12713,3 +12713,8 @@ Per probe: beaten/faced · mean turns · correct passing answers · fork share.
 First-answer accuracy: .78 / .72 / .59.
 Read: on MBPP KL0.3 evades by abandoning the task — after p1 none of its 180 passing answers passes the tests. Strict models get further than on 1800 (2500 reaches p5) but passing answers are mostly wrong past p1 too, and the low fork share at p2+ (.1–.3) means those passes are fragile. Contrast with MATH, where strict 2500 kept 80–100% correct passes at depth.
 9B (668155) @744, no errors: 700–750 beat p1/p2/p3 .77/.26/.19, GSM8K .91 (4B at 700–750: .74/.33/.12, .90).
+
+### 2026-11-06 08:05 — gated races: HumanEval-Py, HumanEval-Java, JS, SQL queued
+Same 3 models (strict 1800 / strict 2500 / KL0.3 1800), 32 episodes, 6-of-8 gate, batch 8, mem 0.30/0.65 (the MBPP OOM fix).
+Spec races/gate4_spec.json via ChameleonBench-gate scripts/heldout_race_launch.py. Node 671854 (24 pieces, 7h wall); score jobs pyeval 671855, javaeval 671856, jseval 671857, sql 671858.
+Known launcher bug: the non-first score jobs check the pyeval status file, so their "RACE INCOMPLETE" check is a no-op — check each pieces.tsv.status by hand.
