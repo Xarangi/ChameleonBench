@@ -12739,3 +12739,16 @@ Battery 671854: pyeval 5/6 (KL p1 OOM x2), jseval 5/6 (KL p1 retry running), jav
 Strict x2500 had no held-out evals yet. Queued:
 1. Full battery at global 2500 = the klx4b_drain.sh / k034b_drain.sh battery, same 35 tasks and args: held-out FIXED-TEXT val race by family, free-answer quality races on train and held-out concepts, persistence x2, capability (GSM8K/MMLU), never-shown panel x8, passive hide-and-solve trained half (base halves linked from klx4b_1800/hs). Driver mech_1025/klx4bx_drain.sh; eval node 672914 (8 h), post 672915. Out: runs/final_v4d_klx_tamia_4b_x2500/{val,quality/step_2500}, mech_1025/klx4b_x2500_2500/hs.
 2. Gated races, 3 models (spec races/gate5_spec.json), after 671854 (afterany): node 672916 (8 h, 42 rows; finished pieces skipped). New: JSON, MGSM fr / ru / th. Reruns: failed pyeval/javaeval/jseval pieces. Adds `--set model.batch_size=16` (the 11-04 fix for Java/French long-history read OOMs; exact re-batching of reads). Score jobs pyeval 672917, javaeval 672918, jseval 672919, json 672920, mgsm_fr 672921, mgsm_ru 672922, mgsm_th 672923; old 671855-7 cancelled.
+
+### 2026-11-06 14:20 — GRADED race battery extended (user: graded tests wherever possible, compare strict 2500)
+New answer-checked race tasks on branch graded-tasks (worktree ChameleonBench-graded, 7aca3d2, pushed; tests pass):
+| task | concept (split) | data | check |
+|---|---|---|---|
+| mbppjava | Java code (held-out) | MultiPL-E mbpp-java rev 28441b6, 386 -> 300 | MultiPL-E asserts under java -ea (as javaeval) |
+| mgsm_de / mgsm_ja | German / Japanese (TRAINED) | juletxara/mgsm rev b2f13d4, 250 | final number (+ fastText in-language extra) |
+| belebele_fi/pt/tr/el/ta | Finnish / Portuguese / Turkish / Greek / Tamil (held-out; no MGSM) | facebook/belebele rev 7899cdf, 900 -> 300 | chosen option letter after brief in-language reasoning (+ in-language extra) |
+| mmlu_physics/cs/bio/med | physics / computer science / biology / medicine and hospitals (held-out topics) | cais/mmlu rev c30699e (physics/cs from cached mmlu_stem) -> 296/200/300/289 | chosen option letter after brief reasoning |
+Data fetched on the login node (datasets-server rows API; compute nodes have no internet, tested 673216) into raw_cache/capability/dl (+ fetch_1106_provenance*.json); materialized by scripts/materialize_graded_tasks.py; race data mech_1025/taskrace/{data,inputs,gold}_<task>.json (CPU 673224).
+Still not gradable (fixed-text val + free-gen in-language/format only): HTML, tone/emotion/deception families, other topics.
+Races: spec races/gate6_spec.json, 3 models x 32 eps, 6-of-8 gate, batch 8, mem .30/.65, model.batch_size=16. Nodes 673237 / 673238 (72 pieces, 8 h); score jobs 673239-673250 (mbppjava, mgsm_de, mgsm_ja, belebele fi pt tr el ta, mmlu physics cs bio med).
+671854 ended FAILED at 13:10 (pieces missing: pyeval kl p1, javaeval x6; jseval kl p1 retry OK) -> covered by 672916.
