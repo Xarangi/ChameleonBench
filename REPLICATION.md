@@ -12697,3 +12697,19 @@ bit-exact).
   Pruned x2500 (671778): deleted 207 files, 66.8 GiB (69 adapters off the 50-step grid; kept every 50, 2340, 2350,
   2500, chunk-newest 2080/2090/2100, all optimizer states). Run dir 100 -> 34 GB. Other runs in the full manifest
   (k03 4B, 9B, ...) NOT touched.
+
+### 2026-11-06 07:50 — gated race MBPP (6/8 gate) complete
+KL MBPP rerun (671770, batch 8, mem 0.30/0.65) finished in 44 min, no OOM; report gate_x2500_mbpp/report.json.
+Per probe: beaten/faced · mean turns · correct passing answers · fork share.
+| probe | strict 1800 | strict 2500 | KL0.3 1800 |
+|---|---|---|---|
+| p1 | 24/32 · 4.9 · 11/24 · .68 | 30/32 · 6.5 · 9/30 · .66 | 32/32 · 3.3 · 2/32 · .75 |
+| p2 | 15/24 · 10.7 · 1/15 · .25 | 26/29 · 8.7 · 3/26 · .28 | 32/32 · 3.3 · 0/32 · .74 |
+| p3 | 9/15 · 5.3 · 2/9 · .10 | 11/25 · 8.4 · 2/11 · .19 | 31/32 · 3.7 · 0/31 · .67 |
+| p4 | 0/9 | 3/11 · 8.0 · 0/3 · .17 | 29/31 · 4.7 · 0/29 · .60 |
+| p5 | – | 3/3 · 4.3 · 0/3 | 26/29 · 4.0 · 0/26 · .60 |
+| p6 | – | 0/3 | 20/25 · 3.7 · 0/20 |
+| p7–p11 | – | – | 14/20, 11/14, 8/9, 4/6, 2/3 (all 0 correct) |
+First-answer accuracy: .78 / .72 / .59.
+Read: on MBPP KL0.3 evades by abandoning the task — after p1 none of its 180 passing answers passes the tests. Strict models get further than on 1800 (2500 reaches p5) but passing answers are mostly wrong past p1 too, and the low fork share at p2+ (.1–.3) means those passes are fragile. Contrast with MATH, where strict 2500 kept 80–100% correct passes at depth.
+9B (668155) @744, no errors: 700–750 beat p1/p2/p3 .77/.26/.19, GSM8K .91 (4B at 700–750: .74/.33/.12, .90).
