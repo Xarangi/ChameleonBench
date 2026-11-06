@@ -12664,3 +12664,12 @@ bit-exact).
   - Strict x2500 (668847) at 2474, now ~229 s/step -> 2500 at ~02:55 with ~30 min wall left (tighter than at 23:50).
     2450-2474: .995/.96/.82, turns-to-beat-3 2.9, within3 .78, GSM8K .93. If it times out, 668848 finishes the last
     steps in a new resume dir and gate_x2500's strict2500 pieces must be relaunched on that dir's step.
+- 11-06 01:35 user: probe 4+ for strict vs KL0.3 4B. From adaptive/turns.jsonl (real_score episodes only, off turns
+  dropped, probe k = n_deployed, probe 1 = the starting panel probe; pooled over episodes, so slightly different from
+  the per-step-averaged training-log bins). Beaten/faced (rate, turns to beat), last ~50 steps of each:
+  probe:        2                 3                 4                 5                6
+  strict 1800   591/677 .87 5.2   268/529 .51 4.6    42/175 .24 4.0     2/17 .12 5.0    1/1
+  strict 2474   759/763 .99 3.1   648/742 .87 3.8   352/546 .64 3.6   102/196 .52 3.7   12/26 .46 4.6
+  KL0.3 1800    674/674 1.0 2.4   657/671 .98 2.7   554/626 .88 3.0   326/385 .85 3.0   93/114 .82 2.9
+  (probe 1 beaten in ~100% for all; turns 2.9 / 1.6 / 1.8.) Episodes reaching probe 5: 3% / 26% / 57%. Deeper
+  counts are censored by the 24-turn budget, so slower models face fewer deep probes.
