@@ -12734,3 +12734,8 @@ Strict 2500 is best on SQL: goes as deep or deeper than KL0.3 and keeps ~90–10
 First-answer accuracy is .844 for all three (27/32) — identical, to check (math differed).
 Battery 671854: pyeval 5/6 (KL p1 OOM x2), jseval 5/6 (KL p1 retry running), javaeval 0/6 (all OOM turns 17–30; 1 retry running). Failed pieces will be rerun at batch 4 after the node ends.
 9B @825: 800–850 beat p1/p2/p3 .84/.43/.15, GSM8K .92 (4B same bin .69/.24/.11, .87).
+
+### 2026-11-06 13:15 — strict x2500 held-out evals queued (user: other held-out concepts, fixed-text, languages)
+Strict x2500 had no held-out evals yet. Queued:
+1. Full battery at global 2500 = the klx4b_drain.sh / k034b_drain.sh battery, same 35 tasks and args: held-out FIXED-TEXT val race by family, free-answer quality races on train and held-out concepts, persistence x2, capability (GSM8K/MMLU), never-shown panel x8, passive hide-and-solve trained half (base halves linked from klx4b_1800/hs). Driver mech_1025/klx4bx_drain.sh; eval node 672914 (8 h), post 672915. Out: runs/final_v4d_klx_tamia_4b_x2500/{val,quality/step_2500}, mech_1025/klx4b_x2500_2500/hs.
+2. Gated races, 3 models (spec races/gate5_spec.json), after 671854 (afterany): node 672916 (8 h, 42 rows; finished pieces skipped). New: JSON, MGSM fr / ru / th. Reruns: failed pyeval/javaeval/jseval pieces. Adds `--set model.batch_size=16` (the 11-04 fix for Java/French long-history read OOMs; exact re-batching of reads). Score jobs pyeval 672917, javaeval 672918, jseval 672919, json 672920, mgsm_fr 672921, mgsm_ru 672922, mgsm_th 672923; old 671855-7 cancelled.
