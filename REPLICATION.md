@@ -12658,3 +12658,9 @@ bit-exact).
   - Strict x2500 (668847) at step 2451, 3:54 wall left, ~210 s/step -> 2500 at ~02:45 (~1 h margin).
     2400-2450: .99/.94/.78, turns-to-beat-3 3.2, within3 .74, GSM8K .89.
   - Race gate_x2500 (670536) waiting on 668847.
+- 11-06 01:15 check-in. Healthy, no errors / OOM.
+  - 9B (668154) at step 630; chunk ends ~01:36, 668155 resumes from the last saved step. Peak 72.5 GB (+0.7).
+    600-650: probe 1/2/3 .66/.14/.15, within3 .30, GSM8K .89 vs 4B KL0.3 600-650 .62/.14/.12, .26, .85.
+  - Strict x2500 (668847) at 2474, now ~229 s/step -> 2500 at ~02:55 with ~30 min wall left (tighter than at 23:50).
+    2450-2474: .995/.96/.82, turns-to-beat-3 2.9, within3 .78, GSM8K .93. If it times out, 668848 finishes the last
+    steps in a new resume dir and gate_x2500's strict2500 pieces must be relaunched on that dir's step.
