@@ -12630,3 +12630,11 @@ bit-exact).
     - 450-469: 9B .59 / .18 / .31 / .90.
   - The 9B tracks the 4B with GSM8K equal or higher.
   - 9B step time 118 -> 166 s.
+- 11-05 20:45 check-in. Both runs healthy (no traceback / OOM; eval_on_save a100 failure as known).
+  - 9B (668154) at step 530 (log header max), ~160-170 s/step, peak 71.8 GB (up from 65 GB at ~200; ~8 GB headroom).
+    Same-step bins, 9B vs 4B KL0.3, probe 1 / probe 2 beaten / within3 / GSM8K fork:
+    450-500 .52/.13/.24/.91 vs .36/.09/.16/.89; 500-550 .58/.27/.32/.88 vs .55/.23/.21/.89. 9B at or ahead of 4B.
+    ETA step 600 ~00:00 11-06, 1000 ~18:00-20:00 11-06 plus resume queue time.
+  - Strict x2500 (668847) at step 2399, in cooldown (2350-2500). k1 / k2 / k3 beaten / within3 / GSM8K:
+    2300-2350 .99/.90/.73/.70/.92; 2350-2400 .99/.91/.79/.70/.89. k3 still creeping up (KL0.3 final k3 .96).
+    ~207 s/step -> step 2500 ~02:30 11-06.
