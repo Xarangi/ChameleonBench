@@ -12694,3 +12694,6 @@ bit-exact).
     gate_x2500_mbpp/failed_670536/. Rerun pieces_kl.tsv with --batch 8, TICA_VLLM_MEM 0.30, TICA_MEM_FRACTION 0.65 (same
     seeds 1/2, 16 episodes each): node 671770 (4:00, 2 of 4 GPUs used), score 671771.
 - x2500 checkpoint prune (100 GB): dry-run manifest job 671777 (manifest in next_chameleons_artifacts/prune_x2500/).
+  Pruned x2500 (671778): deleted 207 files, 66.8 GiB (69 adapters off the 50-step grid; kept every 50, 2340, 2350,
+  2500, chunk-newest 2080/2090/2100, all optimizer states). Run dir 100 -> 34 GB. Other runs in the full manifest
+  (k03 4B, 9B, ...) NOT touched.
