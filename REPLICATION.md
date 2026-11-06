@@ -12651,3 +12651,10 @@ bit-exact).
   (differs only in steps / paths / save bookkeeping): node 670536, score 670537 (mbpp) / 670538 (math). All three models gated,
   so not comparable 1:1 with the ungated 11-03/04 race reports. If 668847 times out before 2500, the strict2500 pieces
   fail (adapter missing) -> relaunch against the resume chunk's final step.
+- 11-05 23:50 check-in. All healthy, no errors / OOM.
+  - 9B (668154) at step 598, peak memory flat at 71.8 GB. 550-600: probe 1/2/3 beaten .63/.15/.08, within3 .26,
+    GSM8K .89 vs 4B KL0.3 same steps .54/.20/.10, .25, .87 (probe 2 dipped in both runs here; 500-550 was .25 / .23).
+    First chunk ends ~01:36 11-06; 668155 resumes when a node frees.
+  - Strict x2500 (668847) at step 2451, 3:54 wall left, ~210 s/step -> 2500 at ~02:45 (~1 h margin).
+    2400-2450: .99/.94/.78, turns-to-beat-3 3.2, within3 .74, GSM8K .89.
+  - Race gate_x2500 (670536) waiting on 668847.
