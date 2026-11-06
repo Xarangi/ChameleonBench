@@ -12638,3 +12638,14 @@ bit-exact).
   - Strict x2500 (668847) at step 2399, in cooldown (2350-2500). k1 / k2 / k3 beaten / within3 / GSM8K:
     2300-2350 .99/.90/.73/.70/.92; 2350-2400 .99/.91/.79/.70/.89. k3 still creeping up (KL0.3 final k3 .96).
     ~207 s/step -> step 2500 ~02:30 11-06.
+- 11-05 21:10 user: strict x2500 vs its 1800 end vs KL0.3 4B (training-log bins, last 50 steps; probe 1/2/3 beaten,
+  turns to beat 1/2/3, within3/within5, GSM8K, free valid): strict 1750-1800 .95/.71/.47, 2.5/3.4/3.6, .59/.70, .91,
+  .74 | x2500 2350-2400 (50 steps into cooldown) .99/.91/.79, 2.2/2.9/3.4, .71/.81, .89, .75 | KL0.3 1750-1800
+  1.00/.99/.96, 2.0/2.4/2.5, .87/.94, .90, .75; KL0.3 50 steps into its cooldown (1650-1700) .998/.98/.94, 2.0/2.4/2.6,
+  .84/.92, .89. Gap closed: probe 2 ~70%, probe 3 ~65%, within3 ~40%, turns-to-beat-3 ~25%. No capability cost.
+- 11-05 21:15 user: queue races. gate_x2500 (ChameleonBench-gate race_launch.py, FIRST GPU use of --pass-gate 8,6):
+  tasks mbpp + math, 32 episodes each, paired seeds, models strict1800 (klx resume_1280/step_520), strict2500
+  (x2500/resume_2100/step_400 = global 2500, not yet written), kl03_1800 (k03 resume_1660/step_140). Node job 670533
+  (4 GPUs, 12 pieces, --time 3:00, afterany:668847), score jobs 670534 (mbpp) / 670535 (math). All three models gated,
+  so not comparable 1:1 with the ungated 11-03/04 race reports. If 668847 times out before 2500, the strict2500 pieces
+  fail (adapter missing) -> relaunch against the resume chunk's final step.
