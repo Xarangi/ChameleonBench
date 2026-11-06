@@ -12673,3 +12673,24 @@ bit-exact).
   KL0.3 1800    674/674 1.0 2.4   657/671 .98 2.7   554/626 .88 3.0   326/385 .85 3.0   93/114 .82 2.9
   (probe 1 beaten in ~100% for all; turns 2.9 / 1.6 / 1.8.) Episodes reaching probe 5: 3% / 26% / 57%. Deeper
   counts are censored by the 24-turn budget, so slower models face fewer deep probes.
+- 11-06 06:00 check-in. Strict x2500 COMPLETED (668847, step 2500; 668848 exited in 7 s). 9B: 668154 TIMEOUT at
+  24 h as planned, resumed as 668155 (tg10601), now step 710, no errors; peak memory back to ~64 GB in the new chunk.
+  9B vs 4B KL0.3, 650-700: probe 1/2/3 .74/.26/.12, within3 .37, GSM8K .93 vs .67/.31/.12, .29, .87.
+- gate_x2500 race (first GPU use of the 8/6 pass gate). Gate works: rejected 10-20% of raw passes per piece (e.g. MBPP
+  strict1800 10/33 + 7/32, strict2500 12/51 + 6/40; math KL0.3 19/146 + 22/126, strict2500 14/95 + 7/78; mean
+  resample share .71-.94).
+  - MATH (report gate_x2500_math/report.json, all 6 pieces ok), per probe k beaten/faced, turns, correct passing
+    answers, fork share:
+    strict1800: p1 32/32 2.2 28/32 .91 | p2 31/32 3.0 24/31 .91 | p3 24/31 4.3 21/24 .72 | p4 9/24 7.3 8/9 .38 |
+      p5 3/9 10.7 2/3 .04 | p6 0/3
+    strict2500: p1 32/32 1.4 30/32 .93 | p2 32/32 2.6 31/32 .94 | p3 29/32 3.2 23/29 .87 | p4 23/29 2.6 20/23 .79 |
+      p5 19/23 4.0 15/19 .62 | p6 9/19 3.9 9/9 .81 | p7 6/9 5.5 5/6 .21 | p8 2/6 4.5 2/2 .44 | p9 0/2
+    kl03_1800: p1 32/32 1.4 22/32 1.0 | p2 32/32 2.1 22/32 .94 | p3 32/32 1.9 23/32 .98 | p4 32/32 2.7 16/32 .90 |
+      p5 28/32 3.4 12/28 .85 | p6 24/28 3.1 11/24 .83 | p7 20/24 4.4 6/20 .79 | p8 14/19 3.4 4/14 .65 |
+      p9 9/14 3.9 2/9 .82 | p10 7/7 2.9 2/7 .66 | p11 1/7 | p12 0/1
+    First-answer accuracy .91 / .91 / .84. Probes beaten in a row: 3.1 / 4.8 / 7.2.
+  - MBPP: strict pieces ok; both kl03_1800 pieces OOM'd twice (HF process at 47.5 GB cap, in _refit_reads ->
+    pooled_shared_prefix at turns 25-30: long late-episode contexts; not the gate code). Failed outputs moved to
+    gate_x2500_mbpp/failed_670536/. Rerun pieces_kl.tsv with --batch 8, TICA_VLLM_MEM 0.30, TICA_MEM_FRACTION 0.65 (same
+    seeds 1/2, 16 episodes each): node 671770 (4:00, 2 of 4 GPUs used), score 671771.
+- x2500 checkpoint prune (100 GB): dry-run manifest job 671777 (manifest in next_chameleons_artifacts/prune_x2500/).
