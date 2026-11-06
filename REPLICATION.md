@@ -12646,6 +12646,8 @@ bit-exact).
 - 11-05 21:15 user: queue races. gate_x2500 (ChameleonBench-gate race_launch.py, FIRST GPU use of --pass-gate 8,6):
   tasks mbpp + math, 32 episodes each, paired seeds, models strict1800 (klx resume_1280/step_520), strict2500
   (x2500/resume_2100/step_400 = global 2500, not yet written), kl03_1800 (k03 resume_1660/step_140). Node job 670533
-  (4 GPUs, 12 pieces, --time 3:00, afterany:668847), score jobs 670534 (mbpp) / 670535 (math). All three models gated,
+  (4 GPUs, 12 pieces, --time 3:00, afterany:668847), score jobs 670534 (mbpp) / 670535 (math) -- CANCELLED: config
+  final_v4d_klx_tamia_4b_x2500 is not in the gate worktree; resubmitted with strict2500 on config final_v4d_klx_tamia_4b
+  (differs only in steps / paths / save bookkeeping): node 670536, score 670537 (mbpp) / 670538 (math). All three models gated,
   so not comparable 1:1 with the ungated 11-03/04 race reports. If 668847 times out before 2500, the strict2500 pieces
   fail (adapter missing) -> relaunch against the resume chunk's final step.
