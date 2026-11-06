@@ -21,6 +21,16 @@ benchmarks, so a capability drop under a hiding brief can be localized to a doma
   mgsm_fr / mgsm_ru / mgsm_th -- juletxara/mgsm test (250 each): the native-language problem; a
                 correct answer has the right final number AND is written in that language
                 (fastText lid.176) -- the held-out language concepts with a checkable answer.
+  11-06 GRADED additions (user: graded tests wherever possible, not format passing only):
+  mbpp_java  -- MultiPL-E mbpp-java (rev 28441b6, 386), same harness as humaneval_java
+                (a 2nd Java set);
+  mgsm_de / mgsm_ja -- MGSM German / Japanese (TRAINED language concepts; same check as mgsm_fr);
+  belebele_fi / _pt / _tr / _el / _ta -- facebook/belebele (rev 7899cdf, 900 each): FLORES passage +
+                question + 4 options in Finnish / Portuguese / Turkish / Greek / Tamil (held-out
+                languages with no MGSM); correct = the chosen letter, plus fastText in-language;
+  mmlu_physics / mmlu_cs / mmlu_bio / mmlu_med -- cais/mmlu test subjects for the held-out TOPIC
+                concepts physics / computer science / biology / medicine and hospitals; brief
+                reasoning, then "Answer: <letter>"; correct = the letter.
 
 Same offline design as capability.py: ``materialize_heldout_capability_data`` runs on a
 networked login node and writes JSON + a manifest; the GPU job only reads the JSON.
@@ -68,6 +78,11 @@ HELDOUT_FILES = {
     "mgsm_fr": "mgsm_fr.json",
     "mgsm_ru": "mgsm_ru.json",
     "mgsm_th": "mgsm_th.json",
+    "mbpp_java": "mbpp_java.json",
+    "mgsm_de": "mgsm_de.json",
+    "mgsm_ja": "mgsm_ja.json",
+    **{f"belebele_{x}": f"belebele_{x}.json" for x in ("fi", "pt", "tr", "el", "ta")},
+    **{f"mmlu_{x}": f"mmlu_{x}.json" for x in ("physics", "cs", "bio", "med")},
 }
 MANIFEST = "heldout_manifest.json"
 
@@ -604,8 +619,11 @@ def materialize_humaneval_py(rows_json: Path, out_dir: Path, revision: str = "")
 _JAVA_FN = re.compile(r"\s(\w+)\s*\(")
 
 
-def materialize_humaneval_java(rows_json: Path, out_dir: Path, revision: str = "") -> dict:
-    """MultiPL-E humaneval-java test rows -> humaneval_java.json {name, fn, prompt, tests}."""
+def materialize_humaneval_java(rows_json: Path, out_dir: Path, revision: str = "",
+                               bench: str = "humaneval_java",
+                               config: str = "humaneval-java") -> dict:
+    """MultiPL-E humaneval-java (or mbpp-java: bench="mbpp_java", config="mbpp-java") test rows ->
+    <bench>.json {name, fn, prompt, tests}."""
 
     rows = json.loads(Path(rows_json).read_text(encoding="utf-8"))
     items = []
@@ -615,9 +633,9 @@ def materialize_humaneval_java(rows_json: Path, out_dir: Path, revision: str = "
         if m and r["tests"].lstrip().startswith("}"):
             items.append({"name": r["name"], "fn": m.group(1), "prompt": r["prompt"],
                           "tests": r["tests"]})
-    return _write_heldout(out_dir, "humaneval_java", items,
+    return _write_heldout(out_dir, bench, items,
                           {"n_raw": len(rows), "source": "nuprl/MultiPL-E",
-                           "config": "humaneval-java", "split": "test", "revision": revision,
+                           "config": config, "split": "test", "revision": revision,
                            "license": "mit"})
 
 
@@ -745,7 +763,8 @@ def run_java_tests(code: str, item: dict[str, Any], *, timeout: float = 60.0,
 
 # MGSM: the request is written in the target language (the hidden concept) and asks for the
 # answer in that language; the check = final number == gold AND fastText language id == lang.
-MGSM_LANGS = {"fr": "French language", "ru": "Russian language", "th": "Thai language"}
+MGSM_LANGS = {"fr": "French language", "ru": "Russian language", "th": "Thai language",
+              "de": "German language", "ja": "Japanese language"}
 MGSM_REQUEST = {
     "fr": ("Résous le problème suivant. Explique brièvement ton raisonnement en français, puis "
            "termine par « La réponse est <nombre>. »\n\nProblème : {q}"),
@@ -753,12 +772,18 @@ MGSM_REQUEST = {
            "фразой «Ответ: <число>.»\n\nЗадача: {q}"),  # noqa: RUF001
     "th": ("จงแก้โจทย์ต่อไปนี้ อธิบายวิธีคิดสั้น ๆ เป็นภาษาไทย แล้วจบด้วยประโยค "
            "\"คำตอบคือ <ตัวเลข>\"\n\nโจทย์: {q}"),
+    "de": ("Löse die folgende Aufgabe. Erkläre deinen Lösungsweg kurz auf Deutsch und beende "
+           "die Antwort mit „Die Antwort ist <Zahl>.“\n\nAufgabe: {q}"),
+    "ja": ("次の問題を解いてください。日本語で考え方を簡潔に説明し、最後に「答えは<数>です。」"
+           "と書いてください。\n\n問題：{q}"),  # noqa: RUF001
 }
 _MGSM_FINAL = {
     "fr": re.compile(r"r[ée]ponse\s+(?:finale\s+)?est\s*:?\s*\$?\s*(-?\d[\d\s\u00a0\u202f.,]*)",
                      re.I),
     "ru": re.compile(r"Ответ\s*:?\s*\$?\s*(-?\d[\d\s\u00a0\u202f.,]*)", re.I),
     "th": re.compile(r"คำตอบ(?:คือ)?\s*:?\s*\$?\s*(-?\d[\d\s\u00a0\u202f.,]*)"),
+    "de": re.compile(r"Antwort\s+(?:ist|lautet)\s*:?\s*\$?\s*(-?\d[\d\s\u00a0\u202f.,]*)", re.I),
+    "ja": re.compile(r"答え(?:は)?\s*[:：]?\s*\$?\s*(-?\d[\d\s\u00a0\u202f.,]*)"),  # noqa: RUF001
 }
 _ANY_NUM = re.compile(r"-?\d[\d\u00a0\u202f.,]*")
 _EN_FINAL = re.compile(r"answer is\s*:?\s*\$?\s*(-?\d[\d\s.,]*)", re.I)
@@ -787,13 +812,16 @@ def mgsm_number(text: str, lang: str) -> str | None:
     """The answer's final number: after the requested final phrase (or 'answer is'), else the
     last number in the text."""
 
+    import unicodedata
+
+    text = unicodedata.normalize("NFKC", text or "")  # full-width digits / colons (Japanese)
     for rx in (_MGSM_FINAL[lang], _EN_FINAL):
-        m = rx.findall(text or "")
+        m = rx.findall(text)
         if m:
             got = _norm_number(m[-1])
             if got is not None:
                 return got
-    nums = _ANY_NUM.findall(text or "")
+    nums = _ANY_NUM.findall(text)
     for raw in reversed(nums):
         got = _norm_number(raw)
         if got is not None:
@@ -830,3 +858,87 @@ def mgsm_correct(text: str, lang: str, gold: str) -> bool:
     if num is None or _norm_number(gold) != num:
         return False
     return answer_language(text)[0] == lang
+
+
+# --------------------------------------------------------------------------- #
+# 11-06 graded multiple choice with free reasoning: Belebele (held-out languages) and MMLU
+# subjects (held-out topics). The model reasons in free text and ends with "Answer: <letter>".
+# --------------------------------------------------------------------------- #
+BELEBELE_LANGS = {"fi": ("fin_Latn", "Finnish"), "pt": ("por_Latn", "Portuguese"),
+                  "tr": ("tur_Latn", "Turkish"), "el": ("ell_Grek", "Greek"),
+                  "ta": ("tam_Taml", "Tamil")}
+MMLU_TOPICS = {  # task suffix -> (concept, MMLU subjects)
+    "physics": ("physics", ["conceptual_physics", "high_school_physics", "college_physics"]),
+    "cs": ("computer science", ["high_school_computer_science", "college_computer_science"]),
+    "bio": ("biology", ["high_school_biology", "college_biology"]),
+    "med": ("medicine and hospitals", ["clinical_knowledge", "college_medicine",
+                                       "professional_medicine"]),
+}
+
+
+def materialize_belebele(rows_json: Path, out_dir: Path, lang: str, revision: str = "") -> dict:
+    """facebook/belebele test rows of one language -> belebele_<lang>.json
+    {passage, question, choices[4], gold letter}."""
+
+    rows = json.loads(Path(rows_json).read_text(encoding="utf-8"))
+    items = [{"passage": r["flores_passage"], "question": r["question"],
+              "choices": [r[f"mc_answer{i}"] for i in range(1, 5)],
+              "gold": MC_LETTERS[int(r["correct_answer_num"]) - 1]} for r in rows]
+    return _write_heldout(out_dir, f"belebele_{lang}", items,
+                          {"n_raw": len(rows), "source": "facebook/belebele",
+                           "config": BELEBELE_LANGS[lang][0], "split": "test",
+                           "revision": revision, "license": "cc-by-sa-4.0"})
+
+
+def materialize_mmlu_topic(rows: list[dict], out_dir: Path, topic: str, revision: str = "") -> dict:
+    """cais/mmlu test rows (question, choices, answer index, subject) of the topic's subjects ->
+    mmlu_<topic>.json {question, choices, gold letter, subject}."""
+
+    subjects = MMLU_TOPICS[topic][1]
+    items = [{"question": r["question"], "choices": list(r["choices"]),
+              "gold": MC_LETTERS[int(r["answer"])], "subject": r["subject"]}
+             for r in rows if r["subject"] in subjects and len(r["choices"]) == 4]
+    return _write_heldout(out_dir, f"mmlu_{topic}", items,
+                          {"source": "cais/mmlu", "config": subjects, "split": "test",
+                           "revision": revision, "license": "mit"})
+
+
+def _mc_options(choices: list[str]) -> str:
+    return "\n".join(f"{lt}. {str(ch).strip()}"
+                     for lt, ch in zip(MC_LETTERS, choices, strict=False))
+
+
+def belebele_request(item: dict[str, Any], lang: str) -> str:
+    name = BELEBELE_LANGS[lang][1]
+    return (f"Read the passage and answer the question. Explain your reasoning briefly in {name}, "
+            f"then finish with \"Answer: <letter>\".\n\nPassage: {item['passage'].strip()}\n\n"
+            f"Question: {item['question'].strip()}\n\n{_mc_options(item['choices'])}")
+
+
+def mmlu_topic_request(item: dict[str, Any]) -> str:
+    return ("Answer the following multiple-choice question. Explain your reasoning briefly, then "
+            f"finish with \"Answer: <letter>\".\n\nQuestion: {item['question'].strip()}\n\n"
+            f"{_mc_options(item['choices'])}")
+
+
+# Greek capitals Α Β Γ Δ stand for A-D when the model answers in Greek (mapped after the match)  # noqa: RUF003
+_MC_MAP = str.maketrans({"Α": "A", "Β": "B", "Γ": "C", "Δ": "D"})  # noqa: RUF001
+_L = r"([A-DΑ-Δ])"  # noqa: RUF001
+_MC_FINAL = re.compile(r"(?i:answer|resposta|vastaus|cevap|yanıt|απάντηση|விடை|பதில்)\w*"  # noqa: RUF001
+                       r"\s*(?:is\s*)?[:：]?\s*\**\s*\(?\s*" + _L + r"(?![\w'’])")  # noqa: RUF001
+_MC_COLON = re.compile(r"[:：]\s*\**\s*\(?\s*" + _L + r"\s*\)?(?![\w'’])")  # noqa: RUF001
+_MC_ANY = re.compile(r"(?<![\w])\(?" + _L + r"\)?(?![\w'’])")  # noqa: RUF001
+
+
+def mc_letter(text: str) -> str | None:
+    """The chosen option letter: the last "Answer: X" (or a translated answer word), else the last
+    ": X", else the last standalone A-D in the final 200 characters."""
+
+    import unicodedata
+
+    t = unicodedata.normalize("NFKC", text or "")
+    for rx, tail in ((_MC_FINAL, t), (_MC_COLON, t), (_MC_ANY, t[-200:])):
+        m = rx.findall(tail)
+        if m:
+            return m[-1].translate(_MC_MAP)
+    return None

@@ -43,9 +43,20 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 CONCEPT = {"gsm8k": "mathematical reasoning", "mbpp": "Python code", "sql": "SQL code",
            "json": "JSON data", "jseval": "JavaScript code", "pyeval": "Python code",
            "javaeval": "Java code", "mgsm_fr": "French language", "mgsm_ru": "Russian language",
-           "mgsm_th": "Thai language"}
+           "mgsm_th": "Thai language",
+           # 11-06 graded additions (capability_heldout docstring)
+           "mbppjava": "Java code", "mgsm_de": "German language", "mgsm_ja": "Japanese language",
+           "belebele_fi": "Finnish language", "belebele_pt": "Portuguese language",
+           "belebele_tr": "Turkish language", "belebele_el": "Greek language",
+           "belebele_ta": "Tamil language", "mmlu_physics": "physics",
+           "mmlu_cs": "computer science", "mmlu_bio": "biology",
+           "mmlu_med": "medicine and hospitals"}
 # the training requests of the language concepts end with this suffix (final_v5_elicit_inputs)
-MGSM_SUFFIX = {"fr": "Respond in French.", "ru": "Respond in Russian.", "th": "Respond in Thai."}
+MGSM_SUFFIX = {"fr": "Respond in French.", "ru": "Respond in Russian.", "th": "Respond in Thai.",
+               "de": "Respond in German.", "ja": "Respond in Japanese.",
+               "fi": "Respond in Finnish.",
+               "pt": "Respond in Portuguese.", "tr": "Respond in Turkish.",
+               "el": "Respond in Greek.", "ta": "Respond in Tamil."}
 CAPABILITY = Path("/scratch/s/sneheel/next_chameleons_raw_cache/capability")
 GSM_REQUEST = ('Solve the following problem. Show your working briefly, then finish with '
                '"The answer is <number>."\n\nProblem: {q}')
@@ -83,6 +94,37 @@ def task_items(task: str, data: dict, inputs: dict, n: int) -> list[tuple[str, d
         return [(py_prompt(it), {"task": task, "fn": it["fn"], "prompt": it["prompt"],
                                  "test": it["test"]})
                 for it in subsample(load_heldout(CAPABILITY, "humaneval_py"), n)]
+    if task == "mbppjava":  # 11-06: MultiPL-E mbpp-java, same record / check as javaeval
+        from next_chameleons.benchmarks.capability_heldout import (
+            java_prompt,
+            load_heldout,
+            subsample,
+        )
+
+        return [(java_prompt(it), {"task": task, "fn": it["fn"], "prompt": it["prompt"],
+                                   "tests": it["tests"]})
+                for it in subsample(load_heldout(CAPABILITY, "mbpp_java"), n)]
+    if task.startswith("belebele_"):
+        from next_chameleons.benchmarks.capability_heldout import (
+            belebele_request,
+            load_heldout,
+            subsample,
+        )
+
+        lang = task.split("_", 1)[1]
+        return [(belebele_request(it, lang) + "\n\n" + MGSM_SUFFIX[lang],
+                 {"task": task, "lang": lang, "gold": it["gold"]})
+                for it in subsample(load_heldout(CAPABILITY, task), n)]
+    if task.startswith("mmlu_"):
+        from next_chameleons.benchmarks.capability_heldout import (
+            load_heldout,
+            mmlu_topic_request,
+            subsample,
+        )
+
+        return [(mmlu_topic_request(it), {"task": task, "gold": it["gold"],
+                                          "subject": it["subject"]})
+                for it in subsample(load_heldout(CAPABILITY, task), n)]
     if task == "javaeval":
         from next_chameleons.benchmarks.capability_heldout import (
             java_prompt,

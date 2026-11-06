@@ -186,3 +186,81 @@ def test_heldout_launcher_dry_run(tmp_path) -> None:
     for ln in tsv:
         assert "--fast-forks" in ln and "--switch-prob 0" in ln and "refit-every" not in ln
     assert "gold_mgsm_th.json" in r.stdout and "tica_task_race_report.py" in r.stdout
+
+
+# ---------------------------------------------------------------- 11-06 graded additions
+@pytest.mark.parametrize("text,want", [
+    ("Reasoning ... Answer: C", "C"),
+    ("the answer is a bit tricky. Answer: B", "B"),   # lowercase 'a' is not a choice
+    ("Vastaus: D", "D"), ("Resposta: **A**", "A"), ("Cevap: C.", "C"),
+    ("Απάντηση: Β", "B"), ("Απάντηση: (Γ)", "C"),  # noqa: RUF001 (Greek A-D)
+    ("பதில்: B", "B"), ("I think (D) is right", "D"), ("no choice given", None),
+])
+def test_mc_letter(text: str, want) -> None:
+    assert C.mc_letter(text) == want
+
+
+@pytest.mark.parametrize("text,lang,want", [
+    ("なので答えは１８です。", "ja", "18"), ("答え：1,250", "ja", "1250"),  # noqa: RUF001
+    ("Die Antwort ist 1.250.", "de", "1250"), ("Die Antwort lautet 18 Dollar.", "de", "18"),
+])
+def test_mgsm_number_de_ja(text: str, lang: str, want: str) -> None:
+    assert C.mgsm_number(text, lang) == want
+
+
+def test_materialize_graded(tmp_path) -> None:
+    bele = [{"flores_passage": "Teksti.", "question": "Mikä?", "mc_answer1": "a",
+             "mc_answer2": "b", "mc_answer3": "c", "mc_answer4": "d", "correct_answer_num": "3"}]
+    (tmp_path / "b.json").write_text(json.dumps(bele))
+    C.materialize_belebele(tmp_path / "b.json", tmp_path, "fi")
+    it, = C.load_heldout(tmp_path, "belebele_fi")
+    assert it["gold"] == "C" and it["choices"] == ["a", "b", "c", "d"]
+    rows = [{"question": "q1", "choices": ["w", "x", "y", "z"], "answer": 0,
+             "subject": "college_physics"},
+            {"question": "q2", "choices": ["w", "x", "y", "z"], "answer": 2,
+             "subject": "sociology"}]
+    meta = C.materialize_mmlu_topic(rows, tmp_path, "physics")
+    assert meta["n"] == 1 and C.load_heldout(tmp_path, "mmlu_physics")[0]["gold"] == "A"
+    java = [{"name": "m0", "prompt": JAVA_ITEM["prompt"], "tests": JAVA_ITEM["tests"]}]
+    (tmp_path / "j.json").write_text(json.dumps(java))
+    C.materialize_humaneval_java(tmp_path / "j.json", tmp_path, bench="mbpp_java",
+                                 config="mbpp-java")
+    assert C.load_heldout(tmp_path, "mbpp_java")[0]["fn"] == "add"
+    man = json.loads((tmp_path / C.MANIFEST).read_text())["files"]
+    assert man["mbpp_java"]["config"] == "mbpp-java" and man["belebele_fi"]["n"] == 1
+
+
+def test_builder_and_report_graded(tmp_path, monkeypatch) -> None:
+    (tmp_path / "belebele_pt.json").write_text(json.dumps(
+        [{"passage": "Texto.", "question": "Qual?", "choices": ["a", "b", "c", "d"],
+          "gold": "B"}]))
+    (tmp_path / "mmlu_bio.json").write_text(json.dumps(
+        [{"question": "Cells?", "choices": ["a", "b", "c", "d"], "gold": "D",
+          "subject": "college_biology"}]))
+    (tmp_path / "mbpp_java.json").write_text(json.dumps([{**JAVA_ITEM, "name": "m0"}]))
+    monkeypatch.setattr(B, "CAPABILITY", tmp_path)
+    (breq, brec), = B.task_items("belebele_pt", {}, {}, 300)
+    assert "Passage: Texto." in breq and "B. b" in breq and breq.endswith("Respond in Portuguese.")
+    assert brec == {"task": "belebele_pt", "lang": "pt", "gold": "B"}
+    (mreq, mrec), = B.task_items("mmlu_bio", {}, {}, 300)
+    assert "Question: Cells?" in mreq and mrec["gold"] == "D"
+    (jreq, jrec), = B.task_items("mbppjava", {}, {}, 300)
+    assert "```java" in jreq and jrec["task"] == "mbppjava"
+    assert B.CONCEPT["mmlu_med"] == "medicine and hospitals"
+    gold = {breq: brec, mreq: mrec}
+    assert set(T.extra_checks({breq: brec})) == {"in_language", "correct_and_in_language"}
+    assert T.extra_checks({mreq: mrec}) == {}
+    fn = T.make_correct(gold, 2)
+    rows = [{"user": "Verdict: PASSED.\n\n" + breq, "answer": "Explicação... Resposta: B"},
+            {"user": breq, "answer": "Resposta: C"},
+            {"user": mreq, "answer": "Because ... Answer: D"}]
+    assert [fn(r) for r in rows] == [True, False, True]
+
+
+def test_heldout_launcher_registers_graded() -> None:
+    import heldout_race_launch as H
+
+    tasks = H.register({}, "/x")
+    for t in ("mbppjava", "mgsm_de", "belebele_ta", "mmlu_med"):
+        assert t in tasks and tasks[t][1] == f"/x/data_{t}.json"
+    assert tasks["mmlu_med"][0] == "medicine and hospitals"

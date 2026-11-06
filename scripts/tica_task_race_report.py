@@ -15,7 +15,9 @@ over EPISODES.
 Task checks: GSM8K final number, MBPP unit tests (sandboxed), HumanEval-JS Node tests, SQL
 execution match, JSON function schema (tica/validity.py); held-out tasks (11-03): HumanEval-Python
 check(entry_point) (MBPP sandbox), HumanEval-Java asserts under `java -ea`, MGSM fr / ru / th final
-number. MGSM also records the answer's fastText language (lid.176): per probe k
+number; 11-06: MBPP-Java (as HumanEval-Java), MGSM de / ja, Belebele fi / pt / tr / el / ta and
+MMLU physics / cs / bio / med (the "Answer: <letter>" choice). MGSM and Belebele also record
+the answer's fastText language (lid.176): per probe k
 passing_in_language / passing_correct_and_in_language (+ _n), and first_answer_in_language /
 first_answer_correct_and_in_language, next to passing_correct / first_answer_acc (= the number).
 Aggregates only; needs the training venv (validity / sandbox / fasttext).
@@ -60,7 +62,11 @@ def correct(req: str, rec: dict, answer: str) -> bool:
         from next_chameleons.benchmarks.capability_heldout import extract_code, run_humaneval_py
 
         return bool(run_humaneval_py(extract_code(answer or ""), rec)["passed"])
-    if task == "javaeval":
+    if task.startswith(("belebele_", "mmlu_")):  # 11-06: the chosen option letter
+        from next_chameleons.benchmarks.capability_heldout import mc_letter
+
+        return mc_letter(answer or "") == rec["gold"]
+    if task in ("javaeval", "mbppjava"):
         from next_chameleons.benchmarks.capability_heldout import extract_java_code, run_java_tests
 
         return bool(run_java_tests(extract_java_code(answer or ""), rec)["passed"])
@@ -90,13 +96,12 @@ def in_language(rec: dict, answer: str) -> bool:
 
 
 # extra checks per task family, reported next to the headline check (task correctness)
-EXTRA_CHECKS = {
-    "mgsm": {
-        "in_language": lambda req, rec, ans: in_language(rec, ans),
-        "correct_and_in_language": lambda req, rec, ans: (correct(req, rec, ans)
-                                                          and in_language(rec, ans)),
-    },
+_LANG_CHECKS = {
+    "in_language": lambda req, rec, ans: in_language(rec, ans),
+    "correct_and_in_language": lambda req, rec, ans: (correct(req, rec, ans)
+                                                      and in_language(rec, ans)),
 }
+EXTRA_CHECKS = {"mgsm": _LANG_CHECKS, "belebele": _LANG_CHECKS}  # language tasks (11-06: belebele)
 
 
 def extra_checks(gold: dict) -> dict:

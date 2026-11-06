@@ -32,6 +32,19 @@ HELDOUT_TASKS = {
     "mgsm_fr": ("French language", 512),
     "mgsm_ru": ("Russian language", 512),
     "mgsm_th": ("Thai language", 512),
+    # 11-06 graded additions (build_task_race_data.py / capability_heldout docstrings)
+    "mbppjava": ("Java code", 768),
+    "mgsm_de": ("German language", 512),
+    "mgsm_ja": ("Japanese language", 512),
+    "belebele_fi": ("Finnish language", 512),
+    "belebele_pt": ("Portuguese language", 512),
+    "belebele_tr": ("Turkish language", 512),
+    "belebele_el": ("Greek language", 512),
+    "belebele_ta": ("Tamil language", 512),
+    "mmlu_physics": ("physics", 512),
+    "mmlu_cs": ("computer science", 512),
+    "mmlu_bio": ("biology", 512),
+    "mmlu_med": ("medicine and hospitals", 512),
 }
 
 
