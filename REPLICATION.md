@@ -12718,3 +12718,19 @@ Read: on MBPP KL0.3 evades by abandoning the task — after p1 none of its 180 p
 Same 3 models (strict 1800 / strict 2500 / KL0.3 1800), 32 episodes, 6-of-8 gate, batch 8, mem 0.30/0.65 (the MBPP OOM fix).
 Spec races/gate4_spec.json via ChameleonBench-gate scripts/heldout_race_launch.py. Node 671854 (24 pieces, 7h wall); score jobs pyeval 671855, javaeval 671856, jseval 671857, sql 671858.
 Known launcher bug: the non-first score jobs check the pyeval status file, so their "RACE INCOMPLETE" check is a no-op — check each pieces.tsv.status by hand.
+
+### 2026-11-06 12:35 — gated race SQL (6/8 gate) complete; Java OOM
+SQL report gate_x2500_sql/report.json (scored early, 672505; queued 671858 cancelled). beaten/faced · correct passing answers · fork share:
+| probe | strict 1800 | strict 2500 | KL0.3 1800 |
+|---|---|---|---|
+| p4 | 30/32 · 27/30 · .76 | 32/32 · 31/32 · .80 | 32/32 · 25/32 · .88 |
+| p6 | 28/29 · 26/28 · .48 | 31/31 · 30/31 · .68 | 31/32 · 20/31 · .79 |
+| p8 | 14/21 · 14/14 · .41 | 27/28 · 25/27 · .64 | 25/29 · 18/25 · .66 |
+| p10 | 5/9 · 5/5 · .25 | 17/22 · 17/17 · .49 | 15/19 · 7/15 · .63 |
+| p12 | 1/2 | 11/11 · 10/11 · .60 | 8/12 · 5/8 · .55 |
+| p14 | – | 3/5 · 3/3 | 1/4 · 0/1 |
+| deepest | p13 | p15 (0/1 at p16) | p14 |
+Strict 2500 is best on SQL: goes as deep or deeper than KL0.3 and keeps ~90–100% correct passes; KL0.3 correctness falls to ~50% by p9–p11.
+First-answer accuracy is .844 for all three (27/32) — identical, to check (math differed).
+Battery 671854: pyeval 5/6 (KL p1 OOM x2), jseval 5/6 (KL p1 retry running), javaeval 0/6 (all OOM turns 17–30; 1 retry running). Failed pieces will be rerun at batch 4 after the node ends.
+9B @825: 800–850 beat p1/p2/p3 .84/.43/.15, GSM8K .92 (4B same bin .69/.24/.11, .87).
