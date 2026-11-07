@@ -12783,3 +12783,28 @@ Races: spec races/gate6_spec.json, 3 models x 32 eps, 6-of-8 gate, batch 8, mem 
   3. det-race 674419 (1 node, afterok): adaptive SELECTIVE supervised detector races evdetsel@16 / @22, held-out
      concepts, 16 eps x 40 turns, per model. pcaressel races NOT rerun (10-26: threshold construction flaw, not fixed).
   All with VLLM_CACHE_ROOT on scratch.
+
+### 2026-11-07 01:20 — STRICT x2500 held-out battery @2500 (672914, 2h55) vs strict @1800 vs KL0.3 @1800
+
+| measure | strict 1800 | strict 2500 | KL0.3 1800 |
+|---|---|---|---|
+| fixed-text held-out val race score (pass) | 0.403 (0.118) | 0.435 (0.152) | 0.652 (0.277) |
+| families topic / emotion / domain / safety / tone / language / format | .47/.31/.36/.58/.43/.16/.50 | .50/.56/.50/.83/.38/.28/.00 | .89/.76/.88/.69/.67/.37/.30 |
+| val k-th probe beat (n) | .72/.49/.59/.25 (64/43/17/8) | .80/.62/.62/.89/.00 (64/45/16/9/2) | .92/.89/.90/.88/1.00 (64/55/39/24/10) |
+| free-answer race, train concepts: beat / pass after turn 1 | .917 / .309 | .933 / .380 | .985 / .450 |
+| free-answer race, held-out concepts: beat / pass after turn 1 | .727 / .155 | .695 / .140 | .933 / .286 |
+| persistence, pass after turn 1 (real / always-passed verdict) | .787 / .433 | .781 / .452 | .787 / .645 |
+| GSM8K clean / math brief / html brief | .88/.87/.89 | .905/.89/.875 | .905/.885/.915 |
+| MMLU clean / math brief / html brief | .655/.662/.67 | .668/.682/.673 | .655/.675/.673 |
+
+Passive hide-and-solve (solved AND undetected by base probes at the training depths; detection at held-out depths
+L4/20/24/28/30 in brackets): GSM8K .23 [1.00] / .66 [1.00] / .48 [1.00]; JSON .19 / .69 / .26; SQL .75 / .80 [.94] /
+.80 [.94]; JS .74 / .79 / .68 [.80]; MBPP (held-out Python) .00 / .00 / .01. Free capability prompts (own / held pools),
+s&h strict 1800 -> 2500 (KL): German .75->.96 (.98) / .96->1.00 (.98); Japanese .89->.93 (.98) / .99->1.00 (.89);
+Arabic .72->.83 (.94) / .83->.91 (.88); Hindi .45->.51 (.89) / .50->.59 (.65); JSON .16->.27 (.34) / .23->.70 (.31);
+SQL .83->.89 (.89) / .75->.83 (.81); JS .81->.85 (.94) / .40->.43 (.42); all-caps .74->.92 (.71) / .59->.79 (.75).
+Panel (never-shown probes) Jaccard of dodged set next turn: held-out .64 / .66 / .71.
+Reading: 700 more strict steps improved hiding on trained concepts (math/JSON passive s&h ~3x, val k2 .49->.62) and on
+held-out val families (emotion, domain, safety, language) with capability flat-to-up, but held-out free-answer races
+did not improve (.73->.70) and the format family fell to 0.00 (small n); KL0.3 @1800 remains far ahead on held-out hiding.
+Race jobs 674353-674355 running (pieces mostly done); detector dumps 674418 running (smoke 48 min).
