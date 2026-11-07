@@ -12752,3 +12752,21 @@ Data fetched on the login node (datasets-server rows API; compute nodes have no 
 Still not gradable (fixed-text val + free-gen in-language/format only): HTML, tone/emotion/deception families, other topics.
 Races: spec races/gate6_spec.json, 3 models x 32 eps, 6-of-8 gate, batch 8, mem .30/.65, model.batch_size=16. Nodes 673237 / 673238 (72 pieces, 8 h); score jobs 673239-673250 (mbppjava, mgsm_de, mgsm_ja, belebele fi pt tr el ta, mmlu physics cs bio med).
 671854 ended FAILED at 13:10 (pieces missing: pyeval kl p1, javaeval x6; jseval kl p1 retry OK) -> covered by 672916.
+
+### 2026-11-06 22:20 — race jobs failed on /home quota; resubmitted; 9B vs 4B @1000
+
+- 672916 (gate5) and 673237/673238 (gate6, graded) FAILED ~21:30-22:00: every vLLM start hit
+  `OSError [Errno 122] Disk quota exceeded` writing `~/.cache/vllm/torch_compile_cache` (/home 25/25 GiB;
+  cache was 16 GiB). Pieces finished: pyeval 15/42, mbppjava 1/72. Score jobs ran on partial data → ignore.
+- Fix: deleted compile-cache entries older than 1 day (/home now 15/25 GiB); resubmitted the node jobs
+  with `VLLM_CACHE_ROOT=/scratch/s/sneheel/vllm_cache` (finished pieces are skipped):
+  gate5 674353 (scores 674356-674362), gate6 674354/674355 (scores 674363-674374).
+  The 672914 strict-x2500 battery is unaffected (running, no errors).
+- 9B vs 4B (both KL0.3), training rollouts, beaten/faced per probe:
+
+| steps | probe | 9B | 4B |
+|---|---|---|---|
+| 850-919 | p1 / p2 / p3 / p4 | 880/895 (.98) / 479/877 (.55) / 82/387 (.21) / 10/46 (.22) | 883/941 (.94) / 378/878 (.43) / 61/305 (.20) / 8/40 (.20) |
+| 920-1003 | p1 / p2 / p3 / p4 | 1124/1139 (.99) / 728/1119 (.65) / 143/606 (.24) / 10/80 (.12) | 1099/1137 (.97) / 530/1098 (.48) / 87/437 (.20) / 7/50 (.14) |
+
+  Training GSM8K (cap_gen/acc): 850-919 9B .89 vs 4B .87; 920-1003 9B .92 vs 4B .89.
