@@ -12808,3 +12808,40 @@ Reading: 700 more strict steps improved hiding on trained concepts (math/JSON pa
 held-out val families (emotion, domain, safety, language) with capability flat-to-up, but held-out free-answer races
 did not improve (.73->.70) and the format family fell to 0.00 (small n); KL0.3 @1800 remains far ahead on held-out hiding.
 Race jobs 674353-674355 running (pieces mostly done); detector dumps 674418 running (smoke 48 min).
+
+### 2026-11-07 18:40 — ALL GATED GRADED RACES @ strict1800 / strict2500 / KL0.3 1800 (6-of-8 gate, 32 eps)
+
+Sum over probes of CORRECT passing answers (languages: correct AND in-language), deepest probe beaten in brackets.
+Per-probe beaten/faced·correct tables: scratchpad gsum.py over races/gate_x2500_<task>/report.json.
+
+| task (split) | strict 1800 | strict 2500 | KL0.3 1800 |
+|---|---|---|---|
+| HumanEval-JS (trained) | 235 (p20) | 248 (p22) | 167 (p22) |
+| JSON (trained) | 56 (p5) | 36 (p8) | 109 (p10) |
+| MGSM German (trained) | 223 (p21) | 184 (p19) | 107 (p26) |
+| MGSM Japanese (trained) | 118 (p11) | 192 (p17) | – (both pieces crash, probe_zoo _pool on empty tensor) |
+| HumanEval-Python (held-out) | 17 (p3) | 10 (p6) | 10 (p10) |
+| HumanEval-Java (held-out) | 71 (p12) | 69 (p15) | 43 (p17) |
+| MBPP-Java (held-out) | 57 (p14) | 59 (p15) | 23 (p17) |
+| MGSM French (held-out) | 108 (p10) | 113 (p10) | 203 (p17) |
+| MGSM Russian (held-out) | 72 (p11) | 114 (p14) | 64 (p9) |
+| MGSM Thai (held-out) | 17 (p3) | 14 (p4) | 6 (p6) |
+| Belebele Finnish (held-out) | 147 (p18) | 165 (p18) | 136 (p16) |
+| Belebele Portuguese (held-out) | 108 (p8) | 147 (p12) | 111 (p11) |
+| Belebele Turkish (held-out) | 26 (p6) | 54 (p9) | 55 (p9) |
+| Belebele Greek (held-out) | 48 (p7) | 58 (p6) | 35 (p7) |
+| Belebele Tamil (held-out) | 1 (p9) | 5 (p9; 16 eps, half 2 exceeded 32k context) | 13 (p8) |
+| MMLU physics (held-out) | 165 (p12) | 181 (p11) | 308 (p17) |
+| MMLU biology (held-out) | 54 (p5) | 86 (p8) | 236 (p12) |
+| MMLU CS (held-out) | 521 (p27) | 533 (p27) | 551 (p29) |
+| MMLU medicine (held-out) | 517 (p27) | 550 (p28) | 618 (p28) |
+
+- MMLU CS / medicine: every model beats every probe to p27+ -> ceiling; probes for these concepts likely do not read
+  MC-reasoning answers at all (no base-model control run) -> uninformative until a base race is run.
+- Pattern: KL0.3 goes deeper on almost everything but its code passes stop being correct after p2-p3 (Java / MBPP-Java
+  correct 0 from p4-p6 on); it is better-and-correct on French math, physics, biology, JSON. Strict keeps code correct.
+  strict 2500 >= strict 1800 on 13 / 17 comparable tasks (worse: JSON, German, Python, Thai).
+- First-answer accuracy is identical for strict1800 and KL0.3 on several tasks (MBPP-Java .469/.469, SQL .844 x3) ->
+  still unexplained, to check.
+- Detector suite: det-dump 674418 TIMED OUT at 4h (12/16 dumps done; KL0.3 missing); dependents cancelled.
+  Resubmitted 8h: dump 676054, race 676055, offline 676056.
