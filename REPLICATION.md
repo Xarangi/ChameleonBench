@@ -12770,3 +12770,16 @@ Races: spec races/gate6_spec.json, 3 models x 32 eps, 6-of-8 gate, batch 8, mem 
 | 920-1003 | p1 / p2 / p3 / p4 | 1124/1139 (.99) / 728/1119 (.65) / 143/606 (.24) / 10/80 (.12) | 1099/1137 (.97) / 530/1098 (.48) / 87/437 (.20) / 7/50 (.14) |
 
   Training GSM8K (cap_gen/acc): 850-919 9B .89 vs 4B .87; 920-1003 9B .92 vs 4B .89.
+
+### 2026-11-06 23:00 — hiding-detector suite on v4d checkpoints queued (user: supervised + unsupervised)
+
+- Same pipeline as 10-25/26 (mech_1025, s1200 v4b) on strict 1800 (sx18), strict 2500 (sx25), KL0.3 1800 (k18) + base;
+  scripts copied to configs/tica/mech_1107/ (det_launch.sh, det_offline.sh); outputs runs/mech_1107/.
+  1. det-dump 674418 (1 node): panel feature dumps, 4 models x {train, held-out} x seeds 1/2, 6 eps x 24 turns,
+     mix real_score .6 / mismatch .2 / nobrief .2, layers 2-31.
+  2. det-offline 674420 (CPU, afterok): supervised concept-agnostic evasion detector (train concepts -> held-out),
+     selectivity (evdet / evdetsel / pcares vs mismatch, no-brief, monitor-off, base), unsupervised OOD
+     (PCA residual, kNN, Mahalanobis, cross-layer ridge; fit on base states of the other split).
+  3. det-race 674419 (1 node, afterok): adaptive SELECTIVE supervised detector races evdetsel@16 / @22, held-out
+     concepts, 16 eps x 40 turns, per model. pcaressel races NOT rerun (10-26: threshold construction flaw, not fixed).
+  All with VLLM_CACHE_ROOT on scratch.
