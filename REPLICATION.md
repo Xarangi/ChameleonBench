@@ -12989,3 +12989,22 @@ rerun 676689 at SLOTS=4). Outputs runs/mech_1107/. Held-out concepts unless stat
    models are still able to beat a selective hiding detector they never trained against, but less easily (48-62% of
    detector probes ever beaten, 94-95% of detector-active turns caught, vs ~100% / 82%). Censored (deployed, never
    beaten by turn 40): 14-16 / model.
+
+### 2026-11-08 03:00 — detector races, the 2 OOM reruns (676689, 14 min) + detectors-in-training setup
+
+- k18@16: p1 16/16 (2.8 turns) | p2 12/16 (6.2) | p3 9/12 (5.6) | p4 7/9 (8.3) | p5 3/7 (2.3) | p6 2/3 | p7 2/2 | p8 1/2 |
+  p9 0/1; detector refits ever beaten 36/52 (69%) in 5.3 turns; 91% of detector-active turns caught; false alarms own
+  mismatch .008 (max .028), base .000.
+- sx18@22: p1 15/16 (6.3) | p2 11/14 (7.3) | p3 5/9 (14.8) | p4 2/5 (7.0) | p5 1/2 | p6 0/1; detector refits ever beaten
+  19/31 (61%) in 7.8 turns; 90% caught; false alarms .010 (max .021) / .001.
+- Full set (detector refits ever beaten): sx18 @16 50% / @22 61%; sx25 @16 62% / @22 48%; k18 @16 69% / @22 62%. KL0.3 the
+  easiest to beat at L16 (5.3 turns vs strict 12.0 / 6.4).
+- DETECTORS IN TRAINING (user 11-08: "continue one of the checkpoints and include the hiding detectors in the detector
+  mix with a high percentage" + "different types of detectors ... refits for these as before"): branch detmix
+  (worktree ChameleonBench-detmix, 85b5e8d): adaptive.detector_kind_prob / detector_kinds (share of in-episode refits
+  drawn from generic detectors), new kinds mlpdet / mlpdetsel (1-hidden-layer MLP), pcaressel fix (reference subspace =
+  base + policy mismatch rows), EvDetBuffer max_rows; 9 unit tests pass (CPU job 676726). Config
+  final_v4d_k03det_tamia_4b: KL0.3 from global 1800 (optimizer state), 50% detectors uniform over
+  {evdetsel, mlpdetsel, pcaressel} x {L12, L16, L22}, buffer seeded from 11-07 k18/base train dumps, cap 6000 rows/layer,
+  steps 2200 (LR 1e-4 held to 2050, cooldown to 1e-5). Smoke (6 steps, 90% detectors) 676730; 676727 failed at once
+  (submitted from main, so main's launcher ran).
