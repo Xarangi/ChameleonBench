@@ -12939,3 +12939,12 @@ Per-probe beaten/faced·correct tables: scratchpad gsum.py over races/gate_x2500
 | p8 | – | 2/4 · 1/2 (50%) · f0.25 | 7/10 · 3/7 (43%) · f0.41 |
 | p9 | – | 0/2 | 3/7 · 2/3 (67%) · f0.67 |
 | p10 | – | – | 3/3 · 2/3 (67%) · f0.29 |
+
+### 2026-11-07 19:15 — why 9B is slow; chain extended
+- Step time grows with training for BOTH sizes (rollout = 80-85% of each step): 4B 80 s (steps 0-150) -> 156 s (~950)
+  -> 241 s (~1650); 9B 114 s -> 208 s (~920) -> 246 s (1060-1278). More probes beaten -> more passes -> more refits,
+  fork resamples and longer judged runs per episode, all inside the rollout; training itself ~35-41 s for both.
+- At matched steps 9B is ~1.3x slower than 4B (920: 208 vs 156 s; 1100-1278: ~246 vs ~180 s): bigger forward passes in
+  HF rollout generation (no vLLM in training rollouts), and DP batch 32 vs 64 per forward.
+- Remaining 522 steps (1278 -> 1800) x ~250-280 s = ~37-40 h. Chain had only 668156 (ends ~02:30 11-08); queued
+  676317, 676318 (afterany; tamia_node.sh resume, same args) so the run reaches 1800 (~11-09 10:00).
