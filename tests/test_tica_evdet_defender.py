@@ -196,3 +196,14 @@ def test_detector_kind_prob_draw():
     ac.detector_kind_prob = 0.0
     assert all(AdaptiveSupervisedTrainer._pick_kind(me) in ("linear", "maxpool")
                for _ in range(200))
+
+
+def test_same_reads_handles_detector_jobs():
+    from next_chameleons.tica.trainers.supervised import _same_reads
+
+    t = torch.ones(3, 4)
+    a = {"kind": "evdetsel", "r_pol": t, "r_base": t, "r_cal": t, "r_mis": None}
+    assert _same_reads(a, dict(a))
+    assert not _same_reads(a, {**a, "r_pol": t + 1})
+    lin = {"kind": "linear", "r": t, "rl": {12: t}, "ft": None, "npr": t, "npl": {}, "nt": None}
+    assert _same_reads(lin, dict(lin))

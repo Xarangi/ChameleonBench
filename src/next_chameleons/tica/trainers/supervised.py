@@ -809,7 +809,9 @@ def _same_reads(a: dict, b: dict) -> bool:
                     and all(same(u, v) for u, v in zip(x, y, strict=True)))
         return x == y
 
-    return all(same(a[k], b[k]) for k in ("r", "rl", "ft", "npr", "npl", "nt"))
+    keys = (("r_pol", "r_base", "r_cal", "r_mis") if a.get("kind") in DETECTOR_KINDS
+            else ("r", "rl", "ft", "npr", "npl", "nt"))
+    return all(same(a.get(k), b.get(k)) for k in keys)
 
 
 @dataclass
@@ -1471,6 +1473,13 @@ class AdaptiveSupervisedTrainer:
                     sec += time.time() - t_sw
                     for f in later:  # redo the later reads in their serial place
                         old = f["job"]
+                        if old["kind"] in DETECTOR_KINDS:
+                            # 11-08: detector reads never touch the no-prompt cache (the only state
+                            # rolled back), and a fit that already ran has added its forks to the
+                            # shared buffer -> keep it (re-submit only if it never started)
+                            if f["fut"].cancelled():
+                                f["fut"] = ovl_fit(old)
+                            continue
                         job = self._refit_reads(f["plan"], t0=time.time())
                         job["name"], job["excl"] = old["name"], old["excl"]
                         self._refit_read_sec -= old["read_dt"]
