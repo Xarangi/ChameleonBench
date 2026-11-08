@@ -223,7 +223,8 @@ def fit_evdet(buf: EvDetBuffer, L: int, concept: str, pol_rows: torch.Tensor,
     perm = torch.randperm(n, generator=g)
     tr, te = perm[n // 2:], perm[: n // 2]  # same fork indices for both classes (paired)
     dev = pol_rows.device
-    buf.cal[L].append((concept, cal_rows.float().to(dev)))
+    if len(cal_rows):
+        buf.cal[L].append((concept, cal_rows.float().to(dev)))
     m_te = None
     if sel:
         mis = mis_rows.float().to(dev)
@@ -240,10 +241,19 @@ def fit_evdet(buf: EvDetBuffer, L: int, concept: str, pol_rows: torch.Tensor,
             return base_part
         return torch.cat([base_part, stack(buf.M[L]), *([extra] if extra is not None else [])])
 
+    def _cal(lst, c):  # 11-08: a concept without own calibration rows (training: every
+        x = stack(lst, c)  # text used as a positive) uses the pooled set of all concepts
+        return x if len(x) or c is None else stack(lst)
+
     def thr_for(prm, c=None):
-        t = _q(_score(kind, prm, stack(buf.cal[L], c)), 1 - FPR)
+        xb = _cal(buf.cal[L], c)
+        if not len(xb):
+            raise RuntimeError("no calibration rows")
+        t = _q(_score(kind, prm, xb), 1 - FPR)
         if sel:
-            t = max(t, _q(_score(kind, prm, stack(buf.cal_pol[L], c)), 1 - FPR))
+            xp = _cal(buf.cal_pol[L], c)
+            if len(xp):
+                t = max(t, _q(_score(kind, prm, xp), 1 - FPR))
         return t
 
     P0, N0 = stack(buf.P[L]), stack(buf.N[L])
@@ -280,8 +290,12 @@ def fit_evdet(buf: EvDetBuffer, L: int, concept: str, pol_rows: torch.Tensor,
         prm = _train(kind, stack(buf.P[L]), negatives(stack(buf.N[L])), C)
     except RuntimeError as e:
         return None, {**info, "kept": False, "why": f"error: {e}"}
-    thr_by = {c: thr_for(prm, c) for c in {c for c, _ in buf.cal[L]}}
+    try:
+        thr_by = {c: thr_for(prm, c) for c in {c for c, _ in buf.cal[L]}}
+        thr_all = thr_for(prm)
+    except RuntimeError as e:
+        return None, {**info, "kept": False, "why": f"error: {e}"}
     s_cal = _score(kind, prm, stack(buf.cal[L]))
-    mon = EvDetMonitor(name, L, concept, kind, prm, thr_for(prm), thr_by)
+    mon = EvDetMonitor(name, L, concept, kind, prm, thr_all, thr_by)
     mon.scale_ = float(s_cal.std()) or 1.0
     return mon, {**info, "kept": True, "why": ""}

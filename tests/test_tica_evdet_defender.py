@@ -207,3 +207,19 @@ def test_same_reads_handles_detector_jobs():
     assert not _same_reads(a, {**a, "r_pol": t + 1})
     lin = {"kind": "linear", "r": t, "rl": {12: t}, "ft": None, "npr": t, "npl": {}, "nt": None}
     assert _same_reads(lin, dict(lin))
+
+
+def test_concept_without_calibration_rows_uses_pooled_set():
+    """11-08 smoke crash: in training a concept can have no spare texts for calibration reads
+    (cal_rows empty) -> its threshold falls back to the pooled calibration set."""
+    buf = EvDetBuffer()
+    pol, base, cal = _rows(0, shift=10.0)
+    mis = _rows(9, n=24)[1]
+    mon, info = fit_evdet(buf, 12, "a", pol, base, cal, CFG, name="c1", kind="evdetsel",
+                          mis_rows=mis)
+    assert info["kept"], info
+    pol2, base2, _ = _rows(1, shift=10.0)
+    mon2, info2 = fit_evdet(buf, 12, "b", pol2, base2, torch.zeros(0, 16), CFG, name="c2",
+                            kind="evdetsel", mis_rows=_rows(10, n=24)[1])
+    assert info2["kept"], info2
+    assert torch.isfinite(mon2.thresholds(["a", "b"])).all()
