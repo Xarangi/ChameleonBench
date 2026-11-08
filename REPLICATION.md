@@ -13046,3 +13046,11 @@ rerun 676689 at SLOTS=4). Outputs runs/mech_1107/. Held-out concepts unless stat
 - Fix in worktree ChameleonBench-detmix2 (branch detmix2, 023702d): knn = cosine distance to a 4096-row base reference;
   detector_kinds knnsel@14/16/18; per-kind gate detector_min_tpr_ic {knn: 0.5} (others unchanged at .8). 12 detector tests pass.
   Chunk 2 676748 cancelled and resubmitted as 676905 (afterany 676747, TICA_REPO=detmix2); chunk 1 keeps running unchanged.
+
+### 11-08 10:30 — detector-training chunk 1 at step 1875; 9B at 1485
+
+- k4det 676747 at global 1875, 290-350 s/step, no tracebacks. Kept detector refits per 25-step window (steps 0-24 / 25-49 / 50-74):
+  evdetsel 192/477 (40%) -> 85/468 (18%) -> 84/461 (18%); mlpdetsel 404/476 (85%) -> 409/485 (84%) -> 426/481 (89%);
+  knnsel 0/1441 total (std-L2, fixed for chunk 2). Falling linear-detector keep rate = first sign the policy is evading
+  the linear detector (or the growing buffer makes it harder to fit); MLP unaffected so far.
+- 9B 676317 at global 1485 (resume_1400 step 85), 245-300 s/step, healthy.
