@@ -13025,3 +13025,24 @@ rerun 676689 at SLOTS=4). Outputs runs/mech_1107/. Held-out concepts unless stat
   / knnsel x L12 / L16 / L22, rest the usual zoo (Thompson); refit on pass; steps 1800 -> 2200; val races queued in
   runs/final_v4d_k03det_tamia_4b/val_queue.txt (drain later). Never trained against: detectors at L8 / L26 / L30, PCA
   residual, Mahalanobis, cross-layer ridge.
+
+### 11-08 06:00 — detector-training chunk 1: kNN detector never passes the gate; fixed for chunk 2
+
+- 676747 healthy: 21 steps (global 1800 -> 1821), 250-434 s/step (median ~290), no tracebacks.
+- In-episode detector refits kept (refit on pass, same gate as the zoo: AUROC >= .95 and in-context TPR >= .8 at 1% FPR):
+
+  | kind | L12 | L16 | L22 | total |
+  |---|---|---|---|---|
+  | evdetsel (supervised linear) | 59/129 | 63/126 | 41/122 | 163/377 (43%) |
+  | mlpdetsel (supervised MLP) | 115/138 | 105/118 | 102/125 | 322/381 (85%) |
+  | knnsel (unsupervised, std-L2) | 0/123 | 0/144 | 0/108 | 0/375 |
+
+  kNN rejections: TPR ~0.01 (max .28) at the threshold although AUROC .89-.93. Effective detector share in chunk 1 ~33%, all
+  supervised. 6 / 1133 detector refits rejected for "no calibration rows".
+- Offline check (runs/mech_1107/knn_variants.json, k18 = this exact start checkpoint, held-out concepts, thr = max(base,
+  k18-honest) q99): kNN separates hiding only at L14-18 and only with cosine distance — L16 cos AUROC .99 / TPR .65
+  (std-L2 .90 / .40); L14 .94 / .44; L18 .95 / .46; L12 <= .71 / .04; L22 <= .84 / .12; deeper layers ~0. Reference
+  choice (base hide-cond / base all / base + k18-honest / k18-honest) matters little; cosine vs L2 matters a lot.
+- Fix in worktree ChameleonBench-detmix2 (branch detmix2, 023702d): knn = cosine distance to a 4096-row base reference;
+  detector_kinds knnsel@14/16/18; per-kind gate detector_min_tpr_ic {knn: 0.5} (others unchanged at .8). 12 detector tests pass.
+  Chunk 2 676748 cancelled and resubmitted as 676905 (afterany 676747, TICA_REPO=detmix2); chunk 1 keeps running unchanged.
