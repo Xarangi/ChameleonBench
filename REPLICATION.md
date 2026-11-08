@@ -13054,3 +13054,41 @@ rerun 676689 at SLOTS=4). Outputs runs/mech_1107/. Held-out concepts unless stat
   knnsel 0/1441 total (std-L2, fixed for chunk 2). Falling linear-detector keep rate = first sign the policy is evading
   the linear detector (or the growing buffer makes it harder to fit); MLP unaffected so far.
 - 9B 676317 at global 1485 (resume_1400 step 85), 245-300 s/step, healthy.
+
+### 11-08 12:00 — AUDIT of the detector-training run (user: "properly verify and audit everything")
+
+Code (detmix cc7eb26 / detmix2 023702d vs tamia): 4 trainer edits only — `_pick_kind` draws detector_kinds with prob
+detector_kind_prob (after first_kind); detector buffer capped (evdet_buffer_max); `_same_reads` + refit_overlap redo
+handle detector jobs. Kept detectors enter the bank through the same path the evdet races used and become hide targets
+via the generic `Target(... "monitored", name ...)` path (episode_cumulative) -> `probe_prob` (differentiable; unit tests
+check gradient for mlpdet/knn). Reads = pooled_shared_prefix, same pooling as all probes. Every kept detector was deployed
+(faced count == kept count). Gate label "tpr_np" in refits.jsonl for detectors = in-context TPR fail (naming only).
+
+Run evidence through step 76 (turns.jsonl, hiding turns, refit on pass; per probe; 25-step windows):
+
+| window | group | probes faced | ever beaten | mean turns to beat |
+|---|---|---|---|---|
+| 0-24 | evdetsel | 192 | 163 (84.9%) | 2.49 |
+| 25-49 | evdetsel | 85 | 64 (75.3%) | 2.53 |
+| 50-74 | evdetsel | 84 | 70 (83.3%) | 2.94 |
+| 0-24 | mlpdetsel | 404 | 339 (83.9%) | 2.67 |
+| 25-49 | mlpdetsel | 409 | 327 (80.0%) | 2.84 |
+| 50-74 | mlpdetsel | 426 | 366 (85.9%) | 2.92 |
+| 0-24 | zoo (concept probes) | 1800 | 1738 (96.6%) | 2.12 |
+| 25-49 | zoo | 1796 | 1699 (94.6%) | 2.09 |
+| 50-74 | zoo | 1812 | 1715 (94.6%) | 2.17 |
+
+Excluding probes cut off by the episode end (24 turns): evdetsel 86.7%, mlpdetsel 86.1%, zoo 96.1% ever beaten.
+=> Once a detector is deployed, the policy beats it about as often as at the start and not faster (turns 2.5 -> 2.9);
+detectors are harder to beat than concept probes.
+
+Refit gate by 10-step window (evdetsel): median in-context TPR .79, .73, .58, .62, .48, .57, .55, .58; AUROC stays .998-1.000;
+policy-honest FPR .007-.014. Buffer at its 6000-row cap from step 10, so the TPR drop from steps 10-19 to 20+ is not buffer
+growth. mlpdetsel TPR .98-1.00 throughout. Reading: the policy's hiding states moved toward the honest/base tail along
+linear directions (separable on average, not at 1% FPR) — consistent with linear-detector evasion, not yet proof.
+
+Control for drift (runs/mech_1108/control.json; detectors built with the trainer's own _train/_score, fit on model A
+train concepts, threshold q99 of base + model honest, evaluated on model B held-out concepts): frozen evdetsel / mlpdetsel
+transfer with TPR .97-1.00 at L16-30 across 700 steps of NO-detector training (sx18 -> sx25) and across KL (k18 <-> sx18).
+Pending: panel dumps of det@1860 (677369) -> frozen k18 detectors on det@1860 (677371) + full 11-07 offline suite incl.
+never-trained layers / PCA residual / Mahalanobis / ridge (677373).
