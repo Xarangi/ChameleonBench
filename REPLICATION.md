@@ -13008,3 +13008,20 @@ rerun 676689 at SLOTS=4). Outputs runs/mech_1107/. Held-out concepts unless stat
   {evdetsel, mlpdetsel, pcaressel} x {L12, L16, L22}, buffer seeded from 11-07 k18/base train dumps, cap 6000 rows/layer,
   steps 2200 (LR 1e-4 held to 2050, cooldown to 1e-5). Smoke (6 steps, 90% detectors) 676730; 676727 failed at once
   (submitted from main, so main's launcher ran).
+
+### 2026-11-08 03:50 — detectors-in-training: smoke results, fixes, full run launched (676747 -> 676748)
+
+- Smoke 676738 (6 steps from KL0.3 global 1800, 90% detector refits; 32 min): 535 / 646 refit attempts were detectors.
+  Kept: evdetsel@12/16/22 16/46, 30/56, 24/59; mlpdetsel 74/81, 46/54, 60/75; pcaressel 0/55, 0/53, 0/56 (gate AUROC
+  fails even with the policy-honest reference). Detector false alarms on own mismatch ~1%. Step time 264-390 s
+  (KL0.3 at 1800 without detectors ~247 s). hide_term 0.50 -> 0.22, cap_gen acc 0.88-1.00.
+- Fixes found by the smoke (branch detmix): launch chain pinned to main (tica_l3covert / tica_val / tica_switch_eval
+  now cd to $TICA_REPO); refit_overlap redo crashed on detector jobs (KeyError 'r') -> detector fits are kept (their
+  reads never use the rolled-back no-prompt cache; re-fitting would insert the forks twice); per-concept threshold on
+  an empty calibration set (training concepts can have no spare texts) -> pooled calibration fallback.
+- Unsupervised type replaced: knnsel@L (label-free; mean standardised distance to the 10 nearest base rows, reference
+  = base rows of the buffer, threshold = max of base / policy-honest q99). 12 detector unit tests pass.
+- FULL RUN final_v4d_k03det_tamia_4b (detmix cc7eb26): 50% of in-episode refits drawn uniformly from evdetsel / mlpdetsel
+  / knnsel x L12 / L16 / L22, rest the usual zoo (Thompson); refit on pass; steps 1800 -> 2200; val races queued in
+  runs/final_v4d_k03det_tamia_4b/val_queue.txt (drain later). Never trained against: detectors at L8 / L26 / L30, PCA
+  residual, Mahalanobis, cross-layer ridge.
