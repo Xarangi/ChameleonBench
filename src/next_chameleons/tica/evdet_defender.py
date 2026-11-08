@@ -72,13 +72,12 @@ def base_kind(kind: str) -> str:
 
 
 def _score(kind: str, prm: dict, x: torch.Tensor) -> torch.Tensor:
-    x = x.float().to(prm["mu"].device)
+    x = x.float().to((prm["mu"] if "mu" in prm else prm["R"]).device)
     if base_kind(kind) == "evdet":
         return ((x - prm["mu"]) / prm["sd"]) @ prm["w"] + prm["b"]
-    if base_kind(kind) == "knn":
-        z = (x - prm["mu"]) / prm["sd"]
-        d = torch.cdist(z, prm["R"])
-        return d.topk(min(KNN_K, d.shape[1]), dim=1, largest=False).values.mean(1) / z.shape[1] ** 0.5
+    if base_kind(kind) == "knn":  # 11-08b cosine (offline k18 L16 TPR: std-L2 .40, cos .65)
+        d = 1 - torch.nn.functional.normalize(x.float(), dim=1) @ prm["R"].T
+        return d.topk(min(KNN_K, d.shape[1]), dim=1, largest=False).values.mean(1)
     if base_kind(kind) == "mlpdet":
         h = torch.nn.functional.gelu(((x - prm["mu"]) / prm["sd"]) @ prm["W1"] + prm["b1"])
         return h @ prm["w2"] + prm["b2"]
@@ -121,10 +120,9 @@ def _train(kind: str, P: torch.Tensor, N: torch.Tensor, C: float) -> dict:
     if base_kind(kind) == "mlpdet":
         return _train_mlp(P, N)
     if base_kind(kind) == "knn":  # N = base rows only (negatives() keeps the policy rows out)
-        mu, sd = N.mean(0), N.std(0, unbiased=False) + 1e-6
         g = torch.Generator().manual_seed(0)
         idx = torch.randperm(len(N), generator=g)[:KNN_REF].to(N.device)
-        return {"mu": mu, "sd": sd, "R": ((N[idx] - mu) / sd).float()}
+        return {"R": torch.nn.functional.normalize(N[idx].float(), dim=1)}
     if base_kind(kind) == "evdet":
         w, b, mu, sd = fit_logistic(torch.cat([P, N]),
                                     torch.cat([torch.ones(len(P)), torch.zeros(len(N))]), C)
@@ -299,7 +297,9 @@ def fit_evdet(buf: EvDetBuffer, L: int, concept: str, pol_rows: torch.Tensor,
     if sel:
         buf.M[L].append((concept, m_tr))
         buf.trim(L)
-    if a < cfg.refit_min_auroc or tpr < cfg.refit_min_tpr_ic:
+    per_kind = getattr(cfg, "detector_min_tpr_ic", None) or {}  # 11-08b e.g. {knn: 0.5}
+    min_tpr = per_kind.get(base_kind(kind), cfg.refit_min_tpr_ic)
+    if a < cfg.refit_min_auroc or tpr < min_tpr:
         return None, {**info, "kept": False,
                       "why": "auroc" if a < cfg.refit_min_auroc else "tpr_np"}
     try:

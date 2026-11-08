@@ -13,7 +13,7 @@
 #   sbatch scripts/slurm/tamia_node.sh final_v4b_tamia_4b@0,1,2,3 final_v4b_score_tamia_4b@0,1,2,3
 # Held-out races are queued if TICA_VAL_QUEUE is set (tica_val_local.sh) and run later by tica_val_drain.sh.
 set -uo pipefail
-cd ${TICA_REPO:-/scratch/s/sneheel/ChameleonBench-detmix}  # detmix worktree (11-08)
+cd ${TICA_REPO:-/scratch/s/sneheel/ChameleonBench-detmix2}  # detmix worktree (11-08)
 NODE_TMP=${SLURM_TMPDIR:-/tmp/tamia_node_$$}
 JOB=${SLURM_JOB_NAME:-v4b}-${SLURM_JOB_ID:-local}
 mkdir -p "$NODE_TMP" logs

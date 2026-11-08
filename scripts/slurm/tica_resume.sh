@@ -13,7 +13,7 @@
 set -euo pipefail
 CFG=${1:?config name}; shift || true
 PY=${PY:-/scratch/s/sneheel/venvs/q35t29/bin/python}
-cd ${TICA_REPO:-/scratch/s/sneheel/ChameleonBench-detmix}  # detmix worktree (11-08)
+cd ${TICA_REPO:-/scratch/s/sneheel/ChameleonBench-detmix2}  # detmix worktree (11-08)
 read -r OUT TOTAL < <(PYTHONPATH=src $PY -c "
 from next_chameleons.tica.config import load_run_config as l; c=l('$CFG'); print(c.out, c.train.steps)")
 # newest checkpoint over the first chunk (adaptive/step_k: global k) and earlier resume chunks

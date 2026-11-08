@@ -12,7 +12,7 @@
 # the quality-check evals of scripts/tamia_v4b.sh) can be queued in QUEUE.extra; they run on free GPUs too.
 #   sbatch --account=aip-<pi> scripts/slurm/tica_val_drain.sh QUEUE [QUEUE ...]
 set -uo pipefail
-cd ${TICA_REPO:-/scratch/s/sneheel/ChameleonBench-detmix}  # detmix worktree (11-08)
+cd ${TICA_REPO:-/scratch/s/sneheel/ChameleonBench-detmix2}  # detmix worktree (11-08)
 (( $# >= 1 )) || { echo "usage: tica_val_drain.sh QUEUE [QUEUE ...]"; exit 2; }
 NODE_TMP=${SLURM_TMPDIR:-/tmp/tica_drain_$$}
 mkdir -p "$NODE_TMP" logs

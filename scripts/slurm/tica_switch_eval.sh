@@ -11,11 +11,11 @@ set -euo pipefail
 CFG=$1; OUT=$2; shift 2
 PY=${PY:-/scratch/s/sneheel/venvs/q35t29/bin/python}
 export TRITON_CACHE_DIR=${SLURM_TMPDIR:-/tmp}/triton
-source ${TICA_REPO:-/scratch/s/sneheel/ChameleonBench-detmix}/scripts/slurm/_local_env.sh
+source ${TICA_REPO:-/scratch/s/sneheel/ChameleonBench-detmix2}/scripts/slurm/_local_env.sh
 export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
-SNAP=$(cd ${TICA_REPO:-/scratch/s/sneheel/ChameleonBench-detmix} && PYTHONPATH=src $PY -c "
+SNAP=$(cd ${TICA_REPO:-/scratch/s/sneheel/ChameleonBench-detmix2} && PYTHONPATH=src $PY -c "
 from next_chameleons.tica.config import load_run_config as l; print(l('$CFG').model.path)")
 LOCAL=${SLURM_TMPDIR:-/tmp}/$(basename $(dirname $(dirname $SNAP)))
 mkdir -p $LOCAL; cp -rL $SNAP/. $LOCAL/
-cd ${TICA_REPO:-/scratch/s/sneheel/ChameleonBench-detmix}  # detmix worktree (11-08)
+cd ${TICA_REPO:-/scratch/s/sneheel/ChameleonBench-detmix2}  # detmix worktree (11-08)
 env PYTHONPATH=src $PY scripts/tica_switch_eval.py --config "$CFG" --model-path "$LOCAL" --out "$OUT" "$@"

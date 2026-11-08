@@ -226,23 +226,31 @@ def test_concept_without_calibration_rows_uses_pooled_set():
 
 
 def test_knnsel_unsupervised_selective():
-    """11-08 kNN detector: reference = base rows only; policy-honest rows (adapter offset inside
-    the base cloud's spread) not flagged, hiding rows (off the base cloud) flagged; differentiable."""
+    """11-08b kNN detector (cosine): reference = base rows only; policy-honest rows (small adapter
+    offset) not flagged, hiding rows (off the base cloud) flagged; differentiable."""
     g = torch.Generator().manual_seed(13)
     d = 16
+    m = torch.full((d,), 3.0)  # residual-stream states have a large shared mean direction
 
     def rows(n, offset=0.0, hide=0.0):
-        x = torch.randn(n, d, generator=g)
+        x = m + torch.randn(n, d, generator=g)
         x[:, 1] += offset
         x[:, 0] += hide
         return x
 
     mon, info = fit_evdet(EvDetBuffer(), 16, "a", rows(64, 0.5, 10.0), rows(64), rows(96), CFG,
                           name="knn", kind="knnsel", mis_rows=rows(64, 0.5))
-    assert info["kept"] and set(mon.prm) == {"mu", "sd", "R"}, info
+    assert info["kept"] and set(mon.prm) == {"R"}, info
     thr = mon.thresholds(["a"])[0]
     assert float((mon.logits(rows(400, 0.5)) > thr).float().mean()) < 0.1
     assert float((mon.logits(rows(400, 0.5, 10.0)) > thr).float().mean()) > 0.9
     x = rows(4, 0.5, 10.0).requires_grad_()
     mon.logits(x).sum().backward()
     assert x.grad is not None and x.grad.abs().sum() > 0
+    strict = SimpleNamespace(**vars(CFG), detector_min_tpr_ic={"knn": 1.01})  # per-kind gate
+    _, info2 = fit_evdet(EvDetBuffer(), 16, "a", rows(64, 0.5, 10.0), rows(64), rows(96), strict,
+                         name="knn", kind="knnsel", mis_rows=rows(64, 0.5))
+    assert not info2["kept"] and info2["why"] == "tpr_np", info2
+    _, info3 = fit_evdet(EvDetBuffer(), 16, "a", *_rows(3, shift=10.0), strict,
+                         name="ev", kind="evdet")  # other kinds keep refit_min_tpr_ic
+    assert info3["kept"], info3

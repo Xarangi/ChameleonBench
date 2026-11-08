@@ -5,7 +5,7 @@
 #   eval_on_save: "bash scripts/slurm/tica_val_local.sh CONFIG {adapter} {step} VALDIR SPLIT"
 # Falls back to sbatch scripts/slurm/tica_val.sh when the job has no "val" slot.
 set -uo pipefail
-cd ${TICA_REPO:-/scratch/s/sneheel/ChameleonBench-detmix}  # detmix worktree (11-08)
+cd ${TICA_REPO:-/scratch/s/sneheel/ChameleonBench-detmix2}  # detmix worktree (11-08)
 # TICA_VAL_QUEUE=FILE (TamIA 10-21, default unset = unchanged): append the race to FILE and return; a later
 # whole-node job (scripts/slurm/tica_val_drain.sh) runs the queued races 4 at a time. Training nodes then keep
 # all 4 GPUs on training (races are logged only, so running them later changes nothing).

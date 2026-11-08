@@ -571,6 +571,7 @@ class AdaptiveConfig:
     # policy / base rows together); 0 = unbounded (the eval races). Over a training run the
     # seed rows from the start checkpoint would otherwise dominate.
     evdet_buffer_max: int = 0
+    detector_min_tpr_ic: dict = field(default_factory=dict)  # 11-08b per base kind, e.g. {knn: 0.5}
     # [] = the in-training zoo: every single-layer kind of episode_refit_kinds at every kind_layers
     # depth + the multi-layer kinds (ens4 / ensdeep4); held-out kinds / depths are refused.
     first_probe_panel_kinds: list = field(default_factory=list)

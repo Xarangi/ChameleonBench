@@ -14,8 +14,8 @@ set -uo pipefail
 CFG=$1; AD=$2; STEP=$3; VAL=$4; SPLIT=$5; shift 5
 export TICA_TRUNC_READS=1 TICA_BATCHED_FITS=1
 mkdir -p "$VAL"
-bash ${TICA_REPO:-/scratch/s/sneheel/ChameleonBench-detmix}/scripts/slurm/tica_switch_eval.sh "$CFG" "$VAL/race_step_$STEP.json" \
+bash ${TICA_REPO:-/scratch/s/sneheel/ChameleonBench-detmix2}/scripts/slurm/tica_switch_eval.sh "$CFG" "$VAL/race_step_$STEP.json" \
   --adapter "$AD" --topics dev --kind mixed --switch-prob 0 --episodes 16 --turns 24 "$@"
-cd ${TICA_REPO:-/scratch/s/sneheel/ChameleonBench-detmix}  # detmix worktree (11-08)
+cd ${TICA_REPO:-/scratch/s/sneheel/ChameleonBench-detmix2}  # detmix worktree (11-08)
 python3 scripts/tica_val_score.py --race "$VAL/race_step_$STEP.json" --split "$SPLIT" \
   --step "$STEP" --out "$VAL/step_$STEP.json"

@@ -159,8 +159,9 @@ rl:
     # 10-16l: factored architecture x layer sampling; layers = train depths only (20/24/28/30 held out)
     kind_layers: [8, 12, 16, 22, 26]
     detector_kind_prob: 0.5   # 11-08 detmix
-    detector_kinds: [evdetsel@12, evdetsel@16, evdetsel@22, mlpdetsel@12, mlpdetsel@16, mlpdetsel@22, knnsel@12, knnsel@16, knnsel@22]
+    detector_kinds: [evdetsel@12, evdetsel@16, evdetsel@22, mlpdetsel@12, mlpdetsel@16, mlpdetsel@22, knnsel@14, knnsel@16, knnsel@18]   # 11-08b: knn only works at L14-18 (offline cos TPR .44/.65/.46; L12/22 <=.12)
     evdet_buffer_max: 6000
+    detector_min_tpr_ic: {knn: 0.5}   # 11-08b: chunk-1 knnsel kept 0/375 at the 0.8 bar (offline best .65); other kinds keep refit_min_tpr_ic
     evdet_seed_model: /scratch/s/sneheel/next_chameleons_artifacts/tica/runs/mech_1107/feats/k18_train_s1.pt,/scratch/s/sneheel/next_chameleons_artifacts/tica/runs/mech_1107/feats/k18_train_s2.pt
     evdet_seed_base: /scratch/s/sneheel/next_chameleons_artifacts/tica/runs/mech_1107/feats/base_train_s1.pt,/scratch/s/sneheel/next_chameleons_artifacts/tica/runs/mech_1107/feats/base_train_s2.pt
     concept_families: configs/tica/final_split_v5.json
