@@ -160,7 +160,7 @@ rl:
     # 10-16l: factored architecture x layer sampling; layers = train depths only (20/24/28/30 held out)
     kind_layers: [8, 12, 16, 22, 26]
     detector_kind_prob: 0.9   # 11-08 detmix
-    detector_kinds: [evdetsel@12, evdetsel@16, evdetsel@22, mlpdetsel@12, mlpdetsel@16, mlpdetsel@22, pcaressel@12, pcaressel@16, pcaressel@22]
+    detector_kinds: [evdetsel@12, evdetsel@16, evdetsel@22, mlpdetsel@12, mlpdetsel@16, mlpdetsel@22, knnsel@12, knnsel@16, knnsel@22]
     evdet_buffer_max: 6000
     evdet_seed_model: /scratch/s/sneheel/next_chameleons_artifacts/tica/runs/mech_1107/feats/k18_train_s1.pt,/scratch/s/sneheel/next_chameleons_artifacts/tica/runs/mech_1107/feats/k18_train_s2.pt
     evdet_seed_base: /scratch/s/sneheel/next_chameleons_artifacts/tica/runs/mech_1107/feats/base_train_s1.pt,/scratch/s/sneheel/next_chameleons_artifacts/tica/runs/mech_1107/feats/base_train_s2.pt

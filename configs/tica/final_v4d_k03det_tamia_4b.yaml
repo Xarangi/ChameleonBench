@@ -6,7 +6,7 @@
 #   - adaptive.detector_kind_prob 0.5: half of all in-episode refits are a generic concept-agnostic HIDING DETECTOR
 #     (tica/evdet_defender.py), uniform over 3 types x 3 trained depths: evdetsel (supervised linear, policy vs base
 #     on identical forks + the policy's own mismatch turns as negatives), mlpdetsel (same, 1-hidden-layer MLP),
-#     pcaressel (label-free PCA residual vs base + policy-honest subspace) at L12 / L16 / L22. Refit on pass, gated
+#     knnsel (label-free kNN distance to base states; pcaressel kept 0/164 in the smoke) at L12 / L16 / L22. Refit on pass, gated
 #     (AUROC >= .95, in-context TPR >= .8 at the calibrated 1% FPR), deployed detectors are hide targets like any probe;
 #     a failed detector refit falls back to another kind via refit_switch_max as before;
 #   - detector buffer seeded from the 11-07 panel dumps (k18 vs base, TRAIN concepts), capped at 6000 rows / layer
@@ -159,7 +159,7 @@ rl:
     # 10-16l: factored architecture x layer sampling; layers = train depths only (20/24/28/30 held out)
     kind_layers: [8, 12, 16, 22, 26]
     detector_kind_prob: 0.5   # 11-08 detmix
-    detector_kinds: [evdetsel@12, evdetsel@16, evdetsel@22, mlpdetsel@12, mlpdetsel@16, mlpdetsel@22, pcaressel@12, pcaressel@16, pcaressel@22]
+    detector_kinds: [evdetsel@12, evdetsel@16, evdetsel@22, mlpdetsel@12, mlpdetsel@16, mlpdetsel@22, knnsel@12, knnsel@16, knnsel@22]
     evdet_buffer_max: 6000
     evdet_seed_model: /scratch/s/sneheel/next_chameleons_artifacts/tica/runs/mech_1107/feats/k18_train_s1.pt,/scratch/s/sneheel/next_chameleons_artifacts/tica/runs/mech_1107/feats/k18_train_s2.pt
     evdet_seed_base: /scratch/s/sneheel/next_chameleons_artifacts/tica/runs/mech_1107/feats/base_train_s1.pt,/scratch/s/sneheel/next_chameleons_artifacts/tica/runs/mech_1107/feats/base_train_s2.pt

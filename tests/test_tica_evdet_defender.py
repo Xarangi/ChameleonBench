@@ -223,3 +223,26 @@ def test_concept_without_calibration_rows_uses_pooled_set():
                             kind="evdetsel", mis_rows=_rows(10, n=24)[1])
     assert info2["kept"], info2
     assert torch.isfinite(mon2.thresholds(["a", "b"])).all()
+
+
+def test_knnsel_unsupervised_selective():
+    """11-08 kNN detector: reference = base rows only; policy-honest rows (adapter offset inside
+    the base cloud's spread) not flagged, hiding rows (off the base cloud) flagged; differentiable."""
+    g = torch.Generator().manual_seed(13)
+    d = 16
+
+    def rows(n, offset=0.0, hide=0.0):
+        x = torch.randn(n, d, generator=g)
+        x[:, 1] += offset
+        x[:, 0] += hide
+        return x
+
+    mon, info = fit_evdet(EvDetBuffer(), 16, "a", rows(64, 0.5, 6.0), rows(64), rows(96), CFG,
+                          name="knn", kind="knnsel", mis_rows=rows(64, 0.5))
+    assert info["kept"] and set(mon.prm) == {"mu", "sd", "R"}, info
+    thr = mon.thresholds(["a"])[0]
+    assert float((mon.logits(rows(400, 0.5)) > thr).float().mean()) < 0.1
+    assert float((mon.logits(rows(400, 0.5, 6.0)) > thr).float().mean()) > 0.9
+    x = rows(4, 0.5, 6.0).requires_grad_()
+    mon.logits(x).sum().backward()
+    assert x.grad is not None and x.grad.abs().sum() > 0
