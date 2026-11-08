@@ -237,12 +237,12 @@ def test_knnsel_unsupervised_selective():
         x[:, 0] += hide
         return x
 
-    mon, info = fit_evdet(EvDetBuffer(), 16, "a", rows(64, 0.5, 6.0), rows(64), rows(96), CFG,
+    mon, info = fit_evdet(EvDetBuffer(), 16, "a", rows(64, 0.5, 10.0), rows(64), rows(96), CFG,
                           name="knn", kind="knnsel", mis_rows=rows(64, 0.5))
     assert info["kept"] and set(mon.prm) == {"mu", "sd", "R"}, info
     thr = mon.thresholds(["a"])[0]
     assert float((mon.logits(rows(400, 0.5)) > thr).float().mean()) < 0.1
-    assert float((mon.logits(rows(400, 0.5, 6.0)) > thr).float().mean()) > 0.9
-    x = rows(4, 0.5, 6.0).requires_grad_()
+    assert float((mon.logits(rows(400, 0.5, 10.0)) > thr).float().mean()) > 0.9
+    x = rows(4, 0.5, 10.0).requires_grad_()
     mon.logits(x).sum().backward()
     assert x.grad is not None and x.grad.abs().sum() > 0

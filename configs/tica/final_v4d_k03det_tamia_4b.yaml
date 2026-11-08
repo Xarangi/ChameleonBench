@@ -12,7 +12,7 @@
 #   - detector buffer seeded from the 11-07 panel dumps (k18 vs base, TRAIN concepts), capped at 6000 rows / layer
 #     (newest kept) so the start checkpoint does not dominate; NOT saved across resume chunks (re-seeded);
 #   - steps 1800 -> 2200: LR back to 1e-4 (held) to 2050, cooldown 2050-2200 to 1e-5.
-# Never trained against (for the post-run eval): detectors at L8 / L26 / L30, kNN / Mahalanobis / cross-layer ridge.
+# Never trained against (for the post-run eval): detectors at L8 / L26 / L30, PCA residual / Mahalanobis / cross-layer ridge.
 # FROM-SCRATCH 4B at the REGULAR KL 0.3 (10-31, user: "start a non strict KL equivalent 4b version to compare with the
 # 2b one cleanly"): the 4B counterpart of final_v4d_tamia_2b and the KL-0.3 twin of final_v4d_klx_tamia_4b. = final_v4d_klx_tamia_4b
 # with ONLY adaptive.kl_weight 3.0 -> 0.3; everything else (APPS JavaScript, big capability pools + 25% hold-out, 1500
