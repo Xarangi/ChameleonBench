@@ -28,6 +28,16 @@ POLICY's own reads of OTHER-concept texts after the same prefix (brief in contex
 = mismatch) are extra negatives (evdetsel only; half of them) and a second calibration set (the
 other half): the threshold is the larger of the base and the policy-mismatch 99th percentiles, so
 the trained model's honest turns are flagged at most ~1% too.
+
+11-08 (detectors IN TRAINING, adaptive.detector_kind_prob / detector_kinds):
+- "mlpdet@L" / "mlpdetsel@L": the supervised detector with a different architecture (one hidden
+  layer of MLP_H GELU units on standardised states, class-balanced BCE, AdamW, full batch, fixed
+  seed); same buffer / gate / calibration as evdet / evdetsel.
+- pcaressel FIX (10-26: kept 2 / 287, the base-only PCA put the policy's honest mismatch turns
+  off-manifold too, so the selective threshold swallowed the hiding turns): the reference subspace
+  is fit on the base rows PLUS the policy's own mismatch rows (honest policy states; still no
+  hiding label), so only what hiding adds is residual.
+- EvDetBuffer(max_rows): each per-layer list keeps at most max_rows rows (oldest dropped first).
 """
 
 from __future__ import annotations
@@ -42,7 +52,9 @@ from next_chameleons.tica.monitors import auroc, fit_logistic
 from next_chameleons.tica.probe_zoo import _Mon
 
 KIND = "evdet"
-KINDS = ("evdet", "pcares", "evdetsel", "pcaressel")  # refit kinds handled here
+KINDS = ("evdet", "pcares", "evdetsel", "pcaressel", "mlpdet", "mlpdetsel")  # refit kinds here
+SUPERVISED = ("evdet", "mlpdet")
+MLP_H, MLP_STEPS, MLP_LR, MLP_WD = 256, 300, 1e-3, 1e-2
 FPR = 0.01
 PCA_K = 64
 CAL_READS = 64  # base-only calibration forks per refit (concept texts not used as positives)
@@ -56,6 +68,9 @@ def _score(kind: str, prm: dict, x: torch.Tensor) -> torch.Tensor:
     x = x.float().to(prm["mu"].device)
     if base_kind(kind) == "evdet":
         return ((x - prm["mu"]) / prm["sd"]) @ prm["w"] + prm["b"]
+    if base_kind(kind) == "mlpdet":
+        h = torch.nn.functional.gelu(((x - prm["mu"]) / prm["sd"]) @ prm["W1"] + prm["b1"])
+        return h @ prm["w2"] + prm["b2"]
     z = x - prm["mu"]
     r = z - (z @ prm["P"].T) @ prm["P"]
     return r.norm(dim=1) / z.norm(dim=1).clamp(min=1e-6)
@@ -90,7 +105,10 @@ def _q(x: torch.Tensor, p: float) -> float:
 
 
 def _train(kind: str, P: torch.Tensor, N: torch.Tensor, C: float) -> dict:
-    """evdet: logistic P vs N; pcares: PCA of N (callers pass base rows only as N for pcares)."""
+    """evdet: logistic P vs N; mlpdet: MLP P vs N; pcares: PCA of N (base rows; pcaressel: + the
+    policy's mismatch rows)."""
+    if base_kind(kind) == "mlpdet":
+        return _train_mlp(P, N)
     if base_kind(kind) == "evdet":
         w, b, mu, sd = fit_logistic(torch.cat([P, N]),
                                     torch.cat([torch.ones(len(P)), torch.zeros(len(N))]), C)
@@ -100,10 +118,37 @@ def _train(kind: str, P: torch.Tensor, N: torch.Tensor, C: float) -> dict:
     return {"mu": mu, "P": V}
 
 
+def _train_mlp(P: torch.Tensor, N: torch.Tensor) -> dict:
+    x = torch.cat([P, N]).float()
+    y = torch.cat([torch.ones(len(P)), torch.zeros(len(N))]).to(x.device)
+    mu, sd = x.mean(0), x.std(0, unbiased=False) + 1e-6
+    z = (x - mu) / sd
+    g = torch.Generator(device="cpu").manual_seed(0)
+    d = z.shape[1]
+    W1 = (torch.randn(d, MLP_H, generator=g) / d ** 0.5).to(x.device).requires_grad_()
+    b1 = torch.zeros(MLP_H, device=x.device, requires_grad=True)
+    w2 = (torch.randn(MLP_H, generator=g) / MLP_H ** 0.5).to(x.device).requires_grad_()
+    b2 = torch.zeros((), device=x.device, requires_grad=True)
+    pw = torch.tensor(len(N) / max(len(P), 1), device=x.device)
+    opt = torch.optim.AdamW([W1, b1, w2, b2], lr=MLP_LR, weight_decay=MLP_WD)
+    with torch.enable_grad():
+        for _ in range(MLP_STEPS):
+            opt.zero_grad(set_to_none=True)
+            out = torch.nn.functional.gelu(z @ W1 + b1) @ w2 + b2
+            loss = torch.nn.functional.binary_cross_entropy_with_logits(out, y, pos_weight=pw)
+            loss.backward()
+            opt.step()
+    if not torch.isfinite(loss):
+        raise RuntimeError("mlp detector fit diverged")
+    return {"W1": W1.detach(), "b1": b1.detach(), "w2": w2.detach(), "b2": b2.detach(),
+            "mu": mu, "sd": sd}
+
+
 class EvDetBuffer:
     """Policy / base rows per layer and concept, shared across episodes (one per trainer)."""
 
-    def __init__(self):
+    def __init__(self, max_rows: int = 0):
+        self.max_rows = int(max_rows)
         self.P: dict = defaultdict(list)  # layer -> [(concept, rows [n, d])]
         self.N: dict = defaultdict(list)
         self.cal: dict = defaultdict(list)  # layer -> [(concept, base rows)], never trained on
@@ -113,6 +158,19 @@ class EvDetBuffer:
     def add(self, L: int, concept: str, pol_rows: torch.Tensor, base_rows: torch.Tensor):
         self.P[L].append((concept, pol_rows.float()))
         self.N[L].append((concept, base_rows.float()))
+        self.trim(L)
+
+    def trim(self, L: int) -> None:
+        """Drop the oldest chunks of every list at layer L until each holds <= max_rows rows (P / N
+        are paired chunk by chunk and dropped together). The newest chunk always stays."""
+        if self.max_rows <= 0:
+            return
+        while len(self.P[L]) > 1 and sum(len(r) for _, r in self.P[L]) > self.max_rows:
+            self.P[L].pop(0)
+            self.N[L].pop(0)
+        for lst in (self.M[L], self.cal[L], self.cal_pol[L]):
+            while len(lst) > 1 and sum(len(r) for _, r in lst) > self.max_rows:
+                lst.pop(0)
 
     def seed(self, model_paths: list[str], base_paths: list[str], L: int, device="cpu") -> int:
         """Train-concept panel dumps (tica_probe_panel --dump-feats) of the evaluated checkpoint
@@ -177,8 +235,8 @@ def fit_evdet(buf: EvDetBuffer, L: int, concept: str, pol_rows: torch.Tensor,
         rs = [r.to(dev) for c, r in rows if only is None or c == only]
         return torch.cat(rs) if rs else torch.zeros(0, pol_rows.shape[1], device=dev)
 
-    def negatives(base_part, extra=None):  # evdetsel: + the policy's mismatch rows
-        if kind != "evdetsel":  # pcares* fits the base rows only
+    def negatives(base_part, extra=None):  # *sel: + the policy's mismatch rows
+        if not sel:  # evdet / mlpdet: base rows; pcares: PCA of the base rows only
             return base_part
         return torch.cat([base_part, stack(buf.M[L]), *([extra] if extra is not None else [])])
 
@@ -209,10 +267,12 @@ def fit_evdet(buf: EvDetBuffer, L: int, concept: str, pol_rows: torch.Tensor,
         buf.add(L, concept, pol_rows, base_rows)
         if sel:
             buf.M[L].append((concept, m_tr))
+            buf.trim(L)
         return None, {**info, "kept": False, "why": f"error: {e}"}
     buf.add(L, concept, pol_rows, base_rows)  # the defender learns from every attempt
     if sel:
         buf.M[L].append((concept, m_tr))
+        buf.trim(L)
     if a < cfg.refit_min_auroc or tpr < cfg.refit_min_tpr_ic:
         return None, {**info, "kept": False,
                       "why": "auroc" if a < cfg.refit_min_auroc else "tpr_np"}

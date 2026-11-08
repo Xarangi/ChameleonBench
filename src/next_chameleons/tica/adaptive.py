@@ -559,6 +559,18 @@ class AdaptiveConfig:
     # turns seed the detector's buffer. "" = no seed (the first detector sees only its own forks).
     evdet_seed_model: str = ""
     evdet_seed_base: str = ""
+    # DETECTORS IN TRAINING (11-08, user: "include the hiding detectors in the detector mix with a
+    # high percentage ... different types of detectors ... refits for these as before"): each
+    # in-episode refit is drawn from detector_kinds (uniform, e.g. evdetsel@16 / mlpdetsel@22 /
+    # pcaressel@12) with probability detector_kind_prob, else from episode_refit_kinds as usual.
+    # Detector refits are refit-on-pass + gated like any probe and join the hide targets.
+    # 0 = off (default).
+    detector_kind_prob: float = 0.0
+    detector_kinds: list = field(default_factory=list)
+    # Cap on rows per layer in each list of the detector buffer (oldest dropped first, paired
+    # policy / base rows together); 0 = unbounded (the eval races). Over a training run the
+    # seed rows from the start checkpoint would otherwise dominate.
+    evdet_buffer_max: int = 0
     # [] = the in-training zoo: every single-layer kind of episode_refit_kinds at every kind_layers
     # depth + the multi-layer kinds (ens4 / ensdeep4); held-out kinds / depths are refused.
     first_probe_panel_kinds: list = field(default_factory=list)

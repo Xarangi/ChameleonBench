@@ -2422,9 +2422,10 @@ class AdaptiveSupervisedTrainer:
         """The run's generic-detector buffer (refit kinds evdet@L / pcares@L), seeded once per layer
         from adaptive.evdet_seed_model / evdet_seed_base (train-concept panel dumps) when set."""
 
-        if not hasattr(self, "_evdet_buf"):
-            self._evdet_buf, self._evdet_seeded = EvDetBuffer(), {}
         acfg = self.cfg.adaptive
+        if not hasattr(self, "_evdet_buf"):
+            self._evdet_buf = EvDetBuffer(max_rows=int(acfg.evdet_buffer_max or 0))
+            self._evdet_seeded = {}
         if L not in self._evdet_seeded and acfg.evdet_seed_model:
             self._evdet_seeded[L] = self._evdet_buf.seed(
                 acfg.evdet_seed_model.split(","), acfg.evdet_seed_base.split(","), L,
@@ -3269,6 +3270,10 @@ class AdaptiveSupervisedTrainer:
             return None if acfg.episode_refit_kind in exclude else acfg.episode_refit_kind
         if acfg.first_kind and acfg.first_kind not in exclude:
             return acfg.first_kind
+        if acfg.detector_kind_prob > 0 and acfg.detector_kinds:  # 11-08 detectors in training
+            dk = [k for k in acfg.detector_kinds if k not in exclude]
+            if dk and rng.random() < acfg.detector_kind_prob:
+                return rng.choice(dk)
         kinds = [k for k in acfg.episode_refit_kinds if k not in exclude]
         if not kinds:
             return None

@@ -116,3 +116,83 @@ def test_selective_ignores_adapter_offset():
         hiding = float((mon.logits(rows(400, 8.0, 8.0)) > mon.thresholds(["a"])[0]).float().mean())
         assert hiding > 0.9
         assert (honest > 0.5) if flags_honest else (honest < 0.1), (kind, honest)  # q99 of 24 rows
+
+
+def test_mlpdetsel_ignores_adapter_offset():
+    """11-08 MLP detector type: same selective behaviour as evdetsel; differentiable scores."""
+    g = torch.Generator().manual_seed(7)
+    d = 16
+
+    def rows(n, offset=0.0, hide=0.0):
+        x = torch.randn(n, d, generator=g)
+        x[:, 1] += offset
+        x[:, 0] += hide
+        return x
+
+    mon, info = fit_evdet(EvDetBuffer(), 12, "a", rows(48, 8.0, 8.0), rows(48), rows(96), CFG,
+                          name="mlp", kind="mlpdetsel", mis_rows=rows(48, 8.0))
+    assert info["kept"] and set(mon.prm) >= {"W1", "w2"}, info
+    thr = mon.thresholds(["a"])[0]
+    assert float((mon.logits(rows(400, 8.0)) > thr).float().mean()) < 0.1
+    assert float((mon.logits(rows(400, 8.0, 8.0)) > thr).float().mean()) > 0.9
+    x = rows(4, 8.0, 8.0).requires_grad_()
+    mon.logits(x).sum().backward()
+    assert x.grad is not None and x.grad.abs().sum() > 0
+
+
+def test_pcaressel_fixed_reference_includes_policy_honest_rows():
+    """11-08 fix: the adapter offset lies outside the BASE subspace, so base-only PCA flags honest
+    policy rows and the selective threshold swallowed hiding (10-26: kept 2 / 287). With the
+    policy's mismatch rows in the reference, only the hiding direction is residual."""
+    g = torch.Generator().manual_seed(11)
+    d, r = 96, 6
+    basis = torch.linalg.qr(torch.randn(d, r, generator=g))[0]
+
+    def rows(n, offset=0.0, hide=0.0):
+        x = torch.randn(n, r, generator=g) @ basis.T * 3 + 0.05 * torch.randn(n, d, generator=g)
+        x[:, -2] += offset * (1 + 0.3 * torch.randn(n, generator=g))
+        x[:, -1] += hide
+        return x
+
+    mon, info = fit_evdet(EvDetBuffer(), 16, "a", rows(48, 2.0, 2.0), rows(48), rows(96), CFG,
+                          name="pcs", kind="pcaressel", mis_rows=rows(96, 2.0))
+    assert info["kept"], info
+    thr = mon.thresholds(["a"])[0]
+    assert float((mon.logits(rows(400, 2.0)) > thr).float().mean()) < 0.1
+    assert float((mon.logits(rows(400, 2.0, 2.0)) > thr).float().mean()) > 0.8
+
+
+def test_buffer_cap_drops_oldest_pairs():
+    buf = EvDetBuffer(max_rows=50)
+    for i in range(5):
+        buf.add(12, f"c{i}", torch.full((20, 4), float(i)), torch.zeros(20, 4))
+        buf.cal[12].append((f"c{i}", torch.zeros(20, 4)))
+        buf.trim(12)
+    assert [c for c, _ in buf.P[12]] == ["c3", "c4"] == [c for c, _ in buf.N[12]]
+    assert sum(len(r) for _, r in buf.cal[12]) <= 50
+    unb = EvDetBuffer()
+    for _ in range(5):
+        unb.add(12, "c", torch.zeros(20, 4), torch.zeros(20, 4))
+    assert len(unb.P[12]) == 5
+
+
+def test_detector_kind_prob_draw():
+    """adaptive.detector_kind_prob: share of refits drawn from detector_kinds; exclude honoured."""
+    import random
+
+    from next_chameleons.tica.adaptive import AdaptiveConfig
+    from next_chameleons.tica.trainers.supervised import AdaptiveSupervisedTrainer
+
+    ac = AdaptiveConfig(episode_refit_kind="mixed", episode_refit_kinds=["linear", "maxpool"],
+                        detector_kind_prob=0.5,
+                        detector_kinds=["evdetsel@16", "mlpdetsel@22", "pcaressel@12"])
+    me = SimpleNamespace(cfg=SimpleNamespace(adaptive=ac), rng=random.Random(0), kind_bandit=None)
+    draws = [AdaptiveSupervisedTrainer._pick_kind(me) for _ in range(4000)]
+    share = sum(k in ac.detector_kinds for k in draws) / len(draws)
+    assert 0.46 < share < 0.54
+    assert set(draws) == {"linear", "maxpool", *ac.detector_kinds}
+    ex = AdaptiveSupervisedTrainer._pick_kind(me, exclude=tuple(ac.detector_kinds))
+    assert ex in ("linear", "maxpool")
+    ac.detector_kind_prob = 0.0
+    assert all(AdaptiveSupervisedTrainer._pick_kind(me) in ("linear", "maxpool")
+               for _ in range(200))
