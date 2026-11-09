@@ -13133,3 +13133,11 @@ plausibly chase dynamics within episodes rather than a lasting change. Re-run th
   - evdetsel@12 / @16 / @22: 23/350, 72/331, 41/370 (13% overall; chunk-1 window 1 was 40%). tpr_ic median .39 / .55 / .44, AUROC still ~.998.
   - mlpdetsel@12 / @16 / @22: 302/373, 362/402, 338/390 (tpr_ic median .97-.98).
 - Not changing code mid-run (detmix2 in use).
+
+### 11-09 ~10:00 — 9B vs 4B (KL0.3) at 1400-1718, training rollouts, beaten/faced per probe
+| steps | 9B p1 / p2 / p3 / p4 | 4B p1 / p2 / p3 / p4 | GSM8K 9B / 4B |
+|---|---|---|---|
+| 1400-1500 | 2636/2693 (.98) / 2205/2397 (.92) / 1302/1640 (.79) / 597/879 (.68) | 2681/2704 (.99) / 2238/2420 (.92) / 1328/1709 (.78) / 590/885 (.67) | .88 / .89 |
+| 1500-1600 | 2691/2709 (.99) / 2416/2493 (.97) / 1718/1926 (.89) / 948/1180 (.80) | 2698/2713 (.99) / 2352/2461 (.96) / 1516/1818 (.83) / 764/1089 (.70) | .88 / .87 |
+| 1600-1718 | 2966/2989 (.99) / 2708/2785 (.97) / 1991/2167 (.92) / 1194/1393 (.86) | 2958/2964 (1.00) / 2656/2725 (.97) / 1918/2114 (.91) / 1126/1390 (.81) | .91 / .88 |
+- Detector refits: when a refit fails its gate, another kind is tried (refit_switch_max 3), never the dodged one; all 4 fail 0-3x per step. Logged detector AUROC is hiding vs base only (kNN .999 misleading); tpr_ic at 1% FPR over base + policy-mismatch is the meaningful number.
