@@ -13125,3 +13125,11 @@ L8 .97) says it is not ordinary drift; (b) PCA-residual TPR at L8/12/22. Other u
 (hiding states more anomalous). In-training linear gate TPR drop (.79 -> ~.55) is NOT reproduced offline: in training the
 gate is per-concept, fit on a FIFO buffer mixing ~10 steps of policy rows, on mid-episode forks after repeated catches —
 plausibly chase dynamics within episodes rather than a lasting change. Re-run this battery at step 2200 (end).
+
+### 11-09 09:00 — handoff to chunk 2; cosine kNN still never kept
+- Both 24 h jobs timed out cleanly at 08:45 (4B det 676747 at global 2050, 9B 676317 at 1660); chunk 2 picked up automatically (676905 detmix2, 676318). Now 4B det global 2100/2200, 9B 1710/1800. No errors.
+- Chunk-2 refits (resume_2050/refits.jsonl), kept / attempted:
+  - knnsel@14 / @16 / @18 (cosine, 0.5 gate): 0/369, 0/338, 0/363. AUROC median .999 but tpr_ic median 0.00, max .27 / .27 / .45. The threshold is q99 over base-cal AND policy-mismatch rows; adapter-honest states are as far from the base cloud as hiding states, so a label-free base-reference kNN can't clear 1% FPR in-context. The offline .65 was a fixed-checkpoint number, not the live gate. kNN is a no-op arm (~13% of refit seconds, refits not on the step critical path: sec_refit 0).
+  - evdetsel@12 / @16 / @22: 23/350, 72/331, 41/370 (13% overall; chunk-1 window 1 was 40%). tpr_ic median .39 / .55 / .44, AUROC still ~.998.
+  - mlpdetsel@12 / @16 / @22: 302/373, 362/402, 338/390 (tpr_ic median .97-.98).
+- Not changing code mid-run (detmix2 in use).
