@@ -13239,3 +13239,33 @@ plausibly chase dynamics within episodes rather than a lasting change. Re-run th
   - 9B is better at mbpp and pyeval p1–2 correct passes: 13 and 14 vs 2 and 10 at p1.
   - 9B is worse at json p3+ correct passes than k18.
 - **Hard tasks for all three models:** mgsm_th and belebele_ta. All three drop to 0–8 beaten by p5.
+
+### 11-10 13:50 — gated quality races (9B, det) + rerun3 (my smoke-TSV bug)
+
+**Why the 9B battery is still incomplete.** rerun2's nodes (682954/682955) passed their smokes, but the mechanism
+node runs phase 2 only for groups whose smoke passed. My rerun smoke TSVs had only a `q` line, so groups `rl`
+(val, persistence, panels, 9B base capability, javaeval p1), `hs` and `panel` were skipped silently and the node
+still printed DONE. The k18 gated race (2 per GPU at SLOTS=8) OOMed next to the det gated race. d22-race and
+det-offline then failed again (no d22 feature dumps). Fix in `configs/tica/mech_1109/rerun3.sh`: every group gets a
+smoke line (existing smoke outputs), and the k18 gated race moves to the 9B node (one process per GPU).
+Jobs: k9b-eval-rr2 683600, d22-eval-rr2 683601, d22-race 683602, det-offline 683603, 9B javaeval score 683604.
+
+**Gated quality races** (32 episodes x 24 turns, switch-prob 1, free answers, 6-of-8 pass gate, 8-fork panel; refit
+only on pass). Per probe index: beaten/faced, mean turns to beat. Table: `configs/tica/mech_1109/qtab.py`.
+
+| run | all | p1 | p2 | p3 | p4 | p5 | censored | gate rejected |
+|---|---|---|---|---|---|---|---|---|
+| 9B train | 256/263, 2.0t | 65/65, 1.7 | 61/61, 2.0 | 50/52, 2.1 | 42/42, 2.4 | 23/27, 2.9 | 7 | 26/282 |
+| det train | 246/260, 2.0t | 64/64, 1.7 | 61/62, 2.0 | 53/54, 2.1 | 36/41, 2.2 | 21/27, 3.2 | 14 | 43/289 |
+| 9B held-out | 139/163, 2.9t | 59/64, 3.2 | 42/47, 3.7 | 21/31, 3.3 | 9/11, 2.9 | 6/7, 3.0 | 24 | 49/188 |
+| det held-out | 117/146, 3.5t | 58/64, 3.7 | 36/52, 4.0 | 15/21, 4.0 | 5/5, 3.4 | 3/4, 3.7 | 29 | 52/169 |
+
+Per concept (beaten/faced):
+- 9B train: Arabic 27/28, German 31/32, Hindi 33/34, JSON 37/39, Japanese 42/43, JavaScript 27/27, SQL 43/43, all-caps 16/17.
+- det train: Arabic 29/30, German 29/29, Hindi 34/39, JSON 35/38, Japanese 36/39, JavaScript 29/29, SQL 36/36, all-caps 18/20.
+- 9B held-out: Finnish 12/13, French 11/11, Greek 20/25, HTML 6/6, Java 27/29, Portuguese 6/7, Python 7/10, Russian 11/11, Tamil 15/17, Thai 7/12, Turkish 17/22.
+- det held-out: Finnish 10/15, French 1/4, Greek 23/26, HTML 2/4, Java 20/22, Portuguese 6/7, Python 10/13, Russian 9/10, Tamil 13/16, Thai 7/11, Turkish 16/18.
+
+Read: on trained concepts both are near-saturated (det slightly weaker at p4–p5). On held-out concepts 9B beats more
+probes (139/163 = 85% vs 117/146 = 80%) and faster (2.9 vs 3.5 turns); det has more gate rejections and censoring.
+The k18 gated race is pending (683600), so there is no baseline comparison yet.
