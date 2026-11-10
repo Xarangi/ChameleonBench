@@ -13143,3 +13143,15 @@ plausibly chase dynamics within episodes rather than a lasting change. Re-run th
 - Detector refits: when a refit fails its gate, another kind is tried (refit_switch_max 3), never the dodged one; all 4 fail 0-3x per step. Logged detector AUROC is hiding vs base only (kNN .999 misleading); tpr_ic at 1% FPR over base + policy-mismatch is the meaningful number.
 - Correction (user asked "aren't non-hiding states trained to match base?"): training matches the monitors' READOUTS (match targets, train/match_mse ~1e-4) and the output distribution (KL), not the full activation vector. Offline k18 cosine kNN (mech_1107/knn_variants.json, ref = base_all): AUROC hide vs k18-honest .63-.71 at most layers, .38-.44 at L8/24/28, .95-.99 only at L14-18; hide vs base-on-hide-prompt ~.5 at most layers (.89 at L16). So the full-vector distance mostly tracks "brief in prompt", and the live negatives include mismatch prompts (brief names A, text about B), which forces the threshold above the hiding rows.
 - Follow-up: detector reads pool only the final assistant message's tokens (View.start = len(prompt)); the brief influences them via attention. Offline kNN with ref = k18's own honest rows is no better than base ref (AUROC hide vs honest L12 .62 vs .71, L16 .976 vs .988, L22 .72 vs .84): the hiding shift is low-variance relative to content spread. Label-free PCA residual (drops top PCs) does work (k18 L12 TPR .93; det@1860 .82, L22 .43 -> .16).
+
+### 11-09 19:45 — both runs DONE; final evals launched
+- 9B KL0.3 676318 COMPLETED at 1800 (17:15); detector-trained 4B 676905 COMPLETED at 2200 (18:45). No errors.
+- configs/tica/mech_1109/launch.sh (k034b battery minus passive hide-and-solve, pending user decision):
+  - 681321 k9b-eval (1 node, 10 h): held-out fixed-text val race @1800, quality races train/held-out, persistence x2,
+    capability GSM8K/MMLU, never-shown panel @1800, + 9B BASE capability control (runs/v4b_quality_base_9b). Caveat: the
+    quality races' base references stay the 4B ones (v4b_quality_base).
+  - 681322 d22-eval (1 node, 8 h): same battery for det@2200 with the PARENT config final_v4d_k03_tamia_4b (identical eval
+    settings to k18) + panel feature dumps d22 (as d60).
+  - 681323 d22-race (afterok): evdetsel@16/@22 held-out races, 16 eps x 40 turns, same args as k18's 674419.
+  - 681324 det-offline-d22 (CPU, afterok): evasion detector, selectivity (k18/d60/d22), OOD, frozen transfer
+    (k18>k18, k18>d22, d60>d22, d22>d22, control sx18>sx25) -> mech_1108/*_d22.json.
