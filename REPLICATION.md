@@ -13293,3 +13293,9 @@ Scripts: configs/tica/mech_1109/{cmp3,panel3,hs3,racetab}.py.
 - Gated task races (22 tasks): 9B vs 4B are in the 11-10 race entry. There is no 2B gated task race; the 2B has only
   the older ungated 9-task races (not comparable).
 - Gated quality races: 9B done; 4B (k18) pending in 683600; no 2B gated quality race queued.
+- 11-10 14:30 correction (user): the passive hide-and-solve numbers above are the legacy one-turn, fixed-probe test that
+  the user rejected on 10-29 (no turns, no refits). They are not the hide-and-solve measure.
+  - Interactive hide-and-solve = the gated task races: per probe index (= refits survived), beaten/faced, turns to
+    beat, correct passes, fork share.
+  - 4B math there: p1–p4 32/32 beaten in 1.4–2.7 turns, 50–71% correct; p5 28/32, p6 24/28.
+  - The "9B worse at held-pool language hiding" claim came from the passive test only. Withdrawn.
