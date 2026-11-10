@@ -13269,3 +13269,27 @@ Per concept (beaten/faced):
 Read: on trained concepts both are near-saturated (det slightly weaker at p4–p5). On held-out concepts 9B beats more
 probes (139/163 = 85% vs 117/146 = 80%) and faster (2.9 vs 3.5 turns); det has more gate rejections and censoring.
 The k18 gated race is pending (683600), so there is no baseline comparison yet.
+
+### 11-10 14:15 — size comparison: KL0.3 9B @1800 vs 4B @1800 (k18) vs 2B @1800 (x1800)
+User: compare 9B to the 4B at 1800 (not the detector run; the detector gets its own comparison) and to the 2B.
+Scripts: configs/tica/mech_1109/{cmp3,panel3,hs3,racetab}.py.
+- Capability (GSM8K / MMLU, clean | math brief | html brief): 9B .925/.767 | .865/.738 | .91/.757; 4B .905/.655 |
+  .885/.675 | .915/.673; 2B .685/.57 | .605/.547 | .65/.545. 9B base GSM8K .936 (prep); 9B base MMLU control pending (683600).
+- Persistence, no refit, real score: 9B .919 (n395), 4B .920, 2B .808. Always-passed variant: 4B .763, 2B .450, 9B pending.
+- Passive hide-and-solve (s&h train-layer group / held-out-layer group, hide brief):
+  - GSM8K: 9B .82/.10, 4B .48/.00, 2B .43/.02.
+  - HumanEval-JS: 9B .76/.15, 4B .68/.13, 2B .40/.02.
+  - SQL test: 9B .82/.14, 4B .80/.06, 2B .75/.23.
+  - Trained concepts, own pool: 9B is equal or higher on JS .93, SQL .87 and JSON .81 (4B .34). It is lower on German
+    .85 (4B .98), Arabic .87 (.94) and Hindi .79 (.89).
+  - Held pools: 9B is much lower on languages (German .47, Japanese .26, Arabic .15, Hindi .14; 4B .65–.98).
+  - Missing for 9B: all-caps and MBPP (in 683600). JSON test and JSON held score 0 clean on 9B (also 4B base) — unusable.
+- Never-shown 18-probe panel (mean detection, probes beaten det<.5):
+  - train s3: 9B .28, 14/18 | 4B .27, 15/18 | 2B .24, 14/18.
+  - held-out s1: .42, 12/18 | .45, 12/18 | .46, 12/18.
+  - held-out s3: .53, 8/18 | .51, 10/18 | .54, 8/18.
+  - Caveat: these 9B panels ran 2 per GPU, so 51–119 probe fits OOM'd. Treat them as provisional; s0–s2 are rerunning at 1 per GPU.
+- Held-out fixed-text val race: 4B .652, 2B .554, 9B pending (683600).
+- Gated task races (22 tasks): 9B vs 4B are in the 11-10 race entry. There is no 2B gated task race; the 2B has only
+  the older ungated 9-task races (not comparable).
+- Gated quality races: 9B done; 4B (k18) pending in 683600; no 2B gated quality race queued.
