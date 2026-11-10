@@ -13155,3 +13155,21 @@ plausibly chase dynamics within episodes rather than a lasting change. Re-run th
   - 681323 d22-race (afterok): evdetsel@16/@22 held-out races, 16 eps x 40 turns, same args as k18's 674419.
   - 681324 det-offline-d22 (CPU, afterok): evasion detector, selectivity (k18/d60/d22), OOD, frozen transfer
     (k18>k18, k18>d22, d60>d22, d22>d22, control sx18>sx25) -> mech_1108/*_d22.json.
+
+### 11-09 21:00 — final evals v2 (user: full suite + validity measures on free-gen and hiding, add hide-and-solve)
+- v1 (681321-681324) cancelled before starting: its free-gen quality races had NO pass gate (tamia_queue_quality.sh RACE
+  predates the 11-05 gate, and the gate exists only on branches race-gate / graded-tasks, not tamia).
+- New worktree ChameleonBench-final (branch final-evals = graded-tasks 7aca3d2 + the 9B config; pushed). Validity:
+  - every FREE-ANSWER race: 6-of-8 pass gate (--pass-gate 8 --pass-gate-min 6) + 8-fork fluke panel (--fork-panel 8 --fast-forks);
+  - fixed-text races (held-out val race, evdetsel detector races): nothing to re-sample -> no gate (as since 11-05);
+  - persistence races unchanged (--no-refit / --always-pass measure whether a pass holds).
+- Full gated graded task-race suite (22 tasks = everything raced on strict1800/strict2500/KL0.3: GSM8K, MBPP, HumanEval-Py,
+  HumanEval-Java, HumanEval-JS, SQL, JSON, MBPP-Java, MGSM fr/ru/th/de/ja, Belebele fi/pt/tr/el/ta, MMLU physics/cs/bio/med),
+  32 eps, configs/tica/mech_1109/final{4b,9b}_spec.json: det@2200 nodes 681356-681357 (scores 681358-681379),
+  9B@1800 nodes 681380-681382 (vLLM .35 / HF .60; scores after). Known: mgsm_ja crashed for KL0.3 (probe_zoo _pool on an
+  empty tensor, unfixed); MMLU CS/med were at ceiling for all models.
+- Battery (configs/tica/mech_1109/launch.sh v2): 681405 k9b-eval (val race, GATED quality races, persistence x2,
+  capability + 9B base capability, panel @1800, passive hide-and-solve trained + 9B BASE halves); 681406 d22-eval (dumps,
+  val, gated quality, persistence, capability, hide-and-solve trained half (4B base halves linked from k034b_1800/hs),
+  + k18 GATED quality rerun -> final_v4d_k03_tamia_4b/quality/step_1800/race_*_gated.json); 681407 d22 detector races;
+  681408 offline audit.

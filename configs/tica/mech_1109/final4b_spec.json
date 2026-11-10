@@ -1,0 +1,2 @@
+{"name":"final4b","task":"math,mbpp,pyeval,javaeval,jseval,sql,json,mbppjava,mgsm_fr,mgsm_ru,mgsm_th,mgsm_de,mgsm_ja,belebele_fi,belebele_pt,belebele_tr,belebele_el,belebele_ta,mmlu_physics,mmlu_cs,mmlu_bio,mmlu_med","episodes":32,"batch":8,"piece_episodes":16,"vllm_mem":"0.30","hf_mem":"0.65","time":"10:00:00","extra":"--set model.batch_size=16","min_per_piece":15,"jobs":2,
+ "models":{"det2200":["final_v4d_k03_tamia_4b","/scratch/s/sneheel/next_chameleons_artifacts/tica/runs/final_v4d_k03det_tamia_4b/resume_2050/adaptive/step_150"]}}
