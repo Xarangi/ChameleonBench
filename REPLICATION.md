@@ -13173,3 +13173,30 @@ plausibly chase dynamics within episodes rather than a lasting change. Re-run th
   val, gated quality, persistence, capability, hide-and-solve trained half (4B base halves linked from k034b_1800/hs),
   + k18 GATED quality rerun -> final_v4d_k03_tamia_4b/quality/step_1800/race_*_gated.json); 681407 d22 detector races;
   681408 offline audit.
+
+## 2026-11-10 — mech_1109 v2 eval failures and rerun (configs/tica/mech_1109/rerun.sh)
+
+| Job | Result |
+|---|---|
+| 9B task races (681380–2) | 40/44 pieces done, still running |
+| 4B task races | 681357 ran 22/22; 681356 (tg10807) ran 3/22 |
+| k9b-eval 681405 | persistence, capability, hide-and-solve 33/38, panel 3/8 done |
+| d22-eval 681406 (tg10907) | persistence ×2, capability, hide-and-solve tasks 5/5 done; capfree 0/16 |
+
+**Root causes:**
+1. **Gated-quality smoke had 1 concept with `--switch-prob 1.0`.** EpisodeSampler needs ≥2 concepts, so every gated q group was skipped. The full lines are fine (8 and 11 concepts); only the smoke was wrong.
+2. **k9b node ran 8 slots, i.e. two 9B processes per GPU.** That caused CUDA OOM on val, persist_pass, 5 panels, the 9B base capability, hs p_mbpp, and all-caps ×3. Rerun with SLOTS=4.
+3. **tg10907 had /tmp Input/output errors.** The d22 panel dumps, val and all 16 capfree pieces died. The node is now excluded.
+4. **tg10807: the vLLM compile cache on /home failed with "transport endpoint shutdown".** 19 race pieces died. The node is now excluded, and `VLLM_CACHE_ROOT` is set on scratch.
+5. **9B panel_heldout.s0 hit a deterministic TypeError in `panel._mean`** (a None readability value). It is not rerun, so the panel is reported on 3 held-out seeds.
+
+**Reruns:**
+
+| Job | ID | Scope |
+|---|---|---|
+| k9b-eval-rr | 682545 | 13 lines + fixed q smoke |
+| d22-eval-rr | 682546 | 25 lines + fixed q smoke |
+| d22-race | 682547 | afterany 682546 |
+| det-offline | 682548 | afterany 682546 |
+| race-final4b node | 682549 | pieces_0.tsv; finished pieces are skipped |
+| 22 4B score jobs | 682550–682571 | afterany 682549; scripts saved in mech_1109/score4b/ |
