@@ -13200,3 +13200,42 @@ plausibly chase dynamics within episodes rather than a lasting change. Re-run th
 | det-offline | 682548 | afterany 682546 |
 | race-final4b node | 682549 | pieces_0.tsv; finished pieces are skipped |
 | 22 4B score jobs | 682550–682571 | afterany 682549; scripts saved in mech_1109/score4b/ |
+
+## 2026-11-10 — final task races, gated (6-of-8 + 8-fork panel): det-4B@2200 and 9B@1800 vs k18 (KL0.3 4B@1800)
+
+- **Script:** `configs/tica/mech_1109/racetab.py`.
+- **Setup:** 32 episodes per task. The k18 numbers come from races/gate_x2500_* (same gate).
+- **Missing pieces:**
+  - k18 has no mgsm_ja (it crashed at the time).
+  - det mgsm_ja has 16 episodes: p1 hit the known probe_zoo empty-tensor crash.
+  - 9B javaeval has 16 episodes: p1 OOM, rerun queued inside k9b-eval-rr.
+- **Reading the numbers:** a cell is beaten/faced. "corr" counts passes whose answer is also correct, with the % of beaten in brackets. r = mean share of the 8 forks that also pass (1 = not a fluke).
+- **rerun2 (rerun.sh smokes failed):**
+  - The 2-concept smoke can't switch: `switch_sequence` needs ≥3 concepts.
+  - The d22 smoke used the training config name.
+  - Resubmitted: k9b-eval-rr 682954, d22-eval-rr 682955, d22-race 682956, det-offline 682957.
+
+**Totals over the 21 common tasks (excluding mgsm_ja):**
+
+| model | p1 | p2 | p3 | p4 | p5 | p6 |
+|---|---|---|---|---|---|---|
+| k18 | 672/672, corr 390 (58%) | 653/671, 343 (53%) | 621/652, 297 (48%) | 586/621, 252 (43%) | 520/585, 223 (43%) | 462/514, 206 (45%) |
+| det | 668/672, 406 (61%) | 636/668, 373 (59%) | 582/634, 311 (53%) | 530/582, 270 (51%) | 473/526, 247 (52%) | 437/470, 232 (53%) |
+| 9B | 656/656, 444 (68%) | 642/656, 350 (55%) | 607/642, 309 (51%) | 560/606, 295 (53%) | 497/556, 250 (50%) | 445/494, 253 (57%) |
+
+**Per-task notes:**
+- **Det vs k18:**
+  - Det is a little worse at beating later probes (p3 .92 vs .95, p4 .91 vs .94).
+  - Its correct-pass share is higher.
+  - Python code is markedly harder for det:
+    - mbpp p3 18/26 vs 31/32, p4 15/18 vs 29/31.
+    - pyeval p3 19/27 vs 28/31.
+    - Fork robustness r on these is .3–.6.
+  - mgsm_de quality collapsed for det: first-answer accuracy .41 vs .78, p1 correct 12/32 vs 22/32. Beat rates are unchanged.
+  - Det is better on belebele_fi/pt/tr correct passes.
+- **9B vs 4B k18:**
+  - Beat rates are the same (p3 .95, p6 .90).
+  - 9B has more correct passes: p1 68% vs 58%, and every probe level beyond is equal or higher.
+  - 9B is better at mbpp and pyeval p1–2 correct passes: 13 and 14 vs 2 and 10 at p1.
+  - 9B is worse at json p3+ correct passes than k18.
+- **Hard tasks for all three models:** mgsm_th and belebele_ta. All three drop to 0–8 beaten by p5.
