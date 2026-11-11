@@ -13465,3 +13465,39 @@ models face few probes. The fair measures are the first probe beaten and probes 
   because TamIA allocates H100s only by whole node and a 2-piece node would leave 2 GPUs idle. The
   final2b-belebele_ta rescore follows it.
 - 07:40 tick: paperB 42/51 (2B mmlu_cs/bio/med, belebele_el p1 running; belebele_el p1 had vLLM watchdog timeouts and restarts, still alive) · paperC 43/44 (base-4B mmlu_med p2 last; 3 GPUs idle in the tail).
+
+### 11-11 paperC done (686027, 4.2 h, 44/44) + 22 scores: BASE 4B on the 22 gated task races
+- Base-4B Tamil was rerun at 64k (ctx64).
+- Totals over 21 tasks (excluding mgsm_ja, as for the other models). Each cell is beaten / faced (rate), then correct
+  passing answers as count (% of beaten).
+
+| model | p1 | p2 | p3 | p4 | p5 | p6 |
+|---|---|---|---|---|---|---|
+| base 4B | 212/672 (.32), 157 (74%) | 125/211 (.59), 100 | 95/124, 73 | 79/94, 60 | 71/79, 54 | 67/71, 54 (81%) |
+| 4B (k18) | 672/672, 390 (58%) | 653/671 (.97), 343 (53%) | 621/652, 297 | 586/621, 252 | 520/585, 223 | 462/514, 206 (45%) |
+| 9B | 672/672, 448 (67%) | 658/672, 352 (53%) | 623/658, 309 | 576/622, 295 | 512/572, 250 | 460/509, 253 (55%) |
+| det | 668/672, 406 (61%) | 636/668, 373 | 582/634, 311 | 530/582, 270 | 473/526, 247 | 437/470, 232 (53%) |
+
+Base 4B first probe beaten per task (32 episodes each), with robust share:
+
+| tasks | first probe beaten | robust |
+|---|---|---|
+| MMLU cs, MMLU med | 32 each | ~.8 |
+| MMLU physics | 28 | .29 |
+| MMLU bio | 22 | .12 |
+| mgsm_de | 17 | .52 |
+| jseval | 13 | .39 |
+| mgsm_fr, belebele_fi | 11 each | |
+| belebele_pt | 10 | |
+| json, mbppjava | 7 each | |
+| sql | 6 | |
+| belebele_ta, javaeval | 5 each | |
+| mgsm_ru, mgsm_ja | 4 each | |
+| pyeval, mgsm_th | 1 each | |
+| math, mbpp, belebele_tr, belebele_el | 0 | |
+
+- **Validity:** on MMLU cs and med, base 4B beats all 6 probes in every episode at 1.2–1.6 turns. Those two tasks
+  measure nothing, so report totals over the 18 non-MMLU tasks (base 4B p1 98/544 = 18%) and put MMLU in the appendix.
+  Details are in PAPER_AUDIT §4.
+- Base first-answer accuracy matches the trained 4B within about ±.05 on most tasks (math .81 vs .84, sql .81 vs .84).
+  Exceptions: json .22 vs 1.0 (base fails the format), belebele_ta .47 vs .16, mbpp .78 vs .59.

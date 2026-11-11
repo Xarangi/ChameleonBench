@@ -24,7 +24,7 @@ Legend: ✓ done · ✗ missing · ~ partial/caveat · n/a = not applicable.
 | Fixed-text held-out val race (non-free-gen; 7 families) | evasion on unseen concepts with refits | ✓ .554 | ✓ .652 | ✓ .707 | ✓ | ✓ | ✓ 2B .072 / 4B .006 / 9B .013 |
 | Gated free-gen quality race, train concepts | in-distribution evasion | ✓ 197/219 (90%), 2.25 | ✓ 257/272 (94%), 1.85 turns | ✓ 256/263 (97%), 2.01 | ✓ 246/260 | ✗ | ✓ p1 beaten 2B 7/64, 4B 14/66, 9B 6/65 |
 | Gated free-gen quality race, held-out concepts | concept transfer | ✓ 72/117 (62%), 3.83 | ✓ 129/156 (83%), 2.91 | ✓ 139/163 (85%), 2.91 | ✓ 117/146 (80%) | ✗ | ✓ p1 beaten 2B 9/68, 4B 20/64, 9B 6/65 |
-| Gated task races = interactive hide-and-solve (22 tasks) | turns to beat, refits, correct passes | ✗ (old ungated 9 tasks) | ✓ | ✓ | ✓ | ✓ (1800 + 2500) | ✗ |
+| Gated task races = interactive hide-and-solve (22 tasks) | turns to beat, refits, correct passes | running (paperB + rerun) | ✓ | ✓ | ✓ | ✓ (1800 + 2500) | ✓ 4B: p1 212/672; 98/544 excluding MMLU |
 | Persistence (no refit), real / always-passed | does the evasion hold without feedback | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ (4B) |
 | Capability: GSM8K / MMLU, clean + 2 briefs | capability cost | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ 2B/4B/9B |
 | Never-shown 18-probe panel (held-out architectures + layers 4–30), 4 train + 4 held-out seeds | held-out probes and layers | ✓ | ✓ | ✓ (held-out s0: TypeError -> 3 held-out seeds) | ✓ | ✓ | ✓ (4B, 1 seed) |
@@ -82,3 +82,12 @@ Legend: ✓ done · ✗ missing · ~ partial/caveat · n/a = not applicable.
   - evdetsel @22: .79 at 1800–1850, .56 at 2050–2100, .63 at 2150–2200.
   - mlpdetsel @22: .74 -> .65.
   - Linear probes: .02–.08 throughout.
+
+## 4. Validity finding from the base controls (11-11)
+- MMLU CS and MMLU medicine are **uninformative race tasks**. The untrained base 4B beats all 6 probes in 32/32
+  episodes on both, at 1.2–1.6 turns, with robust share .70–.90, exactly like the trained models. The probes do not
+  separate the hiding condition on these tasks.
+- MMLU physics (base beats p1 28/32, robust .29) and MMLU bio (22/32, robust .12) are partly informative: base wins
+  there are mostly flukes.
+- **Recommendation:** report the race totals over the 18 non-MMLU tasks, with MMLU in a separate appendix row, or
+  drop MMLU CS / med. Base 4B over non-MMLU tasks: first probe 98/544 (18%), with low robust shares.

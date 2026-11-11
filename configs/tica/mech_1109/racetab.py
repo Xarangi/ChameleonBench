@@ -1,7 +1,7 @@
 import json, os
 R = "/scratch/s/sneheel/next_chameleons_artifacts/tica/runs/races"
 T = "math mbpp pyeval javaeval jseval sql json mbppjava mgsm_fr mgsm_ru mgsm_th mgsm_de mgsm_ja belebele_fi belebele_pt belebele_tr belebele_el belebele_ta mmlu_physics mmlu_cs mmlu_med mmlu_bio".split()
-M = [("k18", "gate_x2500_{}", "kl03_1800"), ("det", "final4b_{}", "det2200"), ("9b", "final9b_{}", "k9b1800")]
+M = [("base4b", "finalbase4b_{}", "base4b"), ("k18", "gate_x2500_{}", "kl03_1800"), ("det", "final4b_{}", "det2200"), ("9b", "final9b_{}", "k9b1800"), ("2b", "final2b_{}", "k2b1800")]
 tot = {}
 def cell(p):
     b, f = p["beaten"], p["faced"]
