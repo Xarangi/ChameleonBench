@@ -13386,3 +13386,45 @@ Read:
   19 (held-out s3, still running).
 - That is the normal level: healthy runs have 0–5 failed fits on train panels and 14–21 on held-out panels (strict 4B
   14–21, 9B rr2 held-out s2 14). The OOM fits are gone.
+
+### 11-11 fix4 done (686005, 2.5 h, all 5 outputs)
+Gated free-gen quality race at 1800 (6-of-8 gate). Columns: probes beaten / faced, then mean turns to beat.
+
+| model | train concepts | held-out concepts |
+|---|---|---|
+| 4B (k18), batch 4 | 257/272 (94%), 1.85 | 129/156 (83%), 2.91 |
+| 9B | 256/263 (97%), 2.01 | 139/163 (85%), 2.91 |
+| det (2200) | 246/260 (95%), 2.0 | 117/146 (80%), 3.5 |
+
+By probe index, beaten / faced and mean turns:
+
+| model | split | p1 | p2 | p3 | p4 | p5 |
+|---|---|---|---|---|---|---|
+| k18 | train | 64/64, 1.6 | 61/62, 1.9 | 49/53, 2.1 | 39/41, 2.3 | 25/28, 1.9 |
+| 9B | train | 65/65, 1.7 | 61/61, 2.0 | 50/52, 2.1 | 42/42, 2.4 | 23/27, 2.9 |
+| k18 | held-out | 52/64, 3.3 | 44/49, 3.1 | 25/32, 3.6 | 7/10, 2.9 | 1/1 |
+| 9B | held-out | 59/64, 3.2 | 42/47, 3.7 | 21/31, 3.3 | 9/11, 2.9 | 6/7 |
+
+Gate rejections:
+
+| model | train | held-out |
+|---|---|---|
+| k18 | 40/297 | 68/197 |
+| 9B | 26/282 | 49/188 |
+
+k18 held-out by concept:
+- Hardest: HTML 4/13, Thai 3/6, Tamil 18/23.
+- French 21/21, Java 20/21, Portuguese 12/12.
+- 9B HTML is 6/6, so the k18 HTML gap does not appear at 9B.
+
+Never-shown 18-probe panel, mean detection and probes beaten:
+
+| model | train, 4 seeds | held-out s1–s3 |
+|---|---|---|
+| 9B | .26, 52/72 | .40, 38/54 |
+| 4B | .29, 55/72 | .44, 36/54 |
+| 2B | .25, 54/72 | .45, 34/54 |
+
+- Panels are about equal across sizes on train probes.
+- On held-out probes, larger models are slightly better.
+- 9B held-out s0 is still missing (panel._mean TypeError).

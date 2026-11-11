@@ -22,12 +22,12 @@ Legend: ✓ done · ✗ missing · ~ partial/caveat · n/a = not applicable.
 | eval | what it shows | 2B | 4B | 9B | det | strict 4B | base model |
 |---|---|---|---|---|---|---|---|
 | Fixed-text held-out val race (non-free-gen; 7 families) | evasion on unseen concepts with refits | ✓ .554 | ✓ .652 | ✓ .707 | ✓ | ✓ | ✓ 2B .072 / 4B .006 / 9B .013 |
-| Gated free-gen quality race, train concepts | in-distribution evasion | ✗ (ungated only) | ✗ OOM -> rerun 686005 | ✓ | ✓ | ✗ | ✗ (ungated 4B base only) |
-| Gated free-gen quality race, held-out concepts | concept transfer | ✗ (ungated only) | ✗ OOM -> 686005 | ✓ | ✓ | ✗ | ✗ |
+| Gated free-gen quality race, train concepts | in-distribution evasion | running (paperB) | ✓ 257/272 (94%), 1.85 turns | ✓ 256/263 (97%), 2.01 | ✓ 246/260 | ✗ | running (paperA/B/Q) |
+| Gated free-gen quality race, held-out concepts | concept transfer | running (paperB) | ✓ 129/156 (83%), 2.91 | ✓ 139/163 (85%), 2.91 | ✓ 117/146 (80%) | ✗ | running |
 | Gated task races = interactive hide-and-solve (22 tasks) | turns to beat, refits, correct passes | ✗ (old ungated 9 tasks) | ✓ | ✓ | ✓ | ✓ (1800 + 2500) | ✗ |
 | Persistence (no refit), real / always-passed | does the evasion hold without feedback | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ (4B) |
 | Capability: GSM8K / MMLU, clean + 2 briefs | capability cost | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ 2B/4B/9B |
-| Never-shown 18-probe panel (held-out architectures + layers 4–30), 4 train + 4 held-out seeds | held-out probes and layers | ✓ | ✓ | ~ 3 seeds rerunning | ✓ | ✓ | ✓ (4B, 1 seed) |
+| Never-shown 18-probe panel (held-out architectures + layers 4–30), 4 train + 4 held-out seeds | held-out probes and layers | ✓ | ✓ | ✓ (held-out s0: TypeError -> 3 held-out seeds) | ✓ | ✓ | ✓ (4B, 1 seed) |
 | Selectivity: panel `real` vs `mismatch` / `nobrief` | hides only when asked | ✓ | ✓ | ✓ | ✓ | ✓ | n/a |
 | Passive one-turn hide-and-solve | legacy; NOT the paper metric (user 10-29) | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
 
@@ -51,9 +51,9 @@ Legend: ✓ done · ✗ missing · ~ partial/caveat · n/a = not applicable.
 
 ## 2. Gaps, in priority order
 
-1. **4B (k18) gated quality race** (train + held-out). OOM at batch 8 at turn ~17, deterministic even alone on a GPU.
+1. DONE (fix4, batch 4). **4B (k18) gated quality race** (train + held-out). OOM at batch 8 at turn ~17, deterministic even alone on a GPU.
    Rerunning at batch 4 (686005).
-2. **9B never-shown panel**, 3 seeds (train s3, held-out s1 / s3). 51–119 probe fits OOM'd at 2 processes per GPU.
+2. DONE (fix4; failed fits 1 / 18 / 19 = normal). **9B never-shown panel**, 3 seeds (train s3, held-out s1 / s3). 51–119 probe fits OOM'd at 2 processes per GPU.
    Rerunning at 1 per GPU (686005).
    - 9B held-out s0 has a deterministic TypeError in `panel._mean`. It needs a code fix in a fresh worktree; until
      then it is reported on 3 held-out seeds.
