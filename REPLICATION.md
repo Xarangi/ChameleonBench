@@ -13428,3 +13428,39 @@ Never-shown 18-probe panel, mean detection and probes beaten:
 - Panels are about equal across sizes on train probes.
 - On held-out probes, larger models are slightly better.
 - 9B held-out s0 is still missing (panel._mean TypeError).
+
+### 11-11 paperQ done (686077, 2.3 h, 8/8): 2B and base-model gated free-gen quality races
+Episodes are 64–68 per race, 6-of-8 gate.
+
+Beaten / faced counts every probe an episode faced. An episode only faces probe k+1 after beating probe k, so base
+models face few probes. The fair measures are the first probe beaten and probes beaten per episode.
+
+| model | split | first probe beaten | probes beaten / faced | probes beaten per episode | turns | gate rejections |
+|---|---|---|---|---|---|---|
+| base 2B | train | 7/64 (11%) | 14/78 | 0.22 | | 17/31 |
+| 2B @1800 | train | 64/64 | 197/219 (90%) | 3.1 | 2.25 | 57/254 |
+| base 4B | train | 14/66 (21%) | 59/117 | 0.89 | | 15/74 |
+| 4B @1800 | train | 64/64 | 257/272 | 4.0 | 1.85 | |
+| base 9B | train | 6/65 (9%) | 22/83 | 0.34 | | 10/32 |
+| 9B @1800 | train | 65/65 | 256/263 | 3.9 | 2.01 | |
+| base 2B | held-out | 9/68 (13%) | 38/101 | 0.56 | | |
+| 2B @1800 | held-out | 44/64 (69%) | 72/117 (62%) | 1.1 | 3.83 | 69/141 |
+| base 4B | held-out | 20/64 (31%) | 71/124 | 1.1 | | |
+| 4B @1800 | held-out | 52/64 (81%) | 129/156 | 2.0 | 2.91 | |
+| base 9B | held-out | 6/65 (9%) | 21/84 | 0.32 | | |
+| 9B @1800 | held-out | 59/64 (92%) | 139/163 | 2.2 | 2.91 | |
+
+- 2B held-out by concept: Turkish 2/10, Russian 2/6, Finnish 6/12, Tamil 9/16; Java 17/21, French 7/8.
+- Base 4B held-out wins come mostly on Java 22/25 and Portuguese 10/13. It beats 0 of 10 HTML, 0 of 7 French and
+  0 of 3 Greek probes.
+- Size ordering on held-out concepts, first probe: 2B 69% < 4B 81% < 9B 92%.
+
+### Correction to the ctx64 entry above
+- The 2B pieces that overflowed 32k were **belebele_ta p1/p2** (Tamil), not mbppjava. paperB's q smoke failed (those
+  races ran in paperQ), which shifted the `full13`/`full14` log numbering; mbppjava p1/p2 had already finished at
+  04:24/04:27.
+- ctx64 (686192, 20 min) therefore reran only base-4B belebele_ta p1/p2 at 64k; both are done. Rescore 686193
+  (final2b-mbppjava) is harmless.
+- 2B belebele_ta p1/p2 at 64k (`runs/mech_1109/ctx64b.tsv`) will go into paperB's resubmission when paperB ends,
+  because TamIA allocates H100s only by whole node and a 2-piece node would leave 2 GPUs idle. The
+  final2b-belebele_ta rescore follows it.

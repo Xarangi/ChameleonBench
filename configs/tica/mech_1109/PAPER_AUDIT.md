@@ -22,8 +22,8 @@ Legend: ✓ done · ✗ missing · ~ partial/caveat · n/a = not applicable.
 | eval | what it shows | 2B | 4B | 9B | det | strict 4B | base model |
 |---|---|---|---|---|---|---|---|
 | Fixed-text held-out val race (non-free-gen; 7 families) | evasion on unseen concepts with refits | ✓ .554 | ✓ .652 | ✓ .707 | ✓ | ✓ | ✓ 2B .072 / 4B .006 / 9B .013 |
-| Gated free-gen quality race, train concepts | in-distribution evasion | running (paperB) | ✓ 257/272 (94%), 1.85 turns | ✓ 256/263 (97%), 2.01 | ✓ 246/260 | ✗ | running (paperA/B/Q) |
-| Gated free-gen quality race, held-out concepts | concept transfer | running (paperB) | ✓ 129/156 (83%), 2.91 | ✓ 139/163 (85%), 2.91 | ✓ 117/146 (80%) | ✗ | running |
+| Gated free-gen quality race, train concepts | in-distribution evasion | ✓ 197/219 (90%), 2.25 | ✓ 257/272 (94%), 1.85 turns | ✓ 256/263 (97%), 2.01 | ✓ 246/260 | ✗ | ✓ p1 beaten 2B 7/64, 4B 14/66, 9B 6/65 |
+| Gated free-gen quality race, held-out concepts | concept transfer | ✓ 72/117 (62%), 3.83 | ✓ 129/156 (83%), 2.91 | ✓ 139/163 (85%), 2.91 | ✓ 117/146 (80%) | ✗ | ✓ p1 beaten 2B 9/68, 4B 20/64, 9B 6/65 |
 | Gated task races = interactive hide-and-solve (22 tasks) | turns to beat, refits, correct passes | ✗ (old ungated 9 tasks) | ✓ | ✓ | ✓ | ✓ (1800 + 2500) | ✗ |
 | Persistence (no refit), real / always-passed | does the evasion hold without feedback | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ (4B) |
 | Capability: GSM8K / MMLU, clean + 2 briefs | capability cost | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ 2B/4B/9B |
