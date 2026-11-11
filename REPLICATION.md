@@ -13536,3 +13536,4 @@ correct passes (% of beaten).
 | 3.89 | 5.58 | 5.98 | 5.95 | 5.92 |
 
   The base row confirms MMLU is not informative (PAPER_AUDIT §4, §5).
+- 09:40 tick: paperB2 5/6 (2B belebele_ta p1 + belebele_el p1 done at 64k; belebele_ta p2 running). Rescores 686284-7 wait on it.
