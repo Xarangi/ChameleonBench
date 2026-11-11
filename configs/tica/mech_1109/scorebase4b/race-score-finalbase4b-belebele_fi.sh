@@ -1,0 +1,4 @@
+#!/bin/sh
+# This script was created by sbatch --wrap.
+
+cd /scratch/s/sneheel/ChameleonBench-final && OMP_NUM_THREADS=1 PYTHONPATH=src /scratch/s/sneheel/venvs/q35t29/bin/python scripts/tica_task_race_report.py --gold /scratch/s/sneheel/next_chameleons_artifacts/tica/runs/mech_1025/taskrace/gold_belebele_fi.json --race 'base4b=/scratch/s/sneheel/next_chameleons_artifacts/tica/runs/races/finalbase4b_belebele_fi/base4b_p*.jsonl' --workers 8 --out /scratch/s/sneheel/next_chameleons_artifacts/tica/runs/races/finalbase4b_belebele_fi/report.json; rc=$?; miss=$(cat /scratch/s/sneheel/next_chameleons_artifacts/tica/runs/races/finalbase4b_math/pieces*.tsv.status 2>/dev/null | awk -F'\t' -v r=/scratch/s/sneheel/next_chameleons_artifacts/tica/runs/races/finalbase4b_belebele_fi/ '$2 != "ok" && index($1, r) == 1'); if [ -n "$miss" ]; then echo "RACE INCOMPLETE -- missing pieces:"; echo "$miss"; exit 3; fi; exit $rc
