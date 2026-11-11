@@ -24,7 +24,7 @@ Legend: ✓ done · ✗ missing · ~ partial/caveat · n/a = not applicable.
 | Fixed-text held-out val race (non-free-gen; 7 families) | evasion on unseen concepts with refits | ✓ .554 | ✓ .652 | ✓ .707 | ✓ | ✓ | ✓ 2B .072 / 4B .006 / 9B .013 |
 | Gated free-gen quality race, train concepts | in-distribution evasion | ✓ 197/219 (90%), 2.25 | ✓ 257/272 (94%), 1.85 turns | ✓ 256/263 (97%), 2.01 | ✓ 246/260 | ✗ | ✓ p1 beaten 2B 7/64, 4B 14/66, 9B 6/65 |
 | Gated free-gen quality race, held-out concepts | concept transfer | ✓ 72/117 (62%), 3.83 | ✓ 129/156 (83%), 2.91 | ✓ 139/163 (85%), 2.91 | ✓ 117/146 (80%) | ✗ | ✓ p1 beaten 2B 9/68, 4B 20/64, 9B 6/65 |
-| Gated task races = interactive hide-and-solve (22 tasks) | turns to beat, refits, correct passes | ✓ 20/22 (Tamil + belebele_el p1 in paperB2) | ✓ | ✓ | ✓ | ✓ (1800 + 2500) | ✓ 4B: p1 212/672; 98/544 excluding MMLU |
+| Gated task races = interactive hide-and-solve (22 tasks) | turns to beat, refits, correct passes | ✓ 22/22 | ✓ | ✓ | ✓ | ✓ (1800 + 2500) | ✓ 4B: p1 212/672; 98/544 excluding MMLU |
 | Persistence (no refit), real / always-passed | does the evasion hold without feedback | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ (4B) |
 | Capability: GSM8K / MMLU, clean + 2 briefs | capability cost | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ 2B/4B/9B |
 | Never-shown 18-probe panel (held-out architectures + layers 4–30), 4 train + 4 held-out seeds | held-out probes and layers | ✓ | ✓ | ✓ (held-out s0: TypeError -> 3 held-out seeds) | ✓ | ✓ | ✓ (4B, 1 seed) |
@@ -117,3 +117,18 @@ MMLU, 4 tasks, appendix:
 | det | 5.92 |
 
 The MMLU base row confirms §4: MMLU is not informative.
+
+### 5b. Final: all 17 non-MMLU tasks (544 episodes per model; mgsm_ja excluded)
+
+| model | probes beaten / episode | p1 | p6 | correct passes (% of beaten) |
+|---|---|---|---|---|
+| base 4B | 0.28 | 98/544 | 1/3 | 106 (70%) |
+| 2B | 2.97 | 518/544 | 92/129 | 619 (38%) |
+| 4B (k18) | 5.05 | 544/544 | 336/387 | 1095 (40%) |
+| 9B | 5.03 | 544/544 | 334/383 | 1264 (46%) |
+| det | 4.72 | 540/544 | 316/345 | 1227 (48%) |
+
+**Status 11-11 10:00: audit gaps 1–3 are all complete.** Open items:
+- 9B held-out panel s0: TypeError in `panel._mean`; 3 held-out seeds are reported instead.
+- Strict 4B has no gated quality race.
+- Single training seed per size: state as a limitation.

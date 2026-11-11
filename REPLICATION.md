@@ -13537,3 +13537,23 @@ correct passes (% of beaten).
 
   The base row confirms MMLU is not informative (PAPER_AUDIT §4, §5).
 - 09:40 tick: paperB2 5/6 (2B belebele_ta p1 + belebele_el p1 done at 64k; belebele_ta p2 running). Rescores 686284-7 wait on it.
+
+### 11-11 paperB2 done (686283, 43 min) + rescores: all paper gap runs COMPLETE
+- 2B belebele_ta (64k) and belebele_el are complete.
+- Gated task races over all 17 non-MMLU tasks, 544 episodes per model. Each probe column is beaten / faced, then
+  correct passes.
+
+| model | probes beaten / episode | p1 | p2 | p3 | p4 | p5 | p6 | correct passes (% of beaten) |
+|---|---|---|---|---|---|---|---|---|
+| base 4B | 0.28 | 98/544, 66 | 32/97 | 12/31 | 5/11 | 3/5 | 1/3 | 106 (70%) |
+| 2B | 2.97 | 518/544, 197 | 399/518 | 285/399 | 187/283 | 132/184 | 92/129 | 619 (38%) |
+| 4B (k18) | 5.05 | 544/544, 288 | 525/543 | 493/524 | 458/493 | 392/457 | 336/387 | 1095 (40%) |
+| 9B | 5.03 | 544/544, 339 | 530/544 | 496/530 | 449/495 | 386/445 | 334/383 | 1264 (46%) |
+| det | 4.72 | 540/544, 304 | 508/540 | 454/506 | 402/454 | 348/399 | 316/345 | 1227 (48%) |
+
+2B on the two pieces that just finished (beaten / faced, then correct passes):
+
+| task | p1 | p2 | p3 |
+|---|---|---|---|
+| belebele_ta | 32/32, 3 | 18/32 | 2/18 |
+| belebele_el | 28/32, 1 | 16/28 | 9/16 |
