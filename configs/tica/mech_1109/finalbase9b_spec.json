@@ -1,0 +1,2 @@
+{"name":"finalbase9b","task":"math,mbpp,pyeval,javaeval,jseval,sql,json,mbppjava,mgsm_fr,mgsm_ru,mgsm_th,mgsm_de,belebele_fi,belebele_pt,belebele_tr,belebele_el,belebele_ta","episodes":16,"batch":8,"piece_episodes":16,"vllm_mem":"0.35","hf_mem":"0.60","time":"12:00:00","extra":"--set model.batch_size=16","min_per_piece":15,"jobs":1,
+ "models":{"base9b":["final_v4d_k03_tamia_9b","base"]}}

@@ -128,6 +128,53 @@ The MMLU base row confirms §4: MMLU is not informative.
 | 9B | 5.03 | 544/544 | 334/383 | 1264 (46%) |
 | det | 4.72 | 540/544 | 316/345 | 1227 (48%) |
 
+## 6. Final pre-writing audit (11-11 evening)
+
+Paper draft: https://claude.ai/artifact/FjQoA6PpAeyd2NjxvfEZDk (Claude Docs; sections 1-10 + appendix).
+
+**Checked and fine**
+- Task-race commands, all 5 models x 21 tasks, diffed after normalising paths / adapter. They differ only in
+  TICA_REPO, memory fractions, `--batch` (2B 16; 9B javaeval p1 rerun 4) and `--set model.batch_size=16` (absent on
+  k18 math / mbpp; read batch only).
+- k18 task races ran from ChameleonBench-gate (9419997) / -graded (7aca3d2); the others from -final (eb2e8bb).
+  `git diff --stat 9419997 eb2e8bb` touches only task builders, the report script, capability_heldout and the 9B
+  config. The race engine is identical.
+- Every refit counted in the task races passed the quality gate. The 6-of-8 gate rejected 22-24% of apparent passes
+  for 4B / 9B / det, 33% for the 2B and 32% for base 4B. Mean fork share: .80 / .82 / .78 / .71 / .44.
+- Capability runs all use the same command (512 new GSM8K tokens, same 2 briefs).
+- Panel: base 4B mean detection .996 / .992 (0/18 beaten). Monitor-off turns are detected .98-1.00 for all 3 sizes.
+
+**New numbers (no GPU; `ci.py` in the session scratchpad, bootstrap over episodes stratified by task)**
+
+| model | probes beaten / episode, of 6 [95% CI] | uncapped (max 12) | first-answer accuracy |
+|---|---|---|---|
+| base 4B | 0.28 [0.22, 0.33] | 0.28 | .70 |
+| 2B | 2.97 [2.86, 3.07] | 3.42 | .51 |
+| 4B (k18) | 5.05 [4.96, 5.14] | 7.90 | .70 |
+| 9B | 5.03 [4.95, 5.12] | 8.14 | .74 |
+| det | 4.72 [4.62, 4.82] | 7.69 | .69 |
+| strict 1800 | 3.36 [3.24, 3.47] | 4.20 | .76 |
+| strict 2500 | 4.04 [3.91, 4.16] | 5.50 | .77 |
+
+- The cap at 6 saturates for 4B / 9B (many tasks at 6.00); quote the uncapped number alongside.
+- Correct among passes falls with probe index: 4B 53 / 46 / 39 / 33 / 32 / 29%, 9B 62 / 46 / 41 / 41 / 39 / 43%.
+- Free-gen held-out first probe, Wilson 95%: 2B 69% [57, 79], 4B 81% [70, 89], 9B 92% [83, 97]. 4B vs 9B overlap.
+- Frozen step-1800 linear hiding detector on det@2200 (TPR at 1% FPR): L8 .68, L12 .58, L16 .79, L22 .96; fresh
+  detector on det@2200 .97-1.00 at L8-26; no-detector control (sx18 -> sx25) .97-1.00.
+
+**Found missing -> running (paperD 688141, one node, 35 lines, `launch_paperD.sh`)**
+- Base 2B capability (GSM8K / MMLU): there was no measured control. The 2B is at .685 GSM8K vs a .75 training
+  reference, so the capability cost of the 2B was unsupported.
+- Base 2B and base 9B on the 17 non-MMLU task races, half size (16 episodes per task = piece 1 of the trained
+  races; commands equal the trained p1 commands up to `--base`). The base control on the headline metric existed for
+  the 4B only. 64k context from the start. 34 score jobs follow.
+
+**Wording corrections for the paper**
+- Free-gen "first probe n/64" is per concept SEGMENT (32 episodes, each switches concept), not per episode.
+- Base 4B is a weaker free-gen control (31% on held-out, mostly Java and Portuguese); the fixed-text race base rates
+  are 7-14%.
+- 2B task races at batch 16 and the k18 free-gen race at batch 4: stated as protocol differences.
+
 **Status 11-11 10:00: audit gaps 1–3 are all complete.** Open items:
 - 9B held-out panel s0: TypeError in `panel._mean`; 3 held-out seeds are reported instead.
 - Strict 4B has no gated quality race.

@@ -13557,3 +13557,15 @@ correct passes (% of beaten).
 |---|---|---|---|
 | belebele_ta | 32/32, 3 | 18/32 | 2/18 |
 | belebele_el | 28/32, 1 | 16/28 | 9/16 |
+
+### 11-11 evening — final pre-writing audit + paper draft + paperD controls (688141)
+- User: full audit, then write the paper; run jobs only for missing key results.
+- Audit details and new numbers: configs/tica/mech_1109/PAPER_AUDIT.md §6. Paper draft (Claude Docs):
+  https://claude.ai/artifact/FjQoA6PpAeyd2NjxvfEZDk
+- Verified: task-race commands equal across models up to paths / memory / batch; race engine identical between the
+  k18 checkout and final-evals; all counted refits passed the gate; capability commands identical.
+- New, no GPU (`configs/tica/mech_1109/raceci.py`): probes beaten per episode with bootstrap 95% CIs — base 4B 0.28
+  [0.22, 0.33], 2B 2.97 [2.86, 3.07], 4B 5.05 [4.96, 5.14], 9B 5.03 [4.95, 5.12], det 4.72 [4.62, 4.82], strict 1800
+  3.36, strict 2500 4.04. Uncapped (max 12): 4B 7.90, 9B 8.14, 2B 3.42.
+- Missing controls found: base 2B capability; base 2B / base 9B on the task races. Running as paperD 688141
+  (`launch_paperD.sh`; one node, SLOTS=4; 34 half-size race pieces + 1 capability line; 34 score jobs after it).

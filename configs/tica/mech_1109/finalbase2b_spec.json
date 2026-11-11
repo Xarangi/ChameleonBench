@@ -1,0 +1,2 @@
+{"name":"finalbase2b","task":"math,mbpp,pyeval,javaeval,jseval,sql,json,mbppjava,mgsm_fr,mgsm_ru,mgsm_th,mgsm_de,belebele_fi,belebele_pt,belebele_tr,belebele_el,belebele_ta","episodes":16,"batch":16,"piece_episodes":16,"vllm_mem":"0.30","hf_mem":"0.65","time":"10:00:00","extra":"--set model.batch_size=16","min_per_piece":15,"jobs":1,
+ "models":{"base2b":["final_v4d_tamia_2b_x1800","base"]}}
