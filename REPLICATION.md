@@ -13339,3 +13339,6 @@ finalbase4b_spec.json.
   | paperC | 686027 | base 4B 22 task races (44 pieces) |
   | score jobs | 686028–686071 | after paperB / paperC |
   | fix4 | 686005 | k18 gated quality at batch 4, 3 9B panel seeds (running) |
+- 11-11 03:35: the gated quality smoke on paperA and paperB failed: I reused the 1-concept smoke line, but concept
+  switching needs at least 3 concepts. The q group was skipped there; val and task races run. All 8 gated quality
+  races moved to paperQ 686077 with 3-concept smokes. launch_paper.sh fixed for the record.

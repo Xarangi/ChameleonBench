@@ -46,14 +46,14 @@ for s in final2b finalbase4b; do (cd $FW && /usr/bin/python3 scripts/heldout_rac
 SM=$(printf 'rl\t%s\ttrue\n' $M/smoke_9b_race.json)   # val lines: same scripts as the finished 9B / 4B val races
 # ---- node A: 9B + 4B base gated quality, base val, trend val
 TA=$M/paperA.tsv; SA=$M/paperA_smoke.tsv; : > $TA; echo "$SM" > $SA
-add $SA q $M/smoke_base9b_gated.json "TICA_REPO=$FW bash $FW/scripts/slurm/tica_switch_eval.sh $C9 $M/smoke_base9b_gated.json --base --topics 'SQL code' --batch 2 --answers free --ask-concept --episodes 2 --turns 4 --switch-prob 1.0 --turn-budget 1,2,2 --cond real_score $GATE"
+add $SA q $M/smoke_base9b_gated.json "TICA_REPO=$FW bash $FW/scripts/slurm/tica_switch_eval.sh $C9 $M/smoke_base9b_gated.json --base --topics 'SQL code,JSON data,German language' --batch 2 --answers free --ask-concept --episodes 2 --turns 4 --switch-prob 1.0 --turn-budget 1,2,2 --cond real_score $GATE"
 gq $TA $C9 --base $B9/quality_gated 8; gq $TA $C4 --base $B4/quality_gated 4
 valb $TA $B9 $C9; valb $TA $B4 $C4
 val $TA $C9 adaptive/step_600 600; val $TA $C9 resume_620/adaptive/step_380 1000; val $TA $C9 resume_1060/adaptive/step_340 1400
 val $TA $C4 adaptive/step_600 600; val $TA $C4 resume_800/adaptive/step_200 1000; val $TA $C4 resume_1340/adaptive/step_60 1400
 # ---- node B: 2B (gated quality, base gated quality, base val, trend val) + 2B task races
 TB=$M/paperB.tsv; SB=$M/paperB_smoke.tsv; : > $TB; echo "$SM" > $SB
-add $SB q $M/smoke_2b_gated.json "TICA_REPO=$FW bash $FW/scripts/slurm/tica_switch_eval.sh $C2 $M/smoke_2b_gated.json --adapter $A2 --topics 'SQL code' --batch 2 --answers free --ask-concept --episodes 2 --turns 4 --switch-prob 1.0 --turn-budget 1,2,2 --cond real_score $GATE"
+add $SB q $M/smoke_2b_gated.json "TICA_REPO=$FW bash $FW/scripts/slurm/tica_switch_eval.sh $C2 $M/smoke_2b_gated.json --adapter $A2 --topics 'SQL code,JSON data,German language' --batch 2 --answers free --ask-concept --episodes 2 --turns 4 --switch-prob 1.0 --turn-budget 1,2,2 --cond real_score $GATE"
 SMR=$M/smoke_2b_race.json; head -1 $RC/final2b_math/pieces.tsv | cut -f2 | sed -E "s#--episodes [0-9]+#--episodes 1#; s#--batch [0-9]+#--batch 1#; s#--turns [0-9]+#--turns 3#; s#--fork-out [^ ]+#--fork-out ${SMR%.json}_forks.jsonl#; s#--gen-out [^ ]+#--gen-out ${SMR%.json}.jsonl#; s#bash scripts/slurm/tica_switch_eval.sh ([^ ]+) [^ ]+#bash scripts/slurm/tica_switch_eval.sh \1 $SMR#" > $M/.smr
 add $SB race $SMR "bash $HERE/race_piece.sh $SMR $(printf %q "$(cat $M/.smr)")"
 gq $TB $C2 "--adapter $A2" $R/$C2/quality/step_1800 8; gq $TB $C2 --base $B2/quality_gated 8
