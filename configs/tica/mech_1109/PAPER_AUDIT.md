@@ -21,7 +21,7 @@ Legend: ✓ done · ✗ missing · ~ partial/caveat · n/a = not applicable.
 
 | eval | what it shows | 2B | 4B | 9B | det | strict 4B | base model |
 |---|---|---|---|---|---|---|---|
-| Fixed-text held-out val race (non-free-gen; 7 families) | evasion on unseen concepts with refits | ✓ .554 | ✓ .652 | ✓ .707 | ✓ | ✓ | ✗ |
+| Fixed-text held-out val race (non-free-gen; 7 families) | evasion on unseen concepts with refits | ✓ .554 | ✓ .652 | ✓ .707 | ✓ | ✓ | ✓ 2B .072 / 4B .006 / 9B .013 |
 | Gated free-gen quality race, train concepts | in-distribution evasion | ✗ (ungated only) | ✗ OOM -> rerun 686005 | ✓ | ✓ | ✗ | ✗ (ungated 4B base only) |
 | Gated free-gen quality race, held-out concepts | concept transfer | ✗ (ungated only) | ✗ OOM -> 686005 | ✓ | ✓ | ✗ | ✗ |
 | Gated task races = interactive hide-and-solve (22 tasks) | turns to beat, refits, correct passes | ✗ (old ungated 9 tasks) | ✓ | ✓ | ✓ | ✓ (1800 + 2500) | ✗ |
@@ -36,7 +36,7 @@ Legend: ✓ done · ✗ missing · ~ partial/caveat · n/a = not applicable.
 | item | 2B | 4B | 9B | det | strict 4B |
 |---|---|---|---|---|---|
 | Training curves from train logs (beatk 1–5, turns, GSM8K, free validity, KL per 200 steps) | ✓ | ✓ | ✓ | ✓ | ✓ |
-| Held-out val race at intermediate checkpoints | ~ 600 / 1500 / 1800 | ✗ 1800 only | ✗ 1800 only | n/a | ~ 1800 / 2500 |
+| Held-out val race at intermediate checkpoints | ✓ 600 / 1000 / 1400 / 1800 | ✓ 600 / 1000 / 1400 / 1800 | ✓ 600 / 1000 / 1400 / 1800 | n/a | ~ 1800 / 2500 |
 | Detector catch over detector training (evdetsel / mlpdetsel at L12 / 16 / 22, 1800–2200) | n/a | n/a | n/a | ✓ | n/a |
 
 ### 1c. Detector results

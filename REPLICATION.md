@@ -13342,3 +13342,35 @@ finalbase4b_spec.json.
 - 11-11 03:35: the gated quality smoke on paperA and paperB failed: I reused the 1-concept smoke line, but concept
   switching needs at least 3 concepts. The q group was skipped there; val and task races run. All 8 gated quality
   races moved to paperQ 686077 with 3-concept smokes. launch_paper.sh fixed for the record.
+
+### 11-11 04:45 — paperA done: base-model val controls + held-out val trend
+Held-out fixed-text val race (val score | pass rate | probe 1–5 beaten frac/n).
+
+| model | step | val | pass | k1 | k2 | k3 | k4 | k5 |
+|---|---|---|---|---|---|---|---|---|
+| base 2B | – | .072 | .014 | .14/65 | .11/9 | 1/1 | 0/1 | – |
+| base 4B | – | .006 | .014 | .09/65 | .20/5 | 0/1 | – | – |
+| base 9B | – | .013 | .009 | .07/67 | 0/4 | – | – | – |
+| 2B | 600 | .119 | .070 | .52/64 | .28/29 | .17/6 | – | – |
+| 2B | 1000 | .332 | .132 | .77/65 | .48/44 | .65/17 | .50/6 | – |
+| 2B | 1400 | .332 | .132 | .73/64 | .70/40 | .47/17 | .20/5 | 1/1 |
+| 2B | 1800 | .554 | .184 | .80/64 | .78/50 | .72/25 | .60/10 | 1/1 |
+| 4B | 600 | .353 | .089 | .58/65 | .40/35 | .38/13 | 0/1 | – |
+| 4B | 1000 | .393 | .158 | .81/64 | .67/45 | .68/19 | .71/7 | 1/3 |
+| 4B | 1400 | .635 | .248 | .88/64 | .82/51 | .88/34 | .77/22 | 1/7 |
+| 4B | 1800 | .652 | .277 | .92/64 | .89/55 | .90/39 | .88/24 | 1/10 |
+| 9B | 600 | .322 | .084 | .69/64 | .18/39 | .50/6 | 1/1 | – |
+| 9B | 1000 | .514 | .149 | .86/64 | .57/53 | .41/22 | .33/6 | 0/1 |
+| 9B | 1400 | .532 | .215 | .83/64 | .88/49 | .83/29 | .71/14 | 1/5 |
+| 9B | 1800 | .707 | .285 | .92/64 | .91/54 | .91/35 | .96/24 | .92/13 |
+
+- The 2B 600 is from the original run (before the 1270 branch point); the 2B 1400 is on the x1800 branch.
+- The 2B 1000 and 1400 have identical val and pass (.332 / .132) but different per-probe counts. They are separate
+  runs; the match is a coincidence.
+
+Read:
+- **Base models:** essentially never evade held-out probes (val ≤ .07, ~10% of first probes beaten). Trained models
+  beat 80–92% of first probes at 1800.
+- **Over training:** held-out evasion rises with training at every size, and depth (k3+) appears from ~1000–1400.
+- paperC: base-4B belebele_ta p1/p2 crashed at turns 28–30 when the context passed the 32,768-token vLLM limit
+  (Tamil, base model). They will be rerun with a 64k limit after paperC; the limit does not change anything below it.
