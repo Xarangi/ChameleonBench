@@ -13508,3 +13508,31 @@ Base 4B first probe beaten per task (32 episodes each), with robust share:
   they finish.
   - All 6 use TICA_VLLM_MAXLEN=65536; this only matters past 32k.
   - Rescores 686284–686287 (belebele_ta, belebele_el, mmlu_cs, mmlu_med) follow it.
+
+### 11-11 paperB done (686026, 5.8 h) + 2B scores: 2B gated task races (20 of 22 tasks complete)
+- 2B belebele_ta p1/p2 and belebele_el p1 are in paperB2 (686283) with rescores.
+- New `configs/tica/mech_1109/racecmp.py` gives totals over a task set.
+
+Over the 15 non-MMLU tasks complete for all models (480 episodes each). Each probe column is beaten / faced, then
+correct passes (% of beaten).
+
+| model | probes beaten / episode | p1 | p2 | p3 | p4 | p5 | p6 | correct passes |
+|---|---|---|---|---|---|---|---|---|
+| base 4B | 0.30 | 93/480, 66 (71%) | 32/92 | 12/31 | 5/11 | 3/5 | 1/3 | 106 (73%) |
+| 2B | 3.14 | 458/480, 193 (42%) | 365/458 | 274/365 | 184/272 | 132/181 | 92/129 | 613 (41%) |
+| 4B (k18) | 5.21 | 480/480, 265 (55%) | 467/479 | 445/467 | 416/445 | 369/415 | 322/366 | 1047 (42%) |
+| 9B | 5.21 | 480/480, 315 (66%) | 468/480 | 446/468 | 415/445 | 370/411 | 324/367 | 1221 (49%) |
+| det | 4.94 | 476/480 | 449/476 | 414/447 | 379/414 | 338/376 | 314/337 | 1168 (49%) |
+
+- Evasion: 2B < 4B = 9B.
+- 9B keeps the most correct answers while evading: 315 vs 265 correct passing answers at p1, 49% vs 42% overall.
+- 2B per task:
+  - Strong on sql and jseval: 32/32 through p6 on jseval, and 17/19 at p6 on sql with 100% correct.
+  - Weak on code (mbpp p2 13/28, pyeval p2 13/26), belebele_tr (p2 8/26) and mgsm_ru / mgsm_th.
+- MMLU, 4 tasks, probes beaten per episode:
+
+| base 4B | 2B | k18 | 9B | det |
+|---|---|---|---|---|
+| 3.89 | 5.58 | 5.98 | 5.95 | 5.92 |
+
+  The base row confirms MMLU is not informative (PAPER_AUDIT §4, §5).
