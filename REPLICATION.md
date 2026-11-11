@@ -13299,3 +13299,17 @@ Scripts: configs/tica/mech_1109/{cmp3,panel3,hs3,racetab}.py.
     beat, correct passes, fork share.
   - 4B math there: p1–p4 32/32 beaten in 1.4–2.7 turns, 50–71% correct; p5 28/32, p6 24/28.
   - The "9B worse at held-pool language hiding" claim came from the passive test only. Withdrawn.
+
+### 11-11 — overnight reruns landed; paper-readiness audit
+- rerun3 (683600–683604): every output exists except the 4B (k18) gated quality race. It OOMs at batch 8 at turn
+  ~17, deterministically, even alone on a GPU. Rerunning at batch 4 together with the 3 9B panels whose probe fits
+  OOM'd: fix4 686005. The old panel outputs were moved aside as *.oomfits.json.
+- New 9B results:
+  - Held-out val race .707 (4B .652, 2B .554). k1–5 beaten .92 / .91 / .91 / .96 / .92.
+  - Val race by family: domain .80, emotion .67, format .67, language .50, safety .79, tone .73, topic .80.
+  - Persistence, always-passed: .754 (4B .763, 2B .450).
+  - 9B base capability: GSM8K .945, MMLU .768. Briefs: GSM8K .925 / .925, MMLU .745 / .747.
+  - Panel train s0–s2: det .31 / .26 / .22, beaten 12 / 13 / 14 of 18. Held-out s2: .35, 14/18.
+  - javaeval at 32 episodes: beaten 31–32/32 at every probe; correct passes 9 (28%) at p1 and 0 from p3.
+- Detector race, detector model (d22): beats a live selective detector 82% @L16 / 85% @L22 (4B k18: 69% / 62%).
+- Audit with the full inventory, gaps and training curves: configs/tica/mech_1109/PAPER_AUDIT.md.
