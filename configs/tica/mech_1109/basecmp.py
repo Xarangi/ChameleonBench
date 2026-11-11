@@ -3,8 +3,9 @@
 import json, os
 R = "/scratch/s/sneheel/next_chameleons_artifacts/tica/runs/races"
 M = [("base2b", "finalbase2b_{}", "base2b"), ("base4b", "finalbase4b_{}", "base4b"), ("base9b", "finalbase9b_{}", "base9b")]
-G = {"trained concepts": "math mbpp jseval sql json".split(), "held-out code": "pyeval javaeval mbppjava".split(),
-     "held-out MGSM": "mgsm_fr mgsm_ru mgsm_th mgsm_de".split(),
+# groups as in the paper (6.2) and racegroups.py: German and JavaScript are trained concepts, Python is held out
+G = {"trained concepts": "math sql json jseval mgsm_de".split(), "held-out code": "mbpp pyeval javaeval mbppjava".split(),
+     "held-out MGSM": "mgsm_fr mgsm_ru mgsm_th".split(),
      "held-out Belebele": "belebele_fi belebele_pt belebele_tr belebele_el belebele_ta".split()}
 G["all 17"] = [t for g in list(G.values()) for t in g]
 for name, d, key in M:

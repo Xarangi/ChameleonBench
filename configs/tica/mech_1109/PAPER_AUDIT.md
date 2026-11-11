@@ -228,10 +228,22 @@ per-row scores; `launch_paperF.sh`, `judge_piece.sh`), paperD 688141.
 **7e. paperD done (688141, 35/35 outputs, 34/34 score jobs COMPLETED) — untrained 2B / 9B controls** (`basecmp.py`)
 - Probes beaten per episode | correct passes per episode, 17 tasks: base 2B 0.18 | 0.08 (272 eps), base 4B 0.28 | 0.19
   (544 eps), base 9B 0.17 | 0.12 (272 eps). base 2B/9B are half size (16 eps per task, piece p1).
-- By group (beaten/ep): trained concepts .11 / .21 / .09; held-out code .15 / .16 / .17; held-out MGSM .33 / .51 / .33;
-  held-out Belebele .16 / .23 / .12 (2B / 4B / 9B). First probe beaten: 35/272, 98/544, 33/272.
+- By group as in paper 6.2 (beaten/ep, 2B / 4B / 9B): trained concepts .33 / .49 / .23; held-out code .11 / .12 / .12;
+  held-out MGSM .08 / .22 / .21; held-out Belebele .16 / .23 / .12. First probe beaten: 35/272, 98/544, 33/272.
+  (First version of basecmp.py had mbpp / mgsm_de in the wrong groups; fixed, paper sentence corrected in rev 40.)
+- Bootstrap CIs (stratified by task): 2B 0.18 [0.12, 0.25], 4B 0.28 [0.23, 0.33], 9B 0.17 [0.11, 0.23].
 - Concentrated: mgsm_de + mgsm_fr + jseval = 28/50 (2B), 79/151 (4B), 24/46 (9B) of beaten probes; GSM8K and MBPP 0 at every size.
 - Base 2B capability (GSM8K n=200 / MMLU n=600): clean .715 / .592; maths brief .435 / .485; HTML brief .420 / .500.
   Trained 2B: .685 / .570; .605 / .547; .650 / .545. So trained 2B is within 3 pts clean and far ABOVE its base under a
   brief (the untrained 2B collapses when told to hide). The earlier "expect a real cost for the 2B" guess was wrong.
 - Paper updated (rev 34): 6.1 control sentence, capability table row "2B untrained" + text, limitations bullet.
+
+**8. Threat model + related work pass (paper rev 40, 11-11 evening)**
+- Added section 1.1 Threat model (two sides; model-organism framing; three routes: built on purpose, by-product of
+  training against monitors, in-context from deployment feedback; attacker / defender affordances; win condition; scope).
+- Related work rewritten with a reference list (21 entries). Checked by web search: titles, authors, venues / arXiv ids.
+- CORRECTION: the intro said Neural Chameleons' test probes are fit on the original model. The paper's abstract says
+  evasion holds against monitors "trained post hoc on the model's frozen weights". Intro now says the monitor is fit
+  once and does not respond to the model. Not yet verified from the PDF: whether any NC probe is trained on TRIGGERED
+  activations; exact round count of Bailey et al.'s adversarial-training loop (v1: 70 epochs); authors/dates of the
+  LessWrong replications (cited only as "community replications", no reference entry).
