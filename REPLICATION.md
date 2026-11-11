@@ -13374,3 +13374,11 @@ Read:
 - **Over training:** held-out evasion rises with training at every size, and depth (k3+) appears from ~1000–1400.
 - paperC: base-4B belebele_ta p1/p2 crashed at turns 28–30 when the context passed the 32,768-token vLLM limit
   (Tamil, base model). They will be rerun with a 64k limit after paperC; the limit does not change anything below it.
+
+### 11-11 tick: ctx64 rerun (686192)
+- Status: fix4 4/5 (9B panel_heldout.s3 still running, 3 GPUs idle on that node) · paperB 20/51 · paperC 34/44 · paperQ 4/8.
+- 2B mbppjava p1/p2 crashed like base-4B belebele_ta p1/p2: the prompt passed the 32,768-token vLLM context
+  (32,360 and 32,648 input tokens + 512 output).
+- All 4 pieces are rerunning on one node (SLOTS=4, `runs/mech_1109/ctx64.tsv`). The commands are the same except
+  TICA_VLLM_MAXLEN=65536; the limit only matters past 32k, so earlier turns are unaffected.
+- Rescore jobs 686193 (final2b-mbppjava) and 686194 (finalbase4b-belebele_ta) wait on ctx64 + paperB + paperC.
