@@ -13464,3 +13464,4 @@ models face few probes. The fair measures are the first probe beaten and probes 
 - 2B belebele_ta p1/p2 at 64k (`runs/mech_1109/ctx64b.tsv`) will go into paperB's resubmission when paperB ends,
   because TamIA allocates H100s only by whole node and a 2-piece node would leave 2 GPUs idle. The
   final2b-belebele_ta rescore follows it.
+- 07:40 tick: paperB 42/51 (2B mmlu_cs/bio/med, belebele_el p1 running; belebele_el p1 had vLLM watchdog timeouts and restarts, still alive) · paperC 43/44 (base-4B mmlu_med p2 last; 3 GPUs idle in the tail).
