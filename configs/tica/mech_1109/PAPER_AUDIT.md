@@ -179,3 +179,48 @@ Paper draft: https://claude.ai/artifact/FjQoA6PpAeyd2NjxvfEZDk (Claude Docs; sec
 - 9B held-out panel s0: TypeError in `panel._mean`; 3 held-out seeds are reported instead.
 - Strict 4B has no gated quality race.
 - Single training seed per size: state as a limitation.
+
+## 7. Robustness pass by task group / trained vs held-out (11-11 evening, user request)
+
+Scripts: `racegroups.py` (task races by group), `turnacc.py` + `turnacc_tab.py` (every answer graded, by turn / probes
+deployed / verdict; 16 tasks, GSM8K has no gold file for this grader), `freelang.py` (free-gen language check).
+
+**7a. Task races by group** (probes beaten per episode of 6 | with a correct answer | correct among passes p1 / p2-3 / p4-6)
+
+| group | base 4B | 2B | 4B | 9B | det |
+|---|---|---|---|---|---|
+| trained concepts (5 tasks) | 0.49, 0.34 | 4.46, 2.48, 59/60/48% | 5.72, 3.34, 72/64/50% | 5.62, 3.66, 84/66/57% | 5.84, 3.01, 71/58/41% |
+| held-out code (4) | 0.12, 0.07 | 2.81, 0.38, 23/12/5% | 5.36, 0.59, 30/12/2% | 5.30, 0.50, 36/6/1% | 4.60, 0.74, 23/16/12% |
+| held-out MGSM fr/ru/th (3) | 0.22, 0.16 | 2.24, 0.61, 27/27/32% | 4.26, 1.90, 52/42/42% | 4.66, 2.58, 61/53/55% | 4.28, 2.55, 61/58/60% |
+| held-out Belebele (5) | 0.23, 0.17 | 2.03, 0.72, 34/37/35% | 4.61, 1.89, 52/45/31% | 4.47, 2.29, 62/45/52% | 3.96, 2.53, 65/64/63% |
+| all held-out (12) | 0.19, 0.13 | 2.34, 0.58 | 4.77, 1.46 | 4.79, 1.77 | 4.26, 1.94 |
+
+- The falling correct share is a held-out-code effect (and 4B reading). SQL stays high; MGSM is flat.
+- The 2B gap is mostly on held-out concepts. Detector training costs probes only on held-out concepts and raises
+  correct passes there.
+
+**7b. Accuracy by turn, all answers** (turn 0 | 1-7 | 8-15 | 16-23 | 24-32)
+- Base 4B is flat in every group (code .66-.68, trained .58-.66, MGSM .68-.71, reading .79-.71): conversation length
+  is not the cause.
+- 4B held-out code: caught .58 / .21 / .08 / .05 / .03, passing .44 / .22 / .02 / .01 / .00.
+- 4B trained: caught .91 / .73 / .52 / .36 / .31, passing .75 / .60 / .34 / .21 / .19. 9B passing .82 / .67 / .53 / .49 / .42.
+- 4B MGSM: caught .66 / .39 / .15 / .10 / .06, passing .78 / .49 / .48 / .45 / .38.
+- => accuracy erodes over the episode once the model hides, on caught and passing turns alike. Not a per-probe price.
+- In-language share on held-out language tasks .91-1.00 for all models. **MGSM-de, 4B: only 27-35% of answers are in
+  German** (9B: 32/32 at every probe) -> the 4B's 6.00 on MGSM-de is largely off-concept.
+
+**7c. Never-shown panel by probe** (mean detection, trained / held-out concepts; 4B | 9B)
+- trained types (new fits): linear L8-26 .02/.24 | .01/.20; attnpool .02/.34 | .05/.23; ensdeep4 .02/.24 | .01/.20.
+- unseen, beaten: linear@24 .16/.37 | .06/.31; mck_attnlite .02/.19 | .01/.04; spread5 .02/.35 | .02/.35.
+- unseen, mixed: linear@20 .39/.46 | .25/.40; gdm_rollattn .27/.63 | .06/.35; nc_ens8_tok .23/.36 | .51/.31; maxpool@24 .44/.61 | .41/.67.
+- unseen, NOT beaten: linear@28 .71/.77 | .62/.81; ens8_linear .82/.51 | .82/.59; linear@30 .99/.97 | .89/.97; linear@4 1.00 | 1.00.
+- All races so far refit only with trained probe types and layers -> paperE.
+
+**7d. Free-gen race validity (language concepts, fastText lid)**
+- Passes written in the language: untrained models 3/23 (trained langs), 3/99 (held-out); trained models 360/366 and
+  217/236. Base "wins" on languages are answers that left the language.
+- Code / format concepts need the 27B judge -> paperF.
+
+**Running:** paperE 688302 (gated free-gen race, defender refits ONLY with held-out probe kinds + linear@4; 2B / 4B /
+9B / base 4B x train / held-out; `launch_paperE.sh`), paperF 688310 after it (27B judge on all gated gens incl. hok,
+per-row scores; `launch_paperF.sh`, `judge_piece.sh`), paperD 688141.

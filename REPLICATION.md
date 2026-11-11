@@ -13569,3 +13569,14 @@ correct passes (% of beaten).
   3.36, strict 2500 4.04. Uncapped (max 12): 4B 7.90, 9B 8.14, 2B 3.42.
 - Missing controls found: base 2B capability; base 2B / base 9B on the task races. Running as paperD 688141
   (`launch_paperD.sh`; one node, SLOTS=4; 34 half-size race pieces + 1 capability line; 34 score jobs after it).
+
+### 11-11 evening — robustness pass by task group, trained vs held-out, probe type (user request); paperE / paperF
+- Details: configs/tica/mech_1109/PAPER_AUDIT.md §7. Paper sections 4.1, 5.1, 6, 7.1, 8.2 rewritten accordingly.
+- Task races split by group: correct passes per episode 4B 3.34 (trained concepts) / 0.59 (held-out code) / 1.90
+  (held-out MGSM) / 1.89 (held-out Belebele); 9B 3.66 / 0.50 / 2.58 / 2.29; 2B 2.48 / 0.38 / 0.61 / 0.72.
+- Every answer regraded (17 CPU jobs, `turnacc.py`): base accuracy is flat over 33 turns; trained models' accuracy
+  erodes over the episode on caught and passing turns alike (4B held-out code .58 -> .03).
+- 4B MGSM-de: only 27-35% of answers in German.
+- Panel by probe: trained-type new fits beaten (.01-.02); linear@4 / @28 / @30 and ens8_linear not beaten.
+- Free-gen language check: untrained models' passes are in the language 6/122; trained models' 577/602.
+- New jobs: paperE 688302 (held-out-probe-kind gated race, 8 lines), paperF 688310 (27B judge on all gated gens).
