@@ -13382,3 +13382,7 @@ Read:
 - All 4 pieces are rerunning on one node (SLOTS=4, `runs/mech_1109/ctx64.tsv`). The commands are the same except
   TICA_VLLM_MAXLEN=65536; the limit only matters past 32k, so earlier turns are unaffected.
 - Rescore jobs 686193 (final2b-mbppjava) and 686194 (finalbase4b-belebele_ta) wait on ctx64 + paperB + paperC.
+- 9B panel rerun at 1 process per GPU: failed probe fits went from 51 / 52 / 119 to 1 (train s3), 18 (held-out s1) and
+  19 (held-out s3, still running).
+- That is the normal level: healthy runs have 0–5 failed fits on train panels and 14–21 on held-out panels (strict 4B
+  14–21, 9B rr2 held-out s2 14). The OOM fits are gone.
