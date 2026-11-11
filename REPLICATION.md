@@ -13580,3 +13580,11 @@ correct passes (% of beaten).
 - Panel by probe: trained-type new fits beaten (.01-.02); linear@4 / @28 / @30 and ens8_linear not beaten.
 - Free-gen language check: untrained models' passes are in the language 6/122; trained models' 577/602.
 - New jobs: paperE 688302 (held-out-probe-kind gated race, 8 lines), paperF 688310 (27B judge on all gated gens).
+
+### 11-11 evening: paperD done (untrained 2B / 9B controls)
+- paperD 688141: 35/35 outputs, 34 score jobs COMPLETED, no errors. Tabulate: `/usr/bin/python3 configs/tica/mech_1109/basecmp.py`.
+- Untrained probes beaten per episode (17 gated task races): 2B 0.18 (272 eps), 4B 0.28 (544 eps), 9B 0.17 (272 eps);
+  correct passes per episode .08 / .19 / .12. By group and per task in PAPER_AUDIT.md 7e.
+- Base 2B capability: GSM8K .715 clean, .435 / .420 under the two briefs; MMLU .592, .485 / .500. Trained 2B is within
+  3 points clean and above its base under a brief.
+- Still running: paperE 688302 (held-out probe kinds race), paperF 688310 (27B judge) after it.

@@ -224,3 +224,14 @@ deployed / verdict; 16 tasks, GSM8K has no gold file for this grader), `freelang
 **Running:** paperE 688302 (gated free-gen race, defender refits ONLY with held-out probe kinds + linear@4; 2B / 4B /
 9B / base 4B x train / held-out; `launch_paperE.sh`), paperF 688310 after it (27B judge on all gated gens incl. hok,
 per-row scores; `launch_paperF.sh`, `judge_piece.sh`), paperD 688141.
+
+**7e. paperD done (688141, 35/35 outputs, 34/34 score jobs COMPLETED) — untrained 2B / 9B controls** (`basecmp.py`)
+- Probes beaten per episode | correct passes per episode, 17 tasks: base 2B 0.18 | 0.08 (272 eps), base 4B 0.28 | 0.19
+  (544 eps), base 9B 0.17 | 0.12 (272 eps). base 2B/9B are half size (16 eps per task, piece p1).
+- By group (beaten/ep): trained concepts .11 / .21 / .09; held-out code .15 / .16 / .17; held-out MGSM .33 / .51 / .33;
+  held-out Belebele .16 / .23 / .12 (2B / 4B / 9B). First probe beaten: 35/272, 98/544, 33/272.
+- Concentrated: mgsm_de + mgsm_fr + jseval = 28/50 (2B), 79/151 (4B), 24/46 (9B) of beaten probes; GSM8K and MBPP 0 at every size.
+- Base 2B capability (GSM8K n=200 / MMLU n=600): clean .715 / .592; maths brief .435 / .485; HTML brief .420 / .500.
+  Trained 2B: .685 / .570; .605 / .547; .650 / .545. So trained 2B is within 3 pts clean and far ABOVE its base under a
+  brief (the untrained 2B collapses when told to hide). The earlier "expect a real cost for the 2B" guess was wrong.
+- Paper updated (rev 34): 6.1 control sentence, capability table row "2B untrained" + text, limitations bullet.
