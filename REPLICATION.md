@@ -13501,3 +13501,10 @@ Base 4B first probe beaten per task (32 episodes each), with robust share:
   Details are in PAPER_AUDIT §4.
 - Base first-answer accuracy matches the trained 4B within about ±.05 on most tasks (math .81 vs .84, sql .81 vs .84).
   Exceptions: json .22 vs 1.0 (base fails the format), belebele_ta .47 vs .16, mbpp .78 vs .59.
+- 08:40 tick: paperB 45/51 done; mmlu_cs p2 and mmlu_med p1/p2 are running.
+- 2B belebele_el p1 failed: the vLLM watchdog timed out 4 times, and its slot was reused at 07:24.
+- **paperB2 (686283)**, afterany paperB: one node at SLOTS=4 with all 6 then-missing 2B pieces
+  (`runs/mech_1109/paperB2.tsv`): belebele_ta p1/p2, belebele_el p1, and the 3 running ones, which the node skips if
+  they finish.
+  - All 6 use TICA_VLLM_MAXLEN=65536; this only matters past 32k.
+  - Rescores 686284–686287 (belebele_ta, belebele_el, mmlu_cs, mmlu_med) follow it.
