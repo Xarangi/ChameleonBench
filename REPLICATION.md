@@ -13705,3 +13705,20 @@ the 4B-vs-9B ordering was dropped from the paper, so the 9B seed, ~100 node-h, w
   judge_piece.sh) -> judge/j*_loose.json; the paper's validity criterion will be the judge (concept + does the task).
 - Reruns: none needed for correctness. Task-race gate = 1 resample for every model (described as such in the paper now);
   seed-2 evals will use the same code. No gate rerun unless the user asks.
+
+### 11-12 01:35 (user: "is that true always, for all languages and other response types? during training? how did we never catch it")
+Fragment passes (<=20 chars) per concept / task, 2B | 4B | 9B | untrained 4B:
+- Free generation, trained concepts: Arabic 16/20 | 36/43 | 13/27 | 0/6; German 16/20 | 20/22 | 21/31 | 0/2; Hindi 29/35 |
+  13/44 | 12/33 | 0/3; Japanese 23/30 | 48/61 | 29/42 | -; all-caps 13/16 | 20/26 | 12/16 | 0/8; JSON, JavaScript, SQL: 0-1.
+  Held-out: Finnish 4/6 | 7/15 | 7/12; Greek 9/12 | 3/6 | 8/20; Tamil 3/9 | 7/18 | 12/15; Thai 3/6 | 3/3 | 4/7; Turkish 1/2 |
+  10/14 | 5/17; Russian 0/2 | 3/7 | 1/11; French 0/7 | 0/21 | 0/11; Portuguese 0/3 | 0/12 | 1/6; HTML, Java, Python 0.
+- Task races: math, sql, json, jseval, mbpp, pyeval, javaeval, mbppjava 0 everywhere. mgsm_de 69/305 | 362/537 | 34/575;
+  mgsm_fr 0/134 | 19/337 | 2/425; mgsm_ru 11/70 | 71/158 | 71/220; mgsm_th 54/92 | 54/74 | 50/83; belebele fi 41/104 |
+  37/332 | 122/420; pt 3/97 | 17/170 | 4/239; tr 8/39 | 60/176 | 29/125; el 55/63 | 69/120 | 68/124; ta 19/54 | 85/147 |
+  79/117. Untrained 4B: 0 except belebele_ta 6/9.
+- Turn 0 answers that are fragments: 1-3 of 32 episodes (4B trained concepts 11/32); the habit starts after a catch.
+- CAUSE (recipe): the free-generation capability forks apply the hide loss only to VALID samples (tica/validity.py). SQL /
+  JSON / JavaScript validity = execution / schema / tests (a fragment fails); language validity = fastText language ID,
+  all-caps = >= 90% capitals (one word passes). The training logs record cap_free/valid but no answer length.
+- Why it was missed: every validity check in the evals was a surface check too; the judge's task score was dropped as
+  miscalibrated; I did not read passing answers. Paper 4.1 now states the pattern and the cause (doc rev 107).
