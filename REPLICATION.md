@@ -13829,3 +13829,8 @@ before the job's smoke; the rest of 1 and all of 4 need a short follow-up job be
   (the Olmo yaml had no `cap_gen_gen_batch`; the Gemma yaml has 6). Set `cap_gen_gen_batch: 4`. 11 steps ran at
   140-190 s/step. Failed log moved to adaptive_failed_690205. Resubmitted: 690294.
 - Training steps: Gemma 211, 4B seed 1 415, 2B seed 1 638, 9B seed 1 331. No errors.
+
+### 11-12 12:45 tick: Olmo training stable
+- olmo3 690294 running: step 23 after 57 min, ~140 s/step, peak 50.3 GB allocated (rollout 45, capability decode 37),
+  no errors. 1800 steps is ~70 h; resume chunks 690519 690520 690521 queued (afterany).
+- Training steps: Gemma 232, 4B seed 1 446, 2B seed 1 689, 9B seed 1 358. No errors.
