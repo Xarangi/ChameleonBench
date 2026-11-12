@@ -13722,3 +13722,17 @@ Fragment passes (<=20 chars) per concept / task, 2B | 4B | 9B | untrained 4B:
   all-caps = >= 90% capitals (one word passes). The training logs record cap_free/valid but no answer length.
 - Why it was missed: every validity check in the evals was a surface check too; the judge's task score was dropped as
   miscalibrated; I did not read passing answers. Paper 4.1 now states the pattern and the cause (doc rev 107).
+
+### 11-12 01:50: paperI (loose task judge) done; paperH pieces re-run; Olmo prep submitted
+- paperI 689729: judge/j{4b,2bdet,jbase,9b}_loose.json. `taskjudge.py`: the LOOSE task prompt is too strict as a
+  criterion (yes for 935/3043 = 31% of the untrained models' caught answers, 1-15 of 32 turn-0 answers), so no
+  "judge-valid pass" number is reported. As a relative measure: trained models' longer passing answers 203/636 = 32%
+  yes, fragment passes (<= 20 chars) 11/414 = 3% (trained-kind races, 2B / 4B / 9B). Paper 4.1 says this (doc rev 108).
+- paperH 689273: strict 1800 train + held-out gated races done. My emptyfix rerun shared GPU 2 with the node's slot 2,
+  which made the strict 2B train and held-out races OOM and the j9bhok judge fail to start (my error: the 2B race needs
+  > 40 GB at batch 8). Re-running those three inside the allocation on the free GPUs 1 and 3
+  (`mech_1109/paperH_redo.sh`: GPU 1 2B train then j9bhok, GPU 3 2B held-out). jstrict waits for all races.
+- Olmo-3-7B-Instruct downloaded (14 GB; weights are symlinks into /scratch/s/sneheel/hf-cache). Prep 689801
+  (g4k03_prep.sh with CFG=final_v4d_k03_olmo3_7b_tamia MATHRL=mathrl_olmo3_7b_full). Training not submitted yet:
+  cap_level refs to be set from its base GSM8K accuracy.
+- Training running: Gemma 689271 (step 19 at 01:40, ~180 s/step), k4b-s1 689705, k2b-s1 689711, k9b-s1 689723.
