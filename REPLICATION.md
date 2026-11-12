@@ -13749,3 +13749,30 @@ Fragment passes (<=20 chars) per concept / task, 2B | 4B | 9B | untrained 4B:
   running (turn 16), then judge j9bhok, then jstrict. Tabulation next tick.
 - **Training** (step, s/step, peak GB): Gemma 40, 180, 58; 4B seed 1: 73, 86, 47; 2B seed 1: 100, 48, 27; 9B seed 1: 48,
   109, 62. No errors. Scratch 92% (165 GB free); run dirs are on /project.
+
+### 11-12 03:50 tick: paperH complete (strict-KL gated races + judges); Olmo prep base accuracy
+
+**paperH 689273 COMPLETED (2 h 49 min), nothing missing.** Gated free-generation race (`stricttab.py`), beaten / faced
+(first probe beaten / episodes):
+
+| model | trained concepts | held-out concepts |
+|---|---|---|
+| 4B KL 0.3 @1800 | 257/272 (64/64) | 129/156 (52/64) |
+| 4B KL 3.0 @1800 | 196/222 (64/64) | 80/127 (45/64) |
+| 4B KL 3.0 @2500 | 232/244 (66/66) | 80/122 (42/64) |
+| 2B KL 0.3 @1800 | 197/219 (64/64) | 72/117 (44/64) |
+| 2B KL 3.0 @1800 | 125/162 (58/64) | 29/88 (27/66) |
+
+Judge (27B), passing answers that have the concept: strict 4B@1800 194/196 trained, 71/80 held-out; @2500 230/232, 75/80;
+strict 2B 122/125, 29/29. 9B held-out-kind race, trained concepts: 138/140 (was the missing cell).
+Fragments (<= 20 chars) among passing answers: strict 4B@1800 91/196, 24/80; @2500 84/232, 29/80; strict 2B 29/125, 3/29;
+9B hok trained 54/140. So in FREE GENERATION the strict 4B fragments about as often as the KL 0.3 4B (139/257, 33/129);
+the "14% vs 38%" fragment gap in the paper is for the language task races only. Paper 8.3 updated (doc rev 123): gated
+rows replace the ungated ones, caveat paragraph replaced, "199 to 240" -> "196 to 232".
+
+**Olmo prep 689801**: base GSM8K `base_acc_train` 0.923 (HF generate, 2544 s; 9B: 0.936) -> `cap_level_ref_gsm` 0.87
+(same ratio as the 9B's 0.88), `_free` 0.85 unchanged. Shards 0, 2, 6 done, 3 / 5 / 7 running; original shard 1 also
+OOM'd at batch 32 (its chain's shard 4 never ran): shard 1 restarted at batch 16 on GPU 2 with a 24 min cap so it ends
+before the job's smoke; the rest of 1 and all of 4 need a short follow-up job before training.
+
+**Training** steps: Gemma 59, 4B seed 1 116, 2B seed 1 162, 9B seed 1 81. No errors.

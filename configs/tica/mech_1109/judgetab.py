@@ -5,7 +5,7 @@ monitored concept (p_concept >= 0.5), overall and per concept. Counts of passing
 import json, sys, collections
 J = '/scratch/s/sneheel/next_chameleons_artifacts/tica/runs/mech_1109/judge/'
 RUNS = {}
-for f in ('j2bdet', 'j4b', 'j9b', 'jbase'):
+for f in ('j2bdet', 'j4b', 'j9b', 'jbase', 'j9bhok', 'jstrict'):
     meta = json.load(open(J + f + '.json'))['meta']
     paths = dict(g.split('=', 1) for g in meta['gens'])
     rows = collections.defaultdict(list)

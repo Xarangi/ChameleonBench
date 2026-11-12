@@ -305,3 +305,10 @@ free-gen + language task races with fragments counted as catches (~13 node-h); c
 detector race under the free-generation protocol; feedback ablation from turn 0; static-probe baseline adapter; second
 training seed (4B ~120 node-h, 2B ~40).
 Not addressed yet in the paper: every row marked TODO above.
+
+## 12. Strict-KL gated free-generation race (11-12, paperH)
+
+Paper 8.3 now uses the gated race for every column (table in REPLICATION.md "11-12 03:50"). Checks: judge has-concept on
+strict passing answers 71/80, 75/80 (4B held-out), 29/29 (2B held-out); fragment share in free generation is NOT lower
+for the strict 4B (91/196, 24/80 vs 139/257, 33/129), so the fragment advantage claimed in 8.3 is limited to the
+language task races and the text says so. 9B held-out-kind trained-concept judge cell filled: 138/140.
