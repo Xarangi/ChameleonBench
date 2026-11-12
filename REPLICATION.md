@@ -13776,3 +13776,13 @@ OOM'd at batch 32 (its chain's shard 4 never ran): shard 1 restarted at batch 16
 before the job's smoke; the rest of 1 and all of 4 need a short follow-up job before training.
 
 **Training** steps: Gemma 59, 4B seed 1 116, 2B seed 1 162, 9B seed 1 81. No errors.
+
+### 11-12 04:45 tick: Olmo prep smoke OOM (panel cache incomplete); prep resubmitted
+
+- Olmo prep 689801 FAILED (rc 1) at the 3-step smoke: rank 1 hit a panel-cache MISS (shards 1 partial, 4 missing) and the
+  on-the-fly panel fit on top of the rollout ran out of memory (79 GB). Shards 0, 2, 3, 5, 6, 7 complete; shard 1 at
+  180/230 when its time cap ended. Likely cause of Olmo's memory: no grouped-query attention (32 KV heads, 32 attention
+  layers), so a KV cache row costs ~0.5 MB per token, several times the Qwen3.5 models'; read batch stays 16.
+- Resubmitted the same prep (gens present, cached keys hit; finishes shards 1 and 4, then the smoke with a full cache).
+  Training waits for a clean smoke; if the smoke still runs out of memory the read batch / episodes per rank go down.
+- Training steps: Gemma 70, 4B seed 1 159, 2B seed 1 227, 9B seed 1 115. No errors.
