@@ -13672,3 +13672,15 @@ judge-table bug, strict-KL correct passes, catch-before-pass counts. Paper chang
 min-content first probe 36 / 53 / 58%; catches are free; detector standards), findings list, 2.2 defender description,
 2.3 gate, new 4.1 "Fragment answers" table, 6.3, 7.1 (no 4B / 9B ordering), 8 intro, 8.2, 8.3 (strict has as many or more
 correct passes), limitations, conclusion (conditional). Reviews copied to mech_1109/reviews_1112/. No reruns submitted.
+
+### 11-12 00:45: Gemma prep done, training started; paperH x2500 held-out race crashed on an EMPTY resampled answer
+- g4k03-prep 689270 COMPLETED (24 min): Gemma base GSM8K train accuracy .943 (cap_level refs left at .88 / .85, as for
+  the 9B at .936), panel cache all hits, 3-step DP4 smoke OK (step 1: 324 s, max_mem 43.3 GB). Training 689271 started
+  00:39 on tg10705 (resume chunk 689272 chained).
+- paperH 689273: strict x2500 held-out gated race died at turn 10 of batch 3 in `_robust_pass_free` -> `_pool` on an
+  empty tensor: one of the 8 resampled answers was empty (EOS at once). Same error class as the MGSM-ja crashes. The
+  frozen checkout is not edited; new worktree `/scratch/s/sneheel/ChameleonBench-emptyfix` (eb2e8bb + 8 lines in
+  `_score_forks`: an empty sampled answer is read as "." and COUNTED AS A CATCH). The race was restarted from that
+  checkout inside the paperH allocation (srun --overlap, GPU 2 next to the strict 2B race; `mech_1109/paperH_emptyfix.sh`,
+  log logs/paperH-689273-emptyfix.out). The other 5 paperH races run the unpatched code (identical unless a resample
+  is empty, where the unpatched code crashes).
