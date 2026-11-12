@@ -267,3 +267,6 @@ last paragraph now cites judge counts for the held-out-kind races. Stated openly
 (2B, 4B) to 70% (9B) of the trained models' passing answers still contain code, so per-concept free-race numbers on
 held-out code overstate the trained models too. The judge's `answers` score is not used (low on every condition).
 Open: the 9B trained-concept hok race (row in 5.4 + its judge counts).
+- 23:45 update: 9B trained-concept hok race in; paper 5.4 tables complete (doc rev 60), abstract gained one sentence on
+  the held-out-kind race (about one probe in nine beaten on unseen concepts = 10/88) and now cites the judge (13/259).
+  The 9B hok trained-concept race ran at batch 4 (others 8, 4B 4); batch only groups episodes. Its answers are unjudged.

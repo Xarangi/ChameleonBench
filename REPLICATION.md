@@ -13625,3 +13625,11 @@ correct passes (% of beaten).
 - The judge's `answers` score is low everywhere (0.05-0.46, also monitor-off turns of untrained models; answers are cut
   at 320 tokens), so it is not used.
 - Not judged yet: 9B trained-concept hok rerun (race still running, 20/32 episodes at 22:40).
+
+### 11-11 23:45: paperG done; all 8 held-out-kind races in
+- paperG 688866 COMPLETED 23:13 (2 h 01). 9B trained-concept hok race (batch 4, 32 episodes): 140/181 beaten, first
+  probe 54/64, linear outside the trained depth range 2/16, ens8 8/17, token-max ensemble 2/9, linear@20/24 12/14,
+  other 12 types 116/125. Pooled hard kinds on trained concepts now 33/139 (2B 9/45, 4B 12/52, 9B 12/42); 4B+9B
+  linear@30 1/28, linear@4 1/30. Full table: `hoktab.py`.
+- No jobs queued or running. Not done: judging the 9B trained-concept hok answers (`gens/gated_train_hok.jsonl`); it
+  needs a few GPU-minutes = a whole node on TamIA, so it waits for a user decision or the next GPU job.
