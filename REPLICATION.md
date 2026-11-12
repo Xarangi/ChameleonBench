@@ -13822,3 +13822,10 @@ before the job's smoke; the rest of 1 and all of 4 need a short follow-up job be
   not part of the panel cache key. Failed run's 4-line log moved to adaptive_failed_690111. Resubmitted: 690205
   (resume chunks to be added once it has run past the first checkpoints).
 - Training steps: Gemma 191, 4B seed 1 381, 2B seed 1 583, 9B seed 1 305. No errors.
+
+### 11-12 11:45 tick: Olmo training OOM at step 12 (capability decode); cap_gen_gen_batch 4, resubmitted
+- olmo3 690205 FAILED after 32 min at step 12. The fork-batch change worked (rollout peak 36-48 GB, was 63); the failure
+  was in `_cap_gen_step` generate: all capability samples decoded in one call, peak 57-70 GB on steps with long prompts
+  (the Olmo yaml had no `cap_gen_gen_batch`; the Gemma yaml has 6). Set `cap_gen_gen_batch: 4`. 11 steps ran at
+  140-190 s/step. Failed log moved to adaptive_failed_690205. Resubmitted: 690294.
+- Training steps: Gemma 211, 4B seed 1 415, 2B seed 1 638, 9B seed 1 331. No errors.
