@@ -247,3 +247,15 @@ per-row scores; `launch_paperF.sh`, `judge_piece.sh`), paperD 688141.
   once and does not respond to the model. Not yet verified from the PDF: whether any NC probe is trained on TRIGGERED
   activations; exact round count of Bailey et al.'s adversarial-training loop (v1: 70 epochs); authors/dates of the
   LessWrong replications (cited only as "community replications", no reference entry).
+
+## 9. Race with held-out probe kinds (paperE, 11-11 night) -> paper 5.4
+
+Source: `hoktab.py` over `race_*_gated_hok.json` (32 episodes each; 9B trained-concept race pending in paperG).
+- Paper 5.4 filled (doc rev 43) with two tables: beaten/faced trained kinds vs held-out kinds, and by probe kind.
+- Claim checked against deploy_records: linear@30 0/22 and linear@4 1/18 for 4B+9B (the one pass is the 9B, held-out
+  concepts); 2B linear@3 0/11, @23 0/11, @21 2/12.
+- Caveat written into 5.4: on held-out concepts with held-out kinds the untrained 4B beats as many probes (90) as the
+  trained 4B (95). First probes separate them (24/62 vs 48/61); the judge run has to confirm that the untrained passes
+  drop the concept. Until j*.json exist this is supported for language concepts only (section 4.1 language check on the
+  trained-kind races).
+- Still to do when paperG ends: 9B trained-concept row, judge valid-pass counts (4.1), abstract / conclusion sentence.

@@ -13597,3 +13597,18 @@ correct passes (% of beaten).
   One node instead of a rerun node plus a judge node.
 - Early look, 4B held-out concepts, held-out probe kinds: 95/133 probes beaten; linear@4 0/5, linear@30 0/3,
   linear@28 2/7, ens8_mlp 0/2, ens8_linear 1/3; most other held-out kinds beaten. Full table when all 8 finish.
+
+### 11-11 21:45: paperE done (7 of 8 hok races); judge moved into the paperG allocation
+- paperE 688302 finished: 7 of 8 races with held-out probe kinds (`race_{train,heldout}_gated_hok.json`); the 9B
+  trained-concept race is the batch-4 rerun inside paperG 688866 (running, GPU 0).
+- paperG's judge smoke failed (`judge_piece.sh` unpacked `vllm-serving.tar`, which exists on Narval only), so the node
+  skipped group j and left 3 GPUs idle. Fixed `judge_piece.sh` (vllm-latest in place, modules / env as
+  `tamia_mw_rejudge.sh`, `--mem 0.85`) and started the judges as a step in the same allocation:
+  `srun --jobid=688866 --overlap ... bash configs/tica/mech_1109/judge_in_job.sh` (smoke passed 21:44; j4b / j2bdet /
+  jbase on GPUs 1-3, then j9b on the three finished 9B races). The rerun's gens (9b_train_hok) still need judging.
+- Table: `/usr/bin/python3 configs/tica/mech_1109/hoktab.py` (beaten/faced, first probe, by probe family, linear layer,
+  concept). Beaten/faced, trained kinds -> held-out kinds: trained concepts 2B 197/219 -> 115/159, 4B 257/272 ->
+  137/182; held-out concepts 2B 72/117 -> 67/117, 4B 129/156 -> 95/133, 9B 139/163 -> 114/155; untrained 4B 59/117 ->
+  60/116 and 71/124 -> 90/136. Trained models pooled, linear outside the training depth range + ens8 + token-max
+  ensemble: 21/97 (trained concepts), 10/88 (held-out); everything else 93-96% (trained) and 73/86/91% (held-out, 2B /
+  4B / 9B). Untrained 4B beats those hard kinds 24/36 on held-out concepts (it passes by changing the text).

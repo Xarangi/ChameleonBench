@@ -11,9 +11,12 @@ LOCAL=$SLURM_TMPDIR/models--Qwen--Qwen3.5-27B-FP8
 [ -f $LOCAL/.done ] || { mkdir -p $LOCAL.$$ && cp -rL $SNAP/. $LOCAL.$$/ && touch $LOCAL.$$/.done && { mv -T $LOCAL.$$ $LOCAL 2>/dev/null || rm -rf $LOCAL.$$; }; }
 cd /scratch/s/sneheel/ChameleonBench-final
 module --force purge
-module load StdEnv/2023 gcc/12.3 cuda/12.9 python/3.12 opencv/4.13.0 scipy-stack/2026a
-[ -x $SLURM_TMPDIR/vllm-serving/bin/python ] || { mkdir -p $SLURM_TMPDIR/vs.$$ && tar -xf /scratch/s/sneheel/venvs/vllm-serving.tar -C $SLURM_TMPDIR/vs.$$ && { mv -T $SLURM_TMPDIR/vs.$$/vllm-serving $SLURM_TMPDIR/vllm-serving 2>/dev/null || true; }; }
-export VLLM_CACHE_ROOT=/scratch/s/sneheel/vllm_cache
-$SLURM_TMPDIR/vllm-serving/bin/python scripts/tica_free_judge.py --model $LOCAL --out "$OUT" --row-out "${OUT%.json}.rows.jsonl" --tp 1 \
+module load StdEnv/2023 python/3.11 arrow/24.0.0 cuda/12.6 2>/dev/null
+# 11-11 fix: vllm-serving.tar is Narval-only (the judge smoke of paperG failed on it). TamIA: vllm-latest in place, as
+# scripts/slurm/tamia_mw_rejudge.sh (same judge script, one H100 per process).
+VPY=/scratch/s/sneheel/venvs/vllm-latest/bin/python
+export HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1 VLLM_USE_DEEP_GEMM=0
+export VLLM_CACHE_ROOT=${SLURM_TMPDIR:-/tmp}/vllm_cache_judge_${CUDA_VISIBLE_DEVICES:-x}
+$VPY scripts/tica_free_judge.py --model $LOCAL --out "$OUT" --row-out "${OUT%.json}.rows.jsonl" --tp 1 --mem 0.85 \
   --gens "${G[@]}" 2>&1 | grep -vE "it/s\]|^\s*$" | tail -40
 [ -s "$OUT" ]
