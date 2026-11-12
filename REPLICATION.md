@@ -13802,3 +13802,13 @@ before the job's smoke; the rest of 1 and all of 4 need a short follow-up job be
 - Job 690069 (`configs/tica/mech_1109/olmo_prep3.sh`): remaining shard-4 keys from the worktree (as shards 4, 12, 20, 28
   of 32, one per GPU), then the 3-step smoke from main. Training is submitted only after a clean smoke.
 - Training steps: Gemma 150, 4B seed 1 312, 2B seed 1 473, 9B seed 1 247. No errors.
+
+### 11-12 09:45 tick: Olmo prep clean, training submitted
+- Olmo prep3 690069 COMPLETED (16 min): last 81 shard-4 keys computed from the patched worktree with no OOM (panel cache
+  complete, 8/8 shards); 3-step production smoke from main clean: step 1 255 s (rollout 104, train 150), peak 63.4 GB
+  allocated / 67.2 GB reserved per GPU.
+- Olmo-3-7B training submitted: `final_v4d_k03_olmo3_7b_tamia`, jobs 690111 690112 690113 690114 690115 690116 (train + 5 resume chunks, 24 h each,
+  afterany; held-out races queue to val_queue.txt). At ~255 s/step, 1800 steps is ~5.3 node-days.
+  NOTE for the evals: the val drain and any race on Olmo must run from a checkout with the policy.py fix
+  (ChameleonBench-olmofix), or turn-0 fits with short shared prefixes run out of memory.
+- Training steps: Gemma 170, 4B seed 1 347, 2B seed 1 529, 9B seed 1 276. No errors.
