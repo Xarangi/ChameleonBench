@@ -13684,3 +13684,13 @@ correct passes), limitations, conclusion (conditional). Reviews copied to mech_1
   checkout inside the paperH allocation (srun --overlap, GPU 2 next to the strict 2B race; `mech_1109/paperH_emptyfix.sh`,
   log logs/paperH-689273-emptyfix.out). The other 5 paperH races run the unpatched code (identical unless a resample
   is empty, where the unpatched code crashes).
+
+### 11-12 00:55 (user, Telegram): "Start a second seed training run for all (whichever ones are necessary)"
+Started the 4B and the 2B (the 2B-vs-4B gap and the main model's run-to-run variance are the claims that need a seed;
+the 4B-vs-9B ordering was dropped from the paper, so the 9B seed, ~100 node-h, waits for the user's word).
+- `configs/tica/final_v4d_k03_tamia_4b_s1.yaml`, `final_v4d_tamia_2b_x1800_s1.yaml`: the parents with train.seed 0 -> 1,
+  run dir on /project (symlinked from runs/), own copy of the base-model anchor cache. From scratch, 1800 steps. The
+  panel cache key is seed-independent (concept, condition, kind), so the turn-0 probes are the cached ones. The first
+  2B run reached its config through a branch at 1270; this one runs the final config from step 0 (same LR schedule).
+- Jobs: k4b-s1 train + 5 resume chunks, k2b-s1 train + 1 resume chunk (ids below in squeue; 24 h each, afterany chain;
+  a finished run's resume exits at once). eval_on_save races queue to runs/<name>/val_queue.txt.
