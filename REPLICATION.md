@@ -13633,3 +13633,26 @@ correct passes (% of beaten).
   linear@30 1/28, linear@4 1/30. Full table: `hoktab.py`.
 - No jobs queued or running. Not done: judging the 9B trained-concept hok answers (`gens/gated_train_hok.jsonl`); it
   needs a few GPU-minutes = a whole node on TamIA, so it waits for a user decision or the next GPU job.
+
+### 11-12 00:30 (user, Telegram): run everything for robustness; 2 adversarial reviewers; Gemma-4-12B KL 0.3; strict-KL coverage
+- Eval coverage audit (PAPER_AUDIT 1a): the only missing standard eval was the GATED free-generation race for the
+  strict-KL runs (they had the ungated one). paperH 689273 (`launch_paperH.sh`): gated train + held-out races for strict
+  4B @1800, strict 4B @2500, strict 2B @1800 (4B at batch 4, 2B at 8), then the 27B judge on them (jstrict) and on the 9B
+  held-out-kind trained-concept race (j9bhok). The x2500 races load config final_v4d_klx_tamia_4b (ChameleonBench-final
+  has no x2500 yaml; the two differ only in steps / checkpoint settings / out), so their JSON "config" field says klx_4b.
+- Strict runs from existing files (`stricttab.py`), KL0.3 4B | KL3 4B 1800 | KL3 4B 2500 | KL0.3 2B | KL3 2B:
+  fixed-text .652 / .403 / .435 / .554 / .189; first probe .92 / .72 / .80 / .80 / .42; ungated free race held-out
+  182/195, 104/143, 98/141, 101/136, 46/99; trained 280/284, 199/217, 240/257, 223/238, 146/182; persistence real
+  .92 / .91 / .92 / .81 / .73, always-pass .76 / .54 / .55 / .45 / .34; GSM8K clean .905 / .88 / .905 / .685 / .75;
+  panel mean detection held-out (seeds 1-3) .44 / .69 / .62 / .45 / .85. Paper 8.3 rewritten with these (doc rev 63).
+  The strict 2B has no task races under the final gated protocol (not run).
+- GEMMA-4 12B KL 0.3: `configs/tica/final_v4d_k03_gemma4_12b_tamia.yaml` = final_v4d_k03_tamia_9b with only the
+  model-specific values of final_v4d_gemma4_12b_tamia (depth 48 layers 12/18/24/33/39, held-out 30/36/42/45, read batch
+  8, lm_chunk 256, fla_grad false, cap_gen_gen_batch 6) + LoRA alpha 128 (the user's 10-28 Gemma setting; alpha 64 did
+  not hide in 795 steps) + full-GSM8K base gens (`mathrl_gemma4_12b_full.yaml`). Run dir on /project
+  (/project/aip-rrabba/sneheel/tica_runs/..., symlinked from runs/; scratch is at 91%). Training code = main checkout,
+  src unchanged since the 9B run (no commits to src since 11-04). Jobs: prep 689270 (`mech_1109/g4k03_prep.sh` =
+  tamia_2b_prep.sh with one panel shard per GPU: base gens, panel cache, 3-step DP4 smoke) -> 689271 training (afterok)
+  -> 689272 resume chunk (afterany). cap_level refs still the Qwen .88 / .85 until the prep reports Gemma's base accuracy.
+- Two Opus reviewers (claims/statistics; methods/robustness) running read-only on the paper export (rev 60); reviews go
+  to the session scratchpad, assessment to PAPER_AUDIT.
