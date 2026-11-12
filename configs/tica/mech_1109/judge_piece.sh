@@ -17,6 +17,6 @@ module load StdEnv/2023 python/3.11 arrow/24.0.0 cuda/12.6 2>/dev/null
 VPY=/scratch/s/sneheel/venvs/vllm-latest/bin/python
 export HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1 VLLM_USE_DEEP_GEMM=0
 export VLLM_CACHE_ROOT=${SLURM_TMPDIR:-/tmp}/vllm_cache_judge_${CUDA_VISIBLE_DEVICES:-x}
-$VPY scripts/tica_free_judge.py --model $LOCAL --out "$OUT" --row-out "${OUT%.json}.rows.jsonl" --tp 1 --mem 0.85 \
+$VPY scripts/tica_free_judge.py --model $LOCAL --out "$OUT" --row-out "${OUT%.json}.rows.jsonl" --tp 1 --mem 0.85 ${JUDGE_EXTRA:-} \
   --gens "${G[@]}" 2>&1 | grep -vE "it/s\]|^\s*$" | tail -40
 [ -s "$OUT" ]

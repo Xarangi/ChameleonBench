@@ -13694,3 +13694,14 @@ the 4B-vs-9B ordering was dropped from the paper, so the 9B seed, ~100 node-h, w
   2B run reached its config through a branch at 1270; this one runs the final config from step 0 (same LR schedule).
 - Jobs: k4b-s1 train + 5 resume chunks, k2b-s1 train + 1 resume chunk (ids below in squeue; 24 h each, afterany chain;
   a finished run's resume exits at once). eval_on_save races queue to runs/<name>/val_queue.txt.
+
+### 11-12 01:15 (user, Telegram): Olmo 3; 9B seed yes; audit the reviews before correcting, do not over-index
+- 9B second seed: `final_v4d_k03_tamia_9b_s1.yaml` (seed 1, /project), k9b-s1 689723 + resume chunks 689724-689727.
+- Olmo-3-7B-Instruct: downloading to hf/hub (logs/olmo3_download.out); config + prep to follow.
+- Fragment passes re-checked by reading them (user: "why is 1 word bad as long as it does the task?"): every fragment
+  pass ends with EOS and most are the first word of a reply ("function" for a JS function request, "Das", "في",
+  "Η τεχνολο"); a minority are legitimate short answers ("Kiitos!"). So the 20-character rule is too blunt. paperI 689729
+  re-judges all gated free-answer gens with the judge's LOOSE task prompt (`--answers-prompt loose`, via JUDGE_EXTRA in
+  judge_piece.sh) -> judge/j*_loose.json; the paper's validity criterion will be the judge (concept + does the task).
+- Reruns: none needed for correctness. Task-race gate = 1 resample for every model (described as such in the paper now);
+  seed-2 evals will use the same code. No gate rerun unless the user asks.
