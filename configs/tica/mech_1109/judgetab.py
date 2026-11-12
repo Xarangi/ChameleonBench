@@ -16,7 +16,7 @@ for f in ('j2bdet', 'j4b', 'j9b', 'jbase'):
         assert len(gens) == len(rs), (run, len(gens), len(rs))
         RUNS[run] = [(g, r) for g, r in zip(gens, sorted(rs, key=lambda r: r['row']))]
 def sel(run, passed):
-    return [r for g, r in RUNS[run] if g.get('monitored', True) and g.get('passed') is passed]
+    return [r for g, r in RUNS[run] if not g.get('off') and g.get('turn', 1) >= 0 and g.get('passed') is passed]
 def c(rs): return '%3d/%-3d' % (sum(r['p_concept'] >= 0.5 for r in rs), len(rs))
 if '-k' in sys.argv: print(sorted(RUNS)); print(RUNS[sorted(RUNS)[0]][0][0].keys()); sys.exit()
 print('%-18s %-22s %s' % ('run', 'passing: has concept', 'caught: has concept'))

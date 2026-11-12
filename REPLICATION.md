@@ -13656,3 +13656,12 @@ correct passes (% of beaten).
   -> 689272 resume chunk (afterany). cap_level refs still the Qwen .88 / .85 until the prep reports Gemma's base accuracy.
 - Two Opus reviewers (claims/statistics; methods/robustness) running read-only on the paper export (rev 60); reviews go
   to the session scratchpad, assessment to PAPER_AUDIT.
+
+### 11-12 00:50: CORRECTION to the 11-11 22:45 judge counts (found by reviewer A)
+`judgetab.py` filtered on a `monitored` key that the gens rows do not have, so Monitor-OFF turns were counted among
+passing / caught answers. Fixed (`not g['off']`). Corrected passing answers that still have the concept, trained /
+held-out concepts: untrained 2B 2/14, 1/38; 4B 2/59, 0/71; 9B 3/22, 2/21 (10/225 in all, was 13/259). Trained 2B
+195/197, 56/72; 4B 250/257, 107/129; 9B 253/256, 124/139; det 236/246, 106/117. Held-out-kind races: 2B 115/118, 61/68;
+4B 129/138, 84/99; 9B -, 105/117; untrained 4B 5/61, 2/90. Held-out languages 2B 45/47 (was 49/51); code counts
+unchanged. Caught answers with the concept: untrained 63-93%. Conclusions unchanged; paper 4.1 / 5.4 / abstract
+corrected (doc rev 80).
