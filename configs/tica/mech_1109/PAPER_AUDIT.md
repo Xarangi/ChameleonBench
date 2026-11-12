@@ -270,3 +270,38 @@ Open: the 9B trained-concept hok race (row in 5.4 + its judge counts).
 - 23:45 update: 9B trained-concept hok race in; paper 5.4 tables complete (doc rev 60), abstract gained one sentence on
   the held-out-kind race (about one probe in nine beaten on unseen concepts = 10/88) and now cites the judge (13/259).
   The 9B hok trained-concept race ran at batch 4 (others 8, 4B 4); batch only groups episodes. Its answers are unjudged.
+
+## 11. Adversarial reviews (2 x Opus, 11-12) and assessment
+
+Reviews: `reviews_1112/review_A.md` (claims / statistics), `review_B.md` (methods). Verified = re-derived by me from the
+files, not taken from the review.
+
+| # | Finding | Verified | Verdict | Action |
+|---|---|---|---|---|
+| B-C1 | Many trained-model passes are one-word fragments ("Ein", "Um"); language ID and judge accept them | yes (`validpass.py`): passes <=20 chars 2B 97/197, 20/72; 4B 139/257, 33/129; 9B 87/256, 38/139; untrained 0-1 (9B held-out 7/21). Task races, language tasks: 4B 774/2051 passes, 57% of all answers from turn 8; code / SQL / JSON / GSM8K 0 | accept, changes the headline | paper: abstract, findings, new 4.1 "Fragment answers" table (first probe with min-content rule: held-out 23-26, 34-38, 37-41 of 64; untrained 0-2), 6.3, 7.1, conclusion. Optional rerun with fragments counted as catches (~5.5 + 8 node-h): USER |
+| B-C2 | Task-race "6-of-8" gate = one sample copied 8 times (one vLLM seed) | yes: share_mean = 1 - rejected/checks in every piece checked | accept | paper 2.3 + limitations corrected. Code fix (seed + j) and rerun 14-40 node-h: USER |
+| A-M1 / B-M3 | judgetab.py counted Monitor-OFF turns | yes | accept | fixed, paper corrected (rev 80) |
+| A-C1 | Catches are free; caught before first pass in 86-97% of held-out segments | yes (`validpass.py`: first pass with no earlier catch 2 / 4 / 9 of 64) | accept (framing) | abstract, limitations, conclusion now conditional |
+| A-C2 | Thesis must be conditional on the defender's probe family | yes (5.4) | accept | conclusion first paragraph rewritten |
+| A-C3 / B-M6 / A-M14 | Detector section uses two standards (offline 97-100% vs race 62-85% beaten); 8.2 table mixes detector-only and all-probe rates; detector race protocol (fixed text, 16 episodes, no gate) undisclosed | partly: the two standards yes; the 79/81% like-for-like numbers and protocol NOT yet re-derived | accept | abstract, section 8 intro, 8.2 paragraph. TODO: re-derive 8.2 table like for like, state protocol |
+| B-M2 | Strict KL has as many or more CORRECT passes (3.59 / 1.20 / 1.90 / 1.81 vs 3.34 / 0.59 / 1.90 / 1.89; 2500: 3.74 / 1.09 / 2.08 / 2.53) | yes (racegroups with strict rows) | accept, reverses 8.3 | 8.3 rewritten |
+| B-M1 | Defender weaker than described: refit data = dataset texts teacher-forced in context, one snapshot, threshold from ~86 negatives, gate never binds; "episode not judged" wording wrong | code references not re-read by me; refits == accepted yes | accept (text) | 2.2 and limitations rewritten. Stronger-defender race (3-4 node-h) and offline pooled concept probe (CPU): TODO / USER |
+| B-M7 #11 | "First probe" after a switch is fit on the current model; 4B-9B held-out gap sits in the base-panel half (23 vs 31 of 32) | yes (reviewer script first.py rerun) | accept | 2.2 text; 7.1 no longer orders 4B / 9B |
+| A-M2 | Headline first-probe rates count concept-dropping passes | yes | accept | covered by the min-content column |
+| A-M3 / B-M3 | Judge unvalidated; coherence score broken | not re-derived | accept | limitation added. TODO: hand-label ~150 rows; fix prompt and re-judge (1 node-h) |
+| A-M4, A-M5, B-M8 | Concept mix unpaired; CIs ignore clustering / tasks; single seed | plausible, not re-derived | accept | 4B vs 9B claims removed. TODO: cluster bootstrap over episodes and tasks |
+| A-M6 | Undisclosed: 2B branch lineage, cancelled Gemma run, strict 2B | yes | accept | limitations + 8.3 |
+| A-M7 | Held-out concepts are siblings of trained families; trained-concept tasks were capability-training tasks | true by design | accept (text) | TODO: state in 6.2 |
+| A-M8 | Monitor-OFF accuracy stays 0.56-0.64 on held-out code while monitored falls to 0.03 ("does not come back" wrong) | NOT verified | to check | TODO (turnacc with off rows) |
+| B-M9 | 6.3 erosion on language tasks = fragment collapse | yes | accept | 6.3 paragraph added |
+| A-M9, B-m2 | "19 unseen types" counts layers / variants; layer-4 failure partly lexical | plausible | accept (text) | TODO |
+| A-M10, B-m1 | Selectivity: mismatch-turn detection 0.68-0.89 on some probes (partial hiding of an unmonitored concept) | NOT verified | to check | TODO |
+| A-M11, B-M5 | Exclusions: MGSM-de kept though untrained 1.38; MGSM-ja crash | partly | accept | MGSM-ja now in limitations. TODO: uniform validity rule |
+| B-M4 | Belebele near chance; lenient letter extraction | not re-derived | accept | limitation added. TODO: chance-corrected counts |
+| A-M12, A-M13 | Unequal controls; "searching with the one bit" asserted | true | accept | TODO text; feedback-ablation race is new GPU work: USER |
+
+Reviewer-proposed GPU work, for the user to decide (none submitted): gate-seed fix + task-race rerun (14-40 node-h);
+free-gen + language task races with fragments counted as catches (~13 node-h); cumulative-data defender race (3-4);
+detector race under the free-generation protocol; feedback ablation from turn 0; static-probe baseline adapter; second
+training seed (4B ~120 node-h, 2B ~40).
+Not addressed yet in the paper: every row marked TODO above.

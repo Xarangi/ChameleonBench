@@ -13665,3 +13665,10 @@ held-out concepts: untrained 2B 2/14, 1/38; 4B 2/59, 0/71; 9B 3/22, 2/21 (10/225
 4B 129/138, 84/99; 9B -, 105/117; untrained 4B 5/61, 2/90. Held-out languages 2B 45/47 (was 49/51); code counts
 unchanged. Caught answers with the concept: untrained 63-93%. Conclusions unchanged; paper 4.1 / 5.4 / abstract
 corrected (doc rev 80).
+
+### 11-12 01:45: two adversarial reviews assessed (PAPER_AUDIT 11); paper revised to doc rev 103
+Verified by me: fragment passes (`validpass.py`), task-race gate = 1 sample (share_mean = 1 - rejected/checks),
+judge-table bug, strict-KL correct passes, catch-before-pass counts. Paper changes: abstract (fixed-text numbers lead;
+min-content first probe 36 / 53 / 58%; catches are free; detector standards), findings list, 2.2 defender description,
+2.3 gate, new 4.1 "Fragment answers" table, 6.3, 7.1 (no 4B / 9B ordering), 8 intro, 8.2, 8.3 (strict has as many or more
+correct passes), limitations, conclusion (conditional). Reviews copied to mech_1109/reviews_1112/. No reruns submitted.
