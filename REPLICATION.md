@@ -13786,3 +13786,19 @@ before the job's smoke; the rest of 1 and all of 4 need a short follow-up job be
 - Resubmitted the same prep (gens present, cached keys hit; finishes shards 1 and 4, then the smoke with a full cache).
   Training waits for a clean smoke; if the smoke still runs out of memory the read batch / episodes per rank go down.
 - Training steps: Gemma 70, 4B seed 1 159, 2B seed 1 227, 9B seed 1 115. No errors.
+
+### 11-12 08:50 tick: Olmo panel OOM root cause (KV caches kept in the short-prefix fallback); patched worktree
+
+- Olmo prep 689898 FAILED: shard 4/8 ran out of memory (77.8 GB) at key ~120/230 ALONE on a GPU at read batch 16, and
+  the smoke then hit the same miss. Shards 0-3, 5-7 are complete.
+- Root cause (`policy.py` `pooled_shared_prefix`): when the forks share fewer than 64 prefix tokens the read falls back to
+  `pooled_incremental(convs, layers, {})`, which stores every conversation's KV cache in the throwaway state until the
+  call returns. Olmo 3 has 32 attention layers with 32 KV heads (no grouped-query attention): ~0.5 MB per token per
+  conversation, so a few hundred forks fill the GPU. The Qwen3.5 / Gemma caches are several times smaller, so the same
+  path never ran out there. Memory is independent of the read batch on this path.
+- Fix in a separate worktree `/scratch/s/sneheel/ChameleonBench-olmofix` (HEAD + policy.py: one conversation per call, so
+  each cache is freed; identical reads, since no conversation ever reused another's cache). Main checkout untouched
+  (training jobs import it). The panel cache key hashes the fit code only, so keys computed there serve main.
+- Job 690069 (`configs/tica/mech_1109/olmo_prep3.sh`): remaining shard-4 keys from the worktree (as shards 4, 12, 20, 28
+  of 32, one per GPU), then the 3-step smoke from main. Training is submitted only after a clean smoke.
+- Training steps: Gemma 150, 4B seed 1 312, 2B seed 1 473, 9B seed 1 247. No errors.
