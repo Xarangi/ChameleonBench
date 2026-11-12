@@ -13736,3 +13736,16 @@ Fragment passes (<=20 chars) per concept / task, 2B | 4B | 9B | untrained 4B:
   (g4k03_prep.sh with CFG=final_v4d_k03_olmo3_7b_tamia MATHRL=mathrl_olmo3_7b_full). Training not submitted yet:
   cap_level refs to be set from its base GSM8K accuracy.
 - Training running: Gemma 689271 (step 19 at 01:40, ~180 s/step), k4b-s1 689705, k2b-s1 689711, k9b-s1 689723.
+
+### 11-12 02:45 tick: Olmo prep OOM at read batch 32 -> 16; paperH nearly done
+
+- **Olmo prep 689801**: (a) vLLM (vllm-g4) cannot load Olmo 3 (`KeyError: 'rope_theta'` in the engine), so the GSM8K base
+  generations fell back to HF generate on GPU 0 (slower, same output format). (b) Panel shards 0 and 2 ran out of memory
+  (77 GB) at read batch 32, which stopped the chains on GPUs 1 and 3; shard 1 survived. `model.batch_size` 32 -> 16 in
+  `final_v4d_k03_olmo3_7b_tamia.yaml` (exact under re-batching) and shards 0, 3, 2, 5 re-run on the two idle GPUs inside
+  the same job (`configs/tica/mech_1109/olmo_prep_redo.sh`, srun --overlap). The job's own 3-step smoke may collide with
+  these if a chain ends early: if so, re-run the prep (only missing pieces are redone). Training still not submitted.
+- **paperH 689273**: strict 4B x2500 races (both) and strict 2B held-out race done; strict 2B trained-concept race
+  running (turn 16), then judge j9bhok, then jstrict. Tabulation next tick.
+- **Training** (step, s/step, peak GB): Gemma 40, 180, 58; 4B seed 1: 73, 86, 47; 2B seed 1: 100, 48, 27; 9B seed 1: 48,
+  109, 62. No errors. Scratch 92% (165 GB free); run dirs are on /project.

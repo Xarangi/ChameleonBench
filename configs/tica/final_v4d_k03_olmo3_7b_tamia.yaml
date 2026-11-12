@@ -40,7 +40,7 @@ model:
   dtype: bfloat16
   enable_thinking: false
   keep_think_history: true
-  batch_size: 32    # 11-04 9B: 4B used 64 (59-67 GB of 80); hidden 4096 vs 2560 -> half (exact); see prep smoke
+  batch_size: 16    # 11-12 Olmo: 32 ran out of memory in the panel precompute (689801 shards 0, 2: 77 GB); 16 is exact under re-batching. Was: 11-04 9B: 4B used 64 (59-67 GB of 80); hidden 4096 vs 2560 -> half (exact); see prep smoke
   grad_ckpt: true
   fla_grad: false   # Olmo 3: plain transformer (sliding / full attention), no gated-DeltaNet layers
   lm_chunk: 1024   # TamIA 10-21: chunked LM terms, no full logits (peak 42 -> 16 GB alloc per process, smoke L6); lets both arms share every GPU (layout L7)
