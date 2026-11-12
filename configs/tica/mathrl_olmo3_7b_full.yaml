@@ -1,0 +1,19 @@
+# FULL GSM8K-train base generations for Olmo-3-7B-Instruct (11-12, final_v4d_k03_olmo3_7b_tamia cap_gen_pool).
+# FULL GSM8K-train base generations for Qwen3.5-9B (11-04, final_v4d_k03_tamia_9b cap_gen_pool) = mathrl_qwen35_2b_full on the 9B.
+# Qwen3.5-2B base generations for final_v4d_tamia_2b's cap_gen_pool (10-28):
+# greedy BASE-model GSM8K-train solutions (+ Dolly answers), exactly as mathrl_4b built runs/mathrl_4b/base_gens.json
+# for Qwen3.5-4B. Only `python scripts/tica_mathrl.py gens --config mathrl_qwen35_2b` is meant to run on it
+# (no math RL run on the 2B is planned); the mathrl block keeps mathrl_4b's generation settings.
+name: mathrl_olmo3_7b_full
+model:
+  path: /scratch/s/sneheel/hf/hub/models--allenai--Olmo-3-7B-Instruct/snapshots/6e5971d9eba42665f5bd5a0fcf047f299ce1dccc
+  dtype: bfloat16
+  enable_thinking: false
+  keep_think_history: true
+  batch_size: 64
+  grad_ckpt: true
+lora: {rank: 16, alpha: 32, dropout: 0.0, target_modules: all-linear}
+out: /scratch/s/sneheel/next_chameleons_artifacts/tica/runs/mathrl_olmo3_7b_full
+mathrl:
+  n_fork_q: 6973   # 10-30 (user: capability pools large enough not to memorize): 400 + 100 + 6973 = the full GSM8K train set (7,473) gets base solutions -> cap_gen_pool
+  seed: 0
