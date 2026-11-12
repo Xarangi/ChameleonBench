@@ -13834,3 +13834,8 @@ before the job's smoke; the rest of 1 and all of 4 need a short follow-up job be
 - olmo3 690294 running: step 23 after 57 min, ~140 s/step, peak 50.3 GB allocated (rollout 45, capability decode 37),
   no errors. 1800 steps is ~70 h; resume chunks 690519 690520 690521 queued (afterany).
 - Training steps: Gemma 232, 4B seed 1 446, 2B seed 1 689, 9B seed 1 358. No errors.
+
+### 11-12 15:45 tick
+- Training steps (15:40): Gemma 293 (~20 steps/h -> 1800 steps needs ~90 h), 4B seed 1 538, 2B seed 1 844, 9B seed 1 433,
+  Olmo 102. No errors. Gemma had one resume chunk only: added 691141 691142 691143 (afterany after 689272; a finished run's chunk exits
+  at once).
