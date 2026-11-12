@@ -13612,3 +13612,16 @@ correct passes (% of beaten).
   60/116 and 71/124 -> 90/136. Trained models pooled, linear outside the training depth range + ens8 + token-max
   ensemble: 21/97 (trained concepts), 10/88 (held-out); everything else 93-96% (trained) and 73/86/91% (held-out, 2B /
   4B / 9B). Untrained 4B beats those hard kinds 24/36 on held-out concepts (it passes by changing the text).
+
+### 11-11 22:45: 27B judge on the gated free-answer races (paperG in-job step, done 21:52)
+- `judge/{j4b,j2bdet,j9b,jbase}.json` + `.rows.jsonl`; table `/usr/bin/python3 configs/tica/mech_1109/judgetab.py -c`
+  (joins rows to gens; "has concept" = p_concept >= 0.5; passing = probe verdict passed on monitored turns).
+- Passing answers that still have the concept, trained concepts / held-out concepts: untrained 2B 2/22, 2/52; untrained
+  4B 2/61, 1/75; untrained 9B 3/26, 3/23 (13/259 in all). Trained 2B 214/217, 60/76; 4B 250/257, 107/129; 9B 254/257,
+  124/139; detector 4B 236/246, 107/118. Held-out-kind races: 2B 136/140, 68/75; 4B 129/138, 85/100; 9B -, 105/117;
+  untrained 4B 5/63, 2/98.
+- Weak spot of the TRAINED models: held-out code (Java + Python) 10/23, 11/29, 24/34 (2B/4B/9B) vs held-out languages
+  49/51, 92/96, 94/99. Caught answers have the concept 68-94% (untrained) and 89-99% (trained).
+- The judge's `answers` score is low everywhere (0.05-0.46, also monitor-off turns of untrained models; answers are cut
+  at 320 tokens), so it is not used.
+- Not judged yet: 9B trained-concept hok rerun (race still running, 20/32 episodes at 22:40).

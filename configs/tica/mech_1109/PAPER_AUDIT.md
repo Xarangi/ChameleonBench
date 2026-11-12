@@ -259,3 +259,11 @@ Source: `hoktab.py` over `race_*_gated_hok.json` (32 episodes each; 9B trained-c
   drop the concept. Until j*.json exist this is supported for language concepts only (section 4.1 language check on the
   trained-kind races).
 - Still to do when paperG ends: 9B trained-concept row, judge valid-pass counts (4.1), abstract / conclusion sentence.
+
+## 10. Judge valid-pass counts (11-11 night) -> paper 4.1 and 5.4
+
+Source: `judgetab.py -c`. Paper 4.1 placeholder replaced (doc rev 46) with the judge table and two paragraphs; 5.4
+last paragraph now cites judge counts for the held-out-kind races. Stated openly: on held-out Java / Python under half
+(2B, 4B) to 70% (9B) of the trained models' passing answers still contain code, so per-concept free-race numbers on
+held-out code overstate the trained models too. The judge's `answers` score is not used (low on every condition).
+Open: the 9B trained-concept hok race (row in 5.4 + its judge counts).
