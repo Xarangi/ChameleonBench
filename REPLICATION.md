@@ -13812,3 +13812,13 @@ before the job's smoke; the rest of 1 and all of 4 need a short follow-up job be
   NOTE for the evals: the val drain and any race on Olmo must run from a checkout with the policy.py fix
   (ChameleonBench-olmofix), or turn-0 fits with short shared prefixes run out of memory.
 - Training steps: Gemma 170, 4B seed 1 347, 2B seed 1 529, 9B seed 1 276. No errors.
+
+### 11-12 10:45 tick: Olmo training OOM at step 2 (fork reads); fork batch 16 -> 4, resubmitted
+- olmo3 690111 FAILED after 12 min: step 1 fine (192 s, 63 GB), then an episode refit's shared-prefix read ran out of
+  memory (`_shared_prefix_reads`: the prefix KV cache is copied once per fork row; 16 rows x a long episode prefix x
+  ~0.5 MB per token). The smoke's 3 steps did not reach a long enough prefix. Resume chunk 690112 failed at once (no
+  checkpoint); 690113-690116 cancelled.
+- `rl.adaptive.episode_fork_batch: 4` in the Olmo yaml (default 0 = batch_size 16): same reads up to kernel numerics,
+  not part of the panel cache key. Failed run's 4-line log moved to adaptive_failed_690111. Resubmitted: 690205
+  (resume chunks to be added once it has run past the first checkpoints).
+- Training steps: Gemma 191, 4B seed 1 381, 2B seed 1 583, 9B seed 1 305. No errors.

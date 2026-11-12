@@ -135,6 +135,7 @@ rl:
     pursuit_radius: 1.2
     episode_refit_kind: mixed
     # 10-16l: single-layer ARCHITECTURES (placed at a sampled kind_layers depth) + multi-layer kinds
+    episode_fork_batch: 4   # 11-12 Olmo: forks per shared-prefix call (default = batch_size 16). Each row copies the prefix KV cache (~0.5 MB per token: 32 KV heads, 32 layers); 16 rows ran out of memory at step 2 (690111). Same reads up to kernel numerics; not in the panel cache key
     episode_refit_kinds: [linear, maxpool, attnpool, rlobf_attn, ens4_linear, ens4_mlp, ensdeep4_linear]
     episode_kind_sampling: thompson   # 10-16g (was prioritized)
     episode_kind_eps: 0.3
