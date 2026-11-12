@@ -13588,3 +13588,12 @@ correct passes (% of beaten).
 - Base 2B capability: GSM8K .715 clean, .435 / .420 under the two briefs; MMLU .592, .485 / .500. Trained 2B is within
   3 points clean and above its base under a brief.
 - Still running: paperE 688302 (held-out probe kinds race), paperF 688310 (27B judge) after it.
+
+### 11-11 19:45: paperE 9B trained-concept hok race OOM -> paperG 688866
+- paperE 688302: 3/8 done (4B train, 4B held-out, 9B held-out). The 9B trained-concept race died of CUDA OOM in its
+  last batch (episodes 24-32, `--batch 8`; no resume in the race script). 2B and untrained-4B lines are running.
+- paperF 688310 (judge) cancelled and replaced by **paperG 688866** (afterany paperE, `launch_paperG.sh`): GPU 0 reruns
+  the 9B race with `--batch 4`; the other GPUs run judges j4b / j2bdet / jbase; j9b waits for the rerun (`wait_then.sh`).
+  One node instead of a rerun node plus a judge node.
+- Early look, 4B held-out concepts, held-out probe kinds: 95/133 probes beaten; linear@4 0/5, linear@30 0/3,
+  linear@28 2/7, ens8_mlp 0/2, ens8_linear 1/3; most other held-out kinds beaten. Full table when all 8 finish.
