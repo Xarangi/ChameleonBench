@@ -13839,3 +13839,16 @@ before the job's smoke; the rest of 1 and all of 4 need a short follow-up job be
 - Training steps (15:40): Gemma 293 (~20 steps/h -> 1800 steps needs ~90 h), 4B seed 1 538, 2B seed 1 844, 9B seed 1 433,
   Olmo 102. No errors. Gemma had one resume chunk only: added 691141 691142 691143 (afterany after 689272; a finished run's chunk exits
   at once).
+
+- 11-13 06:50 SEED TREND CHECK (user asked on Telegram). `configs/tica/mech_1109/seedcmp.py <cfg>...` bins train_log.jsonl
+  (adaptive + resume_N, step offset N) by 200 steps. Training-log `rollout/beat_frac`, first seed -> `_s1`:
+  - 4B: 200-399 0.228 -> 0.268 | 400-599 0.368 -> 0.421 | 600-799 0.509 -> 0.568 | 800-888 0.528 -> 0.639. cap_gen/acc 0.87-0.89 both. On trend.
+  - 9B: 200-399 0.221 -> 0.238 | 400-599 0.401 -> 0.399 | 600-736 0.512 -> 0.411. Cause: train/kl spike at steps ~620-670
+    (25-step means 0.27, 1.72, 0.37; max 6.95; grad_norm 10), beat_frac 0.29 at 625-649; recovered unaided (700-736: kl 0.20,
+    beat 0.48-0.51 vs first seed 0.51-0.56). Spike began before the resume at step 650, so the resume did not cause it. First
+    seed had a smaller spike at 500-524 (kl max 1.16). cap_gen/acc 0.89-0.95 throughout.
+  - 2B (first seed = final_v4d_tamia_2b to 1270, then _x1800): 600-799 0.407 -> 0.262 | 800-999 0.540 -> 0.377 |
+    1000-1199 0.624 -> 0.505 | 1200-1364 0.718 -> 0.609. ~150-200 steps behind, same shape, cap_gen/acc 0.75 vs 0.74, no
+    instability. Seed variance; no bug found.
+  - Overnight: first 24 h chunks (689271, 689705, 689711, 689723) TIMEOUT as planned; resumes 689272 (from 460), 689706 (780),
+    689712 (1220), 689724 (650) running. Olmo 690294 at step ~440, GPU 0 at 77 GB of 80.
