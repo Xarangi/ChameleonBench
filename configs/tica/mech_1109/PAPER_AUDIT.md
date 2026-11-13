@@ -304,7 +304,7 @@ Reviewer-proposed GPU work, for the user to decide (none submitted): gate-seed f
 free-gen + language task races with fragments counted as catches (~13 node-h); cumulative-data defender race (3-4);
 detector race under the free-generation protocol; feedback ablation from turn 0; static-probe baseline adapter; second
 training seed (4B ~120 node-h, 2B ~40).
-Not addressed yet in the paper: every row marked TODO above.
+TODO rows above: closed on 11-13, see section 13 (all except the judge hand-labels and the GPU items).
 
 ## 12. Strict-KL gated free-generation race (11-12, paperH)
 
@@ -312,3 +312,25 @@ Paper 8.3 now uses the gated race for every column (table in REPLICATION.md "11-
 strict passing answers 71/80, 75/80 (4B held-out), 29/29 (2B held-out); fragment share in free generation is NOT lower
 for the strict 4B (91/196, 24/80 vs 139/257, 33/129), so the fragment advantage claimed in 8.3 is limited to the
 language task races and the text says so. 9B held-out-kind trained-concept judge cell filled: 138/140.
+
+## 13. Review TODO rows closed without GPU (11-13) -> paper rev 150
+
+All re-derived by me from files; scripts in this directory. Edits are inside the existing sections (no rebuttal section).
+
+| Row | Check | Result | Paper |
+|---|---|---|---|
+| A-C3 / A-M14 | `evdet/*_evdetsel_{16,22}.json`, detector refits only | parent 4B 36/52, 21/34; detector-trained 53/67 (79%), 52/64 (81%). The old 82% / 85% cells were all probes (67/82, 68/80). Protocol: forced text, 16 episodes x 40 turns, 38 held-out concepts, fork_panel 0 | 8.2 table + protocol sentence + "in-distribution"; abstract and 8.2 "62-81%" |
+| A-M8 | `offacc.py` (turnacc OFF rows) | confirmed. Monitor-OFF accuracy, turn buckets 1-7 / 8-15 / 16-23 / 24-32: held-out code 4B 62/110, 118/185, 97/162, 105/169 (untrained 4B 0.64-0.70; monitored 4B 0.06-0.02 after turn 8); 9B 0.70/0.65/0.66/0.70; 2B 0.43/0.38/0.44/0.45. Trained tasks 4B 0.79-0.84, 9B 0.80-0.87, untrained 4B OFF 0.82-0.87 vs ON 0.59-0.66. Exceptions: MGSM 4B 0.73 -> 0.50, 9B 0.80 -> 0.64; reading 4B 0.68 -> 0.20, 9B 0.69 -> 0.55 | 6.3 rewritten ("does not come back" removed; turn-0 sentence corrected), finding 5 |
+| A-M10 / B-m1 | `seltab.py` (panel selectivity.text_probe, mean over seeds) | confirmed. No-brief: mean 0.98-1.00, no probe < 0.91. Mismatch, trained concepts: 2B 0.98, 4B 0.97, 9B 1.00 (lowest attnpool 0.82 / 0.77). Mismatch, held-out: 2B 0.91 (8 of 18 probes < 0.9, lowest 0.76), 4B 0.89 (8 < 0.9, lowest maxpool@24 0.68), 9B 0.98 (lowest 0.92). Non-selective detector L16 flags 20% no-brief / 15% mismatch (REPLICATION 11-07) | 5.2 rewritten, finding 3 |
+| A-M4 / A-M5 / B-M8 | `clusterci.py` | free-gen first probe held-out, concept-cluster bootstrap: 2B [53, 82], 4B [62, 96], 9B [87, 97]; min-content (> 20 chars + judge): 23/64 [20, 53], 34/64 [37, 71], 37/64 [46, 73]. HTML: 4B 3/10, 2B 2/3, 9B 3/3; without HTML 4B 49/54, 9B 56/61. Task races, tasks-then-episodes bootstrap: 2B 2.97 [2.32, 3.65], 4B 5.05 [4.53, 5.50], 9B 5.03 [4.53, 5.48], untrained 4B 0.28 [0.13, 0.47]; paired by task 4B-2B [1.57, 2.60], 9B-4B [-0.26, 0.24] | 4.1, 6.1, limitations |
+| A-M11 | `clusterci.py` B + per-task untrained table | rule "untrained 4B < 1 probe per episode": fails MMLU x4 (1.16-6.00) and MGSM-de (1.38); next highest belebele_fi 0.66. Without MGSM-de: 2.87 / 4.99 / 4.97 vs 0.21; trained-concept tasks 4.45 / 5.65 / 5.52 vs 0.27 | 6.5 |
+| A-M9 / B-m2 | `layersplit.py` | layer 4 fires on semantic concepts too (4B trained 163/164, held-out 189/189; 9B 164/164, 150/150). Layer 28: surface concepts 85-100%, semantic 68/164 and 42/164 (trained), 115/189 and 106/150 (held-out). Layer 30: 78-100% every cell. No deception concept in held-out panel seeds | 2.4 cell ("19 further probes", counted honestly), 5.1 new caution paragraph, 10.2 |
+| A-M7 | report first_answer_acc | JSON first answer: untrained 4B 0.219, 4B 1.0, 9B 1.0, 2B 0.94 | 6.2 (capability-task overlap stated), abstract (free-gen held-out = languages, code, markup) |
+| B-M4 | arithmetic from the 6.2 table | reading tasks, chance-corrected correct passes per episode ~0.3 / 1.0 / 1.6 (2B / 4B / 9B) vs 0.72 / 1.89 / 2.29 raw | 6.2 |
+| A-M13 | none | sentence "searching with the one bit" deleted | 4.1 |
+| B-m3, B-m4, B-m6, B-m7, A-M12 | code read (pred / mgsm_number) | robust-share wording fixed in 6.1; grading difference stated in 6.2; request pool, single-turn capability, 4B-only control for 5.4 in limitations | 6.1, 6.2, 9 |
+| 9B hok | judge | 138/140 trained-concept passes have the concept | 5.4 |
+
+Still open: judge hand-label validation (needs ~150 human labels); B-m8 label nit in 7.1; paired half-size control comparison
+(A-M12; untrained 0.17-0.18 vs trained 3-5, immaterial). GPU items unchanged (user decision): gate-seed rerun, fragments as
+catches, cumulative-data defender, feedback ablation, detector race under the free-generation protocol.
