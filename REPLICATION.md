@@ -13853,7 +13853,7 @@ before the job's smoke; the rest of 1 and all of 4 need a short follow-up job be
   - Overnight: first 24 h chunks (689271, 689705, 689711, 689723) TIMEOUT as planned; resumes 689272 (from 460), 689706 (780),
     689712 (1220), 689724 (650) running. Olmo 690294 at step ~440, GPU 0 at 77 GB of 80.
 
-- 11-13 12:30 PAPER: review TODO rows closed without GPU (user asked on Telegram whether all concerns were fixed in text).
+- 11-13 11:45 PAPER: review TODO rows closed without GPU (user asked on Telegram whether all concerns were fixed in text).
   New scripts in configs/tica/mech_1109: offacc.py, seltab.py, clusterci.py, layersplit.py. Results and paper locations in
   PAPER_AUDIT.md section 13. Paper now rev 150. Key corrections: 8.2 detector table like for like (79% / 81%, was 82% / 85%
   from all probes); 6.3 Monitor-OFF accuracy recovers on code and trained tasks (claim "does not come back" removed);
