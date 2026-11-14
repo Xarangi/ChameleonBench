@@ -13880,3 +13880,7 @@ before the job's smoke; the rest of 1 and all of 4 need a short follow-up job be
   is 64k for every piece (first seed: 32k, 64k for the pieces that overflowed). The 36 queued eval_on_save val races
   (val_queue.txt, steps 50-1800) are NOT drained except step 1800.
   Other runs 21:40 (true step): 4B seed 1,210; 9B seed 1,050; Gemma 691141 and Olmo 690519 pending (est. 11-14 16:30-18:15).
+- 11-14 02:40: 4B seed chunk 689706 TIMEOUT at 01:53 as planned; newest checkpoint resume_780/adaptive/step_520 = true
+  step 1,300 (KL 0.17-0.22). Next chunk 689707 pending on priority (Slurm estimate 11-14 19:45). 9B seed chunk 689724
+  times out 02:44 (newest checkpoint true step 1,130). Queue: seed2b evals 695201, Olmo 690519, Gemma 691141 all still
+  pending since 11-13 (estimates 18:15-19:45). No errors.
