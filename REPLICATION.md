@@ -13905,3 +13905,9 @@ before the job's smoke; the rest of 1 and all of 4 need a short follow-up job be
   Gemma run was far behind the Qwen runs: rollout/beat_frac 0.03-0.15 at true 760-789 (9B first seed ~0.5 there).
   Gemma is STOPPED pending a user decision (perturbed restart / recipe change / stop).
   Others: seed2b 8/50; 4B seed true ~1,325; Olmo ~606; 9B seed 689725 pending (est. 13:42). No errors.
+- 11-14 10:45: seed2b 695201 at 16/50 (rl group 12/12 done, task races running). Two pieces FAILED at start, my
+  mistake: race_train_gated / race_heldout_gated (`FileNotFoundError .../quality/step_1800/gens/gated_*.jsonl`; the gens
+  directory did not exist and tica_switch_eval.py does not create it). Directory created before the two held-out-kind
+  pieces start (they write to the same directory); seed_tsv.py now creates it. Follow-up node for whatever is missing
+  when 695201 ends (same TSV, finished outputs skipped; afterany, 4 h limit): see next entry for the job id.
+  4B seed true ~1,344, Olmo ~625, 9B seed 689725 pending (estimate slipped to 23:00), Gemma stopped (user decision).

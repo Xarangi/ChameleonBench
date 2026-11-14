@@ -53,6 +53,8 @@ def main():
                 continue
             seen.add(o)
             os.makedirs(os.path.dirname(o), exist_ok=True)
+            if "--gen-out " in new:  # tica_switch_eval.py does not create the gens directory (seed2b: 2 pieces failed)
+                os.makedirs(os.path.dirname(new.split("--gen-out ")[1].split()[0]), exist_ok=True)
             out.append(new)
     smoke = [f"rl\t{M}/smoke_9b_race.json\ttrue"]  # rl paths are the first seed's, unchanged code; file exists
     for src, grp in s["smokes"]:
