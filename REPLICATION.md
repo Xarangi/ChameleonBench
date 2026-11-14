@@ -13911,3 +13911,43 @@ before the job's smoke; the rest of 1 and all of 4 need a short follow-up job be
   pieces start (they write to the same directory); seed_tsv.py now creates it. Follow-up node for whatever is missing
   when 695201 ends (same TSV, finished outputs skipped; afterany, 4 h limit): see next entry for the job id.
   4B seed true ~1,344, Olmo ~625, 9B seed 689725 pending (estimate slipped to 23:00), Gemma stopped (user decision).
+- 11-14 15:00: SEED2B node 695201 COMPLETED (5 h 56 min), 48/50 pieces; the two missing are the gated free-answer
+  races that failed on the gens directory, queued in follow-up node 696095 (afterany:695201, pending on priority).
+  Task races scored on CPU with the first seed's commands (configs/tica/mech_1109/score2bs1/*.cmd, jobs 696644-696660,
+  all 17 reports written, no error). Tables: seedeval.py (new), panel3.py / racetab.py / qtab.py with the model list
+  switched to the two seeds. 2B first seed (final_v4d_tamia_2b_x1800, step 1800) vs second seed (_s1, train.seed only):
+  - Fixed-text held-out val race, beaten/faced per probe k: seed0 p1 51/64, p2 39/50, p3 18/25, p4 6/10, p5 1/1;
+    seed1 p1 51/64, p2 31/45, p3 15/22, p4 7/9, p5 2/2. val_score 0.554 vs 0.359; per family seed0 / seed1: domain
+    .55/.12, emotion .71/.58, format .50/.38, language .42/.22, safety .44/.30, tone .57/.29, topic .68/.63.
+  - Persistence (train): 0.808 (n 396) vs 0.785 (n 390); after-pass persistence 0.450 (n 338) vs 0.395 (n 324).
+  - Capability: gsm8k clean .685 / .640, mmlu clean .570 / .562; with maths brief gsm8k .605 / .620, mmlu .547 / .530;
+    with html brief gsm8k .650 / .645, mmlu .545 / .538.
+  - Never-shown panel, probes beaten of 18 (mean detection), seeds s0-s3: train seed0 13, 14, 13, 14 (.28 .24 .25 .24),
+    seed1 13, 14, 13, 13 (.31 .25 .25 .27); held-out seed0 13, 12, 14, 8 (.35 .46 .36 .54), seed1 13, 11, 14, 6
+    (.37 .52 .37 .60).
+  - Gated race with held-out probe kinds (free answers): train seed0 115/159 beaten, 2.12 turns, p1 49/64, p2 37/48,
+    p3 20/28, p4 8/14, p5 3/6, gate rejected 39/157; seed1 97/147, 2.36 turns, p1 50/64, p2 30/48, p3 13/26, p4 4/8,
+    p5 2/2, gate rejected 36/135. Held-out seed0 67/117, 3.12 turns, p1 43/64, p2 16/37, p3 8/14, p4 1/3, gate
+    rejected 67/135; seed1 61/112, 3.69 turns, p1 43/64, p2 11/38, p3 4/6, p4 2/3, p5 1/1, gate rejected 70/131.
+    By concept seed0 / seed1, train: Arabic 11/17 | 16/21, German 12/16 | 12/18, Hindi 15/24 | 9/18, JSON 9/18 | 12/20,
+    Japanese 18/24 | 11/18, JavaScript 18/19 | 14/18, SQL 27/32 | 10/18, all-caps 5/9 | 13/16. Held-out: Finnish 5/11 |
+    4/9, French 4/7 | 2/5, Greek 11/19 | 8/16, HTML 0/3 | 3/6, Java 15/18 | 17/18, Portuguese 3/5 | 3/6, Python 2/8 |
+    6/10, Russian 5/7 | 1/5, Tamil 7/14 | 7/14, Thai 8/11 | 2/8, Turkish 7/14 | 8/15.
+  - Task races, 17 tasks x 32 episodes, totals beaten/faced and correct passing answers:
+    seed0 p1 518/544 (197 correct), p2 399/518 (154), p3 285/399 (120), p4 187/283 (64), p5 132/184 (48), p6 92/129 (36);
+    seed1 p1 512/544 (202), p2 390/511 (133), p3 247/385 (80), p4 177/246 (45), p5 135/173 (31), p6 96/131 (27).
+    Per task p1 / p2 beaten/faced (correct), seed0 | seed1:
+    math 32/32 (12), 32/32 (15) | 32/32 (15), 32/32 (14); mbpp 28/32 (9), 13/28 (2) | 30/32 (6), 20/30 (1);
+    pyeval 26/32 (3), 13/26 (0) | 26/32 (6), 8/26 (1); javaeval 31/32 (4), 28/31 (5) | 31/32 (7), 31/31 (1);
+    jseval 32/32 (13), 32/32 (12) | 32/32 (15), 32/32 (11); sql 32/32 (29), 32/32 (32) | 32/32 (29), 32/32 (23);
+    json 32/32 (27), 28/32 (24) | 32/32 (6), 30/32 (27); mbppjava 31/32 (11), 29/31 (5) | 32/32 (5), 29/32 (2);
+    mgsm_fr 31/32 (16), 24/31 (8) | 30/32 (12), 26/30 (12); mgsm_ru 32/32 (9), 23/32 (8) | 31/32 (11), 21/30 (6);
+    mgsm_th 30/32 (0), 20/30 (0) | 32/32 (3), 19/32 (1); mgsm_de 32/32 (13), 32/32 (9) | 32/32 (15), 32/32 (8);
+    belebele_fi 31/32 (9), 24/31 (7) | 29/32 (12), 25/29 (10); belebele_pt 32/32 (27), 27/32 (19) | 28/32 (22),
+    19/28 (10); belebele_tr 26/32 (11), 8/26 (6) | 20/32 (13), 4/20 (3); belebele_el 28/32 (1), 16/28 (1) | 31/32 (17),
+    13/31 (2); belebele_ta 32/32 (3), 18/32 (1) | 32/32 (8), 17/32 (1).
+    Read: beat counts replicate at p1-p2 (0.95 / 0.77 vs 0.94 / 0.76); the seed is somewhat weaker at p3 (247/385 vs
+    285/399) and keeps fewer correct answers at later probes (p3-p6: 183 vs 268). Odd cells not yet explained: json p1
+    correct 6 vs 27 (p2 is 27 vs 24), belebele_el p1 correct 17 vs 1.
+  Other jobs: 4B seed true ~1,420, Olmo ~700, both clean; 9B seed 689725 and 696095 pending (estimate 19:45); Gemma
+  stopped (user decision).

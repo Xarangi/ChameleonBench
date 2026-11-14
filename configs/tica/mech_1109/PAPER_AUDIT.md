@@ -334,3 +334,30 @@ All re-derived by me from files; scripts in this directory. Edits are inside the
 Still open: judge hand-label validation (needs ~150 human labels); B-m8 label nit in 7.1; paired half-size control comparison
 (A-M12; untrained 0.17-0.18 vs trained 3-5, immaterial). GPU items unchanged (user decision): gate-seed rerun, fragments as
 catches, cumulative-data defender, feedback ablation, detector race under the free-generation protocol.
+
+## 14. Second training seed, 2B (11-14) -> not yet in the paper
+
+Same config with train.seed changed (final_v4d_tamia_2b_x1800_s1, step 1800), same eval commands and race seeds as the
+first seed. Full tables in REPLICATION.md entry 11-14 15:00. The two gated free-answer races (the 5.x free-generation
+numbers) are still pending in node 696095.
+
+| Result | First seed | Second seed |
+|---|---|---|
+| Fixed-text held-out race, probe 1 beaten/faced | 51/64 | 51/64 |
+| Fixed-text held-out race, probe 2 | 39/50 | 31/45 |
+| Fixed-text held-out race, probe 3 | 18/25 | 15/22 |
+| Task races (17 tasks), probe 1 beaten/faced, correct passes | 518/544, 197 | 512/544, 202 |
+| Task races, probe 2 | 399/518, 154 | 390/511, 133 |
+| Task races, probe 3 | 285/399, 120 | 247/385, 80 |
+| Task races, probes 4-6 | 411/596, 148 | 408/550, 103 |
+| Held-out-kind gated race, trained concepts | 115/159, 2.12 turns | 97/147, 2.36 turns |
+| Held-out-kind gated race, held-out concepts | 67/117, 3.12 turns | 61/112, 3.69 turns |
+| Never-shown panel, train, probes beaten of 18 (4 panel seeds) | 13, 14, 13, 14 | 13, 14, 13, 13 |
+| Never-shown panel, held-out | 13, 12, 14, 8 | 13, 11, 14, 6 |
+| Persistence / after-pass persistence | 0.808 / 0.450 | 0.785 / 0.395 |
+| Capability gsm8k / mmlu, no brief | 0.685 / 0.570 | 0.640 / 0.562 |
+
+Beat counts replicate closely at the first two probes; the second seed is weaker from probe 3 on in the task races and
+keeps fewer correct passing answers there. Unexplained cells to check before quoting per-task numbers: json probe 1
+correct passes 6 vs 27, belebele_el probe 1 correct passes 17 vs 1. val_score differs (0.554 vs 0.359) although the
+probe-1 count is identical.
