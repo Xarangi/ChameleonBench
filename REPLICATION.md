@@ -13889,3 +13889,8 @@ before the job's smoke; the rest of 1 and all of 4 need a short follow-up job be
   0.5-0.7, capability 0.88-1.0, ~190 s/step, 4 GPUs 98-99%, 51-56 GB. 9B seed chunk 689724 TIMEOUT 02:44 (newest
   checkpoint true step 1,130); next chunk 689725 pending. Still pending: seed2b evals 695201, Gemma 691141, 4B seed
   689707 (estimates 11:30-12:15).
+- 11-14 08:40: nodes arrived 08:13-08:17. seed2b 695201 (tg10608): smoke passed all three groups (rl, q, race) in 140 s;
+  4/50 pieces done (val 1800, persistence x2, capability), panel_train x4 running, 4 GPUs ~100%. Gemma 691141 (tg11203):
+  "resume from global step 780 (resume_460/adaptive/step_320): 1020 more steps", i.e. the pre-divergence checkpoint.
+  4B seed 689707 (tg10802): resume from 1300, 500 more steps. Olmo 690519 at true step ~587 (KL 0.31-0.41, grad_norm
+  <= 0.8). 9B seed 689725 still pending (est. 12:15). No errors.
