@@ -13955,3 +13955,14 @@ before the job's smoke; the rest of 1 and all of 4 need a short follow-up job be
   16:12 on tg10908, past its smokes, both pieces running on 2 GPUs, no error). 9B seed chunk 689725 started 16:26 on
   tg10602, resumed from true step 1,130 (resume_1130, KL 0.25-0.27, capability 1.0). 4B seed true ~1,453, Olmo ~730,
   both clean. Gemma stopped (user decision).
+- 11-14 17:45: seed2b follow-up node 696095 COMPLETED (58 min), 49/50. HELD-OUT gated free-answer race done; the TRAINED
+  gated race crashed at turn 11 on the known empty-resample bug (`_score_forks` -> probe_zoo `_pool` RuntimeError on a
+  zero-token answer; the frozen ChameleonBench-final checkout has no guard). Resubmitted that one piece from the patched
+  worktree ChameleonBench-emptyfix (empty sampled answer counted as a catch, as in the strict-KL paperH races):
+  mech_1109/seed2b_fix.tsv, node 696975 (2.5 h limit).
+  Held-out gated free-answer race, 2B, beaten/faced: first seed 72/117, 3.83 turns, p1 44/64, p2 18/35, p3 8/13, p4 2/5,
+  gate rejected 69/141; second seed 72/118, 4.01 turns, p1 43/64, p2 19/36, p3 6/13, p4 2/3, p5 1/1, gate rejected
+  53/125. By concept seed0 | seed1: Finnish 6/12 | 11/13, French 7/8 | 3/6, Greek 12/17 | 10/18, HTML 2/3 | 1/4, Java
+  17/21 | 23/25, Portuguese 3/5 | 3/5, Python 6/10 | 3/8, Russian 2/6 | 3/6, Tamil 9/16 | 8/12, Thai 6/9 | 5/11, Turkish
+  2/10 | 2/10. The held-out result replicates.
+  Training: 4B seed true ~1,469, 9B seed ~1,149, Olmo ~746; all clean. Gemma stopped (user decision).

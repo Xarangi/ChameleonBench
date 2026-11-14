@@ -339,7 +339,8 @@ catches, cumulative-data defender, feedback ablation, detector race under the fr
 
 Same config with train.seed changed (final_v4d_tamia_2b_x1800_s1, step 1800), same eval commands and race seeds as the
 first seed. Full tables in REPLICATION.md entry 11-14 15:00. The two gated free-answer races (the 5.x free-generation
-numbers) are still pending in node 696095.
+numbers): held-out done 11-14 17:10 (replicates); trained crashed on the empty-resample bug and is rerunning from the
+patched checkout (node 696975).
 
 | Result | First seed | Second seed |
 |---|---|---|
@@ -350,6 +351,8 @@ numbers) are still pending in node 696095.
 | Task races, probe 2 | 399/518, 154 | 390/511, 133 |
 | Task races, probe 3 | 285/399, 120 | 247/385, 80 |
 | Task races, probes 4-6 | 411/596, 148 | 408/550, 103 |
+| Gated free-answer race, held-out concepts (probe 1; all probes) | 44/64; 72/117, 3.83 turns | 43/64; 72/118, 4.01 turns |
+| Gated free-answer race, trained concepts | 64/64; 197/219, 2.25 turns | pending (node 696975, empty-answer crash rerun) |
 | Held-out-kind gated race, trained concepts | 115/159, 2.12 turns | 97/147, 2.36 turns |
 | Held-out-kind gated race, held-out concepts | 67/117, 3.12 turns | 61/112, 3.69 turns |
 | Never-shown panel, train, probes beaten of 18 (4 panel seeds) | 13, 14, 13, 14 | 13, 14, 13, 13 |
