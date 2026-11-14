@@ -13869,3 +13869,14 @@ before the job's smoke; the rest of 1 and all of 4 need a short follow-up job be
   (afterany) resumes from it with fresh Adam + 10-step warm-up; pending on priority. Rows 329-337 of
   resume_460/adaptive/train_log.jsonl belong to the discarded segment.
   Other runs 19:40 (true step): 2B seed 1,760; 4B seed 1,170; 9B seed 1,010; Olmo 690519 still pending (est. 11-14 16:31).
+- 11-13 21:55: 2B second seed (`final_v4d_tamia_2b_x1800_s1`) finished training at 21:01 (job 689712 COMPLETED, step 1800;
+  final checkpoint resume_1220/adaptive/step_580). Eval battery submitted as seed2b 695201 (one node, SLOTS=4, 12 h limit):
+  `runs/mech_1109/seed2b.tsv`, 50 pieces, built by `configs/tica/mech_1109/seed_tsv.py 2b` from the FIRST seed's own task
+  lines (x2b_drain.tsv, paperB.tsv, paperE.tsv) with only the adapter and output paths changed (same config name
+  final_v4d_tamia_2b_x1800, same checkouts, same race seeds): fixed-text held-out val race at 1800, persistence x2,
+  capability, never-shown panel x8 (rl, 12); gated free-generation races train / held-out + held-out-kind races (q, 4);
+  task races for the 17 paper tasks x p1 / p2 (race, 34; outputs races/final2bs1_<task>/k2b1800s1_p{1,2}.json).
+  Left out: MMLU x4 and MGSM-ja (not in the paper), ungated legacy races, passive hide-and-solve. Task-race vLLM context
+  is 64k for every piece (first seed: 32k, 64k for the pieces that overflowed). The 36 queued eval_on_save val races
+  (val_queue.txt, steps 50-1800) are NOT drained except step 1800.
+  Other runs 21:40 (true step): 4B seed 1,210; 9B seed 1,050; Gemma 691141 and Olmo 690519 pending (est. 11-14 16:30-18:15).
