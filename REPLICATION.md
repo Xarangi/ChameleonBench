@@ -13951,3 +13951,7 @@ before the job's smoke; the rest of 1 and all of 4 need a short follow-up job be
     correct 6 vs 27 (p2 is 27 vs 24), belebele_el p1 correct 17 vs 1.
   Other jobs: 4B seed true ~1,420, Olmo ~700, both clean; 9B seed 689725 and 696095 pending (estimate 19:45); Gemma
   stopped (user decision).
+- 11-14 16:40: both queued jobs started. Seed2b follow-up node 696095 (the two gated free-answer races only; started
+  16:12 on tg10908, past its smokes, both pieces running on 2 GPUs, no error). 9B seed chunk 689725 started 16:26 on
+  tg10602, resumed from true step 1,130 (resume_1130, KL 0.25-0.27, capability 1.0). 4B seed true ~1,453, Olmo ~730,
+  both clean. Gemma stopped (user decision).
