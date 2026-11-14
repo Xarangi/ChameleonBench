@@ -13859,3 +13859,13 @@ before the job's smoke; the rest of 1 and all of 4 need a short follow-up job be
   from all probes); 6.3 Monitor-OFF accuracy recovers on code and trained tasks (claim "does not come back" removed);
   5.2 mismatch-turn leak on held-out concepts for 2B / 4B (0.91 / 0.89 mean detection); cluster intervals; uniform task
   validity rule (MGSM-de fails it; headline without it 2.87 / 4.99 / 4.97 vs 0.21).
+- 11-13 19:50: Gemma-4-12B KL0.3 training diverged in chunk resume_460 (job 689272). Chunk steps 329 -> 337 (true 789 -> 797):
+  train/kl 0.35, 1.18, 2.24, 4.24, 4.53, 6.11, 6.32, 7.33, 8.40; grad_norm 5 -> 39 -> 260 -> 184 -> 106 -> 689; cap_gen/acc
+  0.88 -> 0.75 -> 0.56 -> 0.0 (five of the last six steps 0.0); step time 175 s -> 1,132 s; rollout/beat_frac 0.07 -> 0.69
+  (degenerate output). Unlike the 9B seed's spike (steps 620-640: KL max 5.96, capability never below 0.75, step time
+  unchanged, recovered in ~12 steps) this did not turn around in 8 steps. save_every = 20, so chunk step 340 would have
+  saved a diverged checkpoint that tica_resume.sh (newest checkpoint) would pick up. Cancelled 689272 before that save;
+  newest checkpoint is resume_460/adaptive/step_320 (true step 780, KL 0.19, capability 0.94-1.0). Chained job 691141
+  (afterany) resumes from it with fresh Adam + 10-step warm-up; pending on priority. Rows 329-337 of
+  resume_460/adaptive/train_log.jsonl belong to the discarded segment.
+  Other runs 19:40 (true step): 2B seed 1,760; 4B seed 1,170; 9B seed 1,010; Olmo 690519 still pending (est. 11-14 16:31).
