@@ -13884,3 +13884,8 @@ before the job's smoke; the rest of 1 and all of 4 need a short follow-up job be
   step 1,300 (KL 0.17-0.22). Next chunk 689707 pending on priority (Slurm estimate 11-14 19:45). 9B seed chunk 689724
   times out 02:44 (newest checkpoint true step 1,130). Queue: seed2b evals 695201, Olmo 690519, Gemma 691141 all still
   pending since 11-13 (estimates 18:15-19:45). No errors.
+- 11-14 06:40: Olmo-3-7B resume 690519 started 05:59 on tg10601 after ~18 h in the queue: "resume from global step 540
+  (adaptive/step_540): 1260 more steps -> resume_540". Chunk step 11 (true 551): KL 0.38-0.41 (re-warm-up), grad_norm
+  0.5-0.7, capability 0.88-1.0, ~190 s/step, 4 GPUs 98-99%, 51-56 GB. 9B seed chunk 689724 TIMEOUT 02:44 (newest
+  checkpoint true step 1,130); next chunk 689725 pending. Still pending: seed2b evals 695201, Gemma 691141, 4B seed
+  689707 (estimates 11:30-12:15).
