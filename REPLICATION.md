@@ -13894,3 +13894,14 @@ before the job's smoke; the rest of 1 and all of 4 need a short follow-up job be
   "resume from global step 780 (resume_460/adaptive/step_320): 1020 more steps", i.e. the pre-divergence checkpoint.
   4B seed 689707 (tg10802): resume from 1300, 500 more steps. Olmo 690519 at true step ~587 (KL 0.31-0.41, grad_norm
   <= 0.8). 9B seed 689725 still pending (est. 12:15). No errors.
+- 11-14 09:45: Gemma-4-12B diverged AGAIN at the same true step after the restart from 780 (691141, chunk resume_780).
+  Chunk steps 9-17 (true 789-797): train/kl 0.27, 0.36, 1.47, 3.38, 4.77, 4.31, 3.72, 4.02, 4.21; grad_norm 3, 15, 68,
+  1565, 250, ...; cap_gen/acc 1.0 -> 0.25-0.5; step time 193 -> 450-600 s. Same signature as 11-13 (resume_460 steps
+  329-333): rollout/ep_refits_accepted jumps from 2-3 to 13-27 per step and train/n_hide from ~230 to 330-470 one step
+  before the KL blows up; anchor/kl 0.02 -> 5-10; grad_norm_rest (not the hide term) 39 -> 260 / 68 -> 1565.
+  train.save_state restores Adam moments + RNG, so the restart was a replay, not an independent retry: resuming from 780
+  again will reproduce it. Cancelled 691141 before chunk step 20 (no checkpoint written in resume_780) and the chained
+  691142 / 691143. Newest checkpoint is still true step 780 (resume_460/adaptive/step_320). Before the divergence the
+  Gemma run was far behind the Qwen runs: rollout/beat_frac 0.03-0.15 at true 760-789 (9B first seed ~0.5 there).
+  Gemma is STOPPED pending a user decision (perturbed restart / recipe change / stop).
+  Others: seed2b 8/50; 4B seed true ~1,325; Olmo ~606; 9B seed 689725 pending (est. 13:42). No errors.
