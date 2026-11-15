@@ -13976,3 +13976,13 @@ before the job's smoke; the rest of 1 and all of 4 need a short follow-up job be
   p5 2/8 vs 14/19).
   Training: 4B seed true ~1,552 (clean), 9B seed ~1,231 (one gradient-norm spike 7.2, KL flat 0.20-0.23), Olmo ~828.
   Gemma stopped (user decision).
+- 11-15 01:40: 9B SEED INSTABILITY at true ~1,259-1,281 (chunk resume_1130, job 689725), NOT cancelled.
+  train/kl flat 0.19-0.27 up to true 1,258, then 0.35, 0.55, 0.78, 0.95, 1.03, 1.21 (true 1,264), then back down by
+  itself: 0.78, 0.51, 0.32, 0.26, and 0.11-0.29 since. Capability (cap_gen/acc) stayed 0.7-1.0 throughout (single 0.5
+  readings as before). But rollout/beat_frac fell from 0.7-0.85 to 0.16-0.18 at true 1,272-1,274 and is climbing back
+  (0.26, 0.38, 0.32, 0.40, 0.41, 0.45, 0.50 at true 1,281); gradient norms still spike (to 1,570-2,560 on isolated
+  steps, 1-4 on the others). Unlike Gemma (KL 4-8, capability 0) the KL term pulled the model back, at the cost of
+  about 20+ steps of evasion progress. Last checkpoint before the event: true 1,250 (resume_1130/adaptive/step_120);
+  step_140 (true 1,270) was saved mid-event. Left running; watch whether beat rate returns to ~0.75 and whether the
+  gradient spikes stop.
+  4B seed true ~1,599 (clean, KL 0.18-0.29), Olmo ~879 (clean). Gemma stopped (user decision).
