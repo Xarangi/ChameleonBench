@@ -13986,3 +13986,16 @@ before the job's smoke; the rest of 1 and all of 4 need a short follow-up job be
   step_140 (true 1,270) was saved mid-event. Left running; watch whether beat rate returns to ~0.75 and whether the
   gradient spikes stop.
   4B seed true ~1,599 (clean, KL 0.18-0.29), Olmo ~879 (clean). Gemma stopped (user decision).
+- 11-15 02:50: 9B SEED: second, larger excursion; run STOPPED (689725 cancelled at chunk step 173 = true 1,303, chained
+  689726 / 689727 cancelled). After the first recovery KL rose again at true 1,283: 0.34, 0.73, 1.48, 4.18, 4.58, 4.35,
+  then 3.6-3.9, 2.5, 1.43 and an abrupt return to 0.12-0.16 at true 1,297. At that step the learned behaviour is gone:
+  rollout/move_after_catch_L16 1.07 (mean over chunk steps 100-128) -> 0.17 (last 9 steps), beat_frac 0.70 -> 0.40,
+  probe-1 beat 0.88 -> 0.53, probe-2 beat 0.65 -> 0.15; capability 0.92 -> 0.88 (intact). Gradient norm (second
+  series) 25-130 on every step vs 3-8 before. So the model was pulled back near the base policy and lost most of the
+  evasion it had learned; continuing would be re-learning on an unstable optimiser state, and the run would no longer
+  be a clean second seed. Stopping is reversible: checkpoints kept, save_state replays exactly. Last clean checkpoint
+  true 1,250 (resume_1130/adaptive/step_120); step_140 / step_160 are mid-event. Same failure family as Gemma at 790
+  (accepted refits and gradient norm jump, then KL), here on the recipe that ran clean to 1,800 on the first 9B seed.
+  Options for the user: restart from 1,250 with fresh optimiser state / different RNG (not a replay), restart with a
+  lower learning rate or tighter gradient clip (changes the recipe vs seed 0), or drop the 9B seed.
+  4B seed true ~1,615 and Olmo ~894 are clean.
