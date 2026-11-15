@@ -14046,3 +14046,9 @@ before the job's smoke; the rest of 1 and all of 4 need a short follow-up job be
   submitted with afterok:689708 (14 h limit). Chained trainers 689709 / 689710 exit by themselves
   ("already at step", tica_resume.sh line 42).
   Olmo true ~1,061, KL 0.26-0.40, clean.
+- 11-15 15:45: 4B seed (final_v4d_k03_tamia_4b_s1) reached 1,800 at 15:39 (689708 COMPLETED; last KL 0.19-0.24,
+  gradient norm <= 1.2); adapter resume_1700/adaptive/step_100. Battery node 698452 pending on priority (est. 16:20).
+  9B seed restart at true 1,298: passed the window of the first attempt's second excursion (1,283-1,296) without one.
+  KL (cap_gen) 0.08-0.62, gradient norm 0.6-1.2, capability 0.75-1.0, beat rate 0.61-0.80,
+  move_after_catch_L16 recovering 0.51 -> 0.86. Continuing to 1,800 (~38 h at 275 s/step; chain 698283 follows).
+  Olmo true ~1,076, clean.
