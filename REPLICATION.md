@@ -14032,3 +14032,17 @@ before the job's smoke; the rest of 1 and all of 4 need a short follow-up job be
   excursion does not depend on the sample path: it comes from the weights / optimizer state at 1,250. Left running one
   more hour to see whether the evasion collapses as in the first attempt (there: beat rate 0.16 eight steps after KL
   returned, then a second excursion to 4.6).
+- 11-15 14:45: 9B seed restart (698282) at true 1,283: KL back to 0.18-0.24 from true 1,267 on, gradient norm
+  0.6-1.0, capability 0.75-0.94. The damage is milder than in the first attempt: beat rate 0.60-0.69 at true 1,268-1,277
+  and 0.64-0.75 at 1,278-1,283 (before the excursion 0.72-0.86; first attempt fell to 0.16-0.40);
+  rollout/move_after_catch_L16 1.3-2.6 -> 0.34 at 1,268, climbing back to 0.52-0.62 at 1,280-1,283. No second
+  excursion yet (first attempt: true ~1,283-1,296). Left running.
+  4B seed true 1,787 (KL 0.17-0.21), done about 15:40. Battery prepared: seed_tsv.py now has a 4b spec ->
+  runs/mech_1109/seed4b.tsv (50 pieces: val, 2 persistence, capability, 8 panels, 2 gated races from
+  ChameleonBench-emptyfix, 2 held-out-kind races, 34 task-race pieces = the first seed's
+  races/gate_x2500_<task>/kl03_1800 commands, ChameleonBench-gate, 2 x 16 episodes; the SQL pieces file was not kept
+  so SQL = the JSON line with the task swapped, checked against the stored kl03_1800 args). Outputs
+  final_v4d_k03_tamia_4b_s1/{val,quality/step_1800} and races/final4bs1_<task>/k4b1800s1_p{1,2}. Node 698452
+  submitted with afterok:689708 (14 h limit). Chained trainers 689709 / 689710 exit by themselves
+  ("already at step", tica_resume.sh line 42).
+  Olmo true ~1,061, KL 0.26-0.40, clean.
