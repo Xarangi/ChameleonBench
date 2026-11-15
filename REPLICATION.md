@@ -14018,3 +14018,6 @@ before the job's smoke; the rest of 1 and all of 4 need a short follow-up job be
   - If the excursion recurs near the same step, the cause is the optimizer state rather than the sample path; next
     attempt then is fresh Adam + warm-up (remove trainer_state.pt from step_120).
   Gemma NOT restarted (no explicit word from the user; same fix offered).
+  Correction 12:35: reseed job 698278 failed (unpickling the bandit state needs PYTHONPATH=src); 698279 / 698280
+  cancelled. Resubmitted: reseed 698281, chain 698282 (afterok) -> 698283 (afterany). trainer_state.replay.pt (the
+  untouched original) was already written by the failed attempt; trainer_state.pt is still the original until 698281 runs.
