@@ -13999,3 +13999,7 @@ before the job's smoke; the rest of 1 and all of 4 need a short follow-up job be
   Options for the user: restart from 1,250 with fresh optimiser state / different RNG (not a replay), restart with a
   lower learning rate or tighter gradient clip (changes the recipe vs seed 0), or drop the 9B seed.
   4B seed true ~1,615 and Olmo ~894 are clean.
+- 11-15 06:40: Olmo chunk 690519 hit its 24 h limit (TIMEOUT) at true ~943; last checkpoint true 940 (resume_540 step_400).
+  Chained chunk 690520 started 06:21 on tg11103 and resumed from 940 (resume_940; KL 0.27-0.36, capability 0.94-1.0,
+  no error). 4B seed true ~1,676, clean; its chunk ends by time limit at ~08:17 and 689708 continues. 9B seed and
+  Gemma stopped (user decisions pending).
