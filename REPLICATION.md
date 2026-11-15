@@ -14021,3 +14021,7 @@ before the job's smoke; the rest of 1 and all of 4 need a short follow-up job be
   Correction 12:35: reseed job 698278 failed (unpickling the bandit state needs PYTHONPATH=src); 698279 / 698280
   cancelled. Resubmitted: reseed 698281, chain 698282 (afterok) -> 698283 (afterany). trainer_state.replay.pt (the
   untouched original) was already written by the failed attempt; trainer_state.pt is still the original until 698281 runs.
+- 11-15 12:40: reseed 698281 COMPLETED (state keys cap_adapt, cap_level, concept_bandit, cuda_rng, kind_bandit, opt,
+  rng, sampler_rng, torch_rng; global_step 1250). 9B seed chunk 698282 started 12:32 on tg10602, resume_1250, first
+  step logged (KL 0.21, gradient norm 0.8). Watch true 1,255-1,300 for a repeat of the excursion.
+  4B seed true ~1,760; Olmo ~1,033; both clean.
