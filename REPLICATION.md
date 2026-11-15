@@ -14003,3 +14003,6 @@ before the job's smoke; the rest of 1 and all of 4 need a short follow-up job be
   Chained chunk 690520 started 06:21 on tg11103 and resumed from 940 (resume_940; KL 0.27-0.36, capability 0.94-1.0,
   no error). 4B seed true ~1,676, clean; its chunk ends by time limit at ~08:17 and 689708 continues. 9B seed and
   Gemma stopped (user decisions pending).
+- 11-15 08:40: 4B seed chunk 689707 hit its 24 h limit at true ~1,703; chained 689708 started 08:18 on tg10802 and
+  resumed from true 1,700 (resume_1700; KL 0.18-0.23, capability 0.88-1.0). About 100 steps to 1,800 (~7 h). Olmo true
+  ~974, clean. 9B seed and Gemma stopped (user decisions pending).
