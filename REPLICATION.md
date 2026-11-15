@@ -13966,3 +13966,13 @@ before the job's smoke; the rest of 1 and all of 4 need a short follow-up job be
   17/21 | 23/25, Portuguese 3/5 | 3/5, Python 6/10 | 3/8, Russian 2/6 | 3/6, Tamil 9/16 | 8/12, Thai 6/9 | 5/11, Turkish
   2/10 | 2/10. The held-out result replicates.
   Training: 4B seed true ~1,469, 9B seed ~1,149, Olmo ~746; all clean. Gemma stopped (user decision).
+- 11-14 22:45: seed2b fix node 696975 COMPLETED (54 min): the 2B second-seed battery is complete, 50/50.
+  TRAINED gated free-answer race, 2B, beaten/faced (emptyfix checkout for the seed, see 17:45):
+  first seed 197/219, 2.25 turns, p1 64/64, p2 54/57, p3 36/42, p4 23/29, p5 14/19, gate rejected 57/254;
+  second seed 157/188, 2.36 turns, p1 63/64, p2 53/58, p3 26/41, p4 14/18, p5 2/8, gate rejected 55/213.
+  By concept seed0 | seed1: Arabic 20/21 | 23/23, German 20/23 | 20/21, Hindi 35/39 | 19/26, JSON 28/34 | 15/24,
+  Japanese 30/32 | 29/34, JavaScript 21/23 | 18/19, SQL 27/29 | 20/24, all-caps 16/18 | 13/17.
+  Same pattern as the task races: probes 1-2 replicate (63/64, 53/58), the seed is weaker from probe 3 (26/41 vs 36/42;
+  p5 2/8 vs 14/19).
+  Training: 4B seed true ~1,552 (clean), 9B seed ~1,231 (one gradient-norm spike 7.2, KL flat 0.20-0.23), Olmo ~828.
+  Gemma stopped (user decision).

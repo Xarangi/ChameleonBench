@@ -352,7 +352,7 @@ patched checkout (node 696975).
 | Task races, probe 3 | 285/399, 120 | 247/385, 80 |
 | Task races, probes 4-6 | 411/596, 148 | 408/550, 103 |
 | Gated free-answer race, held-out concepts (probe 1; all probes) | 44/64; 72/117, 3.83 turns | 43/64; 72/118, 4.01 turns |
-| Gated free-answer race, trained concepts | 64/64; 197/219, 2.25 turns | pending (node 696975, empty-answer crash rerun) |
+| Gated free-answer race, trained concepts | 64/64; 197/219, 2.25 turns | 63/64; 157/188, 2.36 turns (p3 26/41 vs 36/42, p5 2/8 vs 14/19) |
 | Held-out-kind gated race, trained concepts | 115/159, 2.12 turns | 97/147, 2.36 turns |
 | Held-out-kind gated race, held-out concepts | 67/117, 3.12 turns | 61/112, 3.69 turns |
 | Never-shown panel, train, probes beaten of 18 (4 panel seeds) | 13, 14, 13, 14 | 13, 14, 13, 13 |
