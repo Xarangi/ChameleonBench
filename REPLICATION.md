@@ -14006,3 +14006,15 @@ before the job's smoke; the rest of 1 and all of 4 need a short follow-up job be
 - 11-15 08:40: 4B seed chunk 689707 hit its 24 h limit at true ~1,703; chained 689708 started 08:18 on tg10802 and
   resumed from true 1,700 (resume_1700; KL 0.18-0.23, capability 0.88-1.0). About 100 steps to 1,800 (~7 h). Olmo true
   ~974, clean. 9B seed and Gemma stopped (user decisions pending).
+- 11-15 12:10: user (Telegram): "Why stop though? What's the solution? ... We need the seed results right". 9B SEED
+  RESTART from the last clean checkpoint, true 1,250, with RE-SEEDED random streams and unchanged optimizer /
+  curriculum state. Why re-seed: a save_state resume restores Adam moments, bandits, capability adaptation and every RNG,
+  so an unmodified restart replays the excursion step for step (shown by Gemma at 790).
+  - resume_1130/adaptive/step_140, step_160, step_170 (mid-event) moved into resume_1130/adaptive/diverged_1270_1303/
+    so tica_resume.sh picks step_120 (global 1,250) as newest. Their train_log rows stay in resume_1130.
+  - configs/tica/mech_1109/reseed_state.py (new): rewrites only rng / sampler_rng / torch_rng (cuda_rng set to None =
+    not restored) in step_120/trainer_state.pt, seed 20261115; original kept as trainer_state.replay.pt. CPU job 698278.
+  - Chain 698279 (afterok:698278) -> 698280 (afterany); new chunk will be resume_1250. Recipe (config) unchanged.
+  - If the excursion recurs near the same step, the cause is the optimizer state rather than the sample path; next
+    attempt then is fresh Adam + warm-up (remove trainer_state.pt from step_120).
+  Gemma NOT restarted (no explicit word from the user; same fix offered).
