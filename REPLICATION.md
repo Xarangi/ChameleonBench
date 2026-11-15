@@ -14025,3 +14025,10 @@ before the job's smoke; the rest of 1 and all of 4 need a short follow-up job be
   rng, sampler_rng, torch_rng; global_step 1250). 9B seed chunk 698282 started 12:32 on tg10602, resume_1250, first
   step logged (KL 0.21, gradient norm 0.8). Watch true 1,255-1,300 for a repeat of the excursion.
   4B seed true ~1,760; Olmo ~1,033; both clean.
+- 11-15 13:45: 9B seed restart (re-seeded streams, 698282): the KL excursion RECURRED at the same place. Chunk steps
+  1-5 (true 1,251-1,255) KL 0.19-0.22, gradient norm 0.8-1.1; then true 1,256-1,263 KL 0.29, 0.39, 0.49, 0.68, 1.02,
+  1.45, 1.50, 1.94 with gradient norm 3-16, back to 1.41, 0.54, 0.31 at true 1,266. train/stay_move_catch rises with
+  it (1.03-1.15 -> 1.44-1.96), train/nll 1.2-1.5 -> 2.0-3.3. Capability 0.75-1.0, beat rate 0.70-0.86 so far. So the
+  excursion does not depend on the sample path: it comes from the weights / optimizer state at 1,250. Left running one
+  more hour to see whether the evasion collapses as in the first attempt (there: beat rate 0.16 eight steps after KL
+  returned, then a second excursion to 4.6).
