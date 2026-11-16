@@ -364,3 +364,36 @@ Beat counts replicate closely at the first two probes; the second seed is weaker
 keeps fewer correct passing answers there. Unexplained cells to check before quoting per-task numbers: json probe 1
 correct passes 6 vs 27, belebele_el probe 1 correct passes 17 vs 1. val_score differs (0.554 vs 0.359) although the
 probe-1 count is identical.
+
+## 15. Second training seed, 4B (11-16) -> not yet in the paper
+
+Same config with train.seed changed (final_v4d_k03_tamia_4b_s1, step 1800), the first seed's eval commands and race
+seeds (battery node 698452, 50/50 pieces; generator seed_tsv.py 4b; scoring score4bs1/). Per-task and per-concept
+tables in REPLICATION.md entries 11-15 19:45, 20:45 and 11-16 02:45.
+
+| Result | First seed | Second seed |
+|---|---|---|
+| Fixed-text held-out race, probe 1 beaten/faced | 59/64 | 61/64 |
+| Fixed-text held-out race, probes 2 / 3 / 4 / 5 | 49/55, 35/39, 21/24, 10/10 | 44/52, 32/35, 20/22, 5/6 |
+| Task races (17 tasks), probe 1 beaten/faced, correct passes | 544/544, 288 | 544/544, 262 |
+| Task races, probe 2 | 525/543, 241 | 530/544, 225 |
+| Task races, probe 3 | 493/524, 191 | 501/530, 171 |
+| Task races, probe 4 | 458/493, 150 | 449/499, 135 |
+| Task races, probe 5 | 392/457, 127 | 379/446, 93 |
+| Task races, probe 6 | 336/387, 98 | 312/376, 58 |
+| Gated free-answer race, held-out concepts (probe 1; all probes) | 52/64; 129/156, 2.91 turns | 59/64; 130/155, 3.17 turns |
+| Gated free-answer race, trained concepts | 64/64; 257/272, 1.85 turns | 64/64; 246/258, 2.01 turns |
+| Held-out-kind gated race, trained concepts | 137/182, 2.15 turns | 149/190, 2.17 turns |
+| Held-out-kind gated race, held-out concepts | 95/133, 3.27 turns | 89/130, 3.24 turns |
+| Never-shown panel, train, probes beaten of 18 (4 panel seeds) | 12, 14, 14, 15 | 12, 14, 14, 15 |
+| Never-shown panel, held-out | 13, 12, 14, 10 | 16, 13, 14, 9 |
+| Persistence / after-pass persistence | 0.920 / 0.763 | 0.886 / 0.765 |
+| Capability gsm8k / mmlu, no brief | 0.905 / 0.655 | 0.910 / 0.648 |
+| gsm8k with "mathematical reasoning" / "HTML markup" brief | 0.885 / 0.915 | 0.710 / 0.810 |
+
+Beat counts replicate at every probe index in every race type (largest gap: task races probe 6, 0.87 vs 0.83 of
+faced). The second seed keeps fewer correct passing answers at later probes (probe 5: 127 vs 93, probe 6: 98 vs 58)
+and loses more GSM8K accuracy under a hide brief. Per-task outliers: mgsm_ru from probe 4 (27/29 vs 15/27),
+belebele_tr probes 4-6, and belebele_el first-answer accuracy 0.94 vs 0.44 (probe-1 correct passes 18 vs 8). The
+belebele_el drop also appeared in the 2B seed (17 vs 1), so it is checked for scorer drift before being read as seed
+variance (first-seed files rescored with the current scorer, jobs 699417 / 699418).
