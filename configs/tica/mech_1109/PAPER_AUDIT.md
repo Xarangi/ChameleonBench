@@ -395,5 +395,5 @@ Beat counts replicate at every probe index in every race type (largest gap: task
 faced). The second seed keeps fewer correct passing answers at later probes (probe 5: 127 vs 93, probe 6: 98 vs 58)
 and loses more GSM8K accuracy under a hide brief. Per-task outliers: mgsm_ru from probe 4 (27/29 vs 15/27),
 belebele_tr probes 4-6, and belebele_el first-answer accuracy 0.94 vs 0.44 (probe-1 correct passes 18 vs 8). The
-belebele_el drop also appeared in the 2B seed (17 vs 1), so it is checked for scorer drift before being read as seed
-variance (first-seed files rescored with the current scorer, jobs 699417 / 699418).
+belebele_el drop also appeared in the 2B seed (17 vs 1), and rescoring the first seed with the current scorer reproduces its report exactly, so it is
+not a scoring artifact; the cause is not yet explained.

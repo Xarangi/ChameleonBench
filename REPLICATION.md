@@ -14118,3 +14118,7 @@ before the job's smoke; the rest of 1 and all of 4 need a short follow-up job be
   17 vs 1). The 4B first seed was scored 11-07 with an older scorer, so its belebele_el / belebele_tr files are being
   rescored with the current one (699417 / 699418 -> races/gate_x2500_<task>/report_rescored_final.json).
   9B seed true 1,469: KL 0.10-0.64, gradient norm <= 1.2, beat rate 0.73-0.87. Olmo ~1,233.
+- 11-16 02:55: scorer-drift check: rescoring the first seed's belebele_el and belebele_tr races with the current
+  scorer reproduces the 11-07 reports exactly (el first-answer accuracy 0.938, probe-1 correct 18/32; tr 0.844, 19/32).
+  So the belebele_el drop on the second seeds (4B 0.94 -> 0.44; 2B probe-1 correct 17 -> 1) is not a scoring artifact.
+  Not yet explained (both second seeds answer Greek Belebele worse while every other task is within noise).
