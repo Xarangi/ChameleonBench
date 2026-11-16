@@ -14122,3 +14122,6 @@ before the job's smoke; the rest of 1 and all of 4 need a short follow-up job be
   scorer reproduces the 11-07 reports exactly (el first-answer accuracy 0.938, probe-1 correct 18/32; tr 0.844, 19/32).
   So the belebele_el drop on the second seeds (4B 0.94 -> 0.44; 2B probe-1 correct 17 -> 1) is not a scoring artifact.
   Not yet explained (both second seeds answer Greek Belebele worse while every other task is within noise).
+- 11-16 06:45: Olmo chunk 690520 hit its 24 h limit at true ~1,280; chain 690521 resumed (resume_1280, KL 0.29-0.35).
+  520 steps at ~240 s is ~35 h, more than one chunk, so one more chunk 699629 is chained afterany:690521.
+  9B seed true 1,522, stable (KL 0.11-0.39, beat rate 0.74-0.88); its chunk ends 12:32, 698283 follows.
