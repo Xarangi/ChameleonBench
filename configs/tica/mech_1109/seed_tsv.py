@@ -43,6 +43,21 @@ SPEC = {
         smokes=[(f"{M}/seed2b_smoke.tsv", "q"), (f"{M}/seed2b_smoke.tsv", "race")],
         smoke_from=("final_v4d_tamia_2b_x1800", f"{R}/final_v4d_tamia_2b_x1800_s1/resume_1220/adaptive/step_580", "smoke_s1_2b"),
     ),
+    # 9b (11-16): first-seed task races are races/final9b_<task>/k9b1800_p{1,2}; rerun files first so a piece that
+    # was rerun with changed settings uses the settings that produced the stored result.
+    "9b": dict(
+        cfg="final_v4d_k03_tamia_9b",
+        old_adapter=f"{R}/final_v4d_k03_tamia_9b/resume_1660/adaptive/step_140",
+        new_adapter=f"{R}/final_v4d_k03_tamia_9b_s1/resume_1590/adaptive/step_210",
+        new_run="final_v4d_k03_tamia_9b_s1",
+        race_dir="final9b_", race_tag="k9b1800_p",
+        sources=[f"{M}/k9b_rr2.tsv", f"{M}/k9b_rr.tsv", f"{M}/k9b.tsv", f"{M}/fix4.tsv", f"{M}/paperG.tsv", f"{M}/paperE.tsv"],
+        pieces=f"{R}/races/final9b_*/pieces*.tsv",
+        gated_repo="/scratch/s/sneheel/ChameleonBench-emptyfix",
+        smokes=[(f"{M}/seed2b_smoke.tsv", "q"), (f"{M}/seed2b_smoke.tsv", "race")],
+        smoke_from=("final_v4d_tamia_2b_x1800", f"{R}/final_v4d_tamia_2b_x1800_s1/resume_1220/adaptive/step_580", "smoke_s1_2b"),
+        smoke_sub=[("TICA_VLLM_MEM=0.30", "TICA_VLLM_MEM=0.35"), ("TICA_MEM_FRACTION=0.65", "TICA_MEM_FRACTION=0.60")],  # the 9B pieces' memory split
+    ),
 }
 SKIP = ("mmlu_", "mgsm_ja", "/hs/", "/race_train.json", "/race_heldout.json", "step_1400", "step_1000")
 
@@ -63,7 +78,9 @@ def main():
     s = SPEC[key]
     out, seen = [], set()
     lines = [l for src in s["sources"] for l in open(src)]
-    for src in sorted(glob.glob(s.get("pieces", ""))):  # 2-column race_launch pieces -> race_piece.sh lines
+    if s.get("pieces"):  # task races come only from the pieces files (wrapped in race_piece.sh), never from a bare line
+        lines = [l for l in lines if "/races/" not in l]
+    for src in sorted(glob.glob(s.get("pieces", "")), key=lambda x: ("_rr" not in os.path.basename(x), x)):  # reruns first; 2-column race_launch pieces -> race_piece.sh lines
         for l in open(src):
             f = l.rstrip("\n").split("\t")
             if len(f) != 2 or s["race_tag"] not in f[0]:
@@ -100,7 +117,10 @@ def main():
             f = line.rstrip("\n").split("\t")
             if len(f) == 3 and f[0] == grp and "smoke_from" in s and s["smoke_from"][1] in f[2]:
                 c, a, n = s["smoke_from"]
-                smoke.append(line.rstrip("\n").replace(a, s["new_adapter"]).replace(c, s["cfg"]).replace(n, f"smoke_s1_{key}"))
+                new = line.rstrip("\n").replace(a, s["new_adapter"]).replace(c, s["cfg"]).replace(n, f"smoke_s1_{key}")
+                for x, y in s.get("smoke_sub", []):
+                    new = new.replace(x, y)
+                smoke.append(new)
                 break
             if len(f) == 3 and f[0] == grp and s["old_adapter"] in f[2]:
                 smoke.append(line.rstrip("\n").replace(s["old_adapter"], s["new_adapter"]).replace("smoke_", f"smoke_s1_"))

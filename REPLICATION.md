@@ -14125,3 +14125,11 @@ before the job's smoke; the rest of 1 and all of 4 need a short follow-up job be
 - 11-16 06:45: Olmo chunk 690520 hit its 24 h limit at true ~1,280; chain 690521 resumed (resume_1280, KL 0.29-0.35).
   520 steps at ~240 s is ~35 h, more than one chunk, so one more chunk 699629 is chained afterany:690521.
   9B seed true 1,522, stable (KL 0.11-0.39, beat rate 0.74-0.88); its chunk ends 12:32, 698283 follows.
+- 11-16 14:45: 9B seed chunk 698283 resumed at 1,590 (13:21), now true ~1,605: KL 0.22-0.26, gradient norm <= 1.0,
+  capability 0.69-1.0, ~250 s/step, so 1,800 is due around 04:00 on 11-17. Its eval battery is queued behind it:
+  `seed_tsv.py 9b` -> runs/mech_1109/seed9b.tsv (50 pieces: 12 fixed-text/panel/persistence/capability, 4 gated races,
+  34 task-race pieces for the 17 paper tasks), node 700307 with afterok:698283. Commands are the first 9B seed's
+  (k9b*.tsv, fix4, paperE/G, races/final9b_*/pieces*.tsv; rerun files take precedence, so javaeval p1 keeps the
+  rerun's --batch 4), adapter final_v4d_k03_tamia_9b_s1/resume_1590/adaptive/step_210, outputs
+  races/final9bs1_<task>/k9b1800s1_p{1,2}. Scoring commands are in configs/tica/mech_1109/score9bs1/ (not yet submitted).
+  Olmo true ~1,387, clean (KL 0.27-0.32).
