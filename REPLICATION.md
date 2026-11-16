@@ -14063,3 +14063,17 @@ before the job's smoke; the rest of 1 and all of 4 need a short follow-up job be
   So the 4B seed replicates the fixed-text race at every probe index; the one difference so far is a GSM8K drop under
   a hide brief (clean accuracy unchanged). Panels not yet tabulated (panel3.py when the battery is complete).
   9B seed true 1,362: KL 0.09-0.30, gradient norm <= 1.1, beat rate 0.55-0.82, no further excursion. Olmo ~1,134.
+- 11-15 20:45: 4B seed battery 14/50: both gated free-generation races done (qtab.py), held-out-kind races and task
+  races running (one vLLM watchdog timeout retried in full16, no failure). Beaten/faced, mean turns to beat; first
+  seed -> second seed:
+  held-out concepts: all 129/156 (2.91 t) -> 130/155 (3.17 t); p1 52/64 -> 59/64, p2 44/49 -> 39/49, p3 25/32 -> 21/28,
+  p4 7/10 -> 8/11, p5 1/1 -> 2/2. By concept: Finnish 15/18 -> 15/17, French 21/21 -> 18/20, Greek 6/7 -> 5/6,
+  HTML 4/13 -> 9/17, Java 20/21 -> 17/18, Portuguese 12/12 -> 15/15, Python 9/11 -> 10/12, Russian 7/8 -> 6/6,
+  Tamil 18/23 -> 17/23, Thai 3/6 -> 5/6, Turkish 14/16 -> 13/15. Gate rejections 68/197 -> 57/187.
+  trained concepts: all 257/272 (1.85 t) -> 246/258 (2.01 t); p1 64/64 -> 64/64, p2 61/62 -> 60/60, p3 49/53 -> 50/53,
+  p4 39/41 -> 37/39, p5 25/28 -> 21/27. By concept: Arabic 43/44 -> 35/36, German 22/22 -> 23/25, Hindi 44/48 -> 42/46,
+  JSON 19/22 -> 25/25, Japanese 61/63 -> 58/58, JavaScript 15/15 -> 15/16, SQL 27/28 -> 21/24, all-caps 26/30 -> 27/28.
+  Gate rejections 40/297 -> 35/281.
+  The 4B result replicates across seeds on both gated races at every probe index (unlike 2B, where the second seed
+  was weaker from probe 3).
+  9B seed true 1,378, stable (KL 0.11-0.44, beat rate 0.66-0.79). Olmo ~1,148.
