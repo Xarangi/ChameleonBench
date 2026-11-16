@@ -14052,3 +14052,14 @@ before the job's smoke; the rest of 1 and all of 4 need a short follow-up job be
   KL (cap_gen) 0.08-0.62, gradient norm 0.6-1.2, capability 0.75-1.0, beat rate 0.61-0.80,
   move_after_catch_L16 recovering 0.51 -> 0.86. Continuing to 1,800 (~38 h at 275 s/step; chain 698283 follows).
   Olmo true ~1,076, clean.
+- 11-15 19:45: 4B seed battery 698452: the 12 fixed-text / quality pieces are done (seedeval.py), 4 gated races
+  running, 34 task-race pieces to go. First seed -> second seed (step 1,800 both):
+  held-out fixed-text val race, beaten/faced per probe: p1 59/64 -> 61/64, p2 49/55 -> 44/52, p3 35/39 -> 32/35,
+  p4 21/24 -> 20/22, p5 10/10 -> 5/6; val_score 0.652 -> 0.632. Per family: domain 0.88 -> 0.57, emotion 0.76 -> 0.73,
+  format 0.30 -> 0.29, language 0.37 -> 0.52, safety 0.69 -> 0.75, tone 0.67 -> 0.75, topic 0.89 -> 0.82.
+  Persistence (trained concepts): 0.920 (n 402) -> 0.886 (n 403); after a pass 0.763 (n 401) -> 0.765 (n 387).
+  Capability: GSM8K clean 0.905 -> 0.910, MMLU clean 0.655 -> 0.648; with the "mathematical reasoning" brief GSM8K
+  0.885 -> 0.710 (MMLU 0.675 -> 0.678); with the "HTML markup" brief GSM8K 0.915 -> 0.810 (MMLU 0.673 -> 0.677).
+  So the 4B seed replicates the fixed-text race at every probe index; the one difference so far is a GSM8K drop under
+  a hide brief (clean accuracy unchanged). Panels not yet tabulated (panel3.py when the battery is complete).
+  9B seed true 1,362: KL 0.09-0.30, gradient norm <= 1.1, beat rate 0.55-0.82, no further excursion. Olmo ~1,134.
