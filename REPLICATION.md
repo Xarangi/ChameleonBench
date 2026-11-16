@@ -14077,3 +14077,7 @@ before the job's smoke; the rest of 1 and all of 4 need a short follow-up job be
   The 4B result replicates across seeds on both gated races at every probe index (unlike 2B, where the second seed
   was weaker from probe 3).
   9B seed true 1,378, stable (KL 0.11-0.44, beat rate 0.66-0.79). Olmo ~1,148.
+- 11-16 01:45: 4B seed battery 45/50 (5 task-race pieces left). CPU scoring jobs 699358-699374 queued
+  afterany:698452 (commands in configs/tica/mech_1109/score4bs1/*.cmd = score2bs1 with final4bs1_ / k4b1800s1; reports
+  go to races/final4bs1_<task>/report.json, first-seed comparison is races/gate_x2500_<task>/report.json key kl03_1800).
+  9B seed true 1,455, stable (KL 0.12-0.40, beat rate 0.64-0.83). Olmo ~1,219.
