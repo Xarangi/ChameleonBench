@@ -14133,3 +14133,7 @@ before the job's smoke; the rest of 1 and all of 4 need a short follow-up job be
   rerun's --batch 4), adapter final_v4d_k03_tamia_9b_s1/resume_1590/adaptive/step_210, outputs
   races/final9bs1_<task>/k9b1800s1_p{1,2}. Scoring commands are in configs/tica/mech_1109/score9bs1/ (not yet submitted).
   Olmo true ~1,387, clean (KL 0.27-0.32).
+- 11-17 07:45: 9B second seed reached 1,800 (698283 COMPLETED 07:24, adapter resume_1590/adaptive/step_210; last 8
+  steps KL 0.20-0.24, gradient norm <= 0.8). Eval battery 700307 started on tg10604 at 07:24: all 3 smoke groups
+  passed (220 s), full phase running (50 pieces). Olmo chunk 690521 timed out at 06:21 as expected; 699629 resumed
+  from 1,560 (KL 0.27-0.35), ~225 steps left.
