@@ -14137,3 +14137,15 @@ before the job's smoke; the rest of 1 and all of 4 need a short follow-up job be
   steps KL 0.20-0.24, gradient norm <= 0.8). Eval battery 700307 started on tg10604 at 07:24: all 3 smoke groups
   passed (220 s), full phase running (50 pieces). Olmo chunk 690521 timed out at 06:21 as expected; 699629 resumed
   from 1,560 (KL 0.27-0.35), ~225 steps left.
+- 11-17 09:45: 9B second seed, first 9 of 50 battery pieces (first seed -> second seed; `seedeval.py`, `qtab.py`):
+  - fixed-text held-out race, beaten/faced by probe index: p1 59/64 -> 60/64, p2 49/54 -> 45/56, p3 32/35 -> 30/35,
+    p4 23/24 -> 19/22, p5 12/13 -> 10/11; val score .707 -> .639 (format family .67 -> .40, domain .80 -> .62).
+  - gated free-gen, trained concepts: 256/263 (2.01 turns) -> 231/244 (2.11); p1 65/65 -> 64/64, p2 61/61 -> 58/59,
+    p3 50/52 -> 46/51, p4 42/42 -> 36/39, p5 23/27 -> 18/20.
+  - gated free-gen, held-out concepts: 139/163 (2.91 turns) -> 120/150 (3.08); p1 59/64 -> 55/64, p2 42/47 -> 39/48,
+    p3 21/31 -> 21/27, p4 9/11 -> 3/9, p5 6/7 -> 2/2.
+  - persistence without refit .919 (n 395) -> .841 (n 397); always-passed variant .754 (n 338) -> .462 (n 359): the
+    one clear gap so far.
+  - capability: GSM8K clean .925 -> .915, maths brief .865 -> .850, HTML brief .910 -> .875; MMLU .767 / .738 / .757
+    -> .758 / .753 / .755 (n 200 / 600).
+  Olmo true ~1,597, clean.
