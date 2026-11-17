@@ -397,3 +397,28 @@ and loses more GSM8K accuracy under a hide brief. Per-task outliers: mgsm_ru fro
 belebele_tr probes 4-6, and belebele_el first-answer accuracy 0.94 vs 0.44 (probe-1 correct passes 18 vs 8). The
 belebele_el drop also appeared in the 2B seed (17 vs 1), and rescoring the first seed with the current scorer reproduces its report exactly, so it is
 not a scoring artifact; the cause is not yet explained.
+
+## 16. Sample-size audit (11-16, user request) -> no new runs yet
+
+Sizes read from the stored outputs; intervals are Wilson 95% on the pooled count (they ignore clustering within an
+episode, so the true intervals are wider; §13's concept-cluster bootstrap is the honest version for free generation).
+
+| eval | size per model | typical interval | verdict |
+|---|---|---|---|
+| Task races (headline) | 544 episodes (17 tasks x 32) | beaten / episode 5.05 [4.96, 5.14] | strong pooled; untrained 2B / 9B are half size (272) |
+| Task races by group | 96-160 episodes | about +-0.2 probes | adequate |
+| Task races per task | 32 episodes | a 50% rate is [34, 66] | thin: per-task numbers are descriptive only |
+| Fixed-text held-out race | 64 episodes, 192 probes faced | first probe 59/64 = 92% [83, 97] | adequate overall; per family 10-27 items, thin |
+| Gated free-gen, trained concepts | 32 episodes, 219-272 probes | 257/272 = 94% [91, 97] | adequate |
+| Gated free-gen, held-out concepts | 32 episodes, 64 segments, 117-163 probes | 4B 83% [76, 88], 9B 85% [79, 90]; cluster bootstrap on first probes 4B [62, 96] | thin: cannot order 4B vs 9B (claim already removed) |
+| Held-out probe kinds race | 32 episodes, 130-190 probes | 95/133 = 71% [63, 78]; per kind 11-22 | pooled adequate, per kind thin |
+| Persistence | 32 episodes, ~400 no-refit turns | - | adequate |
+| Never-shown panel | 4 seeds x 6 episodes per split, 18 probes | count of 18 per seed | adequate for beaten / not beaten per probe |
+| Capability GSM8K | 200 items | .905 [.86, .94]; .70 [.63, .76] | thin: differences under ~10 points are not resolved |
+| Capability MMLU | 600 items | .655 [.62, .69] | adequate |
+| Training seeds | 2 per size (9B second pending), 1 for Olmo | - | the main remaining limit |
+
+Cheapest top-ups, not started (need approval): (a) GSM8K on the full 1,319-item test set, clean + 2 briefs, trained
+and untrained, 3 sizes: interval +-2 points, about 8 GPU-h; (b) two more race seeds (32 -> 96 episodes) of the
+held-out gated free-gen race and the held-out-kinds race per size: interval about +-8 -> +-5 points before
+clustering, about one node for 8-10 h; (c) untrained 2B / 9B task races piece 2 (272 -> 544), about half a node-day.
