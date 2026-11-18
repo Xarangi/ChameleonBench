@@ -14168,3 +14168,11 @@ before the job's smoke; the rest of 1 and all of 4 need a short follow-up job be
   516/544 [205]; p3 496/530 [204] -> 480/516 [153]; p4 449/495 [186] -> 428/478 [130]; p5 386/445 [149] -> 359/426
   [95]; p6 334/383 [143] -> 299/352 [83]. The two Java tasks go the other way on early probes (javaeval p1 correct
   9 -> 18, mbppjava 10 -> 15). PAPER_AUDIT §17 table updated to the 17-task numbers.
+- 11-17 21:30: Olmo-3-7B eval battery prepared and queued (703774, afterok:699629; training at true ~1,725, due ~03:30).
+  `olmo_tsv.py` -> runs/mech_1109/olmo.tsv: the 9B battery (50 pieces, same arguments) with the Olmo config / adapter
+  (resume_1560/adaptive/step_240) and outputs races/finalolmo_<task>/olmo1800_p{1,2}. Code: fixed-text / persistence /
+  capability / panel pieces from ChameleonBench-olmofix (= main + one-conversation-per-call read; launch-script
+  copies in configs/tica/mech_1109/olmo/, current Olmo config copied in); gated and task races from the new worktree
+  ChameleonBench-olmoeval (= final-evals eb2e8bb + the same policy.py fix + the empty-answer fix + the Olmo config).
+  Real smokes for all 3 groups (the vLLM path has never run on Olmo). Scoring commands: scoreolmo/. No untrained
+  Olmo control is queued yet (needs approval).
