@@ -335,7 +335,7 @@ Still open: judge hand-label validation (needs ~150 human labels); B-m8 label ni
 (A-M12; untrained 0.17-0.18 vs trained 3-5, immaterial). GPU items unchanged (user decision): gate-seed rerun, fragments as
 catches, cumulative-data defender, feedback ablation, detector race under the free-generation protocol.
 
-## 14. Second training seed, 2B (11-14) -> not yet in the paper
+## 14. Second training seed, 2B (11-14) -> paper Appendix F (rev 152)
 
 Same config with train.seed changed (final_v4d_tamia_2b_x1800_s1, step 1800), same eval commands and race seeds as the
 first seed. Full tables in REPLICATION.md entry 11-14 15:00. The two gated free-answer races (the 5.x free-generation
@@ -365,7 +365,7 @@ keeps fewer correct passing answers there. Unexplained cells to check before quo
 correct passes 6 vs 27, belebele_el probe 1 correct passes 17 vs 1. val_score differs (0.554 vs 0.359) although the
 probe-1 count is identical.
 
-## 15. Second training seed, 4B (11-16) -> not yet in the paper
+## 15. Second training seed, 4B (11-16) -> paper Appendix F (rev 152)
 
 Same config with train.seed changed (final_v4d_k03_tamia_4b_s1, step 1800), the first seed's eval commands and race
 seeds (battery node 698452, 50/50 pieces; generator seed_tsv.py 4b; scoring score4bs1/). Per-task and per-concept
@@ -423,7 +423,7 @@ and untrained, 3 sizes: interval +-2 points, about 8 GPU-h; (b) two more race se
 held-out gated free-gen race and the held-out-kinds race per size: interval about +-8 -> +-5 points before
 clustering, about one node for 8-10 h; (c) untrained 2B / 9B task races piece 2 (272 -> 544), about half a node-day.
 
-## 17. Second training seed, 9B (11-17) -> not yet in the paper
+## 17. Second training seed, 9B (11-17) -> paper Appendix F (rev 152)
 
 Run final_v4d_k03_tamia_9b_s1 (same config, train.seed 1), adapter resume_1590/adaptive/step_210, battery
 `seed_tsv.py 9b` (50 pieces, the first seed's commands). First seed -> second seed, beaten/faced.
@@ -449,3 +449,15 @@ Run final_v4d_k03_tamia_9b_s1 (same config, train.seed 1), adapter resume_1590/a
   difference in answer quality under hiding, the same direction as the 4B and 2B second seeds (§14, §15).
 - Paper consequence when written up: evasion claims hold across seeds for all three sizes; "correct passes" should be
   quoted as a range over seeds, not a point value.
+
+## 18. Second seeds written into the paper (11-18, rev 152; user: general in the main text, specifics in the appendix)
+
+- Section 3: "Each model was trained twice ... tables report the first run" (was "single training run per row").
+- Section 6.1: one sentence, the second runs beat about as many probes with fewer correct answers.
+- Limitations, "Two training runs per model": evasion stable across runs; correct answers on passing turns about a
+  sixth to a quarter lower in the second runs; section 6 counts are the upper end; 2B-4B gap in both runs, 4B-9B
+  within run-to-run variation.
+- Appendix F: one table, both runs per size. Task-race rows are sums over probes 1-6 of §14/§15/§17:
+  beaten/faced 2B 1613/2057 -> 1557/1990, 4B 2748/2948 -> 2715/2939, 9B 2739/2941 -> 2626/2860; correct passes
+  619 -> 518 (-16%), 1095 -> 944 (-14%), 1264 -> 969 (-23%). Largest beaten-share gap in any row: 6 points.
+- Not changed: abstract, intro, conclusion (their numbers are first-run numbers and still inside what both runs show).
