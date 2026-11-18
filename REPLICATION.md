@@ -14176,3 +14176,19 @@ before the job's smoke; the rest of 1 and all of 4 need a short follow-up job be
   ChameleonBench-olmoeval (= final-evals eb2e8bb + the same policy.py fix + the empty-answer fix + the Olmo config).
   Real smokes for all 3 groups (the vLLM path has never run on Olmo). Scoring commands: scoreolmo/. No untrained
   Olmo control is queued yet (needs approval).
+
+### 11-18 03:45 Olmo-3-7B trained to 1,800; eval battery started; task-race path needed a weight-naming fix
+
+- Training 699629 COMPLETED 03:15 (20 h 54 min for steps 1,560-1,800). Last 8 logged steps: KL 0.28-0.38, capability
+  1.0, gradient norm <= 0.8. Adapter `final_v4d_k03_olmo3_7b_tamia/resume_1560/adaptive/step_240` exists (the path the
+  battery was built with).
+- Battery 703774 started 03:15 on tg11103. Smokes: gated free-generation (q) PASSED in 3 min; fixed-text (rl) still
+  running after 26 min (GPU 0 busy, 34-37 GB; one-conversation-per-call reads are slow) so phase 2 has not started;
+  task race (race) FAILED: vLLM `reload_weights` -> `KeyError: 'language_model.embed_tokens.weight'` (vLLM olmo2.py).
+  Cause: `vllm_gen.merged_text_state` renames every `model.*` weight to `model.language_model.*`, which is the
+  Qwen3.5 / Gemma-4 multimodal checkpoint layout; Olmo 3 is a text-only checkpoint with plain `model.*` names.
+- Fix in a new worktree `/scratch/s/sneheel/ChameleonBench-olmorace` (= olmoeval + `VLLM_FAMILY["olmo3"] =
+  {"text_only": True}`: merged state and adapter keep the HF names). olmoeval itself untouched (703774 imports it).
+  Qwen / Gemma behaviour unchanged (flag absent).
+- Race-only node 704753 submitted (`olmo_race_smoke.tsv` / `olmo_race.tsv`, 34 pieces, the same lines with the
+  checkout swapped). The fix is unverified until its smoke passes. 703774 will run the 16 rl + q pieces only.
