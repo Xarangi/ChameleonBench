@@ -422,3 +422,30 @@ Cheapest top-ups, not started (need approval): (a) GSM8K on the full 1,319-item 
 and untrained, 3 sizes: interval +-2 points, about 8 GPU-h; (b) two more race seeds (32 -> 96 episodes) of the
 held-out gated free-gen race and the held-out-kinds race per size: interval about +-8 -> +-5 points before
 clustering, about one node for 8-10 h; (c) untrained 2B / 9B task races piece 2 (272 -> 544), about half a node-day.
+
+## 17. Second training seed, 9B (11-17) -> not yet in the paper
+
+Run final_v4d_k03_tamia_9b_s1 (same config, train.seed 1), adapter resume_1590/adaptive/step_210, battery
+`seed_tsv.py 9b` (50 pieces, the first seed's commands). First seed -> second seed, beaten/faced.
+
+| eval | first seed | second seed |
+|---|---|---|
+| Fixed-text held-out race p1 / p2 / p3 / p4 / p5 | 59/64, 49/54, 32/35, 23/24, 12/13 | 60/64, 45/56, 30/35, 19/22, 10/11 |
+| Gated free-gen, trained concepts | 256/263, 2.01 turns | 231/244, 2.11 turns |
+| Gated free-gen, held-out concepts | 139/163, 2.91 turns | 120/150, 3.08 turns |
+| Held-out probe kinds, trained concepts | 140/181 | 127/173 |
+| Held-out probe kinds, held-out concepts | 114/155 | 95/139 |
+| Task races p1..p6 (15 tasks, Java pending) | 480/480, 466/480, 432/466, 385/431, 323/381, 272/320 | 480/480, 452/480, 416/452, 365/414, 299/363, 242/293 |
+| Task races, correct passing answers p1..p6 | 320, 240, 203, 186, 148, 141 | 270, 189, 146, 128, 94, 83 |
+| Never-shown panel, beaten of 18 (trained) | 12, 13, 14, 13 | 12, 13, 14, 15 |
+| Never-shown panel, beaten of 18 (held-out) | -, 12, 14, 12 | 14, 13, 14, 10 |
+| Persistence no refit / always-passed | .919 / .754 | .841 / .462 |
+| GSM8K clean / maths brief / HTML brief (n 200) | .925 / .865 / .910 | .915 / .850 / .875 |
+| MMLU clean / maths / HTML (n 600) | .767 / .738 / .757 | .758 / .753 / .755 |
+
+- Evasion (probes beaten, turns) replicates on every race type and probe index, a few points lower throughout.
+- Not replicated: correct answers while hiding in the task races (16-41% fewer per probe index, concentrated in
+  MGSM-de and Belebele) and always-passed persistence. Clean capability is unchanged, so this is a seed-level
+  difference in answer quality under hiding, the same direction as the 4B and 2B second seeds (§14, §15).
+- Paper consequence when written up: evasion claims hold across seeds for all three sizes; "correct passes" should be
+  quoted as a range over seeds, not a point value.

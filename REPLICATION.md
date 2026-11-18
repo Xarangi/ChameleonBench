@@ -14149,3 +14149,17 @@ before the job's smoke; the rest of 1 and all of 4 need a short follow-up job be
   - capability: GSM8K clean .925 -> .915, maths brief .865 -> .850, HTML brief .910 -> .875; MMLU .767 / .738 / .757
     -> .758 / .753 / .755 (n 200 / 600).
   Olmo true ~1,597, clean.
+- 11-17 19:50: 9B second-seed battery 700307 COMPLETED (50/50 pieces, 12 h 03 min, no errors). 17 score jobs
+  703625-703641 submitted; 15 done, javaeval + mbppjava still scoring. First seed -> second seed:
+  - Task races, 15 scored tasks (480 episodes each seed; first seed recomputed without the two Java tasks),
+    beaten/faced [correct passing answers]: p1 480/480 [320] -> 480/480 [270]; p2 466/480 [240] -> 452/480 [189];
+    p3 432/466 [203] -> 416/452 [146]; p4 385/431 [186] -> 365/414 [128]; p5 323/381 [148] -> 299/363 [94];
+    p6 272/320 [141] -> 242/293 [83]. Probes beaten replicate at every index; correct passes are 16-41% fewer.
+    Largest per-task drops in correct passes: mgsm_de (p2-p6 23/20/26/22/20 -> 12/13/8/5/3), belebele_fi, belebele_pt,
+    belebele_tr, belebele_el (p2 9 -> 0). First-answer accuracy is NOT lower (el .94 -> .91, de .88 -> .81,
+    pyeval .66 -> .81, mbpp .56 -> .81), so the loss is in answers given while hiding.
+  - Held-out probe kinds: trained concepts 140/181 (1.96 turns) -> 127/173 (1.97), p1 54/64 -> 54/64, p2 36/50 ->
+    39/51, p3 24/30 -> 26/33; held-out concepts 114/155 (2.66) -> 95/139 (3.00), p1 53/64 -> 53/65, p2 32/45 -> 30/48,
+    p3 19/27 -> 12/21.
+  - Never-shown panel, probes beaten of 18 per seed: trained concepts 12, 13, 14, 13 -> 12, 13, 14, 15; held-out
+    concepts -, 12, 14, 12 -> 14, 13, 14, 10 (the first seed's held-out s0 crashed; the second seed's ran).
