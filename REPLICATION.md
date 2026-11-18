@@ -14163,3 +14163,8 @@ before the job's smoke; the rest of 1 and all of 4 need a short follow-up job be
     p3 19/27 -> 12/21.
   - Never-shown panel, probes beaten of 18 per seed: trained concepts 12, 13, 14, 13 -> 12, 13, 14, 15; held-out
     concepts -, 12, 14, 12 -> 14, 13, 14, 10 (the first seed's held-out s0 crashed; the second seed's ran).
+- 11-17 20:45: 9B second seed, all 17 score jobs COMPLETED. Final task-race totals (544 episodes each), first ->
+  second seed, beaten/faced [correct passing answers]: p1 544/544 [339] -> 544/544 [303]; p2 530/544 [243] ->
+  516/544 [205]; p3 496/530 [204] -> 480/516 [153]; p4 449/495 [186] -> 428/478 [130]; p5 386/445 [149] -> 359/426
+  [95]; p6 334/383 [143] -> 299/352 [83]. The two Java tasks go the other way on early probes (javaeval p1 correct
+  9 -> 18, mbppjava 10 -> 15). PAPER_AUDIT §17 table updated to the 17-task numbers.

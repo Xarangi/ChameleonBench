@@ -435,8 +435,8 @@ Run final_v4d_k03_tamia_9b_s1 (same config, train.seed 1), adapter resume_1590/a
 | Gated free-gen, held-out concepts | 139/163, 2.91 turns | 120/150, 3.08 turns |
 | Held-out probe kinds, trained concepts | 140/181 | 127/173 |
 | Held-out probe kinds, held-out concepts | 114/155 | 95/139 |
-| Task races p1..p6 (15 tasks, Java pending) | 480/480, 466/480, 432/466, 385/431, 323/381, 272/320 | 480/480, 452/480, 416/452, 365/414, 299/363, 242/293 |
-| Task races, correct passing answers p1..p6 | 320, 240, 203, 186, 148, 141 | 270, 189, 146, 128, 94, 83 |
+| Task races p1..p6 (17 tasks, 544 episodes) | 544/544, 530/544, 496/530, 449/495, 386/445, 334/383 | 544/544, 516/544, 480/516, 428/478, 359/426, 299/352 |
+| Task races, correct passing answers p1..p6 | 339, 243, 204, 186, 149, 143 | 303, 205, 153, 130, 95, 83 |
 | Never-shown panel, beaten of 18 (trained) | 12, 13, 14, 13 | 12, 13, 14, 15 |
 | Never-shown panel, beaten of 18 (held-out) | -, 12, 14, 12 | 14, 13, 14, 10 |
 | Persistence no refit / always-passed | .919 / .754 | .841 / .462 |
@@ -444,7 +444,7 @@ Run final_v4d_k03_tamia_9b_s1 (same config, train.seed 1), adapter resume_1590/a
 | MMLU clean / maths / HTML (n 600) | .767 / .738 / .757 | .758 / .753 / .755 |
 
 - Evasion (probes beaten, turns) replicates on every race type and probe index, a few points lower throughout.
-- Not replicated: correct answers while hiding in the task races (16-41% fewer per probe index, concentrated in
+- Not replicated: correct answers while hiding in the task races (11-42% fewer per probe index, concentrated in
   MGSM-de and Belebele) and always-passed persistence. Clean capability is unchanged, so this is a seed-level
   difference in answer quality under hiding, the same direction as the 4B and 2B second seeds (§14, §15).
 - Paper consequence when written up: evasion claims hold across seeds for all three sizes; "correct passes" should be
