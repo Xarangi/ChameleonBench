@@ -477,3 +477,11 @@ concepts about as well at the first probe, and generalises less to held-out conc
   correct-answer gap sits in language tasks where Olmo's first-turn accuracy is already low (German .31, Greek .28).
   CAVEAT for any paper sentence: no untrained Olmo control on tasks or capability, so a capability cost of training
   cannot be claimed for Olmo; only the evasion counts are interpretable on their own.
+- untrained Olmo control (REPLICATION 11-19 17:10; `baseolmocmp.py`; half size = 16 episodes per task, 272 in all,
+  same episodes as trained Olmo piece 1). The caveat above is now resolved:
+  - evasion is from training: untrained Olmo beats 0.16 probes per episode (p1 30/272, p2 9/30, p3 3/9, p4 1/3, p5 0/1)
+    against 4.37 for trained Olmo on the same episodes (p1 259/272 ... p6 122/151); untrained 9B 0.17 (p1 33/272).
+  - no capability cost: mean first-turn accuracy over the 17 tasks .57 untrained -> .61 trained (16 episodes per task,
+    so single tasks are noisy); GSM8K .815 -> .825, MMLU .562 -> .563 (clean), also not lower under the two briefs.
+    Olmo's low language-task accuracy is the base model (untrained: Thai .06, Tamil .25, Greek .31), not training.
+  - correct passing answers 27 untrained (0.10 per episode) -> 451 trained (1.66 per episode).
