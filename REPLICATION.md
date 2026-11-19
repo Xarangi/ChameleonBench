@@ -14192,3 +14192,36 @@ before the job's smoke; the rest of 1 and all of 4 need a short follow-up job be
   Qwen / Gemma behaviour unchanged (flag absent).
 - Race-only node 704753 submitted (`olmo_race_smoke.tsv` / `olmo_race.tsv`, 34 pieces, the same lines with the
   checkout swapped). The fix is unverified until its smoke passes. 703774 will run the 16 rl + q pieces only.
+
+### 11-18 19:30 Olmo-3-7B: 10 of 50 eval pieces done; gated races, persistence and all task races ran out of memory
+
+Nodes 703774 (rl + q, 6 h 07 min) and 704753 (task races with the weight-naming fix, 1 h 54 min) both COMPLETED.
+
+- Done (10): fixed-text held-out race, capability, never-shown panel x8.
+- Failed, HF `generate` out of memory at 77 GB (6): the 4 gated free-generation races (turn 6-9 of 24) and the 2
+  persistence runs. Generation is chunked by `model.batch_size` (16); Olmo 3 has no grouped-query attention, so its
+  KV cache is ~0.5 MB per token per row. Rerun as node 705876 (`olmo_rr.tsv`) with `--set model.batch_size=2`
+  (changes only how rows are chunked; sampled answers draw from a differently chunked random stream).
+- Failed, all 34 task races: the weight-naming fix works (smoke passed, races reached turn ~13 of 33), then
+  `_shared_prefix_reads` ran out of memory under the 47.5 GB HF cap (vLLM holds 28 GB beside it). Not a batch-size
+  problem: with a 12k-token history the prefix cache plus `episode_fork_batch` 4 copies is ~30 GB, and task-race
+  histories reach 30k+ tokens, where one prefix cache plus one copy (30 GB) plus the model (15 GB) plus a vLLM server
+  with a 30k-token cache (30 GB) no longer fit on one 80 GB GPU. NOT resubmitted; needs a design decision (shorter
+  races for Olmo, HF-only generation, or code that reads forks without copying the prefix cache).
+
+First results, 9B first seed -> Olmo-3-7B (no untrained Olmo control exists, so capability has no baseline):
+
+| eval | 9B | Olmo-3-7B |
+|---|---|---|
+| Fixed-text held-out race, beaten/faced p1..p5 | 59/64, 49/54, 32/35, 23/24, 12/13 | 51/64, 31/43, 18/22, 8/9, 2/3 |
+| val score | 0.707 | 0.460 |
+| per family (val) | domain .80, emotion .67, format .67, language .50, safety .79, tone .73, topic .80 | domain .50, emotion .41, format .29, language .28, safety .50, tone .60, topic .65 |
+| Never-shown panel, trained concepts, beaten of 18 (4 seeds) | 12, 13, 14, 13 | 12, 13, 14, 14 |
+| Never-shown panel, trained, mean detection | .31, .26, .22, .26 | .30, .29, .24, .28 |
+| Never-shown panel, held-out concepts, beaten of 18 | -, 12, 14, 12 | 12, 11, 10, 7 |
+| Never-shown panel, held-out, mean detection | -, .42, .35, .43 | .41, .53, .49, .55 |
+| GSM8K clean / maths brief / HTML brief (n 200) | .925 / .865 / .910 | .825 / .855 / .850 |
+| MMLU clean / maths / HTML (n 600) | .767 / .738 / .757 | .563 / .537 / .542 |
+
+Reading: on trained concepts Olmo hides from never-shown probes as well as the 9B. On held-out concepts it is weaker
+(first fixed-text probe 51/64, the 2B's number; fewer never-shown probes beaten). Hide briefs cost it no GSM8K accuracy.
