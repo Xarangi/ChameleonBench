@@ -14317,3 +14317,14 @@ No untrained Olmo control, so these are not corrected for what the base model do
   loaded config; if it runs out of memory, the afterany chunk 706454 resumes from the last checkpoint (saved every
   20 steps) with the smaller fork batch. Whether fork reads are the source of the peak is not confirmed.
 - Olmo task races 24/34 (706372: 2 of its 8 done; 705939: 13/17). No errors.
+
+### 11-19 05:10 Llama: 706453 ran out of memory at step ~49 as feared; resumed from 40 with fork batch 8
+- 706453 FAILED (CUDA out of memory in a forward during rollout, 76 GB in use, rank 2) after 48 logged steps. Chunk
+  706454 resumed from global step 40 (`resume_40`) with `episode_fork_batch: 8`: 12 steps so far, rollout peak at most
+  40.9 GB (was 40-80), ~124 s/step. So the fork reads were the source. Chain extended by one chunk (706524 after
+  706456): 706454 running, 706455, 706456, 706524 queued.
+- First 60 steps, means over steps 1-20 / 21-40 / 41-60 (Llama | 9B | Olmo): free-generation validity .41 .54 .45 |
+  .67 .68 .71 | .48 .41 .37; cap_gen accuracy .82 .85 .89 | .85 .88 .93 | .90 .92 .97; beat rate .02 .02 .03 | .02 .05
+  .05 | .02 .04 .05; train KL .07 .11 .10 | .07 .10 .11 | .13 .20 .23. Llama tracks the 9B on KL and capability; its
+  free-generation validity starts lower, like Olmo's.
+- Olmo task races 29/34 (706372 14/17 of the first list, 705939 15/17). No errors.
