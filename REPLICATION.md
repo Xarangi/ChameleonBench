@@ -14250,8 +14250,8 @@ Changes, all in `/scratch/s/sneheel/ChameleonBench-olmorace` (nothing else impor
 - 6 of the first 8 pieces failed at turns 6-30 with `ValueError: Cannot crop a DynamicSlidingWindowLayer after it has
   seen more tokens than its sliding window`: Olmo 3 has sliding-window attention layers, so the single-row path that
   reused the prefix cache and cropped it back (added 19:50) cannot work once the history passes ~17k tokens. Removed;
-  a single row now copies the prefix like any other chunk. No results were produced by the removed path (pieces died
-  on the first call that used it... the crop raised before any read was returned).
+  a single row now copies the prefix like any other chunk. The removed path produced no results: the crop
+  raised before any read was returned.
 - Memory is not the limit any more: pieces reached turn 24-30 with the HF GPUs at 42-44 GB of 80.
 - The two pieces still running started on the old code and will fail the same way; the 9 not yet started pick up the
   fix. Failed pieces get resubmitted when the node ends.
