@@ -14274,3 +14274,27 @@ Changes, all in `/scratch/s/sneheel/ChameleonBench-olmorace` (nothing else impor
   cache, 3-step DP4 memory smoke. Then: cap_level_ref_gsm from base accuracy, training chunks from the worktree
   (`scripts/slurm/tamia_node.sh final_v4d_k03_llama31_8b_tamia@0,1,2,3`, TICA_VAL_QUEUE set). Evals on Llama will
   need this format in the eval worktrees plus a text-only vLLM family entry for `llama`.
+
+### 11-19 02:00 Olmo-3-7B: gated free-generation races and persistence (rerun node 705876, 6/6); Llama prep
+9B first seed -> Olmo-3-7B (`qtab.py`; gated races, beaten/faced and mean turns to beat):
+- Trained concepts, trained probe kinds: 256/263 (2.01 turns) -> 177/198 (2.41). p1 65/65 -> 63/64, p2 61/61 -> 55/58,
+  p3 50/52 -> 34/40, p4 42/42 -> 19/27, p5 23/27 -> 6/7. Gate rejections 26/282 -> 54/231.
+  By concept: Arabic 27/28 -> 14/18, German 31/32 -> 14/18, Hindi 33/34 -> 24/30, JSON 37/39 -> 32/34, Japanese 42/43
+  -> 28/29, JavaScript 27/27 -> 24/25, SQL 43/43 -> 31/31, all-caps 16/17 -> 10/13.
+- Held-out concepts, trained probe kinds: 139/163 (2.91) -> 92/135 (3.17). p1 59/64 -> 45/64, p2 42/47 -> 31/41,
+  p3 21/31 -> 11/23, p4 9/11 -> 5/6, p5 6/7 -> 0/1. By concept: Finnish 12/13 -> 10/13, French 11/11 -> 5/6, Greek
+  20/25 -> 12/21, HTML 6/6 -> 1/3, Java 27/29 -> 23/24, Portuguese 6/7 -> 5/7, Python 7/10 -> 8/11, Russian 11/11 ->
+  4/7, Tamil 15/17 -> 1/9, Thai 7/12 -> 8/13, Turkish 17/22 -> 15/21.
+- Trained concepts, held-out probe kinds: 140/181 (1.96) -> 107/153 (2.20). p1 54/64 -> 52/64, p2 36/50 -> 34/50,
+  p3 24/30 -> 16/31, p4 13/20 -> 5/8, p5 9/10 -> 2/2.
+- Held-out concepts, held-out probe kinds: 114/155 (2.66) -> 113/157 (2.53). p1 53/64 -> 53/64, p2 32/45 -> 30/48,
+  p3 19/27 -> 15/25, p4 9/13 -> 10/12, p5 3/7 -> 4/5.
+- Persistence without refit .919 (n 395) -> .848 (n 394); always-passed variant .754 (n 338) -> .424 (n 347), close
+  to the 9B second seed's .462.
+Reading: Olmo beats first probes on trained concepts almost as often as the 9B (63/64) and falls behind from the
+third probe on; on held-out concepts it is weaker already at the first probe (45/64 vs 59/64), mostly Tamil, Russian,
+Greek, HTML. Against held-out probe kinds the two models are close. Same direction as the fixed-text results (11-18).
+No untrained Olmo control, so these are not corrected for what the base model does.
+- Task races: 705894 ended with 9/17; its 8 early failures resubmitted as 706372 (same TSV). 705939 9/17, running.
+- Llama prep 706077: base GSM8K train accuracy .921 (vLLM, 2,220 s; 9B .936, Olmo .923) -> cap_level_ref_gsm .87 by
+  the 9B ratio. Panel shards 0-6 started/finished, 7 running, smoke last.

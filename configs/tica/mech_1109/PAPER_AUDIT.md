@@ -461,3 +461,15 @@ Run final_v4d_k03_tamia_9b_s1 (same config, train.seed 1), adapter resume_1590/a
   beaten/faced 2B 1613/2057 -> 1557/1990, 4B 2748/2948 -> 2715/2939, 9B 2739/2941 -> 2626/2860; correct passes
   619 -> 518 (-16%), 1095 -> 944 (-14%), 1264 -> 969 (-23%). Largest beaten-share gap in any row: 6 points.
 - Not changed: abstract, intro, conclusion (their numbers are first-run numbers and still inside what both runs show).
+
+## 19. Olmo-3-7B (second model family), not in the paper yet (11-19)
+
+Source: REPLICATION.md 11-18 19:30 (fixed-text race, panel, capability) and 11-19 02:00 (gated free-generation races,
+persistence). One training run, no untrained Olmo control. 9B first run -> Olmo:
+- fixed-text held-out race p1..p5: 59/64, 49/54, 32/35, 23/24, 12/13 -> 51/64, 31/43, 18/22, 8/9, 2/3;
+- gated free generation, trained concepts 256/263 -> 177/198 (p1 65/65 -> 63/64); held-out concepts 139/163 -> 92/135
+  (p1 59/64 -> 45/64); held-out probe kinds 140/181 -> 107/153 (trained concepts), 114/155 -> 113/157 (held-out);
+- persistence .919 -> .848; always-passed .754 -> .424.
+General statement these support: a second model family trained with the same recipe learns to evade on trained
+concepts about as well at the first probe, and generalises less to held-out concepts and later probes. Task races
+pending (34 pieces, 18 done). Whether Olmo enters the paper is the user's decision.
