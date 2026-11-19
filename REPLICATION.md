@@ -14256,3 +14256,21 @@ Changes, all in `/scratch/s/sneheel/ChameleonBench-olmorace` (nothing else impor
 - The two pieces still running started on the old code and will fail the same way; the 9 not yet started pick up the
   fix. Failed pieces get resubmitted when the node ends.
 - Rerun node 705876: both persistence pieces done; the 4 gated races are at turns 9-14 of 24, no errors.
+
+### 11-18 22:30 Olmo task races run on the two-GPU layout; Llama-3.1-8B run started (user: "Do it")
+- Olmo task races: with the in-place path removed, pieces finish (about 1 h each, no memory errors). 21:45: 705894
+  2/17 (mgsm_fr p1, mgsm_de p1), 705939 1/17 (math p1). The 8 pieces of 705894 that died before the fix are resubmitted
+  when that node ends. Rerun node 705876: persistence done (2/6), gated races running.
+- Llama-3.1-8B-Instruct (unsloth mirror, already in hf/hub; 32 layers, hidden 4096, 8 KV heads): config
+  `final_v4d_k03_llama31_8b_tamia` = the 9B KL0.3 recipe with only model path, `fla_grad: false`, run dir on /project,
+  own base solutions (`mathrl_llama31_8b_full`) and anchor cache. One seed. Untrained control not queued (not decided).
+- Code: the keep-think render knew only ChatML and Gemma-4 turns, so Llama needs its own chat format. Added in a new
+  worktree `/scratch/s/sneheel/ChameleonBench-llama` (branch `llama`, commit 57ea3e3): `LLAMA3_HEADERS` in policy.py
+  (BOS, system turn with the template's default date preamble, header / `<|eot_id|>` turns; chosen when the tokenizer
+  template has `<|start_header_id|>`), other models unchanged. Slurm scripts in that worktree point at it. Test
+  `tests/test_tica_llama3.py` (CPU job 706073, passed together with the Gemma format tests): render equals the real
+  tokenizer template string for string, one BOS, and the segment-wise tokenisation equals the per-turn views.
+- Prep node 706077 (`configs/tica/mech_1109/llama_prep.sh` in the worktree = g4k03_prep.sh): base GSM8K solutions, panel
+  cache, 3-step DP4 memory smoke. Then: cap_level_ref_gsm from base accuracy, training chunks from the worktree
+  (`scripts/slurm/tamia_node.sh final_v4d_k03_llama31_8b_tamia@0,1,2,3`, TICA_VAL_QUEUE set). Evals on Llama will
+  need this format in the eval worktrees plus a text-only vLLM family entry for `llama`.
