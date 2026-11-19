@@ -14328,3 +14328,35 @@ No untrained Olmo control, so these are not corrected for what the base model do
   .05 | .02 .04 .05; train KL .07 .11 .10 | .07 .10 .11 | .13 .20 .23. Llama tracks the 9B on KL and capability; its
   free-generation validity starts lower, like Olmo's.
 - Olmo task races 29/34 (706372 14/17 of the first list, 705939 15/17). No errors.
+
+### 11-19 07:30 Olmo-3-7B task races complete (34/34 pieces, 17 tasks); Llama at step ~120
+Scored with scoreolmo/ (17 CPU jobs, all completed), table `racetab.py` with the model list 9b / olmo. Per task:
+episodes 32; first-turn accuracy; then per probe index p1..p6 beaten/faced and correct passing answers.
+9B first seed -> Olmo-3-7B, sums over the 17 tasks and probes 1-6: beaten/faced 2,739/2,941 -> 2,278/2,576; correct
+passing answers 1,264 -> 873. By probe index (Olmo): p1 516/544 (correct 205), p2 473/516 (144), p3 412/471 (144),
+p4 355/408 (142), p5 291/353 (127), p6 231/284 (111).
+Per task, first-turn accuracy and beaten/faced p1 | p3 | p6 with correct passes in brackets (9B -> Olmo):
+- math: .91 -> .88; 32/32 (29) | 32/32 (21) | 20/24 (13) -> 32/32 (30) | 29/32 (24) | 15/23 (12)
+- sql: .84 -> .72; 32/32 (26) | 32/32 (24) | 22/29 (17) -> 32/32 (23) | 32/32 (24) | 27/29 (22)
+- json: 1.0 -> .97; 32/32 (31) | 30/32 (13) | 21/25 (6) -> 32/32 (21) | 30/32 (7) | 17/24 (1)
+- jseval: .66 -> .66; 32/32 (23) | 32/32 (17) | 32/32 (14) -> 32/32 (21) | 32/32 (19) | 27/29 (17)
+- mbpp: .56 -> .72; 32/32 (13) | 31/32 (1) | 12/19 (0) -> 32/32 (13) | 28/31 (2) | 8/16 (0)
+- pyeval: .66 -> .81; 32/32 (14) | 28/30 (0) | 11/18 (0) -> 31/32 (12) | 21/26 (0) | 6/7 (0)
+- javaeval: .56 -> .56; 32/32 (9) | 32/32 (0) | 31/31 (0) -> 31/32 (13) | 21/25 (4) | 5/10 (0)
+- mbppjava: .53 -> .34; 32/32 (10) | 32/32 (1) | 31/32 (2) -> 29/32 (9) | 23/29 (5) | 14/16 (2)
+- mgsm_de: .88 -> .31; 32/32 (26) | 32/32 (20) | 32/32 (20) -> 32/32 (8) | 32/32 (6) | 31/31 (14)
+- mgsm_fr: .81 -> .75; 32/32 (25) | 32/32 (25) | 31/31 (22) -> 32/32 (19) | 32/32 (20) | 28/31 (16)
+- mgsm_ru: .91 -> .53; 32/32 (22) | 30/32 (21) | 24/27 (11) -> 27/32 (14) | 14/23 (7) | 1/4 (0)
+- mgsm_th: .53 -> .12; 32/32 (12) | 15/25 (0) | 0/3 (0) -> 30/32 (1) | 15/24 (0) | 4/5 (1)
+- belebele_fi: .78 -> .44; 32/32 (22) | 32/32 (15) | 29/29 (13) -> 32/32 (3) | 30/31 (8) | 15/18 (8)
+- belebele_pt: .91 -> .62; 32/32 (28) | 31/31 (29) | 22/26 (20) -> 32/32 (12) | 32/32 (12) | 28/28 (17)
+- belebele_tr: .78 -> .31; 32/32 (25) | 25/30 (13) | 6/9 (3) -> 32/32 (3) | 27/30 (4) | 5/11 (1)
+- belebele_el: .94 -> .28; 32/32 (20) | 25/30 (3) | 6/9 (2) -> 30/32 (3) | 14/28 (2) | 0/2 (0)
+- belebele_ta: .34 -> .22; 32/32 (4) | 25/32 (1) | 4/7 (0) -> 18/32 (0) | 0/18 (0) | -
+Reading: Olmo evades on real tasks at a similar rate on maths, SQL, JSON, JavaScript and Python (first probe 31-32 of
+32, later probes a little behind the 9B), and clearly worse on Russian and Tamil. Correct passing answers are about
+30% fewer overall, and most of that gap is in the language tasks, where Olmo's first-turn accuracy is already low
+(German .31, Greek .28, Thai .12). Without an untrained Olmo run on these tasks this cannot be split into "Olmo is
+weaker at these languages" and "training hurt it"; that is the one control the Olmo results still lack.
+- Llama 706454: true step ~120, ~102 s/step, peak 55.9 GB; last 20 steps KL .14, gradient norm 1.0, beat rate .06,
+  cap_gen accuracy .89, free-generation validity .55. No errors.

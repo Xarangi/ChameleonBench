@@ -471,5 +471,9 @@ persistence). One training run, no untrained Olmo control. 9B first run -> Olmo:
   (p1 59/64 -> 45/64); held-out probe kinds 140/181 -> 107/153 (trained concepts), 114/155 -> 113/157 (held-out);
 - persistence .919 -> .848; always-passed .754 -> .424.
 General statement these support: a second model family trained with the same recipe learns to evade on trained
-concepts about as well at the first probe, and generalises less to held-out concepts and later probes. Task races
-pending (34 pieces, 18 done). Whether Olmo enters the paper is the user's decision.
+concepts about as well at the first probe, and generalises less to held-out concepts and later probes. Whether Olmo enters the paper is the user's decision.
+- task races (REPLICATION 11-19 07:30; 17 tasks, probes 1-6): beaten/faced 2,739/2,941 -> 2,278/2,576, correct passing
+  answers 1,264 -> 873. Close to the 9B on maths, SQL, JSON, JavaScript, Python; worse on Russian and Tamil; the
+  correct-answer gap sits in language tasks where Olmo's first-turn accuracy is already low (German .31, Greek .28).
+  CAVEAT for any paper sentence: no untrained Olmo control on tasks or capability, so a capability cost of training
+  cannot be claimed for Olmo; only the evasion counts are interpretable on their own.
