@@ -14298,3 +14298,12 @@ No untrained Olmo control, so these are not corrected for what the base model do
 - Task races: 705894 ended with 9/17; its 8 early failures resubmitted as 706372 (same TSV). 705939 9/17, running.
 - Llama prep 706077: base GSM8K train accuracy .921 (vLLM, 2,220 s; 9B .936, Olmo .923) -> cap_level_ref_gsm .87 by
   the 9B ratio. Panel shards 0-6 started/finished, 7 running, smoke last.
+
+### 11-19 02:50 Llama-3.1-8B prep clean; training submitted
+- Prep 706077 COMPLETED (2 h 16 min): base GSM8K train accuracy .921; panel cache 8/8 shards (7,586 s), no cache miss in
+  the smoke; 3-step DP4 smoke clean: 212 / 133 / 118 s per step, peak 56.4 GB allocated / 61.2 GB reserved per GPU
+  (rollout), train KL .035-.069, `cap_gen/kl_misaligned` 0, no memory error. Batch settings left at the 9B values.
+- `cap_level_ref_gsm: 0.87` (branch llama). Training `final_v4d_k03_llama31_8b_tamia` submitted from the worktree:
+  706453 (train) + resume chunks 706454 706455 706456 (afterany, 24 h each). At ~125 s/step, 1,800 steps is about
+  2.6 node-days.
+- Olmo task races 20/34: 705939 11/17 running, 706372 (8 resubmitted pieces) running.
