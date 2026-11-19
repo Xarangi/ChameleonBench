@@ -14244,3 +14244,15 @@ Changes, all in `/scratch/s/sneheel/ChameleonBench-olmorace` (nothing else impor
   first half as the test (a first submission, 705893, pointed at TSVs that had not been written and was cancelled
   while pending). The second half goes in once pieces pass turn ~20. Expect roughly 2 h per piece (9B: 41 min at
   batch 8), so about 17 h per node.
+
+### 11-18 20:15 Olmo task races, node 705894: memory fits; the in-place read was wrong for Olmo and is removed
+
+- 6 of the first 8 pieces failed at turns 6-30 with `ValueError: Cannot crop a DynamicSlidingWindowLayer after it has
+  seen more tokens than its sliding window`: Olmo 3 has sliding-window attention layers, so the single-row path that
+  reused the prefix cache and cropped it back (added 19:50) cannot work once the history passes ~17k tokens. Removed;
+  a single row now copies the prefix like any other chunk. No results were produced by the removed path (pieces died
+  on the first call that used it... the crop raised before any read was returned).
+- Memory is not the limit any more: pieces reached turn 24-30 with the HF GPUs at 42-44 GB of 80.
+- The two pieces still running started on the old code and will fail the same way; the 9 not yet started pick up the
+  fix. Failed pieces get resubmitted when the node ends.
+- Rerun node 705876: both persistence pieces done; the 4 gated races are at turns 9-14 of 24, no errors.
