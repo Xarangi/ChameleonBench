@@ -135,6 +135,7 @@ rl:
     pursuit_radius: 1.2
     episode_refit_kind: mixed
     # 10-16l: single-layer ARCHITECTURES (placed at a sampled kind_layers depth) + multi-layer kinds
+    episode_fork_batch: 8   # 11-19 Llama: rollout peak reached 80.1 GB allocated at step 21 of 706453 (9B: ~62). Forks per shared-prefix call 32 -> 8; same reads up to kernel numerics; takes effect from the next resume chunk
     episode_refit_kinds: [linear, maxpool, attnpool, rlobf_attn, ens4_linear, ens4_mlp, ensdeep4_linear]
     episode_kind_sampling: thompson   # 10-16g (was prioritized)
     episode_kind_eps: 0.3
