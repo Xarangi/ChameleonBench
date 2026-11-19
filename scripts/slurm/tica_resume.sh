@@ -4,7 +4,7 @@
 #SBATCH --cpus-per-task=6
 #SBATCH --mem=64G
 #SBATCH --time=12:00:00
-#SBATCH --output=/scratch/s/sneheel/ChameleonBench/logs/%x-%j.out
+#SBATCH --output=/scratch/s/sneheel/ChameleonBench-llama/logs/%x-%j.out
 # Resume chunk for an adaptive run that hit its time limit. Finds the newest checkpoint (global step N)
 # over <cfg.out>/adaptive and earlier <cfg.out>/resume_*/adaptive chunks, runs the REMAINING (cfg.train.steps - N) steps from that adapter into
 # <cfg.out>/resume_N (step numbers there restart at 1: global step = N + k; fresh Adam + 10-step
@@ -13,7 +13,7 @@
 set -euo pipefail
 CFG=${1:?config name}; shift || true
 PY=${PY:-/scratch/s/sneheel/venvs/q35t29/bin/python}
-cd /scratch/s/sneheel/ChameleonBench
+cd /scratch/s/sneheel/ChameleonBench-llama
 read -r OUT TOTAL < <(PYTHONPATH=src $PY -c "
 from next_chameleons.tica.config import load_run_config as l; c=l('$CFG'); print(c.out, c.train.steps)")
 # newest checkpoint over the first chunk (adaptive/step_k: global k) and earlier resume chunks

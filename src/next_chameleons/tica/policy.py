@@ -1062,6 +1062,41 @@ def render_keep_reasoning_gemma4(conv: list[dict], add_generation_prompt: bool,
     return "".join(out)
 
 
+LLAMA3_SYSTEM_HEAD = ("<|start_header_id|>system<|end_header_id|>\n\n"
+                      "Cutting Knowledge Date: December 2023\nToday Date: 26 Jul 2024\n\n")
+LLAMA3_ASSISTANT_HEAD = "<|start_header_id|>assistant<|end_header_id|>\n\n"
+
+
+def render_keep_reasoning_llama3(conv: list[dict], add_generation_prompt: bool,
+                                 thinking: bool) -> str:
+    """Llama-3.1 chat template (text messages, no tools; 11-18): BOS, a system turn that always
+    carries the template's default date preamble (date_string "26 Jul 2024") followed by the system
+    message if any, then '<|start_header_id|>role<|end_header_id|>\n\n' + content + '<|eot_id|>'
+    turns. The model has no thinking block: an empty "reasoning" key is ignored (a finished turn is
+    already its generation prompt + content), a non-empty one is an error. Checked against the real
+    template in tests/test_tica_llama3.py."""
+
+    if thinking:
+        raise ValueError("Llama-3.1 has no thinking mode")
+    msgs = list(conv)
+    system = ""
+    if msgs and msgs[0]["role"] == "system":
+        system = msgs.pop(0)["content"].strip()
+    out = ["<|begin_of_text|>", LLAMA3_SYSTEM_HEAD + system + "<|eot_id|>"]
+    for m in msgs:
+        role, content = m["role"], m["content"].strip()
+        if role == "system":
+            raise ValueError("system message must be first")
+        if role not in ("user", "assistant"):
+            raise ValueError(f"unsupported role {role!r}")
+        if role == "assistant" and (m.get("reasoning") or "").strip():
+            raise ValueError("Llama-3.1 render cannot keep reasoning")
+        out.append(f"<|start_header_id|>{role}<|end_header_id|>\n\n{content}<|eot_id|>")
+    if add_generation_prompt:
+        out.append(LLAMA3_ASSISTANT_HEAD)
+    return "".join(out)
+
+
 @dataclass(frozen=True)
 class ChatFormat:
     """What the keep-think render and multi_view need from a chat template: the render itself, the
@@ -1077,6 +1112,7 @@ QWEN_CHATML = ChatFormat("qwen_chatml", render_keep_reasoning,
                          "<|im_start|>assistant\n<think>\n\n</think>\n\n", "<|im_end|>")
 GEMMA4_TURNS = ChatFormat("gemma4", render_keep_reasoning_gemma4,
                           "<|turn>model\n" + GEMMA4_EMPTY_THOUGHT, "<turn|>")
+LLAMA3_HEADERS = ChatFormat("llama3", render_keep_reasoning_llama3, LLAMA3_ASSISTANT_HEAD, "<|eot_id|>")
 
 
 def chat_format_for(tokenizer) -> ChatFormat:
@@ -1089,4 +1125,6 @@ def chat_format_for(tokenizer) -> ChatFormat:
         tpl = " ".join(str(v) for v in tpl.values())
     if isinstance(tpl, str) and "<|turn>" in tpl and "<|channel>" in tpl:
         return GEMMA4_TURNS
+    if isinstance(tpl, str) and "<|start_header_id|>" in tpl and "<|eot_id|>" in tpl:
+        return LLAMA3_HEADERS  # 11-18 Llama-3.1
     return QWEN_CHATML
