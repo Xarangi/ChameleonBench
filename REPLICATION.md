@@ -14225,3 +14225,22 @@ First results, 9B first seed -> Olmo-3-7B (no untrained Olmo control exists, so 
 
 Reading: on trained concepts Olmo hides from never-shown probes as well as the 9B. On held-out concepts it is weaker
 (first fixed-text probe 51/64, the 2B's number; fewer never-shown probes beaten). Hide briefs cost it no GSM8K accuracy.
+
+### 11-18 19:50 Olmo task races: two GPUs per piece (user: use the 4-GPU node, do not skip)
+
+Where the memory went (704753): the rollout keeps one KV cache per episode across turns (`pooled_incremental`
+state: `--batch` 8 episodes x history), and every fork read copies the prefix cache per row. At ~0.5 MB per token that
+is 48 GB at a 12k-token history with 8 episodes, before the forks, under a 47.5 GB cap.
+
+Changes, all in `/scratch/s/sneheel/ChameleonBench-olmorace` (nothing else imports it), off unless the env var is set:
+- `TICA_VLLM_GPU_OFFSET=2`: the vLLM server runs on GPU (own index + 2), so server and HF model each own a GPU
+  (node run with NG=2 SLOTS=2: two pieces at a time). `TICA_VLLM_MEM` 0.35 -> 0.90, `TICA_MEM_FRACTION` 0.60 -> 0.95.
+- `TICA_READ_TOKENS=50000`: fork reads use fewer rows per call as the history grows; a single row reuses the prefix
+  cache and crops it back instead of copying it. Same reads.
+- `--batch 8` (or 4) -> `--batch 2` episodes at a time (same tasks, seeds and gates; batching differs, as for the 2B
+  at 16). Budget at a 30k-token history: 2 episode caches 30 GB + prefix 15 GB + model 15 GB = 60 GB of 75.
+  Histories much beyond ~40k tokens will still not fit.
+- TSVs `olmo_race2a.tsv` / `olmo_race2b.tsv` (17 pieces each), smoke `olmo_race2_smoke.tsv`. Node 705894 runs the
+  first half as the test (a first submission, 705893, pointed at TSVs that had not been written and was cancelled
+  while pending). The second half goes in once pieces pass turn ~20. Expect roughly 2 h per piece (9B: 41 min at
+  batch 8), so about 17 h per node.
