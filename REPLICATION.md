@@ -14307,3 +14307,13 @@ No untrained Olmo control, so these are not corrected for what the base model do
   706453 (train) + resume chunks 706454 706455 706456 (afterany, 24 h each). At ~125 s/step, 1,800 steps is about
   2.6 node-days.
 - Olmo task races 20/34: 705939 11/17 running, 706372 (8 resubmitted pieces) running.
+
+### 11-19 04:15 Llama-3.1-8B training started; memory close to the limit
+- 706453 started 03:07 (tg10902): step 30 after 62 min, 91-152 s/step. Steps 28-30: train KL .08-.14, gradient norm
+  .72-.78, beat rate 0-.10 (expected this early), cap_gen accuracy .75-1.0, free-generation validity .56-.94.
+- Memory: rollout peak varies 40-80 GB per step; step 21 reached 80.1 GB allocated (82.4 reserved), at the card's
+  limit. Train and capability phases stay under 48 GB. No error yet. Precaution: `episode_fork_batch: 8` in the
+  worktree config (branch llama; same reads up to kernel numerics, as for Olmo 11-12). The running job keeps its
+  loaded config; if it runs out of memory, the afterany chunk 706454 resumes from the last checkpoint (saved every
+  20 steps) with the smaller fork batch. Whether fork reads are the source of the peak is not confirmed.
+- Olmo task races 24/34 (706372: 2 of its 8 done; 705939: 13/17). No errors.
