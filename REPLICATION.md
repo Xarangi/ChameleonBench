@@ -14360,3 +14360,15 @@ Reading: Olmo evades on real tasks at a similar rate on maths, SQL, JSON, JavaSc
 weaker at these languages" and "training hurt it"; that is the one control the Olmo results still lack.
 - Llama 706454: true step ~120, ~102 s/step, peak 55.9 GB; last 20 steps KL .14, gradient norm 1.0, beat rate .06,
   cap_gen accuracy .89, free-generation validity .55. No errors.
+
+### 11-19 11:20 Untrained Olmo-3-7B control submitted (user approved on Telegram 11-19 11:10)
+
+- Node **706876** (`baseolmo`, NG=2 SLOTS=2, 16 h limit), TSV `runs/mech_1109/baseolmo.tsv` from
+  `configs/tica/mech_1109/baseolmo_tsv.py`. 18 pieces:
+  - the 17 gated task races at half size (piece p1: 16 episodes, seed 1), the trained Olmo p1 commands with
+    `--adapter ...` -> `--base`; outputs `runs/races/finalbaseolmo_<task>/baseolmo_p1*`. Same design as the untrained
+    2B / 9B controls (paperD).
+  - base capability (GSM8K / MMLU clean + the two briefs): `final_v4d_k03_olmo3_7b_tamia/quality/base/capability.json`.
+- Smokes reuse the passed Olmo smoke outputs. No untrained free-generation (concept) races: for the Qwen models those
+  were run for the 4B only.
+- Llama training at 11:05: step 243 / 1,800, ~115 s/step, peak 55.9 GB, no errors.
