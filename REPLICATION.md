@@ -14405,3 +14405,11 @@ maths brief GSM8K .830 -> .855, MMLU .517 -> .537; under the HTML brief .830 -> 
 Reading: Olmo's evasion comes from training (untrained Olmo beats probes as rarely as the untrained 9B), and training
 did not cost capability. The low language-task accuracy reported at 07:30 is the base model, not damage. First-turn
 accuracies per task are on 16 episodes each, so only the mean and the capability benchmarks carry the "no cost" claim.
+
+### 11-20 01:00 Llama-3.1-8B training: step 618 / 1,800; fifth chunk queued
+
+- No errors since the step-49 OOM. Last-20 means at step 618: KL .21, grad norm 0.77, beat rate .44 (was .06 at step
+  ~120, .21 at ~300, .33 at ~500), cap_gen acc .87, cap_free valid .71; peak 59.7 GB.
+- Steps slow down as the beat rate rises (longer episodes): 102 s at step ~120, 125 s at ~400, 162 s at ~620. At 160-200
+  s/step the remaining ~1,180 steps need 53-66 h against 76 h in the chain, so a fifth resume chunk **724145** was
+  queued after 706524 (same command). It costs nothing unless it runs; cancel leftovers when step 1,800 is reached.
