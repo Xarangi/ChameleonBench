@@ -14413,3 +14413,12 @@ accuracies per task are on 16 episodes each, so only the mean and the capability
 - Steps slow down as the beat rate rises (longer episodes): 102 s at step ~120, 125 s at ~400, 162 s at ~620. At 160-200
   s/step the remaining ~1,180 steps need 53-66 h against 76 h in the chain, so a fifth resume chunk **724145** was
   queued after 706524 (same command). It costs nothing unless it runs; cancel leftovers when step 1,800 is reached.
+
+### 11-20 06:05 Llama: first chunk timed out at step 707; next chunk swapped for a 12 h one (queue wait)
+
+- 706454 TIMEOUT on schedule (04:42:50) at step 707, checkpoint at 700 (`resume_40/adaptive/step_660`). Last-20 means:
+  KL .20, grad norm 0.77, beat rate .44, cap_gen acc .86, cap_free valid .69, 161 s/step, peak 59.7 GB. No errors.
+- 706455 did not start: the cluster is busy and 24 h jobs only run in `gpubase_bynode_b3`; start estimate 13:30, then
+  16:40. Jobs of <= 12 h go to `gpubase_bynode_b2` (more nodes, backfill). So: submitted **724748** (same command,
+  `--time=12:00:00`, no dependency), repointed 706456 to `afterany:724748`, cancelled 706455.
+  Chain: 724748 (12 h) -> 706456 -> 706524 -> 724145 = 84 h for ~50 h of remaining steps.
