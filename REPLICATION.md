@@ -14422,3 +14422,13 @@ accuracies per task are on 16 episodes each, so only the mean and the capability
   16:40. Jobs of <= 12 h go to `gpubase_bynode_b2` (more nodes, backfill). So: submitted **724748** (same command,
   `--time=12:00:00`, no dependency), repointed 706456 to `afterany:724748`, cancelled 706455.
   Chain: 724748 (12 h) -> 706456 -> 706524 -> 724145 = 84 h for ~50 h of remaining steps.
+
+### 11-20 19:50 Llama: second handover without a gap; step 949 / 1,800
+
+- 724748 (12 h) started 07:19 (the 24 h chunk it replaced had a 16:40 estimate), resumed cleanly from 700 and timed
+  out at 19:19:55 at step 944. A 12 h chunk **732678** had been put in front of the next 24 h one at 16:10; it started
+  2 s later on the same node (tg10606) and resumed from the step-940 checkpoint (`resume_940`).
+- Chain: 732678 (ends ~07:20 11-21) -> 706456 -> 706524 -> 724145 -> 726315 (24 h each; 726315 added 11-20 13:00
+  because steps slow as the beat rate rises). Put a 12 h chunk in front again before the next handover.
+- Last-20 means around step 934: KL .21, grad norm 0.81, beat rate .59, cap_gen acc .83 (50-step means .79-.88 over
+  the whole run), cap_free valid .78; 188 s/step; peak 59.5 GB. No errors since the step-49 OOM.
